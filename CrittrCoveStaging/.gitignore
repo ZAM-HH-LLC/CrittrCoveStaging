@@ -8,6 +8,7 @@ stuffleft to do.txt
 
 # Expo
 .expo/
+web/
 .expo/*
 web-build/
 web-build/*
