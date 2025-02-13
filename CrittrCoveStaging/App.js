@@ -99,8 +99,8 @@ const screens = [
 const linking = {
   enabled: true,
   prefixes: [
-    'https://crittrcove.com',
-    'http://crittrcove.com',
+    'https://staging.crittrcove.com',
+    'http://staging.crittrcove.com',
     `${API_BASE_URL}`
   ],
   config: {
