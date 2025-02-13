@@ -1,7 +1,7 @@
 {
   "name": "zenexoticsmobile",
   "version": "1.0.0",
-  "homepage": "https://crittrcove.com",
+  "homepage": "https://staging.crittrcove.com",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -11,7 +11,7 @@
     "build:staging": "npx expo export:web",
     "deploy:staging": "gh-pages -d web-build -b gh-pages-test",
     "build": "npx expo export:web",
-    "deploy": "gh-pages -d web-build",
+    "deploy": "git add web-build -f && git commit -m \"Deploy web build\" && git subtree push --prefix web-build origin gh-pages",
     "deploy:full": "npm run build && npm run deploy"
   },
   "dependencies": {
