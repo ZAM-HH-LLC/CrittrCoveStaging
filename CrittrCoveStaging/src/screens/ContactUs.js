@@ -11,7 +11,7 @@ import { useForm, ValidationError } from '@formspree/react';
 
 const ContactUs = () => {
   const navigation = useNavigation();
-  const { is_prototype, screenWidth } = useContext(AuthContext);
+  const { screenWidth } = useContext(AuthContext);
   const [state, handleFormspreeSubmit] = useForm("mkgobpro");
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -32,56 +32,33 @@ const ContactUs = () => {
 
     setIsSubmitting(true);
     setSuccessMessage('');
+    
+    // Use backend API in production mode
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/users/v1/contact/`, {
+        name,
+        email,
+        message
+      });
 
-    if (is_prototype) {
-      // Use Formspree in prototype mode
-      try {
-        await handleFormspreeSubmit({
-          name,
-          email,
-          message
-        });
-        
-        if (state.succeeded) {
-          setSuccessMessage('Your message has been sent successfully!');
-          setName('');
-          setEmail('');
-          setMessage('');
-        }
-      } catch (error) {
-        setSuccessMessage('Failed to send message. Please try again later.');
-        console.error(error);
-      } finally {
-        setIsSubmitting(false);
+      if (response.status === 200) {
+        setSuccessMessage('Your message has been sent successfully!');
+        setName('');
+        setEmail('');
+        setMessage('');
+      } else {
+        throw new Error('Failed to send message');
       }
-    } else {
-      // Use backend API in production mode
-      try {
-        const response = await axios.post(`${API_BASE_URL}/api/users/contact/`, {
-          name,
-          email,
-          message
-        });
-
-        if (response.status === 200) {
-          setSuccessMessage('Your message has been sent successfully!');
-          setName('');
-          setEmail('');
-          setMessage('');
-        } else {
-          throw new Error('Failed to send message');
-        }
-      } catch (error) {
-        setSuccessMessage(error.response?.data?.error || 'Failed to send message. Please try again later.');
-        console.error(error);
-      } finally {
-        setIsSubmitting(false);
-      }
+    } catch (error) {
+      setSuccessMessage(error.response?.data?.error || 'Failed to send message. Please try again later.');
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Show success message from either Formspree or backend
-  if (is_prototype && state.succeeded) {
+  if (state.succeeded) {
     return (
       <CrossPlatformView fullWidthHeader={true} contentWidth={maxContentWidth}>
         <BackHeader title="Contact Us" onBackPress={() => navigation.navigate('More')} />
@@ -120,8 +97,7 @@ const ContactUs = () => {
             onChangeText={setName}
             name="name"
           />
-          {is_prototype && <ValidationError prefix="Name" field="name" errors={state.errors} />}
-          
+          <ValidationError prefix="Name" field="name" errors={state.errors} />
           <TextInput
             style={styles.input}
             placeholder="Your Email"
@@ -131,7 +107,7 @@ const ContactUs = () => {
             name="email"
             autoCapitalize="none"
           />
-          {is_prototype && <ValidationError prefix="Email" field="email" errors={state.errors} />}
+          <ValidationError prefix="Email" field="email" errors={state.errors} />
           
           <TextInput
             style={[styles.input, styles.messageInput]}
@@ -141,7 +117,7 @@ const ContactUs = () => {
             multiline
             name="message"
           />
-          {is_prototype && <ValidationError prefix="Message" field="message" errors={state.errors} />}
+          <ValidationError prefix="Message" field="message" errors={state.errors} />
           
           {successMessage ? (
             <Text style={styles.successMessage}>
@@ -152,10 +128,10 @@ const ContactUs = () => {
           <TouchableOpacity 
             style={[styles.button, isSubmitting && styles.disabledButton]} 
             onPress={handleSubmit}
-            disabled={isSubmitting || (is_prototype && state.submitting)}
+            disabled={isSubmitting || (state.submitting)}
           >
             <Text style={styles.buttonText}>
-              {isSubmitting || (is_prototype && state.submitting) ? 'Sending...' : 'Send Message'}
+              {isSubmitting || (state.submitting) ? 'Sending...' : 'Send Message'}
             </Text>
           </TouchableOpacity>
         </View>

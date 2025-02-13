@@ -34,7 +34,6 @@ export const AuthProvider = ({ children }) => {
   const [firstName, setFirstName] = useState('');
 
   // SET TO "true" FOR NO API CALLS
-  const [is_prototype, setIsPrototype] = useState(false);
 
   // Set is_DEBUG to false by default in prototype mode
   const [is_DEBUG, setIsDebug] = useState(false);
@@ -480,21 +479,12 @@ export const AuthProvider = ({ children }) => {
 
   // Add useEffect to persist role changes
   useEffect(() => {
-    if (is_prototype && isSignedIn) {
+    if (isSignedIn) {
       AsyncStorage.setItem('userRole', userRole || 'professional');
       AsyncStorage.setItem('isApprovedProfessional', String(isApprovedProfessional));
     }
-  }, [is_prototype, isSignedIn, userRole, isApprovedProfessional]);
+  }, [isSignedIn, userRole, isApprovedProfessional]);
 
-  // Ensure isApprovedProfessional is set to true in prototype mode
-  useEffect(() => {
-    if (is_prototype) {
-      setIsApprovedProfessional(true);
-      if (is_DEBUG) {
-        console.log('Prototype mode: isApprovedProfessional set to true');
-      }
-    }
-  }, [is_prototype]);
 
   return (
     <AuthContext.Provider value={{ 
@@ -511,8 +501,6 @@ export const AuthProvider = ({ children }) => {
       screenWidth,
       checkAuthStatus,
       firstName,
-      is_prototype,
-      setIsPrototype,
       is_DEBUG,
       setIsDebug
     }}>

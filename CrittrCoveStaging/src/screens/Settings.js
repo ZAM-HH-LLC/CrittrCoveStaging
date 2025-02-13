@@ -8,7 +8,6 @@ import CrossPlatformView from '../components/CrossPlatformView';
 import { AuthContext } from '../context/AuthContext';
 
 const Settings = ({ navigation }) => {
-  const { is_prototype } = useContext(AuthContext);
   
   const settingsItems = [
     { title: 'Change Password', icon: 'lock-reset', route: 'ChangePassword' },
@@ -50,13 +49,6 @@ const Settings = ({ navigation }) => {
         title="Settings" 
         onBackPress={() => navigation.navigate('More')} 
       />
-      {is_prototype && (
-        <View style={styles.warningContainer}>
-          <Text style={styles.warningText}>
-            Prototype Mode: Only "Change Password" is currently functional
-          </Text>
-        </View>
-      )}
       <View style={Platform.OS === 'web' ? styles.webContent : styles.content}>
         {renderContent()}
       </View>

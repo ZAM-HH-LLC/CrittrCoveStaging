@@ -145,7 +145,7 @@ const RequestChangesModal = ({ visible, onClose, onSubmit, loading }) => {
 const BookingDetails = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { is_prototype, currentUser, is_DEBUG } = useContext(AuthContext);
+  const { is_DEBUG } = useContext(AuthContext);
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -216,67 +216,38 @@ const BookingDetails = () => {
           });
         }
 
-        if (is_prototype) {
-          if (!bookingId && initialData) {
-            bookingId = await createBooking(
-              initialData.clientId || 'client123',
-              initialData.professionalId || 'professional123',
-              initialData
-            );
-          }
-
-          if (!bookingId) {
-            bookingId = await AsyncStorage.getItem(LAST_VIEWED_BOOKING_ID);
-          }
-
-          if (!bookingId) {
-            navigation.replace('MyBookings');
-            return;
-          }
-
-          if (is_DEBUG) {
-            console.log('BookingDetails: Fetching booking with ID:', bookingId);
-          }
-          await AsyncStorage.setItem(LAST_VIEWED_BOOKING_ID, bookingId);
-          const bookingData = await fetchBookingDetails(bookingId);
-          if (is_DEBUG) {
-            console.log('BookingDetails: Fetched booking data:', bookingData);
-          }
-          setBooking(bookingData);
-        } else {
-          // Real API call
-          if (!bookingId) {
-            navigation.replace('MyBookings');
-            return;
-          }
-
-          let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-          if (!token) {
-            throw new Error('No authentication token found');
-          }
-          const response = await axios.get(
-            `${API_BASE_URL}/api/bookings/v1/${bookingId}/?is_prorated=true`,
-            { headers: { Authorization: `Bearer ${token}` }}
-          );
-
-          // Transform API response to match the expected format
-          const transformedBooking = {
-            ...response.data,
-            id: response.data.booking_id,
-            clientName: response.data.client_name,
-            professionalName: response.data.professional_name,
-            serviceType: response.data.service_details.service_type,
-            animalType: response.data.service_details.animal_type,
-            numberOfPets: response.data.service_details.num_pets,
-            costs: response.data.cost_summary,
-            status: response.data.status
-          };
-
-          if (is_DEBUG) {
-            console.log('BookingDetails: Fetched and transformed booking data:', transformedBooking);
-          }
-          setBooking(transformedBooking);
+        // Real API call
+        if (!bookingId) {
+          navigation.replace('MyBookings');
+          return;
         }
+
+        let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+        const response = await axios.get(
+          `${API_BASE_URL}/api/bookings/v1/${bookingId}/?is_prorated=true`,
+          { headers: { Authorization: `Bearer ${token}` }}
+        );
+
+        // Transform API response to match the expected format
+        const transformedBooking = {
+          ...response.data,
+          id: response.data.booking_id,
+          clientName: response.data.client_name,
+          professionalName: response.data.professional_name,
+          serviceType: response.data.service_details.service_type,
+          animalType: response.data.service_details.animal_type,
+          numberOfPets: response.data.service_details.num_pets,
+          costs: response.data.cost_summary,
+          status: response.data.status
+        };
+
+        if (is_DEBUG) {
+          console.log('BookingDetails: Fetched and transformed booking data:', transformedBooking);
+        }
+        setBooking(transformedBooking);
       } catch (error) {
         console.error('Error fetching booking details:', error);
         Alert.alert(
@@ -290,7 +261,7 @@ const BookingDetails = () => {
     };
 
     fetchBooking();
-  }, [route.params?.bookingId, navigation, is_prototype]);
+  }, [route.params?.bookingId, navigation]);
 
   // Add helper function to safely display data
   const getDisplayValue = (value, placeholder = 'TBD') => {
@@ -336,11 +307,6 @@ const BookingDetails = () => {
       return false;
     }
 
-    // In prototype mode, use the existing logic
-    if (is_prototype) {
-      return true;
-    }
-
     if (is_DEBUG) {
       console.log('Booking edit ability:', booking.can_edit);
     }
@@ -381,36 +347,11 @@ const BookingDetails = () => {
       // Save changes
       try {
         setIsPetsSaving(true);
-        if (!is_prototype) {
-          const token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-          if (!token) {
-            throw new Error('No authentication token found');
-          }
-          const response = await axios.patch(
-            `${API_BASE_URL}/api/booking-drafts/v1/${booking.booking_id}/update/`,
-            { pets: selectedPets.map(pet => ({
-                pet_id: pet.pet_id,
-                name: pet.name,
-                species: pet.species,
-                breed: pet.breed
-              }))
-            },
-            { headers: { Authorization: `Bearer ${token}` }}
-          );
-          // Update booking status and pets from response
-          if (response.data.booking_status) {
-            setBooking(prevBooking => ({
-              ...prevBooking,
-              status: response.data.booking_status,
-              pets: selectedPets
-            }));
-          }
-        } else {
-          setBooking(prev => ({
-            ...prev,
-            pets: selectedPets
-          }));
-        }
+        
+        setBooking(prev => ({
+          ...prev,
+          pets: selectedPets
+        }));
         setIsPetsEditMode(false);
       } catch (error) {
         console.error('Error updating pets:', error);
@@ -461,7 +402,7 @@ const BookingDetails = () => {
         <TouchableOpacity
           style={styles.addPetButton}
           onPress={async () => {
-            if (!showPetDropdown && !is_prototype) {
+            if (!showPetDropdown) {
               await fetchAvailablePets();
             }
             setShowPetDropdown(!showPetDropdown);
@@ -481,8 +422,7 @@ const BookingDetails = () => {
               {isLoadingPets ? (
                 <ActivityIndicator style={{ padding: 10 }} />
               ) : (
-                (is_prototype ? PET_OPTIONS : availablePets)
-                  .filter(pet => !selectedPets.some(selected => selected.pet_id === pet.pet_id))
+                availablePets.filter(pet => !selectedPets.some(selected => selected.pet_id === pet.pet_id))
                   .map((pet) => (
                     <TouchableOpacity
                       key={pet.pet_id || pet.id}
@@ -498,7 +438,7 @@ const BookingDetails = () => {
                     </TouchableOpacity>
                   ))
               )}
-              {!isLoadingPets && !is_prototype && availablePets.length === 0 && (
+              {!isLoadingPets && availablePets.length === 0 && (
                 <Text style={styles.noContentText}>No pets available</Text>
               )}
             </ScrollView>
@@ -540,34 +480,11 @@ const BookingDetails = () => {
       // Save changes
       try {
         setIsServiceSaving(true);
-        if (!is_prototype) {
-          const token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-          if (!token) {
-            throw new Error('No authentication token found');
-          }
-
-          // Only send update if service has changed
-          if (editedBooking.service_details.service_id !== booking.service_details.service_id) {
-            const response = await axios.patch(
-              `${API_BASE_URL}/api/booking-drafts/v1/${booking.booking_id}/update/`,
-              { service_id: editedBooking.service_details.service_id },
-              { headers: { Authorization: `Bearer ${token}` }}
-            );
-            // Update booking status and service from response
-            if (response.data.booking_status) {
-              setBooking(prevBooking => ({
-                ...prevBooking,
-                status: response.data.booking_status,
-                service_details: editedBooking.service_details
-              }));
-            }
-          }
-        } else {
-          setBooking(prev => ({
-            ...prev,
-            service_details: editedBooking.service_details
-          }));
-        }
+        
+        setBooking(prev => ({
+          ...prev,
+          service_details: editedBooking.service_details
+        }));
         setIsServiceEditMode(false);
       } catch (error) {
         console.error('Error updating service:', error);
@@ -582,9 +499,7 @@ const BookingDetails = () => {
           ...booking.service_details
         }
       }));
-      if (!is_prototype) {
-        await fetchAvailableServices();
-      }
+      await fetchAvailableServices();
       setIsServiceEditMode(true);
     }
   };
@@ -828,42 +743,6 @@ const BookingDetails = () => {
         console.log('Adding new occurrence:', newOccurrence);
       }
 
-      if (is_prototype) {
-        const transformedOccurrence = {
-          occurrence_id: `occ${booking.occurrences.length + 1}`,
-          start_date: newOccurrence.startDate,
-          end_date: newOccurrence.endDate,
-          start_time: newOccurrence.startTime,
-          end_time: newOccurrence.endTime,
-          rates: {
-            base_rate: newOccurrence.rates.baseRate,
-            additional_animal_rate: newOccurrence.rates.additionalAnimalRate,
-            applies_after: newOccurrence.rates.appliesAfterAnimals,
-            holiday_rate: newOccurrence.rates.holidayRate,
-            unit_of_time: newOccurrence.rates.timeUnit.toUpperCase().replace(' ', '_'),
-            additional_rates: newOccurrence.rates.additionalRates.map(rate => ({
-              title: rate.name,
-              description: rate.description || '',
-              amount: `$${parseFloat(rate.amount).toFixed(2)}`
-            }))
-          },
-          calculated_cost: newOccurrence.totalCost,
-          base_total: `$${parseFloat(newOccurrence.baseTotal || newOccurrence.rates.baseRate).toFixed(2)}`
-        };
-
-        const updatedOccurrences = [...booking.occurrences, transformedOccurrence];
-
-        setBooking(prev => ({
-          ...prev,
-          occurrences: updatedOccurrences,
-          cost_summary: calculateTotalCosts(updatedOccurrences)
-        }));
-
-        handleStatusUpdateAfterEdit();
-        setShowAddOccurrenceModal(false);
-        return;
-      }
-
       // Real API mode
       const token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       if (!token) {
@@ -949,44 +828,7 @@ const BookingDetails = () => {
     if (is_DEBUG) {
       console.log('Original occurrence:', occurrence);
     }
-    
-    if (is_prototype) {
-      // In prototype mode, use the same data structure as API
-      const transformedOccurrence = {
-        id: occurrence.occurrence_id,
-        occurrence_id: occurrence.occurrence_id,  // Make sure we set both id and occurrence_id
-        startDate: occurrence.start_date,
-        endDate: occurrence.end_date,
-        startTime: occurrence.start_time,
-        endTime: occurrence.end_time,
-        rates: {
-          baseRate: occurrence.rates.base_rate,
-          additionalAnimalRate: occurrence.rates.additional_animal_rate,
-          appliesAfterAnimals: occurrence.rates.applies_after.toString(),
-          holidayRate: occurrence.rates.holiday_rate,
-          timeUnit: occurrence.rates.unit_of_time.toLowerCase().replace(/_/g, ' '),
-          additionalRates: occurrence.rates.additional_rates
-            .filter(rate => rate.title !== 'Booking Details Cost')
-            .map(rate => ({
-              name: rate.title,
-              description: rate.description,
-              amount: rate.amount.replace(/[^0-9.]/g, '')
-            }))
-        },
-        totalCost: occurrence.calculated_cost,
-        baseTotal: occurrence.base_total.replace(/[^0-9.]/g, ''),
-        multiple: calculateMultiple(occurrence.base_total, occurrence.rates.base_rate)
-      };
 
-      if (is_DEBUG) {
-        console.log('Transformed occurrence for modal (prototype):', transformedOccurrence);
-      }
-      setSelectedOccurrence(transformedOccurrence);
-      setShowAddOccurrenceModal(true);
-      return;
-    }
-
-    // Non-prototype mode - original transformation logic
     const transformedOccurrence = {
       id: occurrence.occurrence_id,
       occurrence_id: occurrence.occurrence_id,  // Make sure we set both id and occurrence_id
@@ -1104,12 +946,10 @@ const BookingDetails = () => {
           <Text style={styles.summaryText}>Subtotal:</Text>
           <Text style={styles.summaryText}>${(booking?.cost_summary?.subtotal || 0).toFixed(2)}</Text>
         </View>
-        {!is_prototype && (
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryText}>Platform Fee (10%):</Text>
-            <Text style={styles.summaryText}>${(booking?.cost_summary?.platform_fee || 0).toFixed(2)}</Text>
-          </View>
-        )}
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryText}>Platform Fee (10%):</Text>
+          <Text style={styles.summaryText}>${(booking?.cost_summary?.platform_fee || 0).toFixed(2)}</Text>
+        </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>Taxes (8%):</Text>
           <Text style={styles.summaryText}>${(booking?.cost_summary?.taxes || 0).toFixed(2)}</Text>
@@ -1426,17 +1266,17 @@ const BookingDetails = () => {
             {isLoadingServices ? (
               <ActivityIndicator style={{ padding: 10 }} />
             ) : (
-              (is_prototype ? SERVICE_OPTIONS : availableServices).map((service) => (
+              availableServices.map((service) => (
                 <TouchableOpacity
-                  key={is_prototype ? service : service.service_id}
+                  key={service.service_id}
                   style={styles.dropdownItem}
                   onPress={() => {
                     setEditedBooking(prev => ({
                       ...prev,
                       service_details: {
                         ...prev.service_details,
-                        service_type: is_prototype ? service : service.service_name,
-                        service_id: is_prototype ? null : service.service_id
+                        service_type: service.service_name,
+                        service_id: service.service_id
                       }
                     }));
                     setShowServiceDropdown(false);
@@ -1444,14 +1284,14 @@ const BookingDetails = () => {
                 >
                   <Text style={[
                     styles.dropdownText,
-                    editedBooking?.service_details?.service_type === (is_prototype ? service : service.service_name) && styles.selectedOption
+                    editedBooking?.service_details?.service_type === (service.service_name) && styles.selectedOption
                   ]}>
-                    {is_prototype ? service : service.service_name}
+                    {service.service_name}
                   </Text>
                 </TouchableOpacity>
               ))
             )}
-            {!isLoadingServices && !is_prototype && availableServices.length === 0 && (
+            {!isLoadingServices && availableServices.length === 0 && (
               <Text style={styles.noContentText}>No services available</Text>
             )}
           </ScrollView>

@@ -11,7 +11,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const Waitlist = () => {
   const navigation = useNavigation();
-  const { is_prototype, screenWidth } = useContext(AuthContext);
+  const { screenWidth } = useContext(AuthContext);
   const [state, handleFormspreeSubmit] = useForm("mkgobpro");
   
   // Form state

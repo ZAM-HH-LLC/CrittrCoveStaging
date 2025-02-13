@@ -14,7 +14,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const ProfessionalDashboard = ({ navigation }) => {
   const { colors } = useTheme();
-  const { signOut, firstName, is_prototype, screenWidth, is_DEBUG } = useContext(AuthContext);
+  const { signOut, firstName, screenWidth, is_DEBUG } = useContext(AuthContext);
   const [upcomingBookings, setUpcomingBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -79,11 +79,6 @@ const ProfessionalDashboard = ({ navigation }) => {
   ];
 
   const fetchDashboardData = async () => {
-    if (is_prototype) {
-      setUpcomingBookings(prototypeBookings);
-      setIsLoading(false);
-      return;
-    }
 
     try {
       setIsLoading(true);
@@ -115,7 +110,7 @@ const ProfessionalDashboard = ({ navigation }) => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [is_prototype]);
+  }, []);
 
   // TODO: Fetch client requests from the backend
   const clientRequests = [
@@ -142,7 +137,7 @@ const ProfessionalDashboard = ({ navigation }) => {
       <View style={styles.cardContainer}>
         <Card style={styles.card}>
           <Card.Content>
-            <Title style={dynamicStyles.cardTitle}>Welcome back, {is_prototype ? 'John Doe' : firstName}!</Title>
+            <Title style={dynamicStyles.cardTitle}>Welcome back, {firstName}!</Title>
             <Paragraph style={dynamicStyles.cardParagraph}>Here's an overview of your upcoming activities.</Paragraph>
           </Card.Content>
         </Card>
@@ -157,23 +152,17 @@ const ProfessionalDashboard = ({ navigation }) => {
             ) : upcomingBookings.length > 0 ? (
               upcomingBookings.map((booking) => (
                 <TouchableOpacity
-                  key={is_prototype ? booking.id : booking.booking_id}
+                  key={booking.booking_id}
                   onPress={() => navigateToFrom(navigation, 'BookingDetails', 'ProfessionalDashboard', { 
-                    bookingId: is_prototype ? booking.id : booking.booking_id 
+                    bookingId: booking.booking_id 
                   })}
                   style={styles.bookingItem}
                 >
                   <List.Item
                     titleStyle={dynamicStyles.listItemTitle}
                     descriptionStyle={dynamicStyles.listItemDescription}
-                    title={is_prototype ? 
-                      `${booking.client} - ${booking.pet}` :
-                      `${booking.client_name} - ${booking.pets.slice(0, 3).map(pet => pet.name).join(', ')}${booking.pets.length > 3 ? '...' : ''} (${booking.pets.slice(0, 3).map(pet => pet.species).join(', ')}${booking.pets.length > 3 ? '...' : ''})`
-                    }
-                    description={is_prototype ?
-                      `${booking.date} at ${booking.time}` :
-                      `${booking.start_date} at ${booking.start_time}`
-                    }
+                    title={`${booking.client_name} - ${booking.pets.slice(0, 3).map(pet => pet.name).join(', ')}${booking.pets.length > 3 ? '...' : ''} (${booking.pets.slice(0, 3).map(pet => pet.species).join(', ')}${booking.pets.length > 3 ? '...' : ''})`}
+                    description={`${booking.start_date} at ${booking.start_time}`}
                     left={(props) => <IconComponent {...props} icon="calendar" name="calendar" />}
                     right={(props) => <IconComponent {...props} icon="chevron-right" name="chevron-right" />}
                   />

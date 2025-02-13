@@ -32,7 +32,7 @@ const PaymentMethods = () => {
     accountNumber: '',
     routingNumber: '',
   });
-  const { isApprovedProfessional, is_prototype, is_DEBUG } = useContext(AuthContext);
+  const { isApprovedProfessional, is_DEBUG } = useContext(AuthContext);
   const [isConfirming, setIsConfirming] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [methodToDelete, setMethodToDelete] = useState(null);
@@ -91,7 +91,7 @@ const PaymentMethods = () => {
 
   // Check if Stripe is ready
   useEffect(() => {
-    if (!is_prototype && Platform.OS === 'web') {
+    if (Platform.OS === 'web') {
       console.log('Stripe loading started');
       setLoading(true);
       const checkStripeReady = async () => {
@@ -111,7 +111,7 @@ const PaymentMethods = () => {
     } else {
       setLoading(false);
     }
-  }, [is_prototype]);
+  }, []);
 
   if (loading) {
     if (is_DEBUG) {
@@ -225,7 +225,7 @@ const PaymentMethods = () => {
     }
     setModalLoading(true);
 
-    if (!is_prototype && Platform.OS === 'web') {
+    if (Platform.OS === 'web') {
       if (is_DEBUG) {
         console.log('MBA: Initializing Stripe elements for web');
       }

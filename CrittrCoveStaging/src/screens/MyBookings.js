@@ -15,7 +15,7 @@ import { API_BASE_URL } from '../config/config';
 
 const MyBookings = () => {
   const navigation = useNavigation();
-  const { is_prototype, isApprovedProfessional, userRole, is_DEBUG } = useContext(AuthContext);
+  const { isApprovedProfessional, userRole, is_DEBUG } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState(userRole === 'professional' ? 'professional' : 'client');
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState([]);
@@ -33,46 +33,29 @@ const MyBookings = () => {
     setLoading(true);
     setError(null);
     try {
-      if (is_prototype) {
-        if (is_DEBUG) {
-          console.log('Fetching mock bookings:', {
-            isApprovedProfessional,
-            userRole,
-            activeTab
-          });
-        }
-        
-        // In prototype mode, use mock data
-        if (activeTab === 'professional' && isApprovedProfessional) {
-          setBookings(mockProfessionalBookings);
-        } else {
-          setBookings(mockClientBookings);
-        }
+      // Real API call logic
+      let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      if (is_DEBUG) {
+        console.log('Fetching real bookings:', {
+          isApprovedProfessional,
+          userRole,
+          activeTab
+        });
+      }
+
+      const response = await axios.get(
+        `${API_BASE_URL}/api/bookings/v1/`,
+        { headers: { Authorization: `Bearer ${token}` }}
+      );
+
+      if (activeTab === 'professional') {
+        setBookings(response.data.bookings.professional_bookings || []);
       } else {
-        // Real API call logic
-        let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-
-        if (is_DEBUG) {
-          console.log('Fetching real bookings:', {
-            isApprovedProfessional,
-            userRole,
-            activeTab
-          });
-        }
-
-        const response = await axios.get(
-          `${API_BASE_URL}/api/bookings/v1/`,
-          { headers: { Authorization: `Bearer ${token}` }}
-        );
-
-        if (activeTab === 'professional') {
-          setBookings(response.data.bookings.professional_bookings || []);
-        } else {
-          setBookings(response.data.bookings.client_bookings || []);
-        }
+        setBookings(response.data.bookings.client_bookings || []);
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -88,12 +71,11 @@ const MyBookings = () => {
       console.log('Fetching bookings due to dependency change:', {
         activeTab,
         userRole,
-        isApprovedProfessional,
-        is_prototype
+        isApprovedProfessional
       });
     }
     fetchBookings();
-  }, [activeTab, userRole, isApprovedProfessional, is_prototype]);
+  }, [activeTab, userRole, isApprovedProfessional]);
 
   // Handle search
   const handleSearch = (query) => {

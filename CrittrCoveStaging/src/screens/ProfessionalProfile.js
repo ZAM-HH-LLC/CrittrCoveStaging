@@ -128,7 +128,6 @@ const ProfessionalProfile = ({ route, navigation }) => {
   const [favoriteServices, setFavoriteServices] = useState([]);
   const [servicesModalVisible, setServicesModalVisible] = useState(false);
   const isWideScreen = useResponsiveLayout();
-  const { is_prototype } = useContext(AuthContext);
   const dynamicStyles = {
     profileSection: {
       backgroundColor: theme.colors.surface,
@@ -514,7 +513,6 @@ const ProfessionalProfile = ({ route, navigation }) => {
   );
 
   const renderGallery = () => {
-    if (is_prototype) return null;
     return (
       <View style={styles.gallerySection}>
         <Text style={styles.sectionTitle}>53 Photos</Text>
