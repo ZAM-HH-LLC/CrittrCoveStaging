@@ -11,7 +11,7 @@
     "build:staging": "npx expo export:web",
     "deploy:staging": "gh-pages -d web-build -b gh-pages-test",
     "build": "npx expo export:web",
-    "deploy": "git checkout gh-pages && git pull origin gh-pages && rm -rf * && git checkout main -- web-build && mv web-build/* . && rm -rf web-build && git add . && git commit -m \"Deploy web build\" && git push origin gh-pages && git checkout main",
+    "deploy": "cd web-build && git init && git add . && git commit -m \"Deploy to gh-pages\" && git push --force git@github.com:ZAM-HH-LLC/CrittrCoveStaging.git main:gh-pages",
     "deploy:full": "npm run build && npm run deploy"
   },
   "dependencies": {
@@ -65,7 +65,7 @@
     "@babel/core": "^7.24.0",
     "@babel/plugin-transform-export-namespace-from": "^7.25.9",
     "@babel/plugin-transform-template-literals": "^7.24.1",
-    "@expo/webpack-config": "^19.0.0",
+    "@expo/webpack-config": "^19.0.1",
     "crypto-browserify": "^3.12.1",
     "gh-pages": "^6.3.0",
     "stream-browserify": "^3.0.0",
