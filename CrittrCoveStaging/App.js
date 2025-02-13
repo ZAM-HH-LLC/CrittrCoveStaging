@@ -227,7 +227,7 @@ const PrototypeWarning = () => {
           <Text style={styles.closeButtonText}>✕</Text>
         </TouchableOpacity>
         <Text style={styles.warningText}>
-          🚧 MBABoss Staging MVP Mode: All features are currently under development. Join our waitlist for the full version to receive exclusive discounts, bonuses, and early-access promotions!
+          🚧 MBABOSS Staging MVP Mode: All features are currently under development. Join our waitlist for the full version to receive exclusive discounts, bonuses, and early-access promotions!
         </Text>
         <TouchableOpacity 
           style={styles.waitlistButton}
