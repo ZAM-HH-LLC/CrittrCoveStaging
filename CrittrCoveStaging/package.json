@@ -11,7 +11,7 @@
     "build:staging": "npx expo export:web",
     "deploy:staging": "gh-pages -d web-build -b gh-pages-test",
     "build": "npx expo export:web",
-    "deploy": "gh-pages -d web-build",
+    "deploy": "gh-pages -d web-build -b gh-pages",
     "deploy:full": "npm run build && npm run deploy"
   },
   "dependencies": {
