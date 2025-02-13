@@ -1,3 +1,0 @@
-"""
-Professional tests package.
-"""
