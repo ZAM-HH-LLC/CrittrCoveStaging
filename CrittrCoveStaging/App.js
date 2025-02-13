@@ -185,10 +185,66 @@ function TabNavigator() {
   );
 }
 
+const MVPWarning = () => {
+  const [isVisible, setIsVisible] = useState(true);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const checkBannerStatus = async () => {
+      if (Platform.OS === 'web') {
+        const hidden = sessionStorage.getItem('mvp_banner_hidden');
+        if (hidden === 'true') {
+          setIsVisible(false);
+        }
+      } else {
+        const hidden = await AsyncStorage.getItem('mvp_banner_hidden');
+        if (hidden === 'true') {
+          setIsVisible(false);
+        }
+      }
+    };
+    checkBannerStatus();
+  }, []);
+
+  const hideBanner = async () => {
+    if (Platform.OS === 'web') {
+      sessionStorage.setItem('mvp_banner_hidden', 'true');
+    } else {
+      await AsyncStorage.setItem('mvp_banner_hidden', 'true');
+    }
+    setIsVisible(false);
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <View style={styles.warningBanner}>
+      <View style={styles.warningContent}>
+        <TouchableOpacity 
+          style={styles.closeButton}
+          onPress={hideBanner}
+        >
+          <Text style={styles.closeButtonText}>✕</Text>
+        </TouchableOpacity>
+        <Text style={styles.warningText}>
+          🚧 MVP MODE: Features are still under development.
+        </Text>
+        <TouchableOpacity 
+          style={styles.waitlistButton}
+          onPress={() => navigateToFrom(navigation, 'Waitlist', 'Home')}
+        >
+          <Text style={styles.waitlistButtonText}>Join Waitlist</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 function AppContent() {
   const { checkAuthStatus, is_DEBUG } = useContext(AuthContext);
   const [initialRoute, setInitialRoute] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -256,6 +312,17 @@ function AppContent() {
     return null; // Or a loading spinner component
   }
 
+  const hideBanner = async () => {
+    if (Platform.OS === 'web') {
+      sessionStorage.setItem('mvp_banner_hidden', 'true');
+    } else {
+      await AsyncStorage.setItem('mvp_banner_hidden', 'true');
+    }
+    setIsVisible(false);
+  };
+
+  
+
   return (
     <NavigationContainer 
       ref={navigationRef}
@@ -268,34 +335,33 @@ function AppContent() {
         }
       }}
     >
-      <View style={styles.container}>
-        {Platform.OS === 'web' ? (
-          <Stack.Navigator
-            initialRouteName={initialRoute}
-            screenOptions={{
-              headerShown: true,
-              header: ({ navigation }) => <Navigation navigation={navigation} />,
-              ...TransitionPresets.SlideFromRightIOS,
-              presentation: 'card',
-              animation: 'slide_from_right'
-            }}
-          >
-            {screens.map(screen => (
-              <Stack.Screen 
-                key={screen.name}
-                name={screen.name} 
-                component={screen.component}
-                options={{
-                  headerShown: true,
-                  animation: 'slide_from_right'
-                }}
-              />
-            ))}
-          </Stack.Navigator>
-        ) : (
-          <TabNavigator />
-        )}
-      </View>
+      {isVisible && <MVPWarning />}
+      {Platform.OS === 'web' ? (
+        <Stack.Navigator
+          initialRouteName={initialRoute}
+          screenOptions={{
+            headerShown: true,
+            header: ({ navigation }) => <Navigation navigation={navigation} />,
+            ...TransitionPresets.SlideFromRightIOS,
+            presentation: 'card',
+            animation: 'slide_from_right'
+          }}
+        >
+          {screens.map(screen => (
+            <Stack.Screen 
+              key={screen.name}
+              name={screen.name} 
+              component={screen.component}
+              options={{
+                headerShown: true,
+                animation: 'slide_from_right'
+              }}
+            />
+          ))}
+        </Stack.Navigator>
+      ) : (
+        <TabNavigator />
+      )}
     </NavigationContainer>
   );
 }
