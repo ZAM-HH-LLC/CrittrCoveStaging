@@ -12,8 +12,8 @@ let CardElement = null;
 let IbanElement = null;
 
 // Initialize Stripe conditionally
-const initializeStripe = async (is_prototype) => {
-  if (!is_prototype && Platform.OS === 'web') {
+const initializeStripe = async () => {
+  if (Platform.OS === 'web') {
     const stripe = await import('@stripe/stripe-js');
     const stripeReact = await import('@stripe/react-stripe-js');
     stripePromise = stripe.loadStripe(STRIPE_PUBLISHABLE_KEY);
@@ -196,52 +196,10 @@ const NativePaymentElement = ({ onChange, paymentType }) => {
 };
 
 export const StripePaymentElement = ({ onChange, paymentType }) => {
-  const { is_prototype } = useContext(AuthContext);
 
   useEffect(() => {
-    initializeStripe(is_prototype);
-  }, [is_prototype]);
-
-  if (is_prototype) {
-    // Return simplified input fields for prototype mode
-    return (
-      <View style={styles.container}>
-        {paymentType === 'card' ? (
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="Card Number"
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="MM/YY"
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="CVC"
-              keyboardType="numeric"
-              secureTextEntry
-            />
-          </>
-        ) : (
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="Account Number"
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Routing Number"
-              keyboardType="numeric"
-            />
-          </>
-        )}
-      </View>
-    );
-  }
+    initializeStripe();
+  }, []);
 
   if (Platform.OS === 'web' && Elements && stripePromise) {
     return (

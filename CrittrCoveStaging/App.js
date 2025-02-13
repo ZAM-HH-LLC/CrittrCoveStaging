@@ -185,63 +185,8 @@ function TabNavigator() {
   );
 }
 
-const PrototypeWarning = () => {
-  const [isVisible, setIsVisible] = useState(true);
-  const navigation = useNavigation();
-
-  useEffect(() => {
-    const checkBannerStatus = async () => {
-      if (Platform.OS === 'web') {
-        const hidden = sessionStorage.getItem('prototype_banner_hidden');
-        if (hidden === 'true') {
-          setIsVisible(false);
-        }
-      } else {
-        const hidden = await AsyncStorage.getItem('prototype_banner_hidden');
-        if (hidden === 'true') {
-          setIsVisible(false);
-        }
-      }
-    };
-    checkBannerStatus();
-  }, []);
-
-  const hideBanner = async () => {
-    if (Platform.OS === 'web') {
-      sessionStorage.setItem('prototype_banner_hidden', 'true');
-    } else {
-      await AsyncStorage.setItem('prototype_banner_hidden', 'true');
-    }
-    setIsVisible(false);
-  };
-
-  if (!isVisible) return null;
-
-  return (
-    <View style={styles.warningBanner}>
-      <View style={styles.warningContent}>
-        <TouchableOpacity 
-          style={styles.closeButton}
-          onPress={hideBanner}
-        >
-          <Text style={styles.closeButtonText}>✕</Text>
-        </TouchableOpacity>
-        <Text style={styles.warningText}>
-          🚧 Staging MVP Mode: All features are currently under development. Join our waitlist for the full version to receive exclusive discounts, bonuses, and early-access promotions!
-        </Text>
-        <TouchableOpacity 
-          style={styles.waitlistButton}
-          onPress={() => navigateToFrom(navigation, 'Waitlist', 'Home')}
-        >
-          <Text style={styles.waitlistButtonText}>Join Waitlist</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
 function AppContent() {
-  const { checkAuthStatus, is_DEBUG, is_prototype } = useContext(AuthContext);
+  const { checkAuthStatus, is_DEBUG } = useContext(AuthContext);
   const [initialRoute, setInitialRoute] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -324,7 +269,6 @@ function AppContent() {
       }}
     >
       <View style={styles.container}>
-        {is_prototype && <PrototypeWarning />}
         {Platform.OS === 'web' ? (
           <Stack.Navigator
             initialRouteName={initialRoute}

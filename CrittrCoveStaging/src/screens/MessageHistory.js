@@ -3,11 +3,14 @@ import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, SafeAreaVie
 import { Button, Card, Paragraph, useTheme, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons'; // Import the icon library
 import { theme } from '../styles/theme';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, getStorage } from '../context/AuthContext';
 import RequestBookingModal from '../components/RequestBookingModal';
 import { createBooking, BOOKING_STATES, mockConversations, mockMessages, CURRENT_USER_ID } from '../data/mockData';
 import { format } from 'date-fns';
 import { useNavigation } from '@react-navigation/native';
+import { API_BASE_URL } from '../config/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth) => StyleSheet.create({
@@ -97,7 +100,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
     width: '100%',
     position: 'absolute',
     padding: 16,
-    paddingTop: screenWidth > 1000 ? 72 : 20,
+    paddingTop: screenWidth > 1000 ? 72 : 0,
     top: 0,
     left: 0,
     right: 0,
@@ -106,7 +109,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
   messageList: {
     // padding: 16,
     width: '100%',
-    paddingBottom: 80,
+    paddingTop: 80, // the list is inverted, so we need to pad the top to account for the footer on mobile
   },
   messageInputContainer: {
     flexDirection: 'row',
@@ -132,7 +135,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   messageCard: {
     marginVertical: 4,
-    maxWidth: '80%',
+    maxWidth: screenWidth > 1000 ? '40%' : '60%',
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -156,11 +159,11 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   sentMessageContainer: {
     alignItems: 'flex-end',
-    marginBottom: 16,
+    marginBottom: 4,
   },
   receivedMessageContainer: {
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 4,
   },
   senderAbove: {
     fontWeight: 'bold',
@@ -511,10 +514,13 @@ const createStyles = (screenWidth) => StyleSheet.create({
 });
 
 const MessageHistory = ({ navigation, route }) => {
-  console.log("TESTING MVP PUSH TO MVP AND gh-pages-test being deployed")
   const { colors } = useTheme();
-  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-  const styles = createStyles(screenWidth); // Initialize styles here
+  const { screenWidth } = useContext(AuthContext);
+  const styles = createStyles(screenWidth);
+  
+  // Add loading states
+  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [selectedConversationData, setSelectedConversationData] = useState(null);
@@ -522,54 +528,218 @@ const MessageHistory = ({ navigation, route }) => {
   const [isSending, setIsSending] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const IS_CLIENT = false; // This should come from your auth context
-  const { is_DEBUG } = useContext(AuthContext);
-  // Use mockConversations instead of local state
-  const [conversations, setConversations] = useState(mockConversations);
+  const { is_DEBUG, is_prototype, isApprovedProfessional } = useContext(AuthContext);
+  const [conversations, setConversations] = useState([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Add useEffect to set initial selected conversation
+  // Clear data on unmount
   useEffect(() => {
-    if (conversations.length > 0 && !selectedConversation) {
-      setSelectedConversation(conversations[0].id);
-    }
-  }, [conversations]);
+    return () => {
+      setConversations([]);
+      setMessages([]);
+      setSelectedConversation(null);
+      setSelectedConversationData(null);
+      setIsLoadingConversations(is_prototype ? false :true);
+      setIsLoadingMessages(false);
+      setCurrentPage(1);
+      setHasMore(true);
+    };
+  }, []);
 
-  useEffect(() => {
-    if (selectedConversation) {
-      const conversation = conversations.find(conv => conv.id === selectedConversation);
-      if (conversation) {
-        // Get messages for this conversation from mockData
-        const conversationMessages = mockMessages[selectedConversation] || [];
-        if (is_DEBUG) {
-          console.log('Selected conversation:', selectedConversation);
-          console.log('Available messages:', mockMessages);
-          console.log('Loading messages:', conversationMessages);
+  // Function to fetch conversations
+  const fetchConversations = async () => {
+    try {
+      setIsLoadingConversations(true);
+      
+      if (is_prototype) {
+        // In prototype mode, use mock data
+        console.log('MBABOSS Setting mock conversations in prototype mode');
+        setConversations(mockConversations);
+        if (mockConversations.length > 0 && screenWidth > 1000) {
+          setSelectedConversation(mockConversations[0].id);
         }
+        setIsLoadingConversations(false);
+        return;
+      }
+
+      console.log('MBABOSS Fetching conversations...');
+      const token = await getStorage('userToken');
+      console.log('MBABOSS User token exists:', !!token);
+      
+      // Log the full request details
+      const requestUrl = `${API_BASE_URL}/api/conversations/v1/`;
+      console.log('MBABOSS Making request to:', requestUrl);
+      
+      const response = await axios.get(requestUrl, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('MBABOSS Conversations response status:', response.status);
+      console.log('MBABOSS Conversations data:', response.data);
+      
+      if (response.data && Array.isArray(response.data)) {
+        setConversations(response.data);
         
+        // Auto-select first conversation on web
+        if (response.data.length > 0 && screenWidth > 1000) {
+          console.log('MBABOSS Auto-selecting first conversation:', response.data[0].conversation_id);
+          setSelectedConversation(response.data[0].conversation_id);
+        }
+      } else {
+        console.error('Invalid response format:', response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        console.error('Error status:', error.response.status);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+      } else {
+        console.error('Error setting up request:', error.message);
+      }
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  };
+
+  // Function to fetch messages for a conversation
+  const fetchMessages = async (conversationId, page = 1) => {
+    try {
+      if (page === 1) {
+        setIsLoadingMessages(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+      
+      const token = await getStorage('userToken');
+      const response = await axios.get(`${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/?page=${page}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (page === 1) {
+        setMessages(response.data.messages);
+      } else {
+        setMessages(prev => [...prev, ...response.data.messages]);
+      }
+      
+      setHasMore(response.data.has_more);
+      setCurrentPage(page);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    } finally {
+      setIsLoadingMessages(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Function to send a message
+  const SendNormalMessage = async (messageContent) => {
+    if (is_prototype) {
+      // Keep existing prototype message send logic
+      try {
+        const messageData = {
+          content: messageContent,
+          sender: 'Me',
+          timestamp: new Date().toISOString(),
+        };
+
+        const response = await new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ status: 200, data: messageData });
+          }, 1000);
+        });
+
+        console.log('MBABOSS Message sent:', response.data);
+        setMessages(prevMessages => [response.data, ...prevMessages]);
+        return response.data;
+      } catch (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
+    } else {
+      try {
+        const token = await getStorage('userToken');
+        const response = await axios.post(`${API_BASE_URL}/api/messages/v1/send_norm_message/`, {
+          conversation_id: selectedConversation,
+          content: messageContent
+        }, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Add new message to the beginning of the list since FlatList is inverted
+        setMessages(prevMessages => [response.data, ...prevMessages]);
+
+        // Update conversation's last message
+        setConversations(prev => prev.map(conv => 
+          conv.conversation_id === selectedConversation 
+            ? {
+                ...conv,
+                last_message: messageContent,
+                last_message_time: response.data.timestamp
+              }
+            : conv
+        ));
+
+        return response.data;
+      } catch (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
+    }
+  };
+
+  // Effect to load initial data
+  useEffect(() => {
+    console.log('MBABOSS MessageHistory mounted, is_prototype:', is_prototype);
+    if (is_prototype) {
+      console.log('MBABOSS Setting mock conversations');
+      setIsLoadingConversations(false);
+      setConversations(mockConversations);
+      if (mockConversations.length > 0 && screenWidth > 1000) {
+        setSelectedConversation(mockConversations[0].id);
+      }
+    } else {
+      console.log('MBABOSS Fetching real conversations');
+      fetchConversations();
+    }
+  }, [is_prototype, screenWidth]);
+
+  // Effect to load messages when conversation is selected
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    if (is_prototype) {
+      const conversation = mockConversations.find(conv => conv.id === selectedConversation);
+      if (conversation) {
+        const conversationMessages = mockMessages[selectedConversation] || [];
         setMessages(conversationMessages);
         setSelectedConversationData(conversation);
       }
+    } else {
+      fetchMessages(selectedConversation);
+      const conversation = conversations.find(conv => conv.conversation_id === selectedConversation);
+      setSelectedConversationData(conversation);
     }
-  }, [selectedConversation, conversations]);
+  }, [selectedConversation, is_prototype]);
 
-  useEffect(() => {
-    // Check if we have a selectedConversation from navigation params
-    if (route.params?.selectedConversation) {
-      setSelectedConversation(route.params.selectedConversation);
-      
-      // If this is a new conversation with a professional, update the conversation data
-      if (route.params.professionalId && route.params.professionalName) {
-        const conversation = mockConversations.find(
-          conv => conv.id === route.params.selectedConversation
-        );
-        if (conversation) {
-          conversation.professionalId = route.params.professionalId;
-          conversation.name = route.params.professionalName;
-          conversation.isProfessional = true;
-        }
-      }
+  // Add loadMoreMessages function for infinite scroll
+  const loadMoreMessages = () => {
+    if (hasMore && !isLoadingMore && !is_prototype) {
+      fetchMessages(selectedConversation, currentPage + 1);
     }
-  }, [route.params]);
+  };
 
   const isCurrentUserMessage = useCallback((message) => {
     return message.sender === 'Me';
@@ -591,7 +761,7 @@ const MessageHistory = ({ navigation, route }) => {
               pets: item.data.pets,
               occurrences: item.data.occurrences,
               status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-              clientName: selectedConversationData.name,
+              clientName: selectedConversationData.name || selectedConversationData.other_user_name,
               professionalName: 'Me'
             }
           });
@@ -606,15 +776,16 @@ const MessageHistory = ({ navigation, route }) => {
     }
 
     // Existing message rendering code
-    const isFromMe = item.sender === CURRENT_USER_ID;
+    // Update message rendering to use sent_by_other_user
+    const isFromMe = !item.sent_by_other_user;
     return (
       <View style={isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer}>
-        <Text style={[
+        {/* <Text style={[
           styles.senderAbove,
           isFromMe ? styles.sentSenderName : styles.receivedSenderName
         ]}>
-          {isFromMe ? 'Me' : selectedConversationData?.name}
-        </Text>
+          {isFromMe ? 'Me' : selectedConversationData?.name || selectedConversationData?.other_user_name}
+        </Text> */}
         <View style={[
           styles.messageCard, 
           isFromMe ? styles.sentMessage : styles.receivedMessage
@@ -628,37 +799,15 @@ const MessageHistory = ({ navigation, route }) => {
             </Text>
           </View>
         </View>
-        <Text style={[
+        {/* <Text style={[
           styles.timestampBelow,
           isFromMe ? styles.sentTimestamp : styles.receivedTimestamp
         ]}>
           {new Date(item.timestamp).toLocaleTimeString()}
-        </Text>
+        </Text> */}
       </View>
     );
   }, [selectedConversationData, renderBookingRequestMessage]);
-
-  const simulateMessageSend = async (messageContent) => {
-    try {
-      const messageData = {
-        content: messageContent,
-        sender: 'Me',
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({ status: 200, data: messageData });
-        }, 1000);
-      });
-
-      console.log('Message sent:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw error;
-    }
-  };
 
   const WebInput = () => {
     const [message, setMessage] = useState('');
@@ -668,20 +817,7 @@ const MessageHistory = ({ navigation, route }) => {
       if (message.trim() && !isSending) {
         setIsSending(true);
         try {
-          await simulateMessageSend(message.trim());
-          const newMsg = {
-            message_id: Date.now().toString(),
-            participant1_id: selectedConversationData?.participant1_id !== CURRENT_USER_ID ? selectedConversationData?.participant1_id : CURRENT_USER_ID,
-            participant2_id: selectedConversationData?.participant2_id !== CURRENT_USER_ID ? selectedConversationData?.participant2_id : CURRENT_USER_ID,
-            sender: CURRENT_USER_ID,
-            role_map: selectedConversationData?.role_map,
-            content: message.trim(),
-            timestamp: new Date().toISOString(),
-            status: "sent",
-            is_booking_request: false,
-            metadata: {}
-          };
-          setMessages(prevMessages => [...prevMessages, newMsg]);
+          await SendNormalMessage(message.trim());
           setMessage('');
         } catch (error) {
           console.error('Failed to send message:', error);
@@ -734,20 +870,7 @@ const MessageHistory = ({ navigation, route }) => {
       if (message.trim() && !isSending) {
         setIsSending(true);
         try {
-          await simulateMessageSend(message.trim());
-          const newMsg = {
-            message_id: Date.now().toString(),
-            participant1_id: selectedConversationData?.participant1_id !== CURRENT_USER_ID ? selectedConversationData?.participant1_id : CURRENT_USER_ID,
-            participant2_id: selectedConversationData?.participant2_id !== CURRENT_USER_ID ? selectedConversationData?.participant2_id : CURRENT_USER_ID,
-            sender: CURRENT_USER_ID,
-            role_map: selectedConversationData?.role_map,
-            content: message.trim(),
-            timestamp: new Date().toISOString(),
-            status: "sent",
-            is_booking_request: false,
-            metadata: {}
-          };
-          setMessages(prevMessages => [...prevMessages, newMsg]);
+          await SendNormalMessage(message.trim());
           setMessage('');
         } catch (error) {
           console.error('Failed to send message:', error);
@@ -787,20 +910,20 @@ const MessageHistory = ({ navigation, route }) => {
   const MessageInput = Platform.OS === 'web' ? <WebInput /> : <MobileInput />;
   
   const handleRequestBooking = async () => {
-    const currentConversation = conversations.find(c => c.id === selectedConversation);
-    console.log('Current conversation:', currentConversation);
-    console.log('CURRENT_USER_ID:', CURRENT_USER_ID);
-    console.log('Selected conversation ID:', selectedConversation);
+    const currentConversation = conversations.find(c => c.conversation_id === selectedConversation);
+    console.log('MBABOSS Current conversation:', currentConversation);
+    console.log('MBABOSS CURRENT_USER_ID:', CURRENT_USER_ID);
+    console.log('MBABOSS Selected conversation ID:', selectedConversation);
     
     if (!currentConversation) {
-      console.log('No conversation found');
+      console.log('MBABOSS No conversation found');
       return;
     }
 
     // Log participant and role information
-    console.log('Participant1 ID:', currentConversation.participant1_id);
-    console.log('Participant2 ID:', currentConversation.participant2_id);
-    console.log('Role map:', currentConversation.role_map);
+    console.log('MBABOSS Participant1 ID:', currentConversation.participant1_id);
+    console.log('MBABOSS Participant2 ID:', currentConversation.participant2_id);
+    console.log('MBABOSS Role map:', currentConversation.role_map);
 
     // Check if current user is the professional by checking their role in the conversation
     const isProfessional = 
@@ -809,36 +932,36 @@ const MessageHistory = ({ navigation, route }) => {
       (currentConversation.participant2_id === CURRENT_USER_ID && 
        currentConversation.role_map.participant2_role === "professional");
     
-    console.log('Is Professional?', isProfessional);
+    console.log('MBABOSS Is Professional?', isProfessional);
 
     if (isProfessional) {
-      console.log('User is professional - creating booking and navigating to details');
+      console.log('MBABOSS User is professional - creating booking and navigating to details');
       try {
         // Get the client ID (the other participant)
         const clientId = currentConversation.participant1_id === CURRENT_USER_ID ? 
           currentConversation.participant2_id : currentConversation.participant1_id;
         const professionalId = CURRENT_USER_ID;
         
-        console.log('Creating booking with:', {
+        console.log('MBABOSS Creating booking with:', {
           clientId,
           professionalId,
-          clientName: currentConversation.name
+          clientName: currentConversation.name || currentConversation.other_user_name
         });
 
         const bookingId = await createBooking(
           clientId,
           professionalId,
           {
-            clientName: currentConversation.name,
+            clientName: currentConversation.name || currentConversation.other_user_name,
             professionalName: 'Me',
             status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
           }
         );
 
-        console.log('Created booking with ID:', bookingId);
+        console.log('MBABOSS Created booking with ID:', bookingId);
 
         if (bookingId) {
-          console.log('Navigating to BookingDetails with:', {
+          console.log('MBABOSS Navigating to BookingDetails with:', {
             bookingId,
             initialData: null
           });
@@ -853,7 +976,7 @@ const MessageHistory = ({ navigation, route }) => {
         Alert.alert('Error', 'Unable to create booking. Please try again.');
       }
     } else {
-      console.log('User is client - showing request modal');
+      console.log('MBABOSS User is client - showing request modal');
       setShowRequestModal(true);
     }
     
@@ -873,7 +996,7 @@ const MessageHistory = ({ navigation, route }) => {
         }
       );
 
-      console.log('Created booking with ID:', bookingId);
+      console.log('MBABOSS Created booking with ID:', bookingId);
 
       setShowRequestModal(false);
       navigation.navigate('BookingDetails', {
@@ -948,31 +1071,31 @@ const MessageHistory = ({ navigation, route }) => {
         
         return (
           <TouchableOpacity
-            key={conv.id}
+            key={conv.conversation_id}
             style={[
               styles.conversationItem,
-              selectedConversation === conv.id && styles.selectedConversation
+              selectedConversation === conv.conversation_id && styles.selectedConversation
             ]}
-            onPress={() => setSelectedConversation(conv.id)}
+            onPress={() => setSelectedConversation(conv.conversation_id)}
           >
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
                 <Text style={styles.conversationName}>
-                  {otherParticipantName || conv.name || 'Unknown'}
+                  {otherParticipantName || conv.name || conv.other_user_name || 'Unknown'}
                 </Text>
                 <Text style={styles.conversationTime}>
-                  {new Date(conv.timestamp).toLocaleTimeString()}
+                  {new Date(conv.last_message_time).toLocaleTimeString()}
                 </Text>
               </View>
               <Text 
                 style={[
                   styles.conversationLastMessage,
-                  selectedConversation === conv.id && styles.activeConversationText,
+                  selectedConversation === conv.conversation_id && styles.activeConversationText,
                   conv.unread && styles.unreadMessage
                 ]} 
                 numberOfLines={1}
               >
-                {conv.lastMessage}
+                {conv.last_message}
               </Text>
               {conv.bookingStatus && (
                 <View style={[
@@ -991,7 +1114,7 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Update the message section to handle empty states
+  // Update the message section to handle empty states and fix positioning
   const renderMessageSection = () => {
     if (!selectedConversation) {
       return null;
@@ -1002,7 +1125,7 @@ const MessageHistory = ({ navigation, route }) => {
         {screenWidth > 1000 && selectedConversationData && (
           <View style={styles.messageHeader}>
             <Text style={styles.messageHeaderName}>
-              {selectedConversationData.name}
+              {selectedConversationData.name || selectedConversationData.other_user_name}
             </Text>
           </View>
         )}
@@ -1017,6 +1140,18 @@ const MessageHistory = ({ navigation, route }) => {
               renderItem={renderMessage}
               keyExtractor={item => (item.message_id || Date.now().toString())}
               style={styles.messageList}
+              onEndReached={loadMoreMessages}
+              onEndReachedThreshold={0.5}
+              inverted={true}
+              contentContainerStyle={{
+                flexGrow: 1,
+                justifyContent: 'flex-end',
+                paddingBottom: 16
+              }}
+              maintainVisibleContentPosition={{
+                minIndexForVisible: 0,
+                autoscrollToTopThreshold: 10
+              }}
             />
           )}
         </View>
@@ -1046,7 +1181,14 @@ const MessageHistory = ({ navigation, route }) => {
                     size={20} 
                     color={theme.colors.primary} 
                   />
-                  <Text style={styles.dropdownText}>Request Booking</Text>
+                  <Text style={styles.dropdownText}>
+                    {selectedConversationData && (
+                      (selectedConversationData.participant1_id === CURRENT_USER_ID && 
+                       selectedConversationData.role_map.participant1_role === "professional") ||
+                      (selectedConversationData.participant2_id === CURRENT_USER_ID && 
+                       selectedConversationData.role_map.participant2_role === "professional")
+                    ) ? "Create Booking" : "Request Booking"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1058,27 +1200,6 @@ const MessageHistory = ({ navigation, route }) => {
       </View>
     );
   };
-
-  // Update the useEffect for window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const width = Dimensions.get('window').width;
-      setScreenWidth(width);
-    };
-
-    if (Platform.OS === 'web') {
-      window.addEventListener('resize', handleResize);
-      handleResize(); // Call immediately to set initial width
-      
-      // Also listen for orientation changes
-      window.addEventListener('orientationchange', handleResize);
-      
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        window.removeEventListener('orientationchange', handleResize);
-      };
-    }
-  }, []);
 
   const renderMobileHeader = () => (
     <View style={styles.mobileHeader}>
@@ -1094,7 +1215,7 @@ const MessageHistory = ({ navigation, route }) => {
           />
         </TouchableOpacity>
         <Text style={styles.mobileHeaderName}>
-          {selectedConversationData?.name}
+          {selectedConversationData?.name || selectedConversationData?.other_user_name}
         </Text>
       </View>
     </View>
@@ -1218,14 +1339,16 @@ const MessageHistory = ({ navigation, route }) => {
         marginBottom: 24,
         textAlign: 'center'
       }}>
-        Create services to start getting bookings and messages from clients
+        {is_prototype ? 
+          'Create services to start getting bookings and messages from clients' :
+          'Search professionals to find services and start messaging'}
       </Text>
       <Button
         mode="contained"
-        onPress={() => navigation.navigate('Services')}
+        onPress={() => navigation.navigate(is_prototype ? 'Services' : 'SearchProfessionalListing')}
         style={{ borderRadius: 8 }}
       >
-        Create Services
+        {is_prototype ? 'Create Services' : 'Find Professionals'}
       </Button>
     </View>
   );
@@ -1235,7 +1358,12 @@ const MessageHistory = ({ navigation, route }) => {
       styles.container,
       screenWidth <= 1000 && selectedConversation && styles.mobileContainer
     ]}>
-      {conversations.length > 0 ? (
+      {isLoadingConversations ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading conversations...</Text>
+        </View>
+      ) : conversations.length > 0 ? (
         <>
           {renderHeader()}
           <View style={[
@@ -1247,7 +1375,14 @@ const MessageHistory = ({ navigation, route }) => {
                 <View style={styles.mobileMessageView}>
                   {renderMobileHeader()}
                   <View style={styles.mobileContent}>
-                    {renderMessageSection()}
+                    {isLoadingMessages ? (
+                      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                        <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading messages...</Text>
+                      </View>
+                    ) : (
+                      renderMessageSection()
+                    )}
                   </View>
                 </View>
               ) : (
@@ -1256,7 +1391,14 @@ const MessageHistory = ({ navigation, route }) => {
             ) : (
               <>
                 {renderConversationList()}
-                {renderMessageSection()}
+                {isLoadingMessages ? (
+                  <View style={[styles.messageSection, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading messages...</Text>
+                  </View>
+                ) : (
+                  renderMessageSection()
+                )}
               </>
             )}
           </View>
@@ -1275,3 +1417,4 @@ const MessageHistory = ({ navigation, route }) => {
 };
 
 export default MessageHistory;
+
