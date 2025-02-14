@@ -17,11 +17,15 @@ const DatePicker = ({
   const dateValue = value ? new Date(value) : new Date();
 
   const handleChange = (event, selectedDate) => {
+    const currentDate = selectedDate || dateValue;
+    
+    // Only close picker on Android after selection
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
+    
     if (selectedDate) {
-      onChange(selectedDate.toISOString().split('T')[0]);
+      onChange(currentDate.toISOString().split('T')[0]);
     }
   };
 
@@ -30,8 +34,12 @@ const DatePicker = ({
       <input
         type="date"
         value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          e.preventDefault();
+          onChange(e.target.value);
+        }}
         style={styles.webDatePicker}
+        placeholder={placeholder}
       />
     );
   } else if (Platform.OS === 'ios') {
@@ -74,6 +82,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     fontSize: theme.fontSizes.medium,
+    width: '100%',
   },
   androidButton: {
     padding: 8,

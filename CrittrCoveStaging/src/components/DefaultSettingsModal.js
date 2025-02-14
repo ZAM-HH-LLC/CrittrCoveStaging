@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Switch, ScrollView, Platform, Dimensions } from 'react-native';
+import React, { useState, useEffect, useContext, useRef } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Switch, ScrollView, Platform, Dimensions, Animated } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../styles/theme';
 import DatePicker from './DatePicker';
+import TimePicker from './TimePicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
@@ -38,6 +39,48 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isCurrentlyUnavailable, setIsCurrentlyUnavailable] = useState(false);
   const [showDayDropdown, setShowDayDropdown] = useState(false);
+  const [validationError, setValidationError] = useState("Please select day(s) first");
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
+  const handleClose = () => {
+    // Animate out
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 600,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      // Call onClose after animations complete
+      onClose();
+    });
+  };
+
+  useEffect(() => {
+    if (isVisible) {
+      // Fade in the background overlay
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      // Slide up the modal content
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isVisible]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -131,56 +174,42 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
     setIsCurrentlyUnavailable(!makeAvailable);
   };
 
-  const renderTimePicker = (type, value, onChange) => {
-    if (Platform.OS === 'web') {
-      return (
-        <input
-          type="time"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={styles.webTimePicker}
-        />
-      );
-    } else if (Platform.OS === 'ios') {
-        return (
-            <DateTimePicker
-          value={new Date(`2000-01-01T${value}`)}
-          mode="time"
-          is24Hour={false}
-          display="default"
-          onChange={(event, selectedTime) => {
-            if (selectedTime) {
-              onChange(selectedTime.toTimeString().slice(0, 5));
-            }
-          }}
-        />
-        )
+  // Update validation error whenever selected days changes
+  useEffect(() => {
+    if (selectedDays.length === 0) {
+      setValidationError("Please select day(s) first");
     } else {
-      return (
-        <>
-          <TouchableOpacity onPress={() => setShowTimePicker({ visible: true, type, value })}>
-            <Text>{value}</Text>
-          </TouchableOpacity>
-          {Platform.OS === 'android' && showTimePicker.visible && showTimePicker.type === type && (
-            <DateTimePicker
-              value={new Date(`2000-01-01T${showTimePicker.value}`)}
-              mode="time"
-              is24Hour={false}
-              display="default"
-              onChange={(event, selectedTime) => {
-                setShowTimePicker({ visible: false, type: '', value: '' });
-                if (selectedTime) {
-                  onChange(selectedTime.toTimeString().slice(0, 5));
-                }
-              }}
-            />
-          )}
-        </>
-      );
+      setValidationError("");
     }
+  }, [selectedDays]);
+
+  const renderTimePicker = (type, value, onChange) => {
+    return (
+      <TimePicker
+        value={new Date(`2000-01-01T${value}`)}
+        onChange={(selectedTime) => {
+          const timeString = selectedTime.toTimeString().slice(0, 5);
+          onChange(timeString);
+        }}
+        fullWidth={false}
+        disabled={selectedDays.length === 0}
+        error={validationError}
+      />
+    );
   };
 
   const renderEndDatePicker = () => {
+    // Guard against no selected days
+    if (!selectedDays || selectedDays.length === 0) {
+      return (
+        <DatePicker
+          value={null}
+          onChange={(date) => {}}
+          placeholder="Select End Date"
+        />
+      );
+    }
+
     const daySettings = settings[selectedDays[0]];
     
     return (
@@ -224,7 +253,7 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
           <>
             <View style={styles.settingRow}>
               <Text style={selectedDays.length === 0 ? styles.disabledText : styles.enabledText}>Start Time:</Text>
-              <View pointerEvents={selectedDays.length === 0 ? 'none' : 'auto'}>
+              <View style={styles.timePickerContainer}>
                 {renderTimePicker(
                   'startTime',
                   daySettings.startTime,
@@ -244,7 +273,7 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
             </View>
             <View style={styles.settingRow}>
               <Text style={selectedDays.length === 0 ? styles.disabledText : styles.enabledText}>End Time:</Text>
-              <View pointerEvents={selectedDays.length === 0 ? 'none' : 'auto'}>
+              <View style={styles.timePickerContainer}>
                 {renderTimePicker(
                   'endTime',
                   daySettings.endTime,
@@ -267,22 +296,7 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
         <View style={styles.settingRow}>
           <Text style={selectedDays.length === 0 ? styles.disabledText : styles.enabledText}>End Date:</Text>
           <View pointerEvents={selectedDays.length === 0 ? 'none' : 'auto'}>
-            <DatePicker
-              value={daySettings.endDate}
-              onChange={(date) => {
-                if (selectedDays.length === 0) return;
-                const newSettings = { ...settings };
-                selectedDays.forEach(day => {
-                  newSettings[day] = {
-                    ...newSettings[day],
-                    endDate: date
-                  };
-                });
-                setSettings(newSettings);
-              }}
-              placeholder="Select End Date"
-              disabled={selectedDays.length === 0}
-            />
+            {renderEndDatePicker()}
           </View>
         </View>
       </View>
@@ -372,18 +386,25 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
   return (
     <Modal
       visible={isVisible}
-      animationType="slide"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <View style={styles.modalContainer}>
-        <View style={[
+      <Animated.View style={[
+        styles.modalContainer,
+        {
+          opacity: fadeAnim,
+        }
+      ]}>
+        <Animated.View style={[
           styles.modalContent,
-          { width: screenWidth < 600 ? '90%' : 600 }
+          {
+            width: screenWidth < 600 ? '90%' : 600,
+            transform: [{ translateY: slideAnim }]
+          }
         ]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Default Settings</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
@@ -405,8 +426,8 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
               <Text style={styles.buttonText}>Mark Unavailable</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 };
@@ -511,7 +532,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 15,
+    gap: 12,
   },
   webTimePicker: {
     padding: 5,
@@ -595,6 +617,14 @@ const styles = StyleSheet.create({
   enabledText: {
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  timePickerContainer: {
+    flex: 1,
+    maxWidth: 150,
+  },
+  datePickerContainer: {
+    flex: 1,
+    maxWidth: 200,
   },
 });
 
