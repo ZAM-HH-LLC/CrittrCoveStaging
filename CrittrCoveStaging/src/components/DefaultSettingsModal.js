@@ -202,22 +202,38 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
     // Guard against no selected days
     if (!selectedDays || selectedDays.length === 0) {
       return (
-        <DatePicker
-          value={null}
-          onChange={(date) => {}}
-          placeholder="Select End Date"
-        />
+        <View 
+          style={styles.datePickerContainer} 
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <DatePicker
+            value={null}
+            onChange={(date) => {}}
+            placeholder="Select End Date"
+            disabled={true}
+            isInModal={true}
+          />
+        </View>
       );
     }
 
     const daySettings = settings[selectedDays[0]];
     
     return (
-      <DatePicker
-        value={daySettings.endDate}
-        onChange={(date) => updateDaySettings(selectedDays[0], { endDate: date })}
-        placeholder="Select End Date"
-      />
+      <View 
+        style={styles.datePickerContainer}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <DatePicker
+          value={daySettings.endDate}
+          onChange={(date) => updateDaySettings(selectedDays[0], { endDate: date })}
+          placeholder="Select End Date"
+          disabled={false}
+          isInModal={true}
+        />
+      </View>
     );
   };
 
