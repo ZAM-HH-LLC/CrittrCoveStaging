@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { theme } from '../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, parse } from 'date-fns';
@@ -15,6 +15,46 @@ const UnavailableTimesModal = ({
   bookings
 }) => {
   const navigation = useNavigation();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
+  useEffect(() => {
+    if (visible) {
+      // Fade in the background overlay
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      // Slide up the modal content
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    // Animate out
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 600,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      // Call onClose after animations complete
+      onClose();
+    });
+  };
 
   const formatTime = (time) => {
     const [hours, minutes] = time.split(':');
@@ -134,15 +174,24 @@ const UnavailableTimesModal = ({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
+      <Animated.View style={[
+        styles.modalContainer,
+        {
+          opacity: fadeAnim,
+        }
+      ]}>
+        <Animated.View style={[
+          styles.modalContent,
+          {
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Unavailable Times</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
@@ -153,8 +202,8 @@ const UnavailableTimesModal = ({
               <Text style={styles.emptyText}>No unavailable times for selected date(s)</Text>
             )}
           </ScrollView>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 };

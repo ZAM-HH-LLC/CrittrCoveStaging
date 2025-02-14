@@ -162,11 +162,18 @@ export default function Navigation({ navigation }) {
 
   const renderMenuItems = () => {
     if (!isSignedIn) {
+      if (isMobile) {
+        return [
+          { title: 'Sign In', icon: 'login', route: 'SignIn' },
+          { title: 'Sign Up', icon: 'account-plus', route: 'SignUp' },
+          { title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' },
+          { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
+          { title: 'More', icon: 'dots-horizontal', route: 'More' },
+        ];
+      }
       return [
-        { title: 'Home', icon: 'home', route: 'Home' },
         { title: 'Sign In', icon: 'login', route: 'SignIn' },
         { title: 'Sign Up', icon: 'account-plus', route: 'SignUp' },
-        { title: 'Become Pro', icon: 'clipboard-text-outline', route: 'Waitlist' },
         { title: 'More', icon: 'dots-horizontal', route: 'More' },
       ];
     } else if (userRole === 'professional') {
@@ -230,11 +237,23 @@ export default function Navigation({ navigation }) {
     <>
       {Platform.OS === 'web' ? (
         <Appbar.Header style={[styles.header, { backgroundColor: colors.primary }]}>
-          <View style={styles.titleContainer}>
+          <View style={[styles.titleContainer, {flex: isMobile || isSignedIn ? 1 : undefined}]}>
             <TouchableOpacity onPress={() => handleNavigation('Home')} style={{ width: 150 }}>
               <Text style={[styles.title, { color: colors.whiteText, width: 110 }]}>CrittrCove</Text>
             </TouchableOpacity>
           </View>
+          {!isMobile && !isSignedIn ? (
+            <View style={styles.titleContainer2}>
+              <TouchableOpacity onPress={() => handleNavigation('BecomeProfessional')} style={styles.navLinkContainer}>
+                <MaterialCommunityIcons name="account-heart" size={20} color={theme.colors.whiteText} />
+                <Text style={[styles.title, { color: theme.colors.whiteText, width: 110, fontWeight: '100', marginLeft: 4, fontSize: 16 }]}>Become a Pro</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleNavigation('SearchProfessionalsListing')} style={styles.navLinkContainer}>
+                <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.whiteText} />
+                <Text style={[styles.title, { color: theme.colors.whiteText, width: 110, fontWeight: '100', marginLeft: 4, fontSize: 16 }]}>Search Pros</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {isMobile ? (
             <Menu
               visible={visible}
@@ -284,8 +303,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
   },
   titleContainer: {
+    justifyContent: 'center',
+  },
+  titleContainer2: {
     flex: 1,
     justifyContent: 'center',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
   },
   title: {
     textAlign: 'left',
@@ -343,5 +367,10 @@ const styles = StyleSheet.create({
     color: theme.colors.whiteText,
     fontFamily: theme.fonts.regular.fontFamily,
     fontWeight: '600',
+  },
+  navLinkContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 6,
   },
 });

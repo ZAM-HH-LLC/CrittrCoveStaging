@@ -1,18 +1,21 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Switch, Animated } from 'react-native';
 import { theme } from '../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, parse } from 'date-fns';
 import TimePicker from './TimePicker';
 import { SERVICE_TYPES, ALL_SERVICES } from '../data/mockData';
+import { AuthContext } from '../context/AuthContext';
 
 const AvailabilityBottomSheet = ({ 
   selectedDates, 
   currentAvailability,
   onClose,
   onViewUnavailableTimes,
-  onSave
+  onSave,
+  onMinimize
 }) => {
+  const { screenWidth } = useContext(AuthContext);
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
   const [selectedServices, setSelectedServices] = useState([]);
@@ -22,6 +25,17 @@ const AvailabilityBottomSheet = ({
   const [isMinimized, setIsMinimized] = useState(false);
   const animatedHeight = useRef(new Animated.Value(1)).current;
   const animatedOpacity = useRef(new Animated.Value(1)).current;
+  const slideAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Start the entrance animation when the component mounts
+    Animated.spring(slideAnimation, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 8
+    }).start();
+  }, []);
 
   const getAvailabilityStatus = () => {
     if (!selectedDates || selectedDates.length === 0) return 'Unknown';
@@ -77,6 +91,11 @@ const AvailabilityBottomSheet = ({
   const toggleMinimized = () => {
     const toValue = isMinimized ? 1 : 0;
     
+    // Call onMinimize first to start the background fade
+    const newMinimizedState = !isMinimized;
+    onMinimize?.(newMinimizedState);
+    
+    // Then start our animations
     Animated.parallel([
       Animated.timing(animatedHeight, {
         toValue,
@@ -85,72 +104,121 @@ const AvailabilityBottomSheet = ({
       }),
       Animated.timing(animatedOpacity, {
         toValue,
-        duration: 200,
+        duration: 300,
         useNativeDriver: false
       })
-    ]).start();
-
-    setIsMinimized(!isMinimized);
+    ]).start(() => {
+      setIsMinimized(newMinimizedState);
+    });
   };
 
-  const maxHeight = 600; // Adjust this value based on your content
-  const minHeight = 80;
+  const handleClose = () => {
+    // Animate the slide down
+    Animated.timing(slideAnimation, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      // Call the onClose prop after animation completes
+      onClose();
+    });
+  };
+
+  const maxHeight = isAllDay ? 364 : 445; // Adjust this value based on your content
+  const minHeight = 96;
 
   const containerHeight = animatedHeight.interpolate({
     inputRange: [0, 1],
     outputRange: [minHeight, maxHeight]
   });
 
-  return (
-    <View style={styles.overlay}>
-      <Animated.View 
-        style={[
-          styles.container,
-          { height: containerHeight }
-        ]}
-      >
+  const renderHandle = () => {
+    if (Platform.OS === 'web') {
+      return (
         <TouchableOpacity 
           onPress={toggleMinimized}
           style={styles.handleContainer}
         >
-          <View style={styles.handle} />
+          <MaterialCommunityIcons 
+            name={isMinimized ? "chevron-up" : "chevron-down"}
+            size={24}
+            color={theme.colors.text}
+          />
         </TouchableOpacity>
+      );
+    }
+
+    return (
+      <TouchableOpacity 
+        onPress={toggleMinimized}
+        style={styles.handleContainer}
+      >
+        <View style={styles.handle} />
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={[
+      styles.overlay,
+      { pointerEvents: isMinimized ? 'box-none' : 'auto' } // Allow clicks through when minimized
+    ]}>
+      <Animated.View 
+        style={[
+          styles.container,
+          { 
+            height: containerHeight,
+            transform: [{
+              translateY: slideAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [600, 0]
+              })
+            }]
+          }
+        ]}
+      >
+        {renderHandle()}
         
         <View style={[styles.header, isMinimized && styles.headerMinimized]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
+          {!isMinimized && (
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+          )}
           <View style={styles.headerCenter}>
             <Text style={styles.dateText}>{formatDateRange()}</Text>
             <Text style={[styles.statusText, { color: getStatusColor() }]}>
               {getAvailabilityStatus()}
             </Text>
           </View>
-          <Animated.View style={{ opacity: animatedOpacity }}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={onViewUnavailableTimes}
-            >
-              <MaterialCommunityIcons 
-                name="clock-outline" 
-                size={24} 
-                color={theme.colors.primary} 
-              />
-              <Text style={styles.actionButtonText}>
-                {'Unavailable\nTimes'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {!isMinimized && (
+            <Animated.View style={{ opacity: animatedOpacity }}>
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={onViewUnavailableTimes}
+              >
+                <MaterialCommunityIcons 
+                  name="clock-outline" 
+                  size={24} 
+                  color={theme.colors.primary} 
+                />
+                <Text style={styles.actionButtonText}>
+                  {'Unavailable\nTimes'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
         </View>
 
         <Animated.View 
           style={[
             styles.content,
-            { opacity: animatedOpacity }
+            { opacity: animatedOpacity,
+             }
           ]}
         >
           <View style={styles.serviceSection}>
-            <Text style={styles.label}>Service Type(s)</Text>
+            <Text style={[styles.label, { textAlign: 'center' }]}>Change Availability for Services</Text>
             <TouchableOpacity
               style={[styles.serviceSelector, error && selectedServices.length <= 0 && styles.serviceSelectorError]}
               onPress={() => setShowServiceDropdown(!showServiceDropdown)}
@@ -162,7 +230,7 @@ const AvailabilityBottomSheet = ({
                     : selectedServices.length > 1
                       ? `${selectedServices.length} services selected`
                       : selectedServices[0]
-                  : "Select service type(s)"
+                  : "Select one or more service types"
                 }
               </Text>
               <MaterialCommunityIcons 
@@ -222,7 +290,7 @@ const AvailabilityBottomSheet = ({
           </View>
 
           <View style={styles.timeToggleContainer}>
-            <Text style={styles.label}>Time Selection</Text>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Time Selection</Text>
             <View style={styles.customToggle}>
               <TouchableOpacity 
                 style={[
@@ -254,7 +322,7 @@ const AvailabilityBottomSheet = ({
           {!isAllDay && (
             <View style={styles.timeSection}>
               <View style={styles.timeContainer}>
-                <Text style={styles.label}>Start Time</Text>
+                <Text style={[styles.label, { marginBottom: 0 }]}>Start Time</Text>
                 <TimePicker
                   value={startTime}
                   onChange={setStartTime}
@@ -262,7 +330,7 @@ const AvailabilityBottomSheet = ({
                 />
               </View>
               <View style={styles.timeContainer}>
-                <Text style={styles.label}>End Time</Text>
+                <Text style={[styles.label, { marginBottom: 0 }]}>End Time</Text>
                 <TimePicker
                   value={endTime}
                   onChange={setEndTime}
@@ -295,6 +363,7 @@ const AvailabilityBottomSheet = ({
 const styles = StyleSheet.create({
   overlay: {
     width: '100%',
+    pointerEvents: 'box-none', // This allows clicks to pass through to elements behind
   },
   container: {
     backgroundColor: theme.colors.surface,
@@ -302,7 +371,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 16,
     paddingBottom: Platform.OS === 'ios' ? 40 : 16,
-    maxWidth: 800,
+    maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
     shadowColor: '#000',
@@ -313,7 +382,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-    overflow: 'hidden',
   },
   handleContainer: {
     width: '100%',
@@ -331,11 +399,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
     paddingRight: 8,
+    marginTop: 4, // Add a small margin to separate from the chevron
   },
   headerMinimized: {
-    marginBottom: 0,
+    marginBottom: 8,
+    paddingBottom: 12, // Add padding at the bottom when minimized
     justifyContent: 'space-between',
   },
   headerCenter: {
@@ -345,12 +415,12 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 60,
     height: 40,
-    marginBottom: 30,
+    // marginBottom: 30,
     justifyContent: 'center',
     alignItems: 'center',
   },
   dateText: {
-    fontSize: theme.fontSizes.large,
+    fontSize: theme.fontSizes.medium,
     fontWeight: 'bold',
     color: theme.colors.text,
     fontFamily: theme.fonts.header.fontFamily,
@@ -373,7 +443,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   content: {
-    gap: 24,
+    gap: 12,
   },
   timeToggleContainer: {
     // marginBottom: 8,
@@ -422,7 +492,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: theme.fontSizes.medium,
     color: theme.colors.text,
-    marginBottom: 8,
+    marginBottom: 4,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   serviceSection: {
@@ -480,7 +550,7 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 24,
+    // marginTop: 12,
   },
   button: {
     flex: 1,

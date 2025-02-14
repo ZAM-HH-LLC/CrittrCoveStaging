@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, ScrollView, Image, StyleSheet, Linking, Dimensions, Platform, TouchableOpacity, TextInput } from 'react-native';
 import { Button, Text, Card, Title, Paragraph, useTheme } from 'react-native-paper';
 import { ImageBackground } from 'react-native';
@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BLOG_POSTS } from '../data/mockData';
+import { AuthContext } from '../context/AuthContext';
 
 const { width: windowWidth, height: windowHeight } = Dimensions.get('window');
 
@@ -51,6 +52,8 @@ const ReviewImage = ({ source, style }) => {
 
 export default function HomeScreen({ navigation }) {
   const { colors } = useTheme();
+  const { screenWidth } = useContext(AuthContext);
+  const isMobileView = screenWidth < 660;
   const openAppStore = (url) => {
     Linking.openURL(url);
   };
@@ -504,15 +507,111 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
+  const ServiceCard = ({ icon, title, description, color }) => {
+    const cardStyles = {
+      container: {
+        width: isMobileView ? '90%' : '45%',
+        minWidth: isMobileView ? 'auto' : 300,
+        maxWidth: 500,
+        padding: 20,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        marginBottom: 20,
+        alignSelf: 'center',
+      },
+      header: {
+        flexDirection: 'column',
+        alignItems: 'center',
+        marginBottom: 15,
+      },
+      iconContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: `${theme.colors.primary}15`,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 15,
+      },
+      title: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+        fontFamily: theme.fonts.header.fontFamily,
+        textAlign: 'center',
+        marginBottom: 10,
+      },
+      description: {
+        fontSize: 16,
+        lineHeight: 24,
+        color: theme.colors.text,
+        fontFamily: theme.fonts.regular.fontFamily,
+        textAlign: 'center',
+      },
+    };
+
+    return (
+      <View style={cardStyles.container}>
+        <View style={cardStyles.header}>
+          <View style={cardStyles.iconContainer}>
+            <MaterialCommunityIcons name={icon} size={32} color={color} />
+          </View>
+          <Text style={cardStyles.title}>{title}</Text>
+        </View>
+        <Text style={cardStyles.description}>{description}</Text>
+      </View>
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.heroSection}>
         <Image
-          source={require('../../assets/hero-image.jpg')} // Replace with your image
+          source={require('../../assets/hero-image.jpg')}
           style={styles.heroImage}
           resizeMode="cover"
         />
         <Text style={styles.heroText}>Welcome to CrittrCove</Text>
+      </View>
+
+      {/* Service Highlights Section */}
+      <View style={styles.serviceHighlightsSection}>
+        <Text style={styles.mainServiceTitle}>Marketplace for Pet Owners and Care Professionals</Text>
+        
+        <View style={[styles.servicesGrid, { 
+          flexDirection: isMobileView ? 'column' : 'row',
+          alignItems: isMobileView ? 'center' : 'flex-start',
+        }]}>
+          <ServiceCard
+            icon="paw"
+            title="All Animals Welcome"
+            description="From common pets to exotic animals, we connect you with professionals experienced in caring for any type of animal companion."
+            color={theme.colors.mainColors.senary}
+          />
+          <ServiceCard
+            icon="calendar-clock"
+            title="Flexible Booking Options"
+            description="Book single visits, multiple days, or set up recurring services. Create subscription plans or schedule services months in advance."
+            color={theme.colors.mainColors.quinary}
+          />
+          <ServiceCard
+            icon="shield-check"
+            title="Verified Professionals"
+            description="All professionals are thoroughly vetted and must maintain active insurance coverage to provide services through our platform."
+            color={theme.colors.mainColors.main}
+          />
+          <ServiceCard
+            icon="tune-variant"
+            title="Customizable Services"
+            description="Professionals can create custom service packages and pricing plans tailored to your specific needs and preferences."
+            color={theme.colors.mainColors.quaternary}
+          />
+        </View>
       </View>
 
       <Features />
@@ -563,7 +662,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.socialIconsRow}>
           <TouchableOpacity 
             style={styles.socialIcon} 
-            onPress={() => Linking.openURL('https://instagram.com/thezensitter')}
+            onPress={() => Linking.openURL('https://www.instagram.com/thezensitter')}
           >
             <FontAwesome name="instagram" size={24} color="white" />
           </TouchableOpacity>
@@ -759,7 +858,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'black',
   },
   featuresSection: {
-    marginBottom: 20,
+    marginBottom: 80,
     marginTop: 20,
   },
   toggleContainer: {
@@ -1142,5 +1241,27 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  serviceHighlightsSection: {
+    padding: 20,
+    width: '100%',
+    maxWidth: 1200,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    alignItems: 'center',
+  },
+  mainServiceTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 40,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
+  servicesGrid: {
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 20,
+    width: '100%',
   },
 });

@@ -17,7 +17,7 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const navigation = useNavigation();
-  const { signIn } = useContext(AuthContext);
+  const { signIn, is_prototype } = useContext(AuthContext);
 
   const handleLogin = async () => {
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
@@ -26,6 +26,24 @@ export default function SignIn() {
 
     setLoading(true);
     try {
+      if (is_prototype) {
+        // Mock tokens for prototype mode
+        const mockAccess = 'mock_access_token';
+        const mockRefresh = 'mock_refresh_token';
+        
+        // Pass mock tokens to signIn and get the status
+        const status = await signIn(mockAccess, mockRefresh);
+        console.log('Sign in status (prototype):', status);
+        
+        // Navigate based on status
+        if (status && status.userRole === 'professional') {
+          navigation.navigate('ProfessionalDashboard');
+        } else {
+          navigation.navigate('Dashboard');
+        }
+        return;
+      }
+
       const response = await axios.post(`${API_BASE_URL}/api/token/`, {
         email: email.toLowerCase(),
         password: password,
@@ -90,6 +108,11 @@ export default function SignIn() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Sign In</Text>
+      {is_prototype && (
+        <Text style={styles.prototypeWarning}>
+          Prototype Mode: You can sign in with anything for email and password
+        </Text>
+      )}
       <TextInput
         style={[styles.input, !isEmailValid && styles.invalidInput]}
         placeholder="Email"

@@ -34,16 +34,17 @@ export const AuthProvider = ({ children }) => {
   const [firstName, setFirstName] = useState('');
 
   // SET TO "true" FOR NO API CALLS
+  const [is_prototype, setIsPrototype] = useState(true);
 
   // Set is_DEBUG to false by default in prototype mode
   const [is_DEBUG, setIsDebug] = useState(false);
 
   // Preload Stripe modules when user signs in
   useEffect(() => {
-    if (isSignedIn) {
+    if (isSignedIn && !is_prototype) {
       initStripe();
     }
-  }, [isSignedIn]);
+  }, [isSignedIn, is_prototype]);
 
   // Separate screen width handling from auth
   useEffect(() => {
@@ -64,6 +65,18 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const loadInitialAuth = async () => {
       try {
+        if (is_prototype) {
+          // In prototype mode, set default professional state
+          setIsSignedIn(true);
+          setUserRole('professional');
+          setIsApprovedProfessional(true);
+          await AsyncStorage.multiSet([
+            ['userRole', 'professional'],
+            ['isApprovedProfessional', 'true']
+          ]);
+          return;
+        }
+
         const authStatus = await checkAuthStatus();
         if (authStatus.isSignedIn) {
           await fetchUserName();
@@ -77,6 +90,11 @@ export const AuthProvider = ({ children }) => {
   }, []); // Only run on mount
 
   const fetchUserName = async () => {
+    if (is_prototype) {
+      // In prototype mode, set a default name
+      setFirstName('John');
+      return;
+    }
     try {
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       if (!token) {
@@ -206,6 +224,22 @@ export const AuthProvider = ({ children }) => {
       }
       setIsSignedIn(true);
       
+      if (is_prototype) {
+        // In prototype mode, set default values without API calls
+        const initialRole = 'professional';
+        setUserRole(initialRole);
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('userRole', initialRole);
+        } else {
+          await AsyncStorage.setItem('userRole', initialRole);
+        }
+        setIsApprovedProfessional(true);
+        return {
+          userRole: initialRole,
+          isApprovedProfessional: true
+        };
+      }
+      
       // Get professional status and set initial role
       const status = await getProfessionalStatus(token);
 
@@ -299,6 +333,14 @@ export const AuthProvider = ({ children }) => {
 
   const validateToken = async (token) => {
     try {
+      if (is_prototype) {
+        // In prototype mode, always return true for token validation
+        if (is_DEBUG) {
+          console.log('Prototype mode: Mock token validation successful');
+        }
+        return true;
+      }
+
       const response = await axios.post(`${API_BASE_URL}/api/token/verify/`, {
         token: token
       });
@@ -312,6 +354,20 @@ export const AuthProvider = ({ children }) => {
 
   const refreshUserToken = async (refreshToken) => {
     try {
+      if (is_prototype) {
+        // In prototype mode, return a mock token
+        if (is_DEBUG) {
+          console.log('Prototype mode: Mock token refresh successful');
+        }
+        const mockNewToken = 'mock_refreshed_token';
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('userToken', mockNewToken);
+        } else {
+          await AsyncStorage.setItem('userToken', mockNewToken);
+        }
+        return mockNewToken;
+      }
+
       // Ensure refresh token is retrieved correctly in refreshUserToken
       const refreshToken = Platform.OS === "web" ? sessionStorage.getItem('refreshToken') : await AsyncStorage.getItem('refreshToken');
       if (!refreshToken) {
@@ -357,6 +413,33 @@ export const AuthProvider = ({ children }) => {
 
       // Check if we're on the home page or root URL
       const isHomePage = !currentPath || currentPath === '' || currentPath.toLowerCase() === 'home';
+
+      if (is_prototype) {
+        const token = Platform.OS === "web" ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+        if (!token) {
+          if (is_DEBUG) {
+            console.log('Prototype mode: No token found, signing out');
+          }
+          return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
+        }
+
+        if (is_DEBUG) {
+          console.log('Prototype mode: Token found, setting signed in state');
+        }
+        setIsSignedIn(true);
+        const storedRole = Platform.OS === "web" ? sessionStorage.getItem('userRole') : await AsyncStorage.getItem('userRole');
+
+        if (is_DEBUG) {
+          console.log("MBA setting user role", storedRole);
+        }
+        setUserRole(storedRole === 'professional' || storedRole === 'petOwner' ? storedRole : 'petOwner');
+        setIsApprovedProfessional(true);
+        return {
+          isSignedIn: true,
+          userRole: storedRole === 'professional' || storedRole === 'petOwner' ? storedRole : 'petOwner',
+          isApprovedProfessional: true
+        };
+      }
 
       let token, refreshToken, storedRole, storedApproval;
 
@@ -479,12 +562,21 @@ export const AuthProvider = ({ children }) => {
 
   // Add useEffect to persist role changes
   useEffect(() => {
-    if (isSignedIn) {
+    if (is_prototype && isSignedIn) {
       AsyncStorage.setItem('userRole', userRole || 'professional');
       AsyncStorage.setItem('isApprovedProfessional', String(isApprovedProfessional));
     }
-  }, [isSignedIn, userRole, isApprovedProfessional]);
+  }, [is_prototype, isSignedIn, userRole, isApprovedProfessional]);
 
+  // Ensure isApprovedProfessional is set to true in prototype mode
+  useEffect(() => {
+    if (is_prototype) {
+      setIsApprovedProfessional(true);
+      if (is_DEBUG) {
+        console.log('Prototype mode: isApprovedProfessional set to true');
+      }
+    }
+  }, [is_prototype]);
 
   return (
     <AuthContext.Provider value={{ 
@@ -501,6 +593,8 @@ export const AuthProvider = ({ children }) => {
       screenWidth,
       checkAuthStatus,
       firstName,
+      is_prototype,
+      setIsPrototype,
       is_DEBUG,
       setIsDebug
     }}>

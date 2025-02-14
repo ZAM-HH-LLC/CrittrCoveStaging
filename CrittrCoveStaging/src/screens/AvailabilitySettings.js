@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform, StatusBar, Dimensions, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform, StatusBar, Dimensions, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
 import moment from 'moment';
@@ -37,7 +37,10 @@ const AvailabilitySettings = () => {
   const [error, setError] = useState(null);
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [showUnavailableTimesModal, setShowUnavailableTimesModal] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isBottomSheetMinimized, setIsBottomSheetMinimized] = useState(false);
   const navigation = useNavigation();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loadAvailabilityData = async () => {
@@ -164,16 +167,46 @@ const AvailabilitySettings = () => {
     setMarkedDates(newMarkedDates);
   };
 
+  const toggleBottomSheet = (show) => {
+    if (show) {
+      setIsClosing(false);
+      setShowBottomSheet(true);
+      Animated.timing(fadeAnim, {
+        toValue: 0.5,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      setIsClosing(true);
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowBottomSheet(false);
+        setIsClosing(false);
+      });
+    }
+  };
+
+  const handleBottomSheetMinimize = (minimized) => {
+    setIsBottomSheetMinimized(minimized);
+    Animated.timing(fadeAnim, {
+      toValue: minimized ? 0 : 0.5,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const onDayPress = (day) => {
     const { dateString } = day;
     const selectedDate = new Date(dateString);
     selectedDate.setDate(selectedDate.getDate() + 1); // Adjust for timezone offset
     selectedDate.setHours(0, 0, 0, 0);
   
-
     if (selectedDates.length === 0) {
       setSelectedDates([dateString]);
-      setShowBottomSheet(true);
+      toggleBottomSheet(true);
     } else if (selectedDates.length >= 1) {
       const firstDate = new Date(selectedDates[0]);
       firstDate.setDate(firstDate.getDate() + 1); // Adjust for timezone offset
@@ -185,7 +218,7 @@ const AvailabilitySettings = () => {
 
       if (selectedDate < firstDate) {
         setSelectedDates([dateString]);
-        setShowBottomSheet(true);
+        toggleBottomSheet(true);
         return;
       }
 
@@ -380,7 +413,7 @@ const AvailabilitySettings = () => {
       serviceTypes: services,
       reason: `Unavailable for: ${services.join(', ')}`,
     });
-    setShowBottomSheet(false);
+    toggleBottomSheet(false);
     setSelectedDates([]);
   };
 
@@ -591,22 +624,38 @@ const AvailabilitySettings = () => {
         </ScrollView>
       </SafeAreaView>
 
-      {showBottomSheet && (
-        <View style={styles.bottomSheetOverlay}>
-          <AvailabilityBottomSheet
-            selectedDates={selectedDates}
-            currentAvailability={currentAvailability}
-            onClose={() => {
-              setShowBottomSheet(false);
-              setSelectedDates([]);
-            }}
-            onViewUnavailableTimes={() => {
-              setShowUnavailableTimesModal(true);
-            }}
-            onSave={handleSaveAvailability}
-            onViewBookings={handleViewBookings}
+      {(showBottomSheet || isClosing) && (
+        <>
+          <Animated.View 
+            style={[
+              styles.overlay,
+              {
+                opacity: fadeAnim,
+                backgroundColor: 'black',
+                pointerEvents: isBottomSheetMinimized ? 'none' : 'auto'
+              }
+            ]} 
           />
-        </View>
+          <View style={[
+            styles.bottomSheetContainer,
+            { pointerEvents: 'box-none' }
+          ]}>
+            <AvailabilityBottomSheet
+              selectedDates={selectedDates}
+              currentAvailability={currentAvailability}
+              onClose={() => {
+                toggleBottomSheet(false);
+                setSelectedDates([]);
+              }}
+              onViewUnavailableTimes={() => {
+                setShowUnavailableTimesModal(true);
+              }}
+              onSave={handleSaveAvailability}
+              onViewBookings={handleViewBookings}
+              onMinimize={handleBottomSheetMinimize}
+            />
+          </View>
+        </>
       )}
 
       <UnavailableTimesModal
@@ -755,6 +804,20 @@ const styles = StyleSheet.create({
     color: theme.colors.whiteText,
     fontSize: theme.fontSizes.medium,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'black',
+  },
+  bottomSheetContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
 });
 
