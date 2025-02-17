@@ -6,6 +6,7 @@ import DatePicker from './DatePicker';
 import TimePicker from './TimePicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
+import { DatetimePicker } from './ui/datetime-picker';
 
 const { width } = Dimensions.get('window');
 const modalWidth = Platform.OS === 'web' ? width * 0.4 : width * 0.9;
@@ -184,7 +185,7 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
   }, [selectedDays]);
 
   const renderTimePicker = (type, value, onChange) => {
-    return (
+      return (
       <TimePicker
         value={new Date(`2000-01-01T${value}`)}
         onChange={(selectedTime) => {
@@ -202,18 +203,20 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
     // Guard against no selected days
     if (!selectedDays || selectedDays.length === 0) {
       return (
-        <View 
-          style={styles.datePickerContainer} 
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <DatePicker
-            value={null}
-            onChange={(date) => {}}
-            placeholder="Select End Date"
-            disabled={true}
-            isInModal={true}
-          />
+        <View style={styles.datePickerWrapper}>
+          <View 
+            style={[styles.datePickerContainer]} 
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <DatetimePicker
+              format={[["months", "days", "years"]]}
+              disabled={true}
+              isInModal={true}
+              error={true}
+            />
+          </View>
+          <Text style={styles.validationErrorText}>{validationError}</Text>
         </View>
       );
     }
@@ -221,18 +224,21 @@ const DefaultSettingsModal = ({ isVisible, onClose, onSave, defaultSettings }) =
     const daySettings = settings[selectedDays[0]];
     
     return (
-      <View 
-        style={styles.datePickerContainer}
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <DatePicker
-          value={daySettings.endDate}
-          onChange={(date) => updateDaySettings(selectedDays[0], { endDate: date })}
-          placeholder="Select End Date"
-          disabled={false}
-          isInModal={true}
-        />
+      <View style={styles.datePickerWrapper}>
+        <View 
+          style={styles.datePickerContainer}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <DatetimePicker
+            format={[["months", "days", "years"]]}
+            value={daySettings.endDate ? new Date(daySettings.endDate) : null}
+            onChange={(date) => updateDaySettings(selectedDays[0], { endDate: date.toISOString().split('T')[0] })}
+            disabled={false}
+            isInModal={true}
+            error={false}
+          />
+        </View>
       </View>
     );
   };
@@ -641,6 +647,15 @@ const styles = StyleSheet.create({
   datePickerContainer: {
     flex: 1,
     maxWidth: 200,
+  },
+  datePickerWrapper: {
+    width: '100%',
+  },
+  validationErrorText: {
+    color: theme.colors.danger,
+    fontSize: theme.fontSizes.small,
+    marginTop: 4,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 

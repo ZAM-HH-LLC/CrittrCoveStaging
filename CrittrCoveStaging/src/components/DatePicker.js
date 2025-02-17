@@ -32,37 +32,38 @@ const DatePicker = ({
   };
 
   if (Platform.OS === 'web') {
-    const handleInputClick = (e) => {
+    const handleWrapperEvents = (e) => {
       if (isInModal) {
-        e.preventDefault();
         e.stopPropagation();
+        e.preventDefault();
       }
     };
 
     const handleInputChange = (e) => {
-      if (isInModal) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
       if (!disabled) {
         onChange(e.target.value);
       }
     };
 
     return (
-      <input
-        type="date"
-        value={value || ''}
-        onClick={handleInputClick}
-        onMouseDown={handleInputClick}
-        onChange={handleInputChange}
-        style={{
-          ...styles.webDatePicker,
-          ...(disabled ? styles.disabledInput : {})
-        }}
-        placeholder={placeholder}
-        disabled={disabled}
-      />
+      <div 
+        onClick={handleWrapperEvents}
+        onMouseDown={handleWrapperEvents}
+        style={{ width: '100%' }}
+      >
+        <input
+          type="date"
+          value={value || ''}
+          onChange={handleInputChange}
+          style={{
+            ...styles.webDatePicker,
+            ...(disabled ? styles.disabledInput : {}),
+            cursor: disabled ? 'default' : 'pointer'
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+      </div>
     );
   } else if (Platform.OS === 'ios') {
     return (
