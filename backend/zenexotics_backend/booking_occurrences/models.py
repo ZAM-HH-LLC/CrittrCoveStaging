@@ -40,6 +40,11 @@ class BookingOccurrence(models.Model):
     def __str__(self):
         return f"Occurrence {self.occurrence_id} for Booking {self.booking.booking_id}"
 
+    def save(self, *args, **kwargs):
+        if self.calculated_cost is None:
+            self.calculated_cost = Decimal('0.00')
+        super().save(*args, **kwargs)
+
     def calculate_time_units(self, is_prorated=True):
         """Calculate the number of time units for this occurrence"""
         try:
@@ -87,27 +92,12 @@ class BookingOccurrence(models.Model):
             pass
         return Decimal('0.00')
 
-    def calculated_cost(self, is_prorated=True):
-        """Return the total cost from booking details and occurrence rates"""
-        try:
-            total = Decimal('0.00')
-            
-            # Get the calculated cost from booking details
-            booking_details = self.booking_details.first()
-            if booking_details:
-                total += booking_details.calculate_occurrence_cost(is_prorated)
-            
-            # Add the total from occurrence rates
-            if hasattr(self, 'rates'):
-                total += self.rates.get_total()
-            
-            return total.quantize(Decimal('0.01'))
-        except (AttributeError, KeyError) as e:
-            logger.error(f"Error calculating cost for occurrence {self.occurrence_id}: {str(e)}")
-            return Decimal('0.00')
-
     def update_calculated_cost(self):
-        """Update the calculated cost field with the sum of booking details cost and occurrence rates total"""
+        """
+        Updates the calculated_cost field with the total cost of the occurrence.
+        This includes both the booking details cost and any additional occurrence rates.
+        The value is stored in the calculated_cost field for future reference.
+        """
         try:
             total = Decimal('0.00')
             
@@ -120,9 +110,13 @@ class BookingOccurrence(models.Model):
             if hasattr(self, 'rates'):
                 total += self.rates.get_total()
             
-            # Update and save the field
-            self.calculated_cost = total.quantize(Decimal('0.01'))
-            self.save(update_fields=['calculated_cost'])
+            # Update the field directly in the database
+            BookingOccurrence.objects.filter(occurrence_id=self.occurrence_id).update(
+                calculated_cost=total.quantize(Decimal('0.01'))
+            )
+            
+            # Refresh from database to get updated value
+            self.refresh_from_db()
             
             logger.info(f"Updated occurrence {self.occurrence_id} calculated cost to: ${self.calculated_cost}")
         except Exception as e:
@@ -130,4 +124,4 @@ class BookingOccurrence(models.Model):
 
     def get_calculated_cost(self):
         """Return the stored calculated cost"""
-        return self.calculated_cost
+        return self.calculated_cost if self.calculated_cost is not None else Decimal('0.00')

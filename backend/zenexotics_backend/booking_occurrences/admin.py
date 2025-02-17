@@ -77,8 +77,7 @@ class BookingOccurrenceAdmin(admin.ModelAdmin):
     )
 
     def display_calculated_cost(self, obj):
-        cost = obj.calculated_cost()
-        return f"${float(cost):.2f}"
+        return f"${float(obj.get_calculated_cost()):.2f}"
     display_calculated_cost.short_description = 'Calculated Cost'
 
     class Media:

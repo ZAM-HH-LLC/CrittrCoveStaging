@@ -16,6 +16,15 @@ from ..constants import BookingStates
 import logging
 from booking_drafts.models import BookingDraft
 from services.models import Service
+from conversations.models import Conversation
+from django.db import transaction
+from booking_occurrences.models import BookingOccurrence
+from booking_details.models import BookingDetails
+from booking_occurrence_rates.models import BookingOccurrenceRate
+from service_rates.models import ServiceRate
+from booking_summary.models import BookingSummary
+from decimal import Decimal
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -296,5 +305,225 @@ class AvailableServicesView(APIView):
         ]
 
         return Response(services_data)
+
+class CreateBookingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            # Get the conversation
+            conversation_id = request.data.get('conversation_id')
+            if not conversation_id:
+                return Response(
+                    {"error": "conversation_id is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get the conversation and validate access
+            conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
+            
+            # Verify the requesting user is part of this conversation
+            if request.user.id not in [conversation.participant1_id, conversation.participant2_id]:
+                return Response(
+                    {"error": "Not authorized to create booking for this conversation"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get the professional (must be the requesting user)
+            try:
+                professional = Professional.objects.get(user=request.user)
+            except Professional.DoesNotExist:
+                return Response(
+                    {"error": "Only professionals can create bookings"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get the client (the other participant)
+            other_user_id = conversation.participant1_id if conversation.participant1_id != request.user.id else conversation.participant2_id
+            client = get_object_or_404(Client, user_id=other_user_id)
+
+            # Create the booking
+            booking = Booking.objects.create(
+                client=client,
+                professional=professional,
+                status=BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+                initiated_by=request.user
+            )
+
+            return Response({
+                'booking_id': booking.booking_id,
+                'status': booking.status
+            })
+
+        except Exception as e:
+            logger.error(f"Error creating booking: {str(e)}")
+            return Response(
+                {"error": "Failed to create booking"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class RequestBookingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        # Create a savepoint at the start
+        sid = transaction.savepoint()
+        
+        try:
+            # Get request data
+            conversation_id = request.data.get('conversation_id')
+            service_id = request.data.get('service_type')
+            pet_ids = request.data.get('pets', [])
+            occurrences = request.data.get('occurrences', [])
+
+            # Validate required fields
+            if not all([conversation_id, service_id, pet_ids, occurrences]):
+                return Response(
+                    {"error": "Missing required fields"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get the conversation and validate access
+            conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
+            
+            # Verify the requesting user is part of this conversation
+            if request.user.id not in [conversation.participant1_id, conversation.participant2_id]:
+                return Response(
+                    {"error": "Not authorized to create booking for this conversation"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get the client (must be the requesting user)
+            try:
+                client = Client.objects.get(user=request.user)
+            except Client.DoesNotExist:
+                return Response(
+                    {"error": "Only clients can request bookings"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get the professional (the other participant)
+            other_user_id = conversation.participant1_id if conversation.participant1_id != request.user.id else conversation.participant2_id
+            professional = get_object_or_404(Professional, user_id=other_user_id)
+
+            # Get and validate the service belongs to the professional
+            service = get_object_or_404(Service, service_id=service_id, professional=professional)
+
+            # Create the booking
+            booking = Booking.objects.create(
+                client=client,
+                professional=professional,
+                service_id=service,
+                status=BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+                initiated_by=request.user
+            )
+
+            # Create booking pets entries and verify they belong to the client
+            for pet_id in pet_ids:
+                pet = get_object_or_404(Pet, pet_id=pet_id, owner=client.user)
+                BookingPets.objects.create(
+                    booking=booking,
+                    pet=pet
+                )
+
+            # Get service rates
+            service_rates = ServiceRate.objects.filter(service=service).all()
+
+            # Create booking occurrences, details, and rates
+            for occurrence_data in occurrences:
+                try:
+                    # Parse the dates from strings to datetime objects
+                    start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
+                    end_date = datetime.strptime(occurrence_data.get('end_date', occurrence_data['start_date']), '%Y-%m-%d').date()
+                    
+                    # Parse the times from strings to time objects
+                    start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
+                    end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
+                    
+                    logger.info(f"Creating occurrence with data: {occurrence_data}")
+                    
+                    # Create booking occurrence
+                    occurrence = BookingOccurrence.objects.create(
+                        booking=booking,
+                        start_date=start_date,
+                        end_date=end_date,
+                        start_time=start_time,
+                        end_time=end_time,
+                        created_by='CLIENT',
+                        last_modified_by='CLIENT',
+                        status='PENDING'
+                    )
+                    
+                    logger.info(f"Created occurrence: {occurrence.occurrence_id}")
+
+                    # Create booking details with rates from service
+                    booking_details = BookingDetails.objects.create(
+                        booking_occurrence=occurrence,
+                        num_pets=len(pet_ids),
+                        base_rate=service.base_rate,
+                        additional_pet_rate=service.additional_animal_rate,
+                        holiday_rate=service.holiday_rate,
+                        applies_after=service.applies_after,
+                        calculated_rate=Decimal('0.00')  # This will be updated by the save method
+                    )
+                    
+                    logger.info(f"Created booking details for occurrence: {occurrence.occurrence_id}")
+
+                    # Create booking occurrence rates if service has additional rates
+                    if service_rates:
+                        rates_data = [
+                            {
+                                'title': rate.title,
+                                'description': rate.description,
+                                'amount': f"${rate.rate}"
+                            }
+                            for rate in service_rates
+                        ]
+                        occurrence_rates = BookingOccurrenceRate.objects.create(
+                            occurrence=occurrence,
+                            rates=rates_data
+                        )
+                        logger.info(f"Created occurrence rates for occurrence: {occurrence.occurrence_id}")
+
+                    # Update the calculated cost after all related objects are created
+                    occurrence.update_calculated_cost()
+                    logger.info(f"Updated calculated cost for occurrence: {occurrence.occurrence_id}")
+
+                except Exception as e:
+                    logger.error(f"Error creating occurrence: {str(e)}")
+                    logger.error(f"Error type: {type(e)}")
+                    logger.error(f"Error args: {e.args}")
+                    raise
+
+            # Create initial booking summary (will be updated by signals)
+            BookingSummary.objects.create(
+                booking=booking,
+                subtotal=Decimal('0'),
+                platform_fee=Decimal('0'),
+                taxes=Decimal('0'),
+                total_client_cost=Decimal('0'),
+                total_sitter_payout=Decimal('0')
+            )
+
+            # If we got here, everything worked, so commit the transaction
+            transaction.savepoint_commit(sid)
+
+            return Response({
+                'booking_id': booking.booking_id,
+                'status': booking.status
+            })
+
+        except Exception as e:
+            # Something went wrong, rollback to the savepoint
+            transaction.savepoint_rollback(sid)
+            logger.error(f"Error creating booking request: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            logger.error(f"Error args: {e.args}")
+            return Response(
+                {"error": "Failed to create booking request"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # Placeholder: Ready for views to be added

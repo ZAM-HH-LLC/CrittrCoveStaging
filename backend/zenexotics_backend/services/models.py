@@ -43,6 +43,7 @@ class Service(models.Model):
     base_rate = models.DecimalField(max_digits=10, decimal_places=2)
     additional_animal_rate = models.DecimalField(max_digits=10, decimal_places=2)
     holiday_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    applies_after = models.IntegerField(default=1, help_text='Additional animal rate applies after this many animals')
     unit_of_time = models.CharField(max_length=50, choices=UNIT_OF_TIME_CHOICES)
     moderation_status = models.CharField(
         max_length=50, 

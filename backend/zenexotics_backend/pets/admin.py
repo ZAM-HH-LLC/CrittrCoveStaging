@@ -3,7 +3,7 @@ from .models import Pet
 
 @admin.register(Pet)
 class PetAdmin(admin.ModelAdmin):
-    list_display = ('name', 'species', 'breed', 'owner', 'age_years', 'sex')
+    list_display = ('pet_id', 'name', 'species', 'breed', 'owner', 'age_years', 'sex')
     list_filter = ('species', 'created_at', 'sex', 'spayed_neutered')
     search_fields = ('name', 'owner__email', 'breed')
     readonly_fields = ('created_at',)
