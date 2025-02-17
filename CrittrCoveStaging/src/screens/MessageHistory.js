@@ -926,11 +926,7 @@ const MessageHistory = ({ navigation, route }) => {
     console.log('MBABOSS Role map:', currentConversation.role_map);
 
     // Check if current user is the professional by checking their role in the conversation
-    const isProfessional = 
-      (currentConversation.participant1_id === CURRENT_USER_ID && 
-       currentConversation.role_map.participant1_role === "professional") ||
-      (currentConversation.participant2_id === CURRENT_USER_ID && 
-       currentConversation.role_map.participant2_role === "professional");
+    const isProfessional = currentConversation.is_professional === false;
     
     console.log('MBABOSS Is Professional?', isProfessional);
 
@@ -1182,12 +1178,7 @@ const MessageHistory = ({ navigation, route }) => {
                     color={theme.colors.primary} 
                   />
                   <Text style={styles.dropdownText}>
-                    {selectedConversationData && (
-                      (selectedConversationData.participant1_id === CURRENT_USER_ID && 
-                       selectedConversationData.role_map.participant1_role === "professional") ||
-                      (selectedConversationData.participant2_id === CURRENT_USER_ID && 
-                       selectedConversationData.role_map.participant2_role === "professional")
-                    ) ? "Create Booking" : "Request Booking"}
+                    {selectedConversationData?.is_professional ? "Create Booking" : "Request Booking"}
                   </Text>
                 </TouchableOpacity>
               </View>

@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
   const [firstName, setFirstName] = useState('');
 
   // SET TO "true" FOR NO API CALLS
-  const [is_prototype, setIsPrototype] = useState(true);
+  const [is_prototype, setIsPrototype] = useState(false);
 
   // Set is_DEBUG to false by default in prototype mode
   const [is_DEBUG, setIsDebug] = useState(false);
