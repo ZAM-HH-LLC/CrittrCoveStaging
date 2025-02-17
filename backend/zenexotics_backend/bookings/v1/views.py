@@ -481,6 +481,12 @@ class RequestBookingView(APIView):
                             }
                             for rate in service_rates
                         ]
+                        # Add base rate as first item in rates array
+                        rates_data.insert(0, {
+                            'title': 'Base Rate',
+                            'description': 'Base rate for service',
+                            'amount': f"${service.base_rate}"
+                        })
                         occurrence_rates = BookingOccurrenceRate.objects.create(
                             occurrence=occurrence,
                             rates=rates_data
