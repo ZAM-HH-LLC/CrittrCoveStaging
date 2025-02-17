@@ -1,4 +1,4 @@
-#!/Users/mattaertker/Documents/GitHub/ZenExotics/backend/venv/bin/python
+#!/Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
