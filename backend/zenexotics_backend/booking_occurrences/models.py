@@ -1,6 +1,8 @@
 from django.db import models
 from decimal import Decimal
 from datetime import datetime
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 import logging
 
 logger = logging.getLogger(__name__)
@@ -125,3 +127,30 @@ class BookingOccurrence(models.Model):
     def get_calculated_cost(self):
         """Return the stored calculated cost"""
         return self.calculated_cost if self.calculated_cost is not None else Decimal('0.00')
+
+@receiver(post_save, sender=BookingOccurrence)
+def create_booking_details(sender, instance, created, **kwargs):
+    """
+    Signal handler to create BookingDetails when a BookingOccurrence is created
+    """
+    if created:
+        from booking_details.models import BookingDetails
+        
+        # Get the service from the booking
+        service = instance.booking.service_id
+        if not service:
+            return
+            
+        # Get the number of pets
+        num_pets = instance.booking.booking_pets.count()
+        
+        # Create the booking details
+        BookingDetails.objects.create(
+            booking_occurrence=instance,
+            num_pets=num_pets,
+            base_rate=service.base_rate,
+            additional_pet_rate=service.additional_animal_rate,
+            holiday_rate=service.holiday_rate,
+            applies_after=service.applies_after,
+            calculated_rate=Decimal('0.00')  # This will be updated by its own save method
+        )

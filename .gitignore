@@ -72,3 +72,24 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Local development settings
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

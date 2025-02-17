@@ -25,6 +25,13 @@ from service_rates.models import ServiceRate
 from booking_summary.models import BookingSummary
 from decimal import Decimal
 from datetime import datetime
+from django.core.serializers.json import DjangoJSONEncoder
+import json
+from time import time as current_time  # Rename import to avoid confusion
+from error_logs.models import ErrorLog
+from interaction_logs.models import InteractionLog
+from engagement_logs.models import EngagementLog
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -368,7 +375,7 @@ class RequestBookingView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        # Create a savepoint at the start
+        request_start_time = current_time()  # Rename to avoid conflict with occurrence start_time
         sid = transaction.savepoint()
         
         try:
@@ -380,25 +387,55 @@ class RequestBookingView(APIView):
 
             # Validate required fields
             if not all([conversation_id, service_id, pet_ids, occurrences]):
+                ErrorLog.objects.create(
+                    user=request.user,
+                    error_message='Missing required fields',
+                    endpoint='/api/bookings/v1/request_booking/',
+                    metadata={'request_data': request.data}
+                )
                 return Response(
                     {"error": "Missing required fields"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             # Get the conversation and validate access
-            conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
-            
-            # Verify the requesting user is part of this conversation
-            if request.user.id not in [conversation.participant1_id, conversation.participant2_id]:
+            try:
+                conversation = Conversation.objects.get(conversation_id=conversation_id)
+                if request.user.id not in [conversation.participant1_id, conversation.participant2_id]:
+                    ErrorLog.objects.create(
+                        user=request.user,
+                        error_type='AUTHORIZATION_ERROR',
+                        error_message='Not authorized to create booking for this conversation',
+                        endpoint='/api/bookings/v1/request_booking/',
+                        additional_data={'conversation_id': conversation_id}
+                    )
+                    return Response(
+                        {"error": "Not authorized to create booking for this conversation"},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            except Conversation.DoesNotExist:
+                ErrorLog.objects.create(
+                    user=request.user,
+                    error_type='NOT_FOUND',
+                    error_message='Conversation not found',
+                    endpoint='/api/bookings/v1/request_booking/',
+                    additional_data={'conversation_id': conversation_id}
+                )
                 return Response(
-                    {"error": "Not authorized to create booking for this conversation"},
-                    status=status.HTTP_403_FORBIDDEN
+                    {"error": "Conversation not found"},
+                    status=status.HTTP_404_NOT_FOUND
                 )
 
             # Get the client (must be the requesting user)
             try:
                 client = Client.objects.get(user=request.user)
             except Client.DoesNotExist:
+                ErrorLog.objects.create(
+                    user=request.user,
+                    error_type='AUTHORIZATION_ERROR',
+                    error_message='Only clients can request bookings',
+                    endpoint='/api/bookings/v1/request_booking/'
+                )
                 return Response(
                     {"error": "Only clients can request bookings"},
                     status=status.HTTP_403_FORBIDDEN
@@ -406,10 +443,36 @@ class RequestBookingView(APIView):
 
             # Get the professional (the other participant)
             other_user_id = conversation.participant1_id if conversation.participant1_id != request.user.id else conversation.participant2_id
-            professional = get_object_or_404(Professional, user_id=other_user_id)
+            try:
+                professional = Professional.objects.get(user_id=other_user_id)
+            except Professional.DoesNotExist:
+                ErrorLog.objects.create(
+                    user=request.user,
+                    error_type='NOT_FOUND',
+                    error_message='Professional not found',
+                    endpoint='/api/bookings/v1/request_booking/',
+                    additional_data={'professional_id': other_user_id}
+                )
+                return Response(
+                    {"error": "Professional not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
             # Get and validate the service belongs to the professional
-            service = get_object_or_404(Service, service_id=service_id, professional=professional)
+            try:
+                service = Service.objects.get(service_id=service_id, professional=professional)
+            except Service.DoesNotExist:
+                ErrorLog.objects.create(
+                    user=request.user,
+                    error_type='NOT_FOUND',
+                    error_message='Service not found or does not belong to the professional',
+                    endpoint='/api/bookings/v1/request_booking/',
+                    additional_data={'service_id': service_id, 'professional_id': professional.id}
+                )
+                return Response(
+                    {"error": "Service not found or does not belong to the professional"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
             # Create the booking
             booking = Booking.objects.create(
@@ -420,31 +483,57 @@ class RequestBookingView(APIView):
                 initiated_by=request.user
             )
 
-            # Create booking pets entries and verify they belong to the client
+            # Log the booking creation with comprehensive metadata
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_REQUEST_CREATED',
+                target_type='BOOKING',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'service_id': service_id,
+                    'professional_id': professional.professional_id,
+                    'pets': [{
+                        'pet_id': pet_id,
+                        'pet_name': Pet.objects.get(pet_id=pet_id, owner=client.user).name
+                    } for pet_id in pet_ids],
+                    'occurrences': occurrences,
+                    'booking_summary': {
+                        'fee_percentage': '10.00',
+                        'tax_percentage': '8.00'
+                    }
+                }
+            )
+
+            # Create booking pets entries
             for pet_id in pet_ids:
-                pet = get_object_or_404(Pet, pet_id=pet_id, owner=client.user)
-                BookingPets.objects.create(
-                    booking=booking,
-                    pet=pet
-                )
+                try:
+                    pet = Pet.objects.get(pet_id=pet_id, owner=client.user)
+                    BookingPets.objects.create(
+                        booking=booking,
+                        pet=pet
+                    )
+                except Pet.DoesNotExist:
+                    ErrorLog.objects.create(
+                        user=request.user,
+                        error_message=f'Pet with ID {pet_id} not found or does not belong to you',
+                        endpoint='/api/bookings/v1/request_booking/',
+                        metadata={'pet_id': pet_id}
+                    )
+                    transaction.savepoint_rollback(sid)
+                    return Response(
+                        {"error": f"Pet with ID {pet_id} not found or does not belong to you"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
 
-            # Get service rates
-            service_rates = ServiceRate.objects.filter(service=service).all()
-
-            # Create booking occurrences, details, and rates
+            # Create booking occurrences
             for occurrence_data in occurrences:
                 try:
-                    # Parse the dates from strings to datetime objects
                     start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
                     end_date = datetime.strptime(occurrence_data.get('end_date', occurrence_data['start_date']), '%Y-%m-%d').date()
-                    
-                    # Parse the times from strings to time objects
                     start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
                     end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
                     
-                    logger.info(f"Creating occurrence with data: {occurrence_data}")
-                    
-                    # Create booking occurrence
                     occurrence = BookingOccurrence.objects.create(
                         booking=booking,
                         start_date=start_date,
@@ -455,81 +544,96 @@ class RequestBookingView(APIView):
                         last_modified_by='CLIENT',
                         status='PENDING'
                     )
-                    
-                    logger.info(f"Created occurrence: {occurrence.occurrence_id}")
-
-                    # Create booking details with rates from service
-                    booking_details = BookingDetails.objects.create(
-                        booking_occurrence=occurrence,
-                        num_pets=len(pet_ids),
-                        base_rate=service.base_rate,
-                        additional_pet_rate=service.additional_animal_rate,
-                        holiday_rate=service.holiday_rate,
-                        applies_after=service.applies_after,
-                        calculated_rate=Decimal('0.00')  # This will be updated by the save method
+                except (ValueError, KeyError) as e:
+                    ErrorLog.objects.create(
+                        user=request.user,
+                        error_message=f'Invalid occurrence data: {str(e)}',
+                        endpoint='/api/bookings/v1/request_booking/',
+                        metadata={'occurrence_data': occurrence_data}
                     )
-                    
-                    logger.info(f"Created booking details for occurrence: {occurrence.occurrence_id}")
+                    transaction.savepoint_rollback(sid)
+                    return Response(
+                        {"error": f"Invalid occurrence data: {str(e)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-                    # Create booking occurrence rates if service has additional rates
-                    if service_rates:
-                        rates_data = [
-                            {
-                                'title': rate.title,
-                                'description': rate.description,
-                                'amount': f"${rate.rate}"
-                            }
-                            for rate in service_rates
-                        ]
-                        # Add base rate as first item in rates array
-                        rates_data.insert(0, {
-                            'title': 'Base Rate',
-                            'description': 'Base rate for service',
-                            'amount': f"${service.base_rate}"
-                        })
-                        occurrence_rates = BookingOccurrenceRate.objects.create(
-                            occurrence=occurrence,
-                            rates=rates_data
-                        )
-                        logger.info(f"Created occurrence rates for occurrence: {occurrence.occurrence_id}")
+            # Create/update booking summary
+            try:
+                booking_summary, created = BookingSummary.objects.get_or_create(
+                    booking=booking,
+                    defaults={
+                        'fee_percentage': Decimal('10.00'),
+                        'tax_percentage': Decimal('8.00')
+                    }
+                )
+                
+                if not created:
+                    booking_summary.fee_percentage = Decimal('10.00')
+                    booking_summary.tax_percentage = Decimal('8.00')
+                    booking_summary.save()
+                
+            except Exception as e:
+                ErrorLog.objects.create(
+                    user=request.user,
+                    error_message=f'Error creating/updating booking summary: {str(e)}',
+                    endpoint='/api/bookings/v1/request_booking/',
+                    metadata={'booking_id': booking.booking_id}
+                )
+                transaction.savepoint_rollback(sid)
+                return Response(
+                    {"error": "Failed to create/update booking summary"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
-                    # Update the calculated cost after all related objects are created
-                    occurrence.update_calculated_cost()
-                    logger.info(f"Updated calculated cost for occurrence: {occurrence.occurrence_id}")
-
-                except Exception as e:
-                    logger.error(f"Error creating occurrence: {str(e)}")
-                    logger.error(f"Error type: {type(e)}")
-                    logger.error(f"Error args: {e.args}")
-                    raise
-
-            # Create initial booking summary (will be updated by signals)
-            BookingSummary.objects.create(
-                booking=booking,
-                subtotal=Decimal('0'),
-                platform_fee=Decimal('0'),
-                taxes=Decimal('0'),
-                total_client_cost=Decimal('0'),
-                total_sitter_payout=Decimal('0')
+            # Log successful completion
+            duration = current_time() - request_start_time
+            EngagementLog.objects.create(
+                user=request.user,
+                page_name='BOOKING_REQUEST',
+                duration=int(duration),
+                interactions={
+                    'booking_id': booking.booking_id,
+                    'service_id': service_id,
+                    'num_pets': len(pet_ids),
+                    'num_occurrences': len(occurrences),
+                    'success': True
+                }
             )
 
-            # If we got here, everything worked, so commit the transaction
             transaction.savepoint_commit(sid)
-
             return Response({
                 'booking_id': booking.booking_id,
                 'status': booking.status
             })
 
         except Exception as e:
-            # Something went wrong, rollback to the savepoint
             transaction.savepoint_rollback(sid)
-            logger.error(f"Error creating booking request: {str(e)}")
-            logger.error(f"Error type: {type(e)}")
-            logger.error(f"Error args: {e.args}")
+            
+            # Log the error
+            ErrorLog.objects.create(
+                user=request.user,
+                error_message=str(e),
+                endpoint='/api/bookings/v1/request_booking/',
+                metadata={'request_data': request.data}
+            )
+            
+            # Log failed engagement
+            duration = current_time() - request_start_time
+            EngagementLog.objects.create(
+                user=request.user,
+                page_name='BOOKING_REQUEST',
+                duration=int(duration),
+                interactions={
+                    'error_type': type(e).__name__,
+                    'error_message': str(e),
+                    'success': False
+                }
+            )
+            
             return Response(
                 {"error": "Failed to create booking request"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+# Placeholder: Ready for views to be added
 # Placeholder: Ready for views to be added
