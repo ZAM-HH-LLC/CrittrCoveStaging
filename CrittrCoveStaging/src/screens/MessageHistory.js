@@ -911,9 +911,11 @@ const MessageHistory = ({ navigation, route }) => {
   
   const handleRequestBooking = async () => {
     const currentConversation = conversations.find(c => c.conversation_id === selectedConversation);
-    console.log('MBABOSS Current conversation:', currentConversation);
-    console.log('MBABOSS CURRENT_USER_ID:', CURRENT_USER_ID);
-    console.log('MBABOSS Selected conversation ID:', selectedConversation);
+    if (is_DEBUG) {
+      console.log('MBABOSS Current conversation:', currentConversation);
+      console.log('MBABOSS CURRENT_USER_ID:', CURRENT_USER_ID);
+      console.log('MBABOSS Selected conversation ID:', selectedConversation);
+    }
     
     if (!currentConversation) {
       console.log('MBABOSS No conversation found');
@@ -921,49 +923,52 @@ const MessageHistory = ({ navigation, route }) => {
     }
 
     // Log participant and role information
-    console.log('MBABOSS Participant1 ID:', currentConversation.participant1_id);
-    console.log('MBABOSS Participant2 ID:', currentConversation.participant2_id);
-    console.log('MBABOSS Role map:', currentConversation.role_map);
+    if (is_DEBUG) {
+      console.log('MBABOSS Participant1 ID:', currentConversation.participant1_id);
+      console.log('MBABOSS Participant2 ID:', currentConversation.participant2_id);
+      console.log('MBABOSS Role map:', currentConversation.role_map);
+    }
 
     // Check if current user is the professional by checking their role in the conversation
-    const isProfessional = currentConversation.is_professional === false;
+    const isProfessional = currentConversation.is_professional === true;
     
-    console.log('MBABOSS Is Professional?', isProfessional);
+    if (is_DEBUG) {
+      console.log('MBABOSS Is Professional?', isProfessional);
+    }
 
     if (isProfessional) {
-      console.log('MBABOSS User is professional - creating booking and navigating to details');
+      if (is_DEBUG) {
+        console.log('MBABOSS User is professional - creating booking and navigating to details');
+      }
       try {
-        // Get the client ID (the other participant)
-        const clientId = currentConversation.participant1_id === CURRENT_USER_ID ? 
-          currentConversation.participant2_id : currentConversation.participant1_id;
-        const professionalId = CURRENT_USER_ID;
-        
-        console.log('MBABOSS Creating booking with:', {
-          clientId,
-          professionalId,
-          clientName: currentConversation.name || currentConversation.other_user_name
-        });
-
-        const bookingId = await createBooking(
-          clientId,
-          professionalId,
+        const token = await getStorage('userToken');
+        const response = await axios.post(
+          `${API_BASE_URL}/api/bookings/v1/create/`,
           {
-            clientName: currentConversation.name || currentConversation.other_user_name,
-            professionalName: 'Me',
-            status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+            conversation_id: selectedConversation
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
           }
         );
 
-        console.log('MBABOSS Created booking with ID:', bookingId);
+        if (is_DEBUG) {
+          console.log('MBABOSS Created booking with ID:', response.data.booking_id);
+        }
 
-        if (bookingId) {
-          console.log('MBABOSS Navigating to BookingDetails with:', {
-            bookingId,
-            initialData: null
-          });
+        if (response.data.booking_id) {
+          if (is_DEBUG) {
+            console.log('MBABOSS Navigating to BookingDetails with:', {
+              bookingId: response.data.booking_id,
+              initialData: null
+            });
+          }
           
           navigation.navigate('BookingDetails', {
-            bookingId: bookingId,
+            bookingId: response.data.booking_id,
             initialData: null
           });
         }
@@ -979,26 +984,47 @@ const MessageHistory = ({ navigation, route }) => {
     setShowDropdown(false);
   };
 
-  const handleModalSubmit = async (modalData) => {
+  const handleBookingRequest = async (modalData) => {
     try {
-      const bookingId = await createBooking(
-        'client123',
-        'freelancer123',
+      const token = await getStorage('userToken');
+      const requestData = {
+        conversation_id: selectedConversation,
+        service_type: modalData.serviceType,
+        pets: modalData.pets.map(pet => pet.id),
+        occurrences: modalData.occurrences.map(occ => ({
+          start_date: format(new Date(occ.startDate), 'yyyy-MM-dd'),
+          end_date: format(new Date(occ.endDate || occ.startDate), 'yyyy-MM-dd'),
+          start_time: occ.startTime,
+          end_time: occ.endTime
+        }))
+      };
+
+      if (is_DEBUG) {
+        console.log('MBABOSS Sending booking request:', requestData);
+      }
+
+      const response = await axios.post(
+        `${API_BASE_URL}/api/bookings/v1/request_booking/`,
+        requestData,
         {
-          ...modalData,
-          professionalName: 'Professional Name',
-          clientName: 'Me',
-          status: 'Pending',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
       );
 
-      console.log('MBABOSS Created booking with ID:', bookingId);
-
+      if (is_DEBUG) {
+        console.log('MBABOSS Created booking with ID:', response.data.booking_id);
+      }
       setShowRequestModal(false);
-      navigation.navigate('BookingDetails', {
-        bookingId: bookingId,
-        initialData: null
-      });
+
+      if (response.data.booking_id) {
+        navigation.navigate('BookingDetails', {
+          bookingId: response.data.booking_id,
+          initialData: null
+        });
+      }
     } catch (error) {
       console.error('Error creating booking:', error);
       Alert.alert(
@@ -1009,35 +1035,6 @@ const MessageHistory = ({ navigation, route }) => {
     }
   };
 
-  // Add new function to handle booking request messages
-  const handleBookingRequest = async (bookingRequestMessage) => {
-    try {
-      // Add the booking request message to the current conversation
-      const newMessage = {
-        message_id: Date.now().toString(),
-        participant1_id: selectedConversationData?.participant1_id,
-        participant2_id: selectedConversationData?.participant2_id,
-        sender: CURRENT_USER_ID,
-        role_map: selectedConversationData?.role_map,
-        type: 'booking_request',
-        data: bookingRequestMessage.data,
-        timestamp: new Date().toISOString(),
-        status: "sent",
-        is_booking_request: true,
-        metadata: {}
-      };
-
-      setMessages(prevMessages => [...prevMessages, newMessage]);
-      setShowRequestModal(false);
-    } catch (error) {
-      console.error('Error sending booking request:', error);
-      Alert.alert(
-        'Error',
-        'Unable to send booking request. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
 
   // Add new header component
   const renderHeader = () => {
