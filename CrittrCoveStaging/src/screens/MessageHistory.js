@@ -771,21 +771,55 @@ const MessageHistory = ({ navigation, route }) => {
   }, [navigation, selectedConversationData, CURRENT_USER_ID]);
 
   const renderMessage = useCallback(({ item }) => {
-    if (item.type === 'booking_request') {
-      return renderBookingRequestMessage({ item });
+    // Handle booking request messages
+    if (item.type_of_message === 'initial_booking_request') {
+      const isFromMe = !item.sent_by_other_user;
+      return (
+        <View style={[
+          styles.bookingRequestCard,
+          isFromMe ? styles.sentBookingRequest : styles.receivedBookingRequest
+        ]}>
+          <View style={styles.bookingRequestHeader}>
+            <MaterialCommunityIcons name="calendar-clock" size={24} color={theme.colors.primary} />
+            <Text style={styles.bookingRequestTitle}>Booking Request</Text>
+          </View>
+          
+          <View style={styles.bookingRequestDetails}>
+            <Text style={styles.detailLabel}>Service:</Text>
+            <Text style={styles.detailText}>{item.metadata.service_type}</Text>
+            
+            <Text style={styles.detailLabel}>Pets:</Text>
+            <Text style={styles.detailText}>
+              {item.metadata.pets.join(', ')}
+            </Text>
+            
+            <Text style={styles.detailLabel}>Dates:</Text>
+            {item.metadata.occurrences.map((occ, index) => (
+              <Text key={index} style={styles.detailText}>
+                {format(new Date(occ.start_date), 'MMM d, yyyy')} {occ.start_time} - {occ.end_time}
+              </Text>
+            ))}
+          </View>
+
+          {item.booking_id && (
+            <TouchableOpacity 
+              style={styles.viewBookingButton}
+              onPress={() => navigation.navigate('BookingDetails', {
+                bookingId: item.booking_id,
+                initialData: null
+              })}
+            >
+              <Text style={styles.viewBookingText}>View Booking Details</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
     }
 
-    // Existing message rendering code
-    // Update message rendering to use sent_by_other_user
+    // Handle normal messages
     const isFromMe = !item.sent_by_other_user;
     return (
       <View style={isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer}>
-        {/* <Text style={[
-          styles.senderAbove,
-          isFromMe ? styles.sentSenderName : styles.receivedSenderName
-        ]}>
-          {isFromMe ? 'Me' : selectedConversationData?.name || selectedConversationData?.other_user_name}
-        </Text> */}
         <View style={[
           styles.messageCard, 
           isFromMe ? styles.sentMessage : styles.receivedMessage
@@ -799,15 +833,9 @@ const MessageHistory = ({ navigation, route }) => {
             </Text>
           </View>
         </View>
-        {/* <Text style={[
-          styles.timestampBelow,
-          isFromMe ? styles.sentTimestamp : styles.receivedTimestamp
-        ]}>
-          {new Date(item.timestamp).toLocaleTimeString()}
-        </Text> */}
       </View>
     );
-  }, [selectedConversationData, renderBookingRequestMessage]);
+  }, [navigation]);
 
   const WebInput = () => {
     const [message, setMessage] = useState('');
@@ -909,7 +937,7 @@ const MessageHistory = ({ navigation, route }) => {
 
   const MessageInput = Platform.OS === 'web' ? <WebInput /> : <MobileInput />;
   
-  const handleRequestBooking = async () => {
+  const handleCreateBooking = async () => {
     const currentConversation = conversations.find(c => c.conversation_id === selectedConversation);
     if (is_DEBUG) {
       console.log('MBABOSS Current conversation:', currentConversation);
@@ -987,25 +1015,11 @@ const MessageHistory = ({ navigation, route }) => {
   const handleBookingRequest = async (modalData) => {
     try {
       const token = await getStorage('userToken');
-      const requestData = {
-        conversation_id: selectedConversation,
-        service_type: modalData.serviceType,
-        pets: modalData.pets.map(pet => pet.id),
-        occurrences: modalData.occurrences.map(occ => ({
-          start_date: format(new Date(occ.startDate), 'yyyy-MM-dd'),
-          end_date: format(new Date(occ.endDate || occ.startDate), 'yyyy-MM-dd'),
-          start_time: occ.startTime,
-          end_time: occ.endTime
-        }))
-      };
-
-      if (is_DEBUG) {
-        console.log('MBABOSS Sending booking request:', requestData);
-      }
-
-      const response = await axios.post(
+      
+      // First, create the booking request
+      const bookingRequestResponse = await axios.post(
         `${API_BASE_URL}/api/bookings/v1/request_booking/`,
-        requestData,
+        modalData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1015,13 +1029,31 @@ const MessageHistory = ({ navigation, route }) => {
       );
 
       if (is_DEBUG) {
-        console.log('MBABOSS Created booking with ID:', response.data.booking_id);
+        console.log('MBABOSS Created booking with ID:', bookingRequestResponse.data.booking_id);
       }
+
+
+      // Then, send the booking request message
+      const messageResponse = await axios.post(
+        `${API_BASE_URL}/api/messages/v1/send_request_booking/`,
+        modalData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (is_DEBUG) {
+        console.log('Sent message response:', messageResponse.data);
+      }
+
       setShowRequestModal(false);
 
-      if (response.data.booking_id) {
+      if (bookingRequestResponse.data.booking_id) {
         navigation.navigate('BookingDetails', {
-          bookingId: response.data.booking_id,
+          bookingId: bookingRequestResponse.data.booking_id,
           initialData: null
         });
       }
@@ -1165,7 +1197,7 @@ const MessageHistory = ({ navigation, route }) => {
                 <TouchableOpacity 
                   style={styles.dropdownItem}
                   onPress={() => {
-                    handleRequestBooking();
+                    handleCreateBooking();
                     setShowDropdown(false);
                   }}
                 >
@@ -1399,6 +1431,7 @@ const MessageHistory = ({ navigation, route }) => {
         visible={showRequestModal}
         onClose={() => setShowRequestModal(false)}
         onSubmit={handleBookingRequest}
+        conversationId={selectedConversation}
       />
     </SafeAreaView>
   );
