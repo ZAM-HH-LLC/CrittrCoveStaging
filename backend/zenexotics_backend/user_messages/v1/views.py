@@ -11,6 +11,7 @@ from professionals.models import Professional
 from services.models import Service
 from pets.models import Pet
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -226,44 +227,46 @@ def send_request_booking(request):
     - occurrences: List of occurrence objects with start_date, end_date, start_time, end_time
     """
     try:
-        conversation_id = request.data.get('conversation_id')
-        service_type = request.data.get('service_type')
-        pets = request.data.get('pets', [])
+        # Get the service type name
+        service = Service.objects.get(service_id=request.data.get('service_type'))
+        service_name = service.service_name
+
+        # Get the pet names
+        pet_ids = request.data.get('pets', [])
+        pets = Pet.objects.filter(pet_id__in=pet_ids)
+        pet_names = [pet.name for pet in pets]
+
+        # Format occurrences with AM/PM
         occurrences = request.data.get('occurrences', [])
-
-        # Validate required fields
-        if not all([conversation_id, service_type, pets, occurrences]):
-            return Response(
-                {'error': 'conversation_id, service_type, pets, and occurrences are required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Get the conversation and verify the user is a participant
-        conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
-        current_user = request.user
-
-        if current_user not in [conversation.participant1, conversation.participant2]:
-            return Response(
-                {'error': 'You are not a participant in this conversation'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
+        formatted_occurrences = []
+        for occ in occurrences:
+            start_time = datetime.strptime(occ['start_time'], '%H:%M').strftime('%I:%M %p')
+            end_time = datetime.strptime(occ['end_time'], '%H:%M').strftime('%I:%M %p')
+            formatted_occurrences.append({
+                'start_date': occ['start_date'],
+                'end_date': occ['end_date'],  # Now using the actual end_date from the request
+                'start_time': start_time,
+                'end_time': end_time
+            })
 
         # Create the message
         message = UserMessage.objects.create(
-            conversation=conversation,
-            sender=current_user,
-            content=f"Booking request for service {service_type}",
+            conversation_id=request.data.get('conversation_id'),
+            sender=request.user,  # Added sender
+            content='Booking Request',
             type_of_message='initial_booking_request',
-            is_clickable=True,
-            status='sent',
+            is_clickable=True,  # Added is_clickable
+            status='sent',  # Added status
             metadata={
-                'service_type': service_type,
-                'pets': pets,
-                'occurrences': occurrences
+                'service_type': service_name,
+                'pets': pet_names,
+                'occurrences': formatted_occurrences,
+                'booking_id': request.data.get('booking_id')
             }
         )
 
         # Update conversation's last message and time
+        conversation = message.conversation
         conversation.last_message = "Booking Request"
         conversation.last_message_time = timezone.now()
         conversation.save()
@@ -272,7 +275,8 @@ def send_request_booking(request):
             'message_id': message.message_id,
             'content': message.content,
             'timestamp': message.timestamp,
-            'booking_id': None,
+            'sent_by_other_user': False,
+            'booking_id': request.data.get('booking_id'),
             'status': message.status,
             'type_of_message': message.type_of_message,
             'is_clickable': message.is_clickable,

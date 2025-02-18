@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { navigateToFrom } from '../components/Navigation';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth) => StyleSheet.create({
@@ -769,7 +770,7 @@ const MessageHistory = ({ navigation, route }) => {
         isFromMe={isFromMe}
         timestamp={item.timestamp}
         onAccept={() => {
-          navigation.navigate('BookingDetails', {
+          navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
             bookingId: null,
             initialData: {
               serviceType: item.data.serviceType,
@@ -816,11 +817,11 @@ const MessageHistory = ({ navigation, route }) => {
             ))}
           </View>
 
-          {item.booking_id && (
+          {item.metadata.booking_id && (
             <TouchableOpacity 
               style={styles.viewBookingButton}
-              onPress={() => navigation.navigate('BookingDetails', {
-                bookingId: item.booking_id,
+              onPress={() => navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
+                bookingId: item.metadata.booking_id,
                 initialData: null
               })}
             >
@@ -1010,7 +1011,7 @@ const MessageHistory = ({ navigation, route }) => {
             });
           }
           
-          navigation.navigate('BookingDetails', {
+          navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
             bookingId: response.data.booking_id,
             initialData: null
           });
@@ -1274,9 +1275,9 @@ const MessageHistory = ({ navigation, route }) => {
     const navigation = useNavigation();
     
     const handleViewBooking = () => {
-      navigation.navigate('BookingDetails', {
+      navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
         bookingId: data.bookingId,
-        readOnly: !isFromMe // Make fields read-only for client
+        readOnly: !isFromMe
       });
     };
 
@@ -1393,7 +1394,7 @@ const MessageHistory = ({ navigation, route }) => {
       </Text>
       <Button
         mode="contained"
-        onPress={() => navigation.navigate(is_prototype ? 'Services' : 'SearchProfessionalListing')}
+        onPress={() => navigateToFrom(navigation, is_prototype ? 'Services' : 'SearchProfessionalListing', 'MessageHistory')}
         style={{ borderRadius: 8 }}
       >
         {is_prototype ? 'Create Services' : 'Find Professionals'}
