@@ -610,35 +610,59 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Function to fetch messages for a conversation
   const fetchMessages = async (conversationId, page = 1) => {
+    console.log('MBABOSS [1] Starting fetchMessages with conversationId:', conversationId, 'type:', typeof conversationId);
     try {
+      console.log('MBABOSS [2] Entered try block');
+      
       if (page === 1) {
+        console.log('MBABOSS [3] Setting loading messages for page 1');
         setIsLoadingMessages(true);
       } else {
+        console.log('MBABOSS [3] Setting loading more for page:', page);
         setIsLoadingMore(true);
       }
       
+      console.log('MBABOSS [4] Getting storage token');
       const token = await getStorage('userToken');
-      const response = await axios.get(`${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/?page=${page}`, {
+      console.log('MBABOSS [5] Got token:', token ? 'Token exists' : 'No token');
+      
+      const url = `${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/?page=${page}`;
+      console.log('MBABOSS [6] Making request to URL:', url);
+
+      const response = await axios.get(url, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
+      console.log('MBABOSS [7] Got response:', response.status);
+      
       if (page === 1) {
+        console.log('MBABOSS [8] Setting messages for page 1');
         setMessages(response.data.messages);
       } else {
+        console.log('MBABOSS [8] Appending messages for page:', page);
         setMessages(prev => [...prev, ...response.data.messages]);
       }
       
       setHasMore(response.data.has_more);
       setCurrentPage(page);
+      console.log('MBABOSS [9] Successfully completed fetchMessages');
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      console.error('MBABOSS [ERROR] Error in fetchMessages:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+        method: error.config?.method
+      });
     } finally {
+      console.log('MBABOSS [10] In finally block, cleaning up');
       setIsLoadingMessages(false);
       setIsLoadingMore(false);
     }
+    console.log('MBABOSS [11] Exiting fetchMessages');
   };
 
   // Function to send a message
@@ -719,20 +743,11 @@ const MessageHistory = ({ navigation, route }) => {
   // Effect to load messages when conversation is selected
   useEffect(() => {
     if (!selectedConversation) return;
-
-    if (is_prototype) {
-      const conversation = mockConversations.find(conv => conv.id === selectedConversation);
-      if (conversation) {
-        const conversationMessages = mockMessages[selectedConversation] || [];
-        setMessages(conversationMessages);
-        setSelectedConversationData(conversation);
-      }
-    } else {
-      fetchMessages(selectedConversation);
-      const conversation = conversations.find(conv => conv.conversation_id === selectedConversation);
-      setSelectedConversationData(conversation);
-    }
-  }, [selectedConversation, is_prototype]);
+    console.log('MBABOSS Fetching messages for conversation:', selectedConversation);
+    fetchMessages(selectedConversation);
+    const conversation = conversations.find(conv => conv.conversation_id === selectedConversation);
+    setSelectedConversationData(conversation);
+  }, [selectedConversation]);
 
   // Add loadMoreMessages function for infinite scroll
   const loadMoreMessages = () => {
@@ -1032,11 +1047,13 @@ const MessageHistory = ({ navigation, route }) => {
         console.log('MBABOSS Created booking with ID:', bookingRequestResponse.data.booking_id);
       }
 
-
-      // Then, send the booking request message
+      // Then, send the booking request message with the booking ID
       const messageResponse = await axios.post(
         `${API_BASE_URL}/api/messages/v1/send_request_booking/`,
-        modalData,
+        {
+          ...modalData,
+          booking_id: bookingRequestResponse.data.booking_id
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1049,14 +1066,10 @@ const MessageHistory = ({ navigation, route }) => {
         console.log('Sent message response:', messageResponse.data);
       }
 
-      setShowRequestModal(false);
+      // Add the new message to the messages list
+      setMessages(prevMessages => [messageResponse.data, ...prevMessages]);
 
-      if (bookingRequestResponse.data.booking_id) {
-        navigation.navigate('BookingDetails', {
-          bookingId: bookingRequestResponse.data.booking_id,
-          initialData: null
-        });
-      }
+      setShowRequestModal(false);
     } catch (error) {
       console.error('Error creating booking:', error);
       Alert.alert(
@@ -1094,6 +1107,13 @@ const MessageHistory = ({ navigation, route }) => {
         const otherParticipantName = conv.participant1_id === CURRENT_USER_ID ? 
           conv.participant2_name : conv.participant1_name;
         
+        if (is_DEBUG) {
+          console.log('MBABOSSY Rendering conversation:', {
+            id: conv.conversation_id,
+            type: typeof conv.conversation_id
+          });
+        }
+        
         return (
           <TouchableOpacity
             key={conv.conversation_id}
@@ -1101,7 +1121,15 @@ const MessageHistory = ({ navigation, route }) => {
               styles.conversationItem,
               selectedConversation === conv.conversation_id && styles.selectedConversation
             ]}
-            onPress={() => setSelectedConversation(conv.conversation_id)}
+            onPress={() => {
+              if (is_DEBUG) {
+                console.log('MBABOSSY Setting selected conversation:', {
+                  id: conv.conversation_id,
+                  type: typeof conv.conversation_id
+                });
+              }
+              setSelectedConversation(conv.conversation_id);
+            }}
           >
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
