@@ -12,7 +12,7 @@ class ServiceAdmin(admin.ModelAdmin):
             'fields': ('professional', 'service_name', 'description', 'animal_type', 'categories')
         }),
         ('Pricing', {
-            'fields': ('base_rate', 'additional_animal_rate', 'holiday_rate', 'unit_of_time')
+            'fields': ('base_rate', 'additional_animal_rate', 'applies_after', 'holiday_rate', 'unit_of_time')
         }),
         ('Moderation', {
             'fields': ('moderation_status', 'moderation_notes', 'searchable')

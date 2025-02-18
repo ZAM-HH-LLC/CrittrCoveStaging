@@ -112,15 +112,12 @@ class BookingOccurrence(models.Model):
             if hasattr(self, 'rates'):
                 total += self.rates.get_total()
             
-            # Update the field directly in the database
-            BookingOccurrence.objects.filter(occurrence_id=self.occurrence_id).update(
-                calculated_cost=total.quantize(Decimal('0.01'))
-            )
+            # Only update and save if the value has changed
+            if self.calculated_cost != total:
+                self.calculated_cost = total.quantize(Decimal('0.01'))
+                self.save()  # This will trigger the post_save signal in services (update_booking_summary)
+                logger.info(f"Updated occurrence {self.occurrence_id} calculated cost to: ${self.calculated_cost}")
             
-            # Refresh from database to get updated value
-            self.refresh_from_db()
-            
-            logger.info(f"Updated occurrence {self.occurrence_id} calculated cost to: ${self.calculated_cost}")
         except Exception as e:
             logger.error(f"Error updating calculated cost for occurrence {self.occurrence_id}: {str(e)}")
 

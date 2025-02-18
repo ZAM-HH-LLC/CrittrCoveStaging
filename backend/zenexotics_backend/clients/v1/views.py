@@ -68,9 +68,8 @@ def get_client_dashboard(request):
         # Get upcoming confirmed bookings with at least one upcoming occurrence
         confirmed_bookings = Booking.objects.filter(
             client=client,
-            status=BookingStates.CONFIRMED,
-            occurrences__start_date__gte=today,
-            occurrences__status='FINAL'
+            status__in=[BookingStates.CONFIRMED, BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES],
+            occurrences__start_date__gte=today
         ).select_related('professional__user', 'service_id').distinct()
 
         # Serialize the bookings
@@ -79,8 +78,7 @@ def get_client_dashboard(request):
             # Get the next occurrence for this booking
             next_occurrence = BookingOccurrence.objects.filter(
                 booking=booking,
-                start_date__gte=today,
-                status='FINAL'
+                start_date__gte=today
             ).order_by('start_date', 'start_time').first()
             
             if next_occurrence:

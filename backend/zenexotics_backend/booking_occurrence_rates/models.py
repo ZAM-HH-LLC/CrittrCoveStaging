@@ -122,7 +122,9 @@ def update_occurrence_calculated_cost(sender, instance, created, **kwargs):
 @receiver(post_save, sender='booking_occurrences.BookingOccurrence')
 def create_occurrence_rates(sender, instance, created, **kwargs):
     """
-    Signal handler to create BookingOccurrenceRate when a BookingOccurrence is created
+    Signal handler to create BookingOccurrenceRate when a BookingOccurrence is created.
+    Only includes additional rates from ServiceRate table, not the base rates which are handled
+    by the BookingDetails table.
     """
     if created:
         from service_rates.models import ServiceRate
@@ -134,27 +136,13 @@ def create_occurrence_rates(sender, instance, created, **kwargs):
                 logger.warning(f"No service found for occurrence {instance.occurrence_id}")
                 return
                 
-            # Get service rates
+            # Get service rates (excluding base rates which are handled by BookingDetails)
             service_rates = ServiceRate.objects.filter(service=service)
             
-            # Create rates list
+            # Create rates list only from ServiceRate entries
             rates_list = []
             
-            # Format base rate amount
-            base_rate_amount = f"${service.base_rate}"
-            if not isinstance(base_rate_amount, str):
-                base_rate_amount = f"${base_rate_amount}"
-            if not base_rate_amount.startswith('$'):
-                base_rate_amount = f"${base_rate_amount}"
-            
-            # Add base rate
-            rates_list.append({
-                'title': 'Base Rate',
-                'description': 'Base rate for service',
-                'amount': base_rate_amount
-            })
-            
-            # Add additional service rates
+            # Add service rates
             for rate in service_rates:
                 rate_amount = f"${rate.rate}"
                 if not isinstance(rate_amount, str):
@@ -168,12 +156,13 @@ def create_occurrence_rates(sender, instance, created, **kwargs):
                     'amount': rate_amount
                 })
             
-            # Create the occurrence rate
-            occurrence_rate = BookingOccurrenceRate.objects.create(
-                occurrence=instance,
-                rates=rates_list
-            )
-            logger.info(f"Created BookingOccurrenceRate for occurrence {instance.occurrence_id}")
+            # Only create the occurrence rate if there are additional rates
+            if rates_list:
+                occurrence_rate = BookingOccurrenceRate.objects.create(
+                    occurrence=instance,
+                    rates=rates_list
+                )
+                logger.info(f"Created BookingOccurrenceRate for occurrence {instance.occurrence_id}")
             
         except Exception as e:
             logger.error(f"Error creating BookingOccurrenceRate: {str(e)}")
