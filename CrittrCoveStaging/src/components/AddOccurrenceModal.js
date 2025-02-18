@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Picker, ActivityIndicator, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import DatePicker from './DatePicker';
 import TimePicker from './TimePicker';
+import { AuthContext } from '../context/AuthContext'
 import { format } from 'date-fns';
 import { TIME_OPTIONS } from '../data/mockData';
 import { validateDateTimeRange } from '../utils/dateTimeValidation';
@@ -84,50 +85,61 @@ const AddOccurrenceModal = ({
     return date;
   };
 
+  const { is_DEBUG } = useContext(AuthContext);
   const [occurrence, setOccurrence] = useState(() => {
-    
-    
     if (initialOccurrence) {
+      // For editing existing occurrence
       const initialState = {
         startDate: initialOccurrence.startDate,
-        endDate: initialOccurrence.endDate,
+        endDate: initialOccurrence.endDate || initialOccurrence.startDate,
         startTime: createTimeDate(initialOccurrence.startTime),
         endTime: createTimeDate(initialOccurrence.endTime),
         rates: {
-          baseRate: initialOccurrence.rates.baseRate || '0',
-          additionalAnimalRate: initialOccurrence.rates.additionalAnimalRate || '0',
+          baseRate: '0',
+          additionalAnimalRate: '0',
+          appliesAfterAnimals: '1',
+          holidayRate: '0',
+          timeUnit: 'per visit',
+          additionalRates: []
+        }
+      };
+
+      // Only add rates if they exist in initialOccurrence
+      if (initialOccurrence.rates) {
+        initialState.rates = {
+          baseRate: initialOccurrence.rates.baseRate?.toString() || '0',
+          additionalAnimalRate: initialOccurrence.rates.additionalAnimalRate?.toString() || '0',
           appliesAfterAnimals: initialOccurrence.rates.appliesAfterAnimals || '1',
-          holidayRate: initialOccurrence.rates.holidayRate || '0',
+          holidayRate: initialOccurrence.rates.holidayRate?.toString() || '0',
           timeUnit: initialOccurrence.rates.timeUnit || 'per visit',
           additionalRates: (initialOccurrence.rates.additionalRates || []).map(rate => ({
             name: rate.name,
             description: rate.description || '',
             amount: rate.amount.toString()
           }))
-        },
-        totalCost: initialOccurrence.totalCost || '0',
-        baseTotal: initialOccurrence.baseTotal || '0'
-      };
+        };
+      }
       
       return initialState;
     }
 
-    const defaultState = {
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+    // For new occurrence
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    return {
+      startDate: todayStr,
+      endDate: todayStr,
       startTime: new Date(),
       endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
       rates: {
-        baseRate: defaultRates?.baseRate || '0',
-        additionalAnimalRate: defaultRates?.additionalAnimalRate || '0',
+        baseRate: defaultRates?.baseRate?.toString() || '0',
+        additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
         appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-        holidayRate: defaultRates?.holidayRate || '0',
+        holidayRate: defaultRates?.holidayRate?.toString() || '0',
         timeUnit: defaultRates?.timeUnit || 'per visit',
         additionalRates: defaultRates?.additionalRates || []
       }
     };
-    
-    return defaultState;
   });
 
   // Reset occurrence when initialOccurrence changes or when modal visibility changes
@@ -135,16 +147,18 @@ const AddOccurrenceModal = ({
     if (!visible) {
       // Reset to default state when modal closes
       if (!initialOccurrence) {
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
         setOccurrence({
-          startDate: new Date().toISOString().split('T')[0],
-          endDate: new Date().toISOString().split('T')[0],
+          startDate: todayStr,
+          endDate: todayStr,
           startTime: new Date(),
           endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
           rates: {
-            baseRate: defaultRates?.baseRate || '0',
-            additionalAnimalRate: defaultRates?.additionalAnimalRate || '0',
+            baseRate: defaultRates?.baseRate?.toString() || '0',
+            additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
             appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-            holidayRate: defaultRates?.holidayRate || '0',
+            holidayRate: defaultRates?.holidayRate?.toString() || '0',
             timeUnit: defaultRates?.timeUnit || 'per visit',
             additionalRates: []
           }
@@ -153,27 +167,36 @@ const AddOccurrenceModal = ({
       }
     } else if (initialOccurrence) {
       // Only set occurrence data if we're editing
+      const defaultRatesObj = {
+        baseRate: '0',
+        additionalAnimalRate: '0',
+        appliesAfterAnimals: '1',
+        holidayRate: '0',
+        timeUnit: 'per visit',
+        additionalRates: []
+      };
+
+      const ratesData = initialOccurrence.rates || defaultRatesObj;
+
       setOccurrence({
         startDate: initialOccurrence.startDate,
-        endDate: initialOccurrence.endDate,
+        endDate: initialOccurrence.endDate || initialOccurrence.startDate,
         startTime: createTimeDate(initialOccurrence.startTime),
         endTime: createTimeDate(initialOccurrence.endTime),
         rates: {
-          baseRate: initialOccurrence.rates.baseRate || '0',
-          additionalAnimalRate: initialOccurrence.rates.additionalAnimalRate || '0',
-          appliesAfterAnimals: initialOccurrence.rates.appliesAfterAnimals || '1',
-          holidayRate: initialOccurrence.rates.holidayRate || '0',
-          timeUnit: initialOccurrence.rates.timeUnit || 'per visit',
-          additionalRates: (initialOccurrence.rates.additionalRates || []).map(rate => ({
+          baseRate: ratesData.baseRate?.toString() || '0',
+          additionalAnimalRate: ratesData.additionalAnimalRate?.toString() || '0',
+          appliesAfterAnimals: ratesData.appliesAfterAnimals || '1',
+          holidayRate: ratesData.holidayRate?.toString() || '0',
+          timeUnit: ratesData.timeUnit || 'per visit',
+          additionalRates: (ratesData.additionalRates || []).map(rate => ({
             name: rate.name,
             description: rate.description || '',
-            amount: rate.amount.toString()
+            amount: rate.amount?.toString() || '0'
           }))
-        },
-        totalCost: initialOccurrence.totalCost || '0',
-        baseTotal: initialOccurrence.baseTotal || '0'
+        }
       });
-      setTimeUnit(initialOccurrence.rates.timeUnit || 'per visit');
+      setTimeUnit(ratesData.timeUnit || 'per visit');
     }
   }, [visible, initialOccurrence, defaultRates]);
 
@@ -208,8 +231,22 @@ const AddOccurrenceModal = ({
     try {
       setIsLoading(true);
       
+      // Keep dates as YYYY-MM-DD strings without any manipulation
+      const startDate = occurrence.startDate;
+      const endDate = occurrence.endDate || occurrence.startDate;
+      
+      if (is_DEBUG) {
+        console.log('Original dates:', {
+          startDate,
+          endDate,
+          startTime: format(occurrence.startTime, 'HH:mm'),
+          endTime: format(occurrence.endTime, 'HH:mm')
+        });
+      }
+      
       const occurrenceData = {
-        ...occurrence,
+        startDate,
+        endDate,
         startTime: format(occurrence.startTime, 'HH:mm'),
         endTime: format(occurrence.endTime, 'HH:mm'),
         rates: {
@@ -227,32 +264,40 @@ const AddOccurrenceModal = ({
         totalCost: parseFloat(calculateTotal())
       };
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await onAdd(occurrenceData);
+      if (is_DEBUG) {
+        console.log('Adding occurrence with data:', occurrenceData);
+      }
 
-      setOccurrence({
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
-        startTime: new Date(),
-        endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
-        rates: {
-          baseRate: defaultRates?.baseRate || 0,
-          additionalAnimalRate: defaultRates?.additionalAnimalRate || 0,
-          appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-          holidayRate: defaultRates?.holidayRate || 0,
-          additionalRates: [],
-          timeUnit: 'per visit'
-        }
-      });
-      setShowAddRate(false);
-      setNewRate({ name: '', amount: '' });
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const success = await onAdd(occurrenceData);
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (success) {
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        setOccurrence({
+          startDate: todayStr,
+          endDate: todayStr,
+          startTime: new Date(),
+          endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
+          rates: {
+            baseRate: defaultRates?.baseRate?.toString() || '0',
+            additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
+            appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
+            holidayRate: defaultRates?.holidayRate?.toString() || '0',
+            timeUnit: 'per visit',
+            additionalRates: []
+          }
+        });
+        setShowAddRate(false);
+        setNewRate({ name: '', amount: '' });
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        onClose();
+      }
     } catch (error) {
       console.error('Error adding occurrence:', error);
     } finally {
       setIsLoading(false);
-      onClose();
     }
   };
 

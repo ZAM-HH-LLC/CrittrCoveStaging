@@ -135,12 +135,16 @@ const RequestBookingModal = ({ visible, onClose, onSubmit, conversationId }) => 
       service_type: selectedServiceObj.service_id,
       pets: selectedPets,
       occurrences: occurrences.map(occ => ({
-        start_date: format(new Date(occ.startDate), 'yyyy-MM-dd'),
-        end_date: format(new Date(occ.endDate || occ.startDate), 'yyyy-MM-dd'),
+        start_date: occ.startDate,
+        end_date: occ.endDate || occ.startDate,
         start_time: occ.startTime,
         end_time: occ.endTime
       }))
     };
+
+    if (is_DEBUG) {
+      console.log('Sending booking data:', JSON.stringify(bookingData, null, 2));
+    }
 
     onSubmit(bookingData);
     resetForm();
@@ -327,8 +331,8 @@ const RequestBookingModal = ({ visible, onClose, onSubmit, conversationId }) => 
         <View style={styles.occurrenceDetails}>
           <Text style={styles.dateText}>
             {occ.endDate && occ.startDate !== occ.endDate ? 
-              `${format(new Date(occ.startDate), 'MMM d, yyyy')} - ${format(new Date(occ.endDate), 'MMM d, yyyy')}` :
-              format(new Date(occ.startDate), 'MMM d, yyyy')
+              `${occ.startDate} - ${occ.endDate}` :
+              occ.startDate
             }
           </Text>
           <Text style={styles.timeText}>

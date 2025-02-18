@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
   const [is_prototype, setIsPrototype] = useState(false);
 
   // Set is_DEBUG to false by default in prototype mode
-  const [is_DEBUG, setIsDebug] = useState(false);
+  const [is_DEBUG, setIsDebug] = useState(true);
 
   // Preload Stripe modules when user signs in
   useEffect(() => {

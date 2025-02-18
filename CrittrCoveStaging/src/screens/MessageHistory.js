@@ -434,12 +434,13 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   bookingRequestCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     margin: 8,
     borderWidth: 1,
-    borderColor: theme.colors.primary,
-    maxWidth: 500,
+    borderColor: theme.colors.border,
+    maxWidth: '80%',
+    position: 'relative',
   },
   sentBookingRequest: {
     alignSelf: 'flex-end',
@@ -464,16 +465,25 @@ const createStyles = (screenWidth) => StyleSheet.create({
   bookingRequestDetails: {
     gap: 8,
   },
+  inlineDetailRow: {
+    flexDirection: 'row',
+    // alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 8,
+  },
+  dateSection: {
+    gap: 8,
+  },
   detailLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
-    color: theme.colors.placeholder,
-    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+    // minWidth: 70,
   },
   detailText: {
     fontSize: 16,
     color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
+    flex: 1,
   },
   acceptButton: {
     backgroundColor: theme.colors.primary,
@@ -511,6 +521,22 @@ const createStyles = (screenWidth) => StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  deletedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  deletedText: {
+    color: theme.colors.surface,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 
@@ -801,23 +827,37 @@ const MessageHistory = ({ navigation, route }) => {
           </View>
           
           <View style={styles.bookingRequestDetails}>
-            <Text style={styles.detailLabel}>Service:</Text>
-            <Text style={styles.detailText}>{item.metadata.service_type}</Text>
+            <View style={styles.inlineDetailRow}>
+              <Text style={styles.detailLabel}>Service:</Text>
+              <Text style={styles.detailText}>{item.metadata.service_type}</Text>
+            </View>
             
-            <Text style={styles.detailLabel}>Pets:</Text>
-            <Text style={styles.detailText}>
-              {item.metadata.pets.join(', ')}
-            </Text>
-            
-            <Text style={styles.detailLabel}>Dates:</Text>
-            {item.metadata.occurrences.map((occ, index) => (
-              <Text key={index} style={styles.detailText}>
-                {format(new Date(occ.start_date), 'MMM d, yyyy')} {occ.start_time} - {occ.end_time}
+            <View style={styles.inlineDetailRow}>
+              <Text style={styles.detailLabel}>Pets:</Text>
+              <Text style={styles.detailText}>
+                {item.metadata.pets.join(', ')}
               </Text>
-            ))}
+            </View>
+            
+            <View style={styles.dateSection}>
+              <Text style={styles.detailLabel}>Dates:</Text>
+              {item.metadata.occurrences.map((occ, index) => {
+                // Parse dates from server's YYYY-MM-DD format
+                const startDate = new Date(occ.start_date + 'T00:00:00');
+                const endDate = new Date(occ.end_date + 'T00:00:00');
+                
+                return (
+                  <View key={index} style={styles.occurrenceItem}>
+                    <Text style={styles.detailText}>
+                      {format(startDate, 'MMM d, yyyy')} {occ.start_time} - {occ.end_time}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
           </View>
 
-          {item.metadata.booking_id && (
+          {item.metadata.booking_id && !item.is_deleted && (
             <TouchableOpacity 
               style={styles.viewBookingButton}
               onPress={() => navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
@@ -827,6 +867,12 @@ const MessageHistory = ({ navigation, route }) => {
             >
               <Text style={styles.viewBookingText}>View Booking Details</Text>
             </TouchableOpacity>
+          )}
+
+          {item.is_deleted && (
+            <View style={styles.deletedOverlay}>
+              <Text style={styles.deletedText}>Booking Deleted</Text>
+            </View>
           )}
         </View>
       );

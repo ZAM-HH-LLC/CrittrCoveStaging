@@ -12,6 +12,7 @@ from services.models import Service
 from pets.models import Pet
 import logging
 from datetime import datetime
+from bookings.models import Booking
 
 logger = logging.getLogger(__name__)
 
@@ -50,16 +51,29 @@ def get_conversation_messages(request, conversation_id):
 
         messages_data = []
         for message in messages:
+            # Check if the booking exists and is not deleted
+            is_deleted = False
+            booking_id = None
+            if message.type_of_message == 'initial_booking_request' and message.metadata.get('booking_id'):
+                booking_id = message.metadata['booking_id']
+                try:
+                    booking = Booking.objects.get(booking_id=booking_id)
+                    # Consider a booking "deleted" if it's in a cancelled or declined state
+                    # is_deleted = booking.status in ['CANCELLED', 'DECLINED']
+                except Booking.DoesNotExist:
+                    is_deleted = True
+
             messages_data.append({
                 'message_id': message.message_id,
                 'sent_by_other_user': message.sender != current_user,
                 'content': message.content,
                 'timestamp': message.timestamp,
-                'booking_id': message.booking.booking_id if message.booking else None,
+                'booking_id': booking_id,
                 'status': message.status,
                 'type_of_message': message.type_of_message,
                 'is_clickable': message.is_clickable,
-                'metadata': message.metadata
+                'metadata': message.metadata,
+                'is_deleted': is_deleted
             })
 
         # Get the other participant (the one who isn't the current user)
@@ -79,6 +93,8 @@ def get_conversation_messages(request, conversation_id):
         })
 
     except Exception as e:
+        logger.error(f"Error in get_conversation_messages: {str(e)}")
+        logger.exception("Full traceback:")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
