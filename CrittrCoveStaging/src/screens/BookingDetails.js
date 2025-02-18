@@ -1799,7 +1799,6 @@ const styles = StyleSheet.create({
   noContentText: {
     fontSize: 14,
     color: theme.colors.placeholder,
-    fontStyle: 'italic',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   saveButtonText: {

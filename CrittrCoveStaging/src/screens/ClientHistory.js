@@ -89,7 +89,7 @@ const ClientHistory = ({ route, navigation }) => {
       <View style={styles.messageButtonContainer}>
         <Button 
           mode="contained" 
-          onPress={() => navigateToFrom(navigation, 'Messages', 'ClientHistory', { clientId })}
+          onPress={() => navigateToFrom(navigation, 'MessageHistory', 'ClientHistory', { clientId })}
           style={styles.messageButton}
         >
           View Messages
