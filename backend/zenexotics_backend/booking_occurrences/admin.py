@@ -52,10 +52,10 @@ class BookingOccurrenceRateInline(admin.StackedInline):
 
 @admin.register(BookingOccurrence)
 class BookingOccurrenceAdmin(admin.ModelAdmin):
-    list_display = ('occurrence_id', 'booking', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'display_calculated_cost')
-    list_filter = ('status', 'start_date', 'created_by')
-    search_fields = ('booking__client__user__email', 'booking__professional__user__email')
-    readonly_fields = ('created_at', 'updated_at', 'calculated_cost')
+    list_display = ('occurrence_id', 'booking', 'get_start_datetime', 'get_end_datetime', 'status', 'created_by')
+    list_filter = ('status', 'created_by')
+    search_fields = ('booking__booking_id', 'occurrence_id')
+    readonly_fields = ('created_at', 'updated_at')
     inlines = [BookingOccurrenceRateInline]
     fieldsets = (
         ('Basic Information', {
@@ -75,6 +75,14 @@ class BookingOccurrenceAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def get_start_datetime(self, obj):
+        return f"{obj.start_date} {obj.start_time.strftime('%H:%M')}"
+    get_start_datetime.short_description = 'Start Date/Time (UTC)'
+    
+    def get_end_datetime(self, obj):
+        return f"{obj.end_date} {obj.end_time.strftime('%H:%M')}"
+    get_end_datetime.short_description = 'End Date/Time (UTC)'
 
     def display_calculated_cost(self, obj):
         return f"${float(obj.get_calculated_cost()):.2f}"

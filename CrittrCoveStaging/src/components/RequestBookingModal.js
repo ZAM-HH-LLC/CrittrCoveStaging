@@ -146,9 +146,21 @@ const RequestBookingModal = ({ visible, onClose, onSubmit, conversationId }) => 
       console.log('Sending booking data:', JSON.stringify(bookingData, null, 2));
     }
 
-    onSubmit(bookingData);
-    resetForm();
-    onClose();
+    setIsLoading(true);
+    setError(null);
+    
+    onSubmit(bookingData)
+      .then(() => {
+        resetForm();
+        onClose();
+      })
+      .catch(err => {
+        const errorMessage = err.response?.data?.error || 'Failed to create booking request';
+        setError(errorMessage);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   const handleDeleteOccurrence = async (occurrenceToDelete) => {

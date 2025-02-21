@@ -5,6 +5,9 @@ from decimal import Decimal
 from .constants import BookingStates
 from booking_details.models import BookingDetails
 from .utils import is_holiday, count_holidays
+from core.time_utils import format_booking_occurrence
+from datetime import datetime
+import pytz
 import logging
 
 logger = logging.getLogger(__name__)
@@ -138,6 +141,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 
     def get_occurrences(self, obj):
         is_prorated = self.context.get('is_prorated', True)
+        user = self.context['request'].user
         occurrences = []
         logger.info(f"\nProcessing occurrences for booking {obj.booking_id}:")
 
@@ -173,15 +177,38 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             logger.info(f"  Additional rates total: ${additional_rates_total}")
             logger.info(f"  Final total cost: ${total_cost}")
 
+            # Format times according to user preferences
+            start_dt = datetime.combine(occ.start_date, occ.start_time)
+            end_dt = datetime.combine(occ.end_date, occ.end_time)
+            
+            # Make datetimes timezone-aware in UTC since they're stored in UTC
+            start_dt = pytz.UTC.localize(start_dt)
+            end_dt = pytz.UTC.localize(end_dt)
+            
+            # Format the times according to user preferences
+            formatted_times = format_booking_occurrence(
+                start_dt,
+                end_dt,
+                user.id
+            )
+
+            # Extract just the time portion from the formatted strings
+            formatted_start_time = formatted_times['formatted_start'].split(' ')[-2]
+            formatted_end_time = formatted_times['formatted_end'].split(' ')[-2]
+
             occurrences.append({
                 'occurrence_id': occ.occurrence_id,
-                'start_date': occ.start_date,
-                'end_date': occ.end_date,
-                'start_time': occ.start_time.strftime('%H:%M') if occ.start_time else None,
-                'end_time': occ.end_time.strftime('%H:%M') if occ.end_time else None,
+                'start_date': occ.start_date.strftime('%b %d, %Y'),
+                'end_date': occ.end_date.strftime('%b %d, %Y'),
+                'start_time': formatted_start_time,
+                'end_time': formatted_end_time,
                 'calculated_cost': f"{total_cost:.2f}",
                 'base_total': f"${base_total:.2f}",
-                'rates': self.get_occurrence_rates(occ, booking_details, additional_rates)
+                'rates': self.get_occurrence_rates(occ, booking_details, additional_rates),
+                'formatted_start': formatted_times['formatted_start'],
+                'formatted_end': formatted_times['formatted_end'],
+                'duration': formatted_times['duration'],
+                'timezone': formatted_times['timezone']
             })
 
         return occurrences

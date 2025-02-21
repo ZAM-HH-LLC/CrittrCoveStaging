@@ -13,6 +13,14 @@ from pets.models import Pet
 import logging
 from datetime import datetime
 from bookings.models import Booking
+from django.db.models import Q
+from core.time_utils import (
+    convert_to_utc,
+    convert_from_utc,
+    format_booking_occurrence,
+    get_user_time_settings
+)
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -25,77 +33,104 @@ def get_conversation_messages(request, conversation_id):
     Page number can be specified in the query params, defaults to 1.
     """
     try:
-        current_user = request.user
+        # Get the conversation and verify the user is a participant
         conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
-        
-        # Verify user is participant
+        current_user = request.user
+
         if current_user not in [conversation.participant1, conversation.participant2]:
             return Response(
                 {'error': 'You are not a participant in this conversation'}, 
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Fixed page size and get page number from query params
-        PAGE_SIZE = 20
+        # Get page number from query params, default to 1
         page = int(request.GET.get('page', 1))
-        start_idx = (page - 1) * PAGE_SIZE
-        end_idx = start_idx + PAGE_SIZE
-        
-        # Get messages for current page
-        messages = UserMessage.objects.filter(conversation=conversation)\
-            .order_by('-timestamp')[start_idx:end_idx + 1]  # Get one extra to check if there are more
+        page_size = 20
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
 
-        # Check if there are more messages
-        has_more = len(messages) > PAGE_SIZE
-        messages = messages[:PAGE_SIZE]  # Remove the extra message if it exists
+        # Get messages for this conversation
+        messages = UserMessage.objects.filter(
+            conversation=conversation
+        ).order_by('-timestamp')[start_idx:end_idx]
 
         messages_data = []
+        
         for message in messages:
-            # Check if the booking exists and is not deleted
-            is_deleted = False
-            booking_id = None
-            if message.type_of_message == 'initial_booking_request' and message.metadata.get('booking_id'):
-                booking_id = message.metadata['booking_id']
-                try:
-                    booking = Booking.objects.get(booking_id=booking_id)
-                    # Consider a booking "deleted" if it's in a cancelled or declined state
-                    # is_deleted = booking.status in ['CANCELLED', 'DECLINED']
-                except Booking.DoesNotExist:
-                    is_deleted = True
-
-            messages_data.append({
+            # Initialize message data with common fields
+            message_data = {
                 'message_id': message.message_id,
                 'sent_by_other_user': message.sender != current_user,
                 'content': message.content,
                 'timestamp': message.timestamp,
-                'booking_id': booking_id,
                 'status': message.status,
                 'type_of_message': message.type_of_message,
                 'is_clickable': message.is_clickable,
-                'metadata': message.metadata,
-                'is_deleted': is_deleted
-            })
+                'metadata': message.metadata.copy() if message.metadata else {},
+                'is_deleted': False,
+                'booking_id': None
+            }
 
-        # Get the other participant (the one who isn't the current user)
-        other_participant = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
+            # Handle booking request messages
+            if message.type_of_message == 'initial_booking_request' and message.metadata:
+                booking_id = message.metadata.get('booking_id')
+                
+                if booking_id:
+                    try:
+                        booking = Booking.objects.get(booking_id=booking_id)
+                        message_data['is_deleted'] = booking.status in ['CANCELLED', 'DECLINED']
+                        message_data['booking_id'] = booking_id
+
+                        # Get the booking occurrences from the database
+                        if not message_data['is_deleted']:
+                            formatted_occurrences = []
+                            for occurrence in booking.occurrences.all():
+                                try:
+                                    # Create timezone-aware datetime objects
+                                    start_dt = datetime.combine(occurrence.start_date, occurrence.start_time)
+                                    end_dt = datetime.combine(occurrence.end_date, occurrence.end_time)
+                                    
+                                    # Make datetimes timezone-aware in UTC
+                                    start_dt = pytz.UTC.localize(start_dt)
+                                    end_dt = pytz.UTC.localize(end_dt)
+                                    
+                                    # Format the times according to user preferences
+                                    formatted_times = format_booking_occurrence(
+                                        start_dt,
+                                        end_dt,
+                                        current_user.id
+                                    )
+                                    formatted_occurrences.append(formatted_times)
+                                except Exception as e:
+                                    logger.error(f"Error formatting occurrence: {str(e)}")
+                                    continue
+                            
+                            message_data['metadata']['occurrences'] = formatted_occurrences
+                    except Booking.DoesNotExist:
+                        message_data['is_deleted'] = True
+                else:
+                    message_data['is_deleted'] = True
+
+            messages_data.append(message_data)
 
         # Mark unread messages as read
         UserMessage.objects.filter(
             conversation=conversation,
-            sender=other_participant,
+            sender=conversation.participant2 if conversation.participant1 == current_user else conversation.participant1,
             status='sent'
         ).update(status='read')
 
         return Response({
-            'conversation_id': conversation_id,
             'messages': messages_data,
-            'has_more': has_more
+            'has_more': len(messages) == page_size
         })
 
     except Exception as e:
         logger.error(f"Error in get_conversation_messages: {str(e)}")
-        logger.exception("Full traceback:")
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {'error': 'An error occurred while fetching messages'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -243,66 +278,101 @@ def send_request_booking(request):
     - occurrences: List of occurrence objects with start_date, end_date, start_time, end_time
     """
     try:
-        # Get the service type name
-        service = Service.objects.get(service_id=request.data.get('service_type'))
+        # Get the user's timezone settings
+        user_settings = get_user_time_settings(request.user.id)
+        user_tz = pytz.timezone(user_settings['timezone'])
+        
+        # Get service name
+        service = get_object_or_404(Service, service_id=request.data.get('service_type'))
         service_name = service.service_name
-
-        # Get the pet names
+        
+        # Get pet details
         pet_ids = request.data.get('pets', [])
         pets = Pet.objects.filter(pet_id__in=pet_ids)
-        pet_names = [pet.name for pet in pets]
-
-        # Format occurrences with AM/PM
+        pet_details = [f"{pet.name} ({pet.species})" for pet in pets]
+        
+        # Process occurrences to include timezone-aware datetimes
         occurrences = request.data.get('occurrences', [])
-        formatted_occurrences = []
+        processed_occurrences = []
+        
         for occ in occurrences:
-            start_time = datetime.strptime(occ['start_time'], '%H:%M').strftime('%I:%M %p')
-            end_time = datetime.strptime(occ['end_time'], '%H:%M').strftime('%I:%M %p')
-            formatted_occurrences.append({
-                'start_date': occ['start_date'],
-                'end_date': occ['end_date'],  # Now using the actual end_date from the request
-                'start_time': start_time,
-                'end_time': end_time
-            })
-
-        # Create the message
+            try:
+                # Parse the date and time strings
+                start_date = datetime.strptime(occ['start_date'], '%Y-%m-%d').date()
+                end_date = datetime.strptime(occ['end_date'], '%Y-%m-%d').date()
+                start_time = datetime.strptime(occ['start_time'], '%H:%M').time()
+                end_time = datetime.strptime(occ['end_time'], '%H:%M').time()
+                
+                # Combine into datetime objects in user's timezone
+                start_dt = datetime.combine(start_date, start_time)
+                end_dt = datetime.combine(end_date, end_time)
+                
+                # Make the datetime objects timezone-aware in user's timezone
+                start_dt = user_tz.localize(start_dt)
+                end_dt = user_tz.localize(end_dt)
+                
+                # Convert to UTC
+                start_dt_utc = start_dt.astimezone(pytz.UTC)
+                end_dt_utc = end_dt.astimezone(pytz.UTC)
+                
+                # Format the times according to user preferences for display
+                formatted_times = format_booking_occurrence(
+                    start_dt_utc,
+                    end_dt_utc,
+                    request.user.id
+                )
+                
+                processed_occ = {
+                    'start_date': start_dt_utc.date().isoformat(),
+                    'end_date': end_dt_utc.date().isoformat(),
+                    'start_time': start_dt_utc.time().strftime('%H:%M'),
+                    'end_time': end_dt_utc.time().strftime('%H:%M'),
+                    **formatted_times  # Include all formatted strings
+                }
+                processed_occurrences.append(processed_occ)
+            except (ValueError, KeyError) as e:
+                logger.error(f"Error processing occurrence: {str(e)}")
+                return Response(
+                    {'error': f'Invalid date/time format in occurrence: {str(e)}'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Create the message with processed occurrences
+        conversation = get_object_or_404(Conversation, conversation_id=request.data.get('conversation_id'))
+        
         message = UserMessage.objects.create(
-            conversation_id=request.data.get('conversation_id'),
-            sender=request.user,  # Added sender
+            conversation=conversation,
+            sender=request.user,
             content='Booking Request',
             type_of_message='initial_booking_request',
-            is_clickable=True,  # Added is_clickable
-            status='sent',  # Added status
+            is_clickable=True,
+            status='sent',
             metadata={
                 'service_type': service_name,
-                'pets': pet_names,
-                'occurrences': formatted_occurrences,
+                'pets': pet_details,
+                'occurrences': processed_occurrences,
                 'booking_id': request.data.get('booking_id')
             }
         )
-
+        
         # Update conversation's last message and time
-        conversation = message.conversation
         conversation.last_message = "Booking Request"
         conversation.last_message_time = timezone.now()
         conversation.save()
 
         return Response({
             'message_id': message.message_id,
+            'conversation_id': message.conversation.conversation_id,
             'content': message.content,
-            'timestamp': message.timestamp,
-            'sent_by_other_user': False,
-            'booking_id': request.data.get('booking_id'),
-            'status': message.status,
             'type_of_message': message.type_of_message,
-            'is_clickable': message.is_clickable,
-            'metadata': message.metadata
+            'metadata': message.metadata,
+            'sent_by_other_user': False,
+            'timestamp': message.timestamp
         }, status=status.HTTP_201_CREATED)
-
+        
     except Exception as e:
         logger.error(f"Error in send_request_booking: {str(e)}")
-        logger.exception("Full traceback:")
         return Response(
-            {'error': str(e)}, 
+            {'error': 'An error occurred while sending the booking request'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

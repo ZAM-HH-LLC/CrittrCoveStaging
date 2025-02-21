@@ -32,6 +32,8 @@ from error_logs.models import ErrorLog
 from interaction_logs.models import InteractionLog
 from engagement_logs.models import EngagementLog
 import traceback
+import pytz
+from core.time_utils import get_user_time_settings
 
 logger = logging.getLogger(__name__)
 
@@ -529,17 +531,34 @@ class RequestBookingView(APIView):
             # Create booking occurrences
             for occurrence_data in occurrences:
                 try:
+                    # Parse the date and time strings
                     start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
                     end_date = datetime.strptime(occurrence_data.get('end_date', occurrence_data['start_date']), '%Y-%m-%d').date()
                     start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
                     end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
                     
+                    # Get the user's timezone settings
+                    user_settings = get_user_time_settings(request.user.id)
+                    user_tz = pytz.timezone(user_settings['timezone'])
+                    
+                    # Combine into datetime objects in user's timezone
+                    start_dt = datetime.combine(start_date, start_time)
+                    end_dt = datetime.combine(end_date, end_time)
+                    
+                    # Make the datetime objects timezone-aware in user's timezone
+                    start_dt = user_tz.localize(start_dt)
+                    end_dt = user_tz.localize(end_dt)
+                    
+                    # Convert to UTC
+                    start_dt_utc = start_dt.astimezone(pytz.UTC)
+                    end_dt_utc = end_dt.astimezone(pytz.UTC)
+                    
                     occurrence = BookingOccurrence.objects.create(
                         booking=booking,
-                        start_date=start_date,
-                        end_date=end_date,
-                        start_time=start_time,
-                        end_time=end_time,
+                        start_date=start_dt_utc.date(),
+                        end_date=end_dt_utc.date(),
+                        start_time=start_dt_utc.time(),
+                        end_time=end_dt_utc.time(),
                         created_by='CLIENT',
                         last_modified_by='CLIENT',
                         status='PENDING'

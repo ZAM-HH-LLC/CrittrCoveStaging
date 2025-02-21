@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 import secrets
 import string
 import os
+from django.utils.translation import gettext_lazy as _
+import pytz
 
 def validate_image_file(value):
     if value.size > settings.MAX_UPLOAD_SIZE:
@@ -88,3 +90,32 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def has_module_perms(self, app_label):
         return True
+
+class UserSettings(models.Model):
+    TIMEZONE_CHOICES = [(tz, tz) for tz in pytz.common_timezones]
+    
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='settings'
+    )
+    timezone = models.CharField(
+        max_length=50,
+        choices=TIMEZONE_CHOICES,
+        default='UTC',
+        help_text=_('User\'s preferred timezone')
+    )
+    use_military_time = models.BooleanField(
+        default=False,
+        help_text=_('Whether to use 24-hour time format')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_settings'
+        verbose_name = 'User Settings'
+        verbose_name_plural = 'User Settings'
+
+    def __str__(self):
+        return f"Settings for {self.user.name}"

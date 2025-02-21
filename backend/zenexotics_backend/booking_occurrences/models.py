@@ -1,9 +1,11 @@
 from django.db import models
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, time
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from core.time_utils import convert_to_utc, convert_from_utc, format_datetime_for_user, get_formatted_times
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +26,8 @@ class BookingOccurrence(models.Model):
     booking = models.ForeignKey('bookings.Booking', on_delete=models.CASCADE, related_name='occurrences')
     start_date = models.DateField()
     end_date = models.DateField()
-    start_time = models.TimeField()
-    end_time = models.TimeField()
+    start_time = models.TimeField(help_text="Time in 24-hour format (UTC)")
+    end_time = models.TimeField(help_text="Time in 24-hour format (UTC)")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     created_by = models.CharField(max_length=50, choices=CREATOR_CHOICES)
     last_modified_by = models.CharField(max_length=50, choices=CREATOR_CHOICES)
@@ -43,9 +45,67 @@ class BookingOccurrence(models.Model):
         return f"Occurrence {self.occurrence_id} for Booking {self.booking.booking_id}"
 
     def save(self, *args, **kwargs):
+        # Ensure times are in military format
+        if isinstance(self.start_time, str):
+            try:
+                # Parse time string and convert to military format
+                parsed_time = datetime.strptime(self.start_time, '%I:%M %p').time()
+                self.start_time = time(parsed_time.hour, parsed_time.minute)
+            except ValueError:
+                # If it's already in military format, just parse it
+                try:
+                    parsed_time = datetime.strptime(self.start_time, '%H:%M').time()
+                    self.start_time = time(parsed_time.hour, parsed_time.minute)
+                except ValueError:
+                    pass
+
+        if isinstance(self.end_time, str):
+            try:
+                # Parse time string and convert to military format
+                parsed_time = datetime.strptime(self.end_time, '%I:%M %p').time()
+                self.end_time = time(parsed_time.hour, parsed_time.minute)
+            except ValueError:
+                # If it's already in military format, just parse it
+                try:
+                    parsed_time = datetime.strptime(self.end_time, '%H:%M').time()
+                    self.end_time = time(parsed_time.hour, parsed_time.minute)
+                except ValueError:
+                    pass
+
         if self.calculated_cost is None:
             self.calculated_cost = Decimal('0.00')
         super().save(*args, **kwargs)
+
+    def get_formatted_times(self, user_id):
+        """
+        Get the start and end times formatted according to the user's preferences.
+        Returns a tuple of (formatted start time, formatted end time, timezone abbreviation)
+        """
+        start_dt = datetime.combine(self.start_date, self.start_time)
+        end_dt = datetime.combine(self.end_date, self.end_time)
+        
+        # Make datetimes timezone-aware in UTC
+        start_dt = pytz.UTC.localize(start_dt)
+        end_dt = pytz.UTC.localize(end_dt)
+        
+        # Format according to user preferences
+        formatted_times = format_booking_occurrence(start_dt, end_dt, user_id)
+        return formatted_times
+
+    def set_times_from_local(self, start_dt, end_dt, user_timezone):
+        """
+        Set the occurrence times from local datetime objects.
+        Converts the times to UTC and ensures military format.
+        """
+        # Convert to UTC
+        start_utc = convert_to_utc(start_dt, user_timezone)
+        end_utc = convert_to_utc(end_dt, user_timezone)
+        
+        # Set the fields (always in military format)
+        self.start_date = start_utc.date()
+        self.end_date = end_utc.date()
+        self.start_time = start_utc.time()
+        self.end_time = end_utc.time()
 
     def calculate_time_units(self, is_prorated=True):
         """Calculate the number of time units for this occurrence"""
@@ -54,6 +114,11 @@ class BookingOccurrence(models.Model):
                 service = self.booking.service_id
                 start_datetime = datetime.combine(self.start_date, self.start_time)
                 end_datetime = datetime.combine(self.end_date, self.end_time)
+                
+                # Make datetimes timezone-aware in UTC
+                start_datetime = pytz.UTC.localize(start_datetime)
+                end_datetime = pytz.UTC.localize(end_datetime)
+                
                 duration_hours = (end_datetime - start_datetime).total_seconds() / 3600
                 
                 if service.unit_of_time == 'PER_DAY':

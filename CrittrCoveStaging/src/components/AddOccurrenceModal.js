@@ -412,6 +412,7 @@ const AddOccurrenceModal = ({
                     onChange={(date) => setOccurrence(prev => ({ ...prev, startDate: date }))}
                   />
                 </View>
+                <Text style={{ width: 10 }} />
                 <View style={styles.dateTimeColumn}>
                   <Text style={styles.label}>Start Time</Text>
                   <TimePicker
@@ -431,6 +432,7 @@ const AddOccurrenceModal = ({
                     onChange={(date) => setOccurrence(prev => ({ ...prev, endDate: date }))}
                   />
                 </View>
+                <Text style={{ width: 10 }} />
                 <View style={styles.dateTimeColumn}>
                   <Text style={styles.label}>End Time</Text>
                   <TimePicker

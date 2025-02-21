@@ -476,7 +476,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   detailLabel: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '502',
     color: theme.colors.text,
     // minWidth: 70,
   },
@@ -856,67 +856,16 @@ const MessageHistory = ({ navigation, route }) => {
             
             <View style={styles.dateSection}>
               <Text style={styles.detailLabel}>Dates:</Text>
-              {item.metadata.occurrences.map((occ, index) => {
-                try {
-                  // Parse dates and times correctly
-                  const [startHours, startMinutes] = (occ.start_time || '00:00').split(':').map(Number);
-                  const [endHours, endMinutes] = (occ.end_time || '00:00').split(':').map(Number);
-                  
-                  // Create start date with the correct time
-                  const startDate = new Date(occ.start_date);
-                  if (isNaN(startDate.getTime())) {
-                    throw new Error('Invalid start date');
-                  }
-                  startDate.setHours(startHours || 0, startMinutes || 0, 0);
-                  
-                  // Create end date with the correct time
-                  const endDate = new Date(occ.end_date || occ.start_date);
-                  if (isNaN(endDate.getTime())) {
-                    throw new Error('Invalid end date');
-                  }
-                  endDate.setHours(endHours || 0, endMinutes || 0, 0);
-                  
-                  // Calculate duration
-                  const durationMs = endDate - startDate;
-                  const days = Math.floor(durationMs / (1000 * 60 * 60 * 24));
-                  const hours = Math.floor((durationMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-                  
-                  // Format duration string
-                  let durationStr = '';
-                  if (days > 0) durationStr += `${days} day${days > 1 ? 's' : ''}`;
-                  if (hours > 0) durationStr += durationStr ? `, ${hours} hour${hours > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
-                  if (minutes > 0) durationStr += durationStr ? `, ${minutes} minute${minutes > 1 ? 's' : ''}` : `${minutes} minute${minutes > 1 ? 's' : ''}`;
-                  
-                  return (
-                    <View key={index} style={styles.occurrenceItem}>
-                      {/* <Text style={[styles.detailText, styles.occurrenceNumber]}>
-                        Occurrence {index + 1}:
-                      </Text> */}
-                      <View style={styles.occurrenceDetails}>
-                        <Text style={styles.detailText}>
-                          {format(startDate, 'MMM d, yyyy')} ({format(startDate, 'h:mm a')}) – {format(endDate, 'MMM d, yyyy')} ({format(endDate, 'h:mm a')}){'\n'}
-                          Total: {durationStr} (MST)
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                } catch (error) {
-                  // Fallback rendering for invalid dates
-                  return (
-                    <View key={index} style={styles.occurrenceItem}>
-                      {/* <Text style={[styles.detailText, styles.occurrenceNumber]}>
-                        Occurrence {index + 1}:
-                      </Text> */}
-                      <View style={styles.occurrenceDetails}>
-                        <Text style={styles.detailText}>
-                          {occ.start_date} ({occ.start_time || 'N/A'}) – {occ.end_date || occ.start_date} ({occ.end_time || 'N/A'})
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                }
-              })}
+              {item.metadata.occurrences.map((occ, index) => (
+                <View key={index} style={styles.occurrenceItem}>
+                  <View style={styles.occurrenceDetails}>
+                    <Text style={styles.detailText}>
+                      {occ.formatted_start} to {occ.formatted_end}
+                      {'\n'}<Text style={[{ fontWeight: '502' }]}>Total: {occ.duration} ({occ.timezone})</Text>
+                    </Text>
+                  </View>
+                </View>
+              ))}
             </View>
 
             {item.metadata.booking_id && !item.is_deleted && (
@@ -960,7 +909,7 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
       </View>
     );
-  }, [navigation]);
+  }, [navigation, selectedConversationData, CURRENT_USER_ID]);
 
   const WebInput = () => {
     const [message, setMessage] = useState('');

@@ -889,10 +889,7 @@ const BookingDetails = () => {
         >
           <View style={styles.occurrenceCostHeader}>
             <Text style={styles.occurrenceCostHeaderText}>
-              {occurrence.end_date && occurrence.start_date !== occurrence.end_date ? 
-                `${format(formatDateWithoutTimezone(occurrence.start_date), 'MMM d, yyyy')} - ${format(formatDateWithoutTimezone(occurrence.end_date), 'MMM d, yyyy')}` :
-                format(formatDateWithoutTimezone(occurrence.start_date), 'MMM d, yyyy')
-              }
+              {occurrence.start_date}
             </Text>
             <View style={styles.costAndIcon}>
               <Text style={styles.occurrenceCost}>
@@ -1350,56 +1347,20 @@ const BookingDetails = () => {
   const renderDateTimeSection = () => (
     <View>
       <Text style={styles.sectionTitle}>
-        {canEdit() ? "Dates & Times (Set Rates for Dates)" : "Dates & Times"}
+        {canEdit() ? "Dates & Times (Set Rates For Dates)" : "Dates & Times"}
       </Text>
-      {(booking?.occurrences || []).map((occurrence, index) => (
-        canEdit() ? (
-          <TouchableOpacity 
-            key={index}
-            style={styles.occurrenceCard}
-            onPress={() => handleDateTimeCardPress(occurrence)}
-          >
-            <View style={styles.occurrenceDetails}>
-              <Text style={styles.dateText}>
-                {occurrence.end_date && occurrence.start_date !== occurrence.end_date ? 
-                  `${format(formatDateWithoutTimezone(occurrence.start_date), 'MMM d, yyyy')} - ${format(formatDateWithoutTimezone(occurrence.end_date), 'MMM d, yyyy')}` :
-                  format(formatDateWithoutTimezone(occurrence.start_date), 'MMM d, yyyy')
-                }
-              </Text>
-              <Text style={styles.timeText}>
-                {`${occurrence.start_time} - ${occurrence.end_time}`}
-              </Text>
-            </View>
-            <View style={styles.occurrenceActions}>
-              <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={() => confirmDeleteOccurrence(occurrence.occurrence_id)}
-              >
-                <MaterialCommunityIcons name="trash-can-outline" size={20} color={theme.colors.error} />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={() => handleDateTimeCardPress(occurrence)}
-              >
-                <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View key={index} style={styles.occurrenceCard}>
-            <View style={styles.occurrenceDetails}>
-              <Text style={styles.dateText}>
-                {occurrence.end_date && occurrence.start_date !== occurrence.end_date ? 
-                  `${format(formatDateWithoutTimezone(occurrence.start_date), 'MMM d, yyyy')} - ${format(formatDateWithoutTimezone(occurrence.end_date), 'MMM d, yyyy')}` :
-                  format(formatDateWithoutTimezone(occurrence.start_date), 'MMM d, yyyy')
-                }
-              </Text>
-              <Text style={styles.timeText}>
-                {`${occurrence.start_time} - ${occurrence.end_time}`}
-              </Text>
-            </View>
-          </View>
-        )
+      {(booking?.occurrences || []).map((occ, index) => (
+        <TouchableOpacity
+          key={index}
+          style={styles.occurrenceCard}
+          onPress={() => canEdit() ? handleDateTimeCardPress(occ) : null}
+          disabled={!canEdit()}
+        >
+          <Text style={styles.dateTimeText}>
+            {occ.formatted_start} - {occ.formatted_end}
+            {'\n'}<Text style={[{ fontWeight: '525' }]}>Total: {occ.duration} ({occ.timezone})</Text>
+          </Text>
+        </TouchableOpacity>
       ))}
       
       {canEdit() && (
@@ -2461,6 +2422,12 @@ const styles = StyleSheet.create({
   },
   occurrenceCardText: {
     fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  dateTimeText: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
     fontFamily: theme.fonts.regular.fontFamily,
   },
 });

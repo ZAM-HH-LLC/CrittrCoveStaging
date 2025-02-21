@@ -101,7 +101,7 @@ const TimePicker = ({
 const styles = StyleSheet.create({
   container: {
     // marginVertical: 8,
-    marginBottom: 8,
+    // marginBottom: 8,
   },
   fullWidth: {
     width: '100%',
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     borderRadius: 8,
     padding: 8,
-    backgroundColor: theme.colors.whiteText,
+    backgroundColor: theme.colors.background,
     minHeight: 20,
   },
   compactTimeButton: {
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: 8,
-    backgroundColor: theme.colors.whiteText,
+    backgroundColor: theme.colors.background,
     overflow: 'hidden',
     height: 40,
   },
