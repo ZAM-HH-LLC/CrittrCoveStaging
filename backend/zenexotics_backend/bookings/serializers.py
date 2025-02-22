@@ -5,7 +5,7 @@ from decimal import Decimal
 from .constants import BookingStates
 from booking_details.models import BookingDetails
 from .utils import is_holiday, count_holidays
-from core.time_utils import format_booking_occurrence
+from core.time_utils import format_booking_occurrence, get_user_time_settings
 from datetime import datetime
 import pytz
 import logging
@@ -145,6 +145,11 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         occurrences = []
         logger.info(f"\nProcessing occurrences for booking {obj.booking_id}:")
 
+        # Get user's timezone settings
+        user_settings = get_user_time_settings(user.id)
+        user_tz = pytz.timezone(user_settings['timezone'])
+        use_military_time = user_settings['use_military_time']
+
         for occ in obj.occurrences.prefetch_related('booking_details', 'rates').all():
             booking_details = occ.booking_details.first()
             if not booking_details:
@@ -152,6 +157,42 @@ class BookingDetailSerializer(serializers.ModelSerializer):
                 continue
 
             logger.info(f"\n  Processing occurrence {occ.occurrence_id}:")
+            
+            # Create UTC datetime objects
+            start_dt = datetime.combine(occ.start_date, occ.start_time)
+            end_dt = datetime.combine(occ.end_date, occ.end_time)
+            
+            # Make datetimes timezone-aware in UTC
+            start_dt = pytz.UTC.localize(start_dt)
+            end_dt = pytz.UTC.localize(end_dt)
+            
+            # Convert to user's timezone
+            local_start_dt = start_dt.astimezone(user_tz)
+            local_end_dt = end_dt.astimezone(user_tz)
+
+            # Format raw dates in YYYY-MM-DD format using local time
+            raw_start_date = local_start_dt.strftime('%Y-%m-%d')
+            raw_end_date = local_end_dt.strftime('%Y-%m-%d')
+            
+            # Format raw times in HH:MM format using local time
+            if use_military_time:
+                raw_start_time = local_start_dt.strftime('%H:%M')
+                raw_end_time = local_end_dt.strftime('%H:%M')
+            else:
+                raw_start_time = local_start_dt.strftime('%I:%M %p')
+                raw_end_time = local_end_dt.strftime('%I:%M %p')
+
+            
+            logger.info(f"  Time conversion for occurrence {occ.occurrence_id}:")
+            logger.info(f"    UTC Start: {start_dt}")
+            logger.info(f"    UTC End: {end_dt}")
+            logger.info(f"    Local Start: {local_start_dt}")
+            logger.info(f"    Local End: {local_end_dt}")
+            logger.info(f"    Raw Start Date: {raw_start_date}")
+            logger.info(f"    Raw End Date: {raw_end_date}")
+            logger.info(f"    Raw Start Time: {raw_start_time}")
+            logger.info(f"    Raw End Time: {raw_end_time}")
+
             # Get base_total from booking details calculated cost
             base_total = booking_details.calculate_occurrence_cost(is_prorated)
             logger.info(f"  Base total from booking details: ${base_total}")
@@ -196,12 +237,19 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             formatted_start_time = formatted_times['formatted_start'].split(' ')[-2]
             formatted_end_time = formatted_times['formatted_end'].split(' ')[-2]
 
+            # Get formatted display times
+            formatted_times = format_booking_occurrence(
+                start_dt,
+                end_dt,
+                user.id
+            )
+
             occurrences.append({
                 'occurrence_id': occ.occurrence_id,
-                'start_date': occ.start_date.strftime('%b %d, %Y'),
-                'end_date': occ.end_date.strftime('%b %d, %Y'),
-                'start_time': formatted_start_time,
-                'end_time': formatted_end_time,
+                'start_date': raw_start_date,
+                'end_date': raw_end_date,
+                'start_time': raw_start_time,
+                'end_time': raw_end_time,
                 'calculated_cost': f"{total_cost:.2f}",
                 'base_total': f"${base_total:.2f}",
                 'rates': self.get_occurrence_rates(occ, booking_details, additional_rates),

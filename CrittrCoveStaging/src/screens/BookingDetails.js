@@ -226,6 +226,7 @@ const BookingDetails = () => {
         if (!token) {
           throw new Error('No authentication token found');
         }
+
         const response = await axios.get(
           `${API_BASE_URL}/api/bookings/v1/${bookingId}/?is_prorated=true`,
           { headers: { Authorization: `Bearer ${token}` }}
@@ -889,7 +890,7 @@ const BookingDetails = () => {
         >
           <View style={styles.occurrenceCostHeader}>
             <Text style={styles.occurrenceCostHeaderText}>
-              {occurrence.start_date}
+              {occurrence.formatted_start}
             </Text>
             <View style={styles.costAndIcon}>
               <Text style={styles.occurrenceCost}>

@@ -2,12 +2,12 @@ import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Picker, ActivityIndicator, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import DatePicker from './DatePicker';
-import TimePicker from './TimePicker';
+import DateTimePicker from './DateTimePicker';
 import { AuthContext } from '../context/AuthContext'
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { TIME_OPTIONS } from '../data/mockData';
 import { validateDateTimeRange } from '../utils/dateTimeValidation';
+import { Button } from 'react-native-paper';
 
 const ANIMAL_COUNT_OPTIONS = ['1', '2', '3', '4', '5'];
 
@@ -74,64 +74,95 @@ const AddOccurrenceModal = ({
   isEditing = false,
   modalTitle = 'Add New Occurrence'
 }) => {
+  const { is_DEBUG, screenWidth } = useContext(AuthContext);
 
-  // Helper function to create a Date object from a time string
-  const createTimeDate = (timeStr) => {
-    if (timeStr instanceof Date) return timeStr;
-    const [hours, minutes] = timeStr.split(':');
-    const date = new Date();
-    date.setHours(parseInt(hours, 10));
-    date.setMinutes(parseInt(minutes, 10));
-    return date;
-  };
-
-  const { is_DEBUG } = useContext(AuthContext);
-  const [occurrence, setOccurrence] = useState(() => {
-    if (initialOccurrence) {
-      // For editing existing occurrence
-      const initialState = {
-        startDate: initialOccurrence.startDate,
-        endDate: initialOccurrence.endDate || initialOccurrence.startDate,
-        startTime: createTimeDate(initialOccurrence.startTime),
-        endTime: createTimeDate(initialOccurrence.endTime),
-        rates: {
-          baseRate: '0',
-          additionalAnimalRate: '0',
-          appliesAfterAnimals: '1',
-          holidayRate: '0',
-          timeUnit: 'per visit',
-          additionalRates: []
-        }
-      };
-
-      // Only add rates if they exist in initialOccurrence
-      if (initialOccurrence.rates) {
-        initialState.rates = {
-          baseRate: initialOccurrence.rates.baseRate?.toString() || '0',
-          additionalAnimalRate: initialOccurrence.rates.additionalAnimalRate?.toString() || '0',
-          appliesAfterAnimals: initialOccurrence.rates.appliesAfterAnimals || '1',
-          holidayRate: initialOccurrence.rates.holidayRate?.toString() || '0',
-          timeUnit: initialOccurrence.rates.timeUnit || 'per visit',
-          additionalRates: (initialOccurrence.rates.additionalRates || []).map(rate => ({
-            name: rate.name,
-            description: rate.description || '',
-            amount: rate.amount.toString()
-          }))
-        };
-      }
-      
-      return initialState;
+  const parseInitialDates = (initialOccurrence) => {
+    if (is_DEBUG) {
+      console.log('MBA1234 Parsing initial occurrence:', initialOccurrence);
     }
 
-    // For new occurrence
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    if (!initialOccurrence) {
+      const now = new Date();
+      const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+      return {
+        startDateTime: now,
+        endDateTime: oneHourLater,
+        isMilitary: true // Default to military time for new occurrences
+      };
+    }
+
+    try {
+      const { startDate, startTime, endDate, endTime } = initialOccurrence;
+      
+      // Check if time is in military format (no AM/PM)
+      const isMilitary = !startTime.includes('AM') && !startTime.includes('PM');
+      
+      if (is_DEBUG) {
+        console.log('MBA1234 Time format detection:', {
+          startTime,
+          endTime,
+          isMilitary
+        });
+      }
+
+      // Parse the date and time strings based on format
+      let startDateTime, endDateTime;
+      
+      if (isMilitary) {
+        startDateTime = parse(
+          `${startDate} ${startTime}`,
+          'yyyy-MM-dd HH:mm',
+          new Date()
+        );
+        endDateTime = parse(
+          `${endDate} ${endTime}`,
+          'yyyy-MM-dd HH:mm',
+          new Date()
+        );
+      } else {
+        startDateTime = parse(
+          `${startDate} ${startTime}`,
+          'yyyy-MM-dd hh:mm aa',
+          new Date()
+        );
+        endDateTime = parse(
+          `${endDate} ${endTime}`,
+          'yyyy-MM-dd hh:mm aa',
+          new Date()
+        );
+      }
+
+      if (is_DEBUG) {
+        console.log('MBA1234 Parsed dates:', {
+          startDateTime: startDateTime.toISOString(),
+          endDateTime: endDateTime.toISOString(),
+          isMilitary
+        });
+      }
+
+      return {
+        startDateTime,
+        endDateTime,
+        isMilitary
+      };
+    } catch (error) {
+      console.error('MBA1234 Error parsing dates:', error);
+      const now = new Date();
+      const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
     return {
-      startDate: todayStr,
-      endDate: todayStr,
-      startTime: new Date(),
-      endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
-      rates: {
+        startDateTime: now,
+        endDateTime: oneHourLater,
+        isMilitary: true // Default to military time on error
+      };
+    }
+  };
+
+  const initialDates = parseInitialDates(initialOccurrence);
+  const [occurrence, setOccurrence] = useState({
+    startDateTime: initialDates.startDateTime,
+    endDateTime: initialDates.endDateTime,
+    isMilitary: initialDates.isMilitary,
+    rates: initialOccurrence?.rates || {
         baseRate: defaultRates?.baseRate?.toString() || '0',
         additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
         appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
@@ -139,66 +170,82 @@ const AddOccurrenceModal = ({
         timeUnit: defaultRates?.timeUnit || 'per visit',
         additionalRates: defaultRates?.additionalRates || []
       }
-    };
   });
 
-  // Reset occurrence when initialOccurrence changes or when modal visibility changes
+  // Add effect to update dates when initialOccurrence changes
   useEffect(() => {
-    if (!visible) {
-      // Reset to default state when modal closes
-      if (!initialOccurrence) {
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        setOccurrence({
-          startDate: todayStr,
-          endDate: todayStr,
-          startTime: new Date(),
-          endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
-          rates: {
-            baseRate: defaultRates?.baseRate?.toString() || '0',
-            additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
-            appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-            holidayRate: defaultRates?.holidayRate?.toString() || '0',
-            timeUnit: defaultRates?.timeUnit || 'per visit',
-            additionalRates: []
-          }
-        });
-        setTimeUnit(defaultRates?.timeUnit || 'per visit');
-      }
-    } else if (initialOccurrence) {
-      // Only set occurrence data if we're editing
-      const defaultRatesObj = {
-        baseRate: '0',
-        additionalAnimalRate: '0',
-        appliesAfterAnimals: '1',
-        holidayRate: '0',
-        timeUnit: 'per visit',
-        additionalRates: []
-      };
-
-      const ratesData = initialOccurrence.rates || defaultRatesObj;
-
-      setOccurrence({
-        startDate: initialOccurrence.startDate,
-        endDate: initialOccurrence.endDate || initialOccurrence.startDate,
-        startTime: createTimeDate(initialOccurrence.startTime),
-        endTime: createTimeDate(initialOccurrence.endTime),
-        rates: {
-          baseRate: ratesData.baseRate?.toString() || '0',
-          additionalAnimalRate: ratesData.additionalAnimalRate?.toString() || '0',
-          appliesAfterAnimals: ratesData.appliesAfterAnimals || '1',
-          holidayRate: ratesData.holidayRate?.toString() || '0',
-          timeUnit: ratesData.timeUnit || 'per visit',
-          additionalRates: (ratesData.additionalRates || []).map(rate => ({
-            name: rate.name,
-            description: rate.description || '',
-            amount: rate.amount?.toString() || '0'
-          }))
-        }
-      });
-      setTimeUnit(ratesData.timeUnit || 'per visit');
+    if (initialOccurrence) {
+      const dates = parseInitialDates(initialOccurrence);
+      setOccurrence(prev => ({
+        ...prev,
+        startDateTime: dates.startDateTime,
+        endDateTime: dates.endDateTime,
+        isMilitary: dates.isMilitary,
+        rates: initialOccurrence.rates || prev.rates
+      }));
     }
-  }, [visible, initialOccurrence, defaultRates]);
+  }, [initialOccurrence]);
+
+  const handleStartDateTimeChange = (date) => {
+    if (is_DEBUG) {
+      console.log('MBA1234 Start datetime changed:', date?.toISOString());
+    }
+    if (date && !isNaN(date.getTime())) {
+      setOccurrence(prev => ({
+        ...prev,
+        startDateTime: date
+      }));
+    }
+  };
+
+  const handleEndDateTimeChange = (date) => {
+    if (is_DEBUG) {
+      console.log('MBA1234 End datetime changed:', date?.toISOString());
+    }
+    if (date && !isNaN(date.getTime())) {
+      setOccurrence(prev => ({
+        ...prev,
+        endDateTime: date
+      }));
+    }
+  };
+
+  const handleAdd = async () => {
+    try {
+      // Format dates in UTC for backend
+      const startDate = format(occurrence.startDateTime, 'yyyy-MM-dd');
+      const startTime = format(occurrence.startDateTime, 'HH:mm');
+      const endDate = format(occurrence.endDateTime, 'yyyy-MM-dd');
+      const endTime = format(occurrence.endDateTime, 'HH:mm');
+
+      if (is_DEBUG) {
+        console.log('MBA1234 Adding occurrence:', {
+          startDate,
+          startTime,
+          endDate,
+          endTime,
+          startDateTime: occurrence.startDateTime.toISOString(),
+          endDateTime: occurrence.endDateTime.toISOString()
+        });
+      }
+
+      const success = await onAdd({
+        startDate,
+        startTime,
+        endDate,
+        endTime,
+        rates: occurrence.rates
+      });
+
+      if (success) {
+        handleClose();
+      }
+    } catch (error) {
+      if (is_DEBUG) {
+        console.error('MBA1234 Error adding occurrence:', error);
+      }
+    }
+  };
 
   const [showAddRate, setShowAddRate] = useState(false);
   const [newRate, setNewRate] = useState({ name: '', amount: '' });
@@ -227,97 +274,6 @@ const AddOccurrenceModal = ({
     return totalClientCost.toFixed(2);
   };
 
-  const handleAdd = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Keep dates as YYYY-MM-DD strings without any manipulation
-      const startDate = occurrence.startDate;
-      const endDate = occurrence.endDate || occurrence.startDate;
-      
-      if (is_DEBUG) {
-        console.log('Original dates:', {
-          startDate,
-          endDate,
-          startTime: format(occurrence.startTime, 'HH:mm'),
-          endTime: format(occurrence.endTime, 'HH:mm')
-        });
-      }
-      
-      const occurrenceData = {
-        startDate,
-        endDate,
-        startTime: format(occurrence.startTime, 'HH:mm'),
-        endTime: format(occurrence.endTime, 'HH:mm'),
-        rates: {
-          ...occurrence.rates,
-          baseRate: parseFloat(occurrence.rates.baseRate) || 0,
-          additionalAnimalRate: parseFloat(occurrence.rates.additionalAnimalRate) || 0,
-          appliesAfterAnimals: occurrence.rates.appliesAfterAnimals,
-          holidayRate: parseFloat(occurrence.rates.holidayRate) || 0,
-          additionalRates: occurrence.rates.additionalRates.map(rate => ({
-            ...rate,
-            amount: parseFloat(rate.amount) || 0
-          })),
-          timeUnit,
-        },
-        totalCost: parseFloat(calculateTotal())
-      };
-
-      if (is_DEBUG) {
-        console.log('Adding occurrence with data:', occurrenceData);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const success = await onAdd(occurrenceData);
-      
-      if (success) {
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        setOccurrence({
-          startDate: todayStr,
-          endDate: todayStr,
-          startTime: new Date(),
-          endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
-          rates: {
-            baseRate: defaultRates?.baseRate?.toString() || '0',
-            additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
-            appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-            holidayRate: defaultRates?.holidayRate?.toString() || '0',
-            timeUnit: 'per visit',
-            additionalRates: []
-          }
-        });
-        setShowAddRate(false);
-        setNewRate({ name: '', amount: '' });
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-        onClose();
-      }
-    } catch (error) {
-      console.error('Error adding occurrence:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAddRate = () => {
-    if (newRate.name && newRate.amount) {
-      setOccurrence(prev => ({
-        ...prev,
-        rates: {
-          ...prev.rates,
-          additionalRates: [...prev.rates.additionalRates, {
-            ...newRate,
-            amount: parseFloat(newRate.amount)
-          }]
-        }
-      }));
-      setNewRate({ name: '', amount: '' });
-      setShowAddRate(false);
-    }
-  };
-
   const handleDeleteRate = (index) => {
     setOccurrence(prev => ({
       ...prev,
@@ -336,10 +292,10 @@ const AddOccurrenceModal = ({
   const handleSubmit = () => {
     // Validate the date/time range
     const validation = validateDateTimeRange(
-      occurrence.startDate,
-      occurrence.endDate,
-      format(occurrence.startTime, 'HH:mm'),
-      format(occurrence.endTime, 'HH:mm')
+      format(occurrence.startDateTime, 'yyyy-MM-dd'),
+      format(occurrence.endDateTime, 'yyyy-MM-dd'),
+      format(occurrence.startDateTime, 'HH:mm'),
+      format(occurrence.endDateTime, 'HH:mm')
     );
 
     if (!validation.isValid) {
@@ -352,17 +308,16 @@ const AddOccurrenceModal = ({
 
   const resetForm = () => {
     setOccurrence({
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
-      startTime: new Date(),
-      endTime: new Date(new Date().setHours(new Date().getHours() + 1)),
+      startDateTime: new Date(),
+      endDateTime: new Date(new Date().setHours(new Date().getHours() + 1)),
+      isMilitary: true,
       rates: {
-        baseRate: defaultRates?.baseRate || '0',
-        additionalAnimalRate: defaultRates?.additionalAnimalRate || '0',
+        baseRate: defaultRates?.baseRate?.toString() || '0',
+        additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
         appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-        holidayRate: defaultRates?.holidayRate || '0',
+        holidayRate: defaultRates?.holidayRate?.toString() || '0',
         timeUnit: defaultRates?.timeUnit || 'per visit',
-        additionalRates: []
+        additionalRates: defaultRates?.additionalRates || []
       }
     });
     setTimeUnit(defaultRates?.timeUnit || 'per visit');
@@ -385,63 +340,38 @@ const AddOccurrenceModal = ({
   return (
     <Modal
       visible={visible}
-      transparent={true}
-      animationType="fade"
       onRequestClose={handleClose}
+      animationType="slide"
+      transparent={true}
     >
-      <View style={styles.modalOverlay}>
+      <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {modalTitle}
-            </Text>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+            <Text style={styles.modalTitle}>{modalTitle}</Text>
+            <TouchableOpacity onPress={handleClose}>
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
 
           <ScrollableContent>
-            <View style={styles.dateTimeSection}>
-              <Text style={styles.sectionTitle}>Date & Time</Text>
-              
-              <View style={styles.dateTimeContainer}>
-                <View style={styles.dateTimeColumn}>
-                  <Text style={styles.label}>Start Date</Text>
-                  <DatePicker
-                    value={occurrence.startDate}
-                    onChange={(date) => setOccurrence(prev => ({ ...prev, startDate: date }))}
-                  />
-                </View>
-                <Text style={{ width: 10 }} />
-                <View style={styles.dateTimeColumn}>
-                  <Text style={styles.label}>Start Time</Text>
-                  <TimePicker
-                    value={occurrence.startTime}
-                    onChange={(time) => setOccurrence(prev => ({ ...prev, startTime: time }))}
-                    fullWidth
-                  />
-                </View>
-              </View>
+            <View style={[styles.section, { zIndex: 10 }]}>
+              <Text style={styles.label}>Start Date & Time</Text>
+              <DateTimePicker
+                value={occurrence.startDateTime}
+                onChange={handleStartDateTimeChange}
+                error={validationError?.startDateTime}
+                isMilitary={occurrence.isMilitary}
+              />
             </View>
-            <View style={styles.dateTimeSection}>
-              <View style={[styles.dateTimeContainer, {marginTop: 15}]}>
-                <View style={styles.dateTimeColumn}>
-                  <Text style={styles.label}>End Date</Text>
-                  <DatePicker
-                    value={occurrence.endDate}
-                    onChange={(date) => setOccurrence(prev => ({ ...prev, endDate: date }))}
-                  />
-                </View>
-                <Text style={{ width: 10 }} />
-                <View style={styles.dateTimeColumn}>
-                  <Text style={styles.label}>End Time</Text>
-                  <TimePicker
-                    value={occurrence.endTime}
-                    onChange={(time) => setOccurrence(prev => ({ ...prev, endTime: time }))}
-                    fullWidth
-                  />
-                </View>
-              </View>
+
+            <View style={[styles.section, { zIndex: 9 }]}>
+              <Text style={styles.label}>End Date & Time</Text>
+              <DateTimePicker
+                value={occurrence.endDateTime}
+                onChange={handleEndDateTimeChange}
+                error={validationError?.endDateTime}
+                isMilitary={occurrence.isMilitary}
+              />
             </View>
 
             {validationError && (
@@ -450,10 +380,10 @@ const AddOccurrenceModal = ({
 
             {!hideRates && (
               <>
-                <View style={styles.rateSection}>
-                  <View style={[styles.rateContainer, {marginTop: 15}]}>
+                <View style={[styles.section, { zIndex: 8 }]}>
+                  <Text style={styles.label}>Base Rate</Text>
+                  <View style={styles.rateContainer}>
                     <View style={styles.baseRateInput}>
-                      <Text style={styles.label}>Base Rate</Text>
                       <TextInput
                         style={styles.input}
                         value={occurrence.rates.baseRate.toString()}
@@ -479,10 +409,17 @@ const AddOccurrenceModal = ({
                       </Picker>
                     </View>
                   </View>
+                </View>
 
-                  <View style={[styles.rateContainer, styles.topSpacing]}>
+                <View style={[styles.section, { zIndex: 7 }]}>
+                  <Text style={styles.label}>
+                    {screenWidth < 375 
+                      ? `+${occurrence.rates.appliesAfterAnimals} Pet Rate`
+                      : 'Additional Pet Rate'
+                    }
+                  </Text>
+                  <View style={styles.rateContainer}>
                     <View style={styles.baseRateInput}>
-                      <Text style={styles.label}>Additional Animal Rate</Text>
                       <TextInput
                         style={styles.input}
                         value={occurrence.rates.additionalAnimalRate.toString()}
@@ -516,10 +453,12 @@ const AddOccurrenceModal = ({
                       </Picker>
                     </View>
                   </View>
+                </View>
 
-                  <View style={[styles.rateContainer, styles.topSpacing]}>
+                <View style={[styles.section, { zIndex: 6 }]}>
+                  <Text style={styles.label}>Holiday Rate</Text>
+                  <View style={styles.rateContainer}>
                     <View style={styles.baseRateInput}>
-                      <Text style={styles.label}>Holiday Rate</Text>
                       <TextInput
                         style={styles.input}
                         value={occurrence.rates.holidayRate.toString()}
@@ -537,10 +476,10 @@ const AddOccurrenceModal = ({
                   </View>
                 </View>
 
-                <View style={styles.rateSection}>
-                  <Text style={[styles.label, {marginTop: 10, marginBottom: 0}]}>Additional Rates</Text>
+                <View style={[styles.section, { zIndex: 5 }]}>
+                  <Text style={styles.label}>Additional Rates</Text>
                   {occurrence.rates.additionalRates.map((rate, index) => (
-                    <View key={index} style={[styles.rateRow, {marginTop: 10, marginBottom: 0}]}>
+                    <View key={index} style={[styles.rateRow, {marginBottom: 10}]}>
                       <TextInput
                         style={[styles.input, styles.rateInput]}
                         value={rate.name}
@@ -584,7 +523,7 @@ const AddOccurrenceModal = ({
                             placeholder="0.00"
                           />
                         </View>
-                        <TouchableOpacity onPress={handleAddRate}>
+                        <TouchableOpacity onPress={() => handleAddRate()}>
                           <MaterialCommunityIcons name="plus" size={24} color={theme.colors.primary} />
                         </TouchableOpacity>
                       </View>
@@ -607,27 +546,16 @@ const AddOccurrenceModal = ({
 
               </>
             )}
-
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={handleClose}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.addButton]}
-                onPress={handleSubmit}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color={theme.colors.surface} />
-                ) : (
-                  <Text style={styles.addButtonText}>{isEditing ? 'Save' : 'Add'}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
           </ScrollableContent>
+
+          <View style={styles.buttonContainer}>
+            <Button mode="outlined" onPress={handleClose} style={styles.button}>
+              Cancel
+            </Button>
+            <Button mode="contained" onPress={handleSubmit} style={styles.button}>
+              {isEditing ? 'Save Changes' : 'Add'}
+            </Button>
+          </View>
         </View>
       </View>
     </Modal>
@@ -635,14 +563,14 @@ const AddOccurrenceModal = ({
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.background,
     borderRadius: 8,
     padding: 20,
     width: '90%',
@@ -660,77 +588,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontFamily: theme.fonts.header.fontFamily,
   },
-  closeButton: {
-    padding: 5,
-  },
-  sectionTitle: {
-    fontSize: theme.fontSizes.large,
-    fontWeight: '500',
-    fontFamily: theme.fonts.header.fontFamily,
-  },
-  dateTimeSection: {
-    // marginBottom: 10,
-  },
-  dateTimeContainer: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 15,
-    // marginBottom: 15,
-  },
-  dateTimeColumn: {
-    flex: 1,
-  },
-  topSpacing: {
-    marginTop: 15,
-  },
-  rateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  rateInput: {
-    flex: 2,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  rateAmountContainer: {
-    flex: 1,
-  },
-  rateAmountInput: {
-    flex: 1,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  addRateButton: {
-    padding: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    alignItems: 'center',
-    // marginTop: ,
-  },
-  addRateButtonText: {
-    color: theme.colors.primary,
-    fontSize: theme.fontSizes.medium,
-    fontFamily: theme.fonts.regular.fontFamily,
+  section: {
+    position: 'relative',
+    marginBottom: 16,
   },
   label: {
     fontSize: theme.fontSizes.medium,
     color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 2,
+    fontFamily: theme.fonts.header.fontFamily,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    position: 'relative',
+    zIndex: 200, // Higher than modal content
+    marginBottom: 16,
   },
   dollarSign: {
     fontSize: theme.fontSizes.medium,
@@ -739,72 +610,37 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   input: {
-    backgroundColor: theme.colors.surface,
-    padding: 10,
-    borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    fontFamily: theme.fonts.regular.fontFamily,
+    borderRadius: 8,
+    padding: 8,
+    backgroundColor: theme.colors.background,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
-    gap: 15,
+    gap: 10,
+    marginTop: 16,
   },
   button: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
+    paddingVertical: 6,
   },
-  cancelButton: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  addButton: {
-    backgroundColor: theme.colors.primary,
-  },
-  cancelButtonText: {
-    color: theme.colors.text,
-    fontSize: theme.fontSizes.medium,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  addButtonText: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.surface,
-    fontWeight: 'bold',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  rateLabelContainer: {
-    flexDirection: 'row',
-    marginTop: 10,
-    marginBottom: 5,
-  },
-  rateTitleLabel: {
-    flex: 2,
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  rateAmountLabel: {
-    flex: 1,
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    marginLeft: 10,
-    fontFamily: theme.fonts.regular.fontFamily,
+  rateSection: {
+    // marginBottom: 10,
   },
   rateContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
+    justifyContent: 'space-between',
+    gap: 12,
   },
   baseRateInput: {
     flex: 1,
   },
   timeUnitInput: {
     flex: 1,
+    marginTop: -32,
   },
   picker: {
     backgroundColor: theme.colors.surface,
@@ -841,16 +677,65 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontFamily: theme.fonts.regular.fontFamily,
   },
-  dropdownText: {
+  rateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+    width: '100%',
+    flexWrap: 'nowrap',
+  },
+  rateInput: {
+    flex: 2,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    height: 39,
+    padding: 12,
+    fontFamily: theme.fonts.regular.fontFamily,
+    minWidth: 0,
+  },
+  rateAmountContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rateAmountInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    height: 39,
+    padding: 12,
+    fontFamily: theme.fonts.regular.fontFamily,
+    width: '100%',
+  },
+  addRateButton: {
+    padding: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  addRateButtonText: {
+    color: theme.colors.primary,
+    fontSize: theme.fontSizes.medium,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  rateLabelContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  rateTitleLabel: {
+    flex: 2,
+    fontSize: theme.fontSizes.medium,
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
   },
-  selectedDropdownText: {
-    color: theme.colors.primary,
-    fontWeight: 'bold',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  pickerItem: {
+  rateAmountLabel: {
+    flex: 1,
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    marginLeft: 10,
     fontFamily: theme.fonts.regular.fontFamily,
   },
 });

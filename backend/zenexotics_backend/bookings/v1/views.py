@@ -118,8 +118,32 @@ class BookingDetailView(generics.RetrieveAPIView):
     lookup_field = 'booking_id'
     lookup_url_kwarg = 'booking_id'
 
+    def initial(self, request, *args, **kwargs):
+        """This runs before anything else in the view"""
+        logger.info("="*50)
+        logger.info("BOOKING DETAIL REQUEST RECEIVED")
+        logger.info(f"URL: {request.build_absolute_uri()}")
+        logger.info(f"Method: {request.method}")
+        logger.info(f"User: {request.user.email}")
+        logger.info(f"Booking ID: {kwargs.get('booking_id')}")
+        logger.info("="*50)
+        
+        # Now let's check if the booking exists in the database
+        try:
+            booking = Booking.objects.get(booking_id=kwargs.get('booking_id'))
+            logger.info(f"Booking found in database: {booking.booking_id}")
+            logger.info(f"Booking client: {booking.client.user.email if booking.client else 'None'}")
+            logger.info(f"Booking professional: {booking.professional.user.email if booking.professional else 'None'}")
+        except Booking.DoesNotExist:
+            logger.error(f"Booking {kwargs.get('booking_id')} does not exist in database")
+        except Exception as e:
+            logger.error(f"Error checking booking: {str(e)}")
+        
+        super().initial(request, *args, **kwargs)
+
     def get_queryset(self):
-        return Booking.objects.select_related(
+        logger.info("Building queryset for booking lookup")
+        queryset = Booking.objects.select_related(
             'service_id',
             'client',
             'professional',
@@ -129,6 +153,37 @@ class BookingDetailView(generics.RetrieveAPIView):
             'occurrences',
             'occurrences__rates'
         )
+        logger.info(f"Base queryset SQL: {str(queryset.query)}")
+        return queryset
+
+    def get_object(self):
+        try:
+            booking_id = self.kwargs.get('booking_id')
+            logger.info(f"Attempting to fetch booking with ID: {booking_id}")
+            logger.info(f"Current user: {self.request.user.email}")
+            
+            # Get the booking
+            queryset = self.get_queryset()
+            booking = queryset.get(booking_id=booking_id)
+            logger.info(f"Found booking: {booking.booking_id}")
+            logger.info(f"Client: {booking.client.user.email if booking.client else 'None'}")
+            logger.info(f"Professional: {booking.professional.user.email if booking.professional else 'None'}")
+            
+            # Check if user has permission to view this booking
+            user = self.request.user
+            if not (user == booking.client.user or user == booking.professional.user):
+                logger.error(f"User {user.email} not authorized to view booking {booking_id}")
+                raise PermissionError("Not authorized to view this booking")
+            
+            return booking
+            
+        except Booking.DoesNotExist:
+            logger.error(f"Booking {booking_id} not found in database")
+            raise
+        except Exception as e:
+            logger.error(f"Error in get_object: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -140,58 +195,84 @@ class BookingDetailView(generics.RetrieveAPIView):
             professional = Professional.objects.get(user=user)
             context['is_professional'] = True
             context['professional'] = professional
+            logger.info(f"User {user.email} is a professional")
         except Professional.DoesNotExist:
             context['is_professional'] = False
             context['professional'] = None
+            logger.info(f"User {user.email} is not a professional")
         
         return context
 
     def retrieve(self, request, *args, **kwargs):
         try:
+            logger.info(f"Retrieving booking with ID: {kwargs.get('booking_id')}")
+            logger.info(f"Request user: {request.user.email}")
+            
             instance = self.get_object()
+            logger.info(f"Found booking: {instance.booking_id}")
+            
+            context = self.get_serializer_context()
+            logger.info(f"Context: {context}")
+            
+            # If user is a professional, check for draft
+            if context.get('is_professional') and context.get('professional') == instance.professional:
+                try:
+                    draft = BookingDraft.objects.get(booking=instance)
+                    if draft.draft_data:
+                        logger.info(f"Found draft data for booking {instance.booking_id}")
+                        # Use draft data for response
+                        draft_data = draft.draft_data
+                        
+                        # Set original status on instance for serializer
+                        if draft.original_status:
+                            instance.original_status = draft.original_status
+                        
+                        # Create serializer with instance
+                        serializer = self.get_serializer(instance, context=context)
+                        data = serializer.data
+                        
+                        # Override fields from draft data
+                        if 'status' in draft_data:
+                            data['status'] = draft_data['status']
+                        if 'service_details' in draft_data:
+                            data['service_details'] = draft_data['service_details']
+                        if 'pets' in draft_data:
+                            data['pets'] = draft_data['pets']
+                        if 'occurrences' in draft_data:
+                            data['occurrences'] = draft_data['occurrences']
+                        if 'cost_summary' in draft_data:
+                            data['cost_summary'] = draft_data['cost_summary']
+                        
+                        return Response(data)
+                except BookingDraft.DoesNotExist:
+                    logger.info("No draft found for booking")
+                    pass
+            
+            # If no draft or user is client, return original booking data
+            serializer = self.get_serializer(instance, context=context)
+            data = serializer.data
+            logger.info(f"Returning booking data: {data}")
+            return Response(data)
+            
+        except PermissionError as e:
+            logger.error(f"Permission denied: {str(e)}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_403_FORBIDDEN
+            )
         except Booking.DoesNotExist:
+            logger.error(f"Booking with ID {kwargs.get('booking_id')} not found")
             return Response(
                 {"error": f"Booking with ID {kwargs.get('booking_id')} not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        context = self.get_serializer_context()
-        
-        # If user is a professional, check for draft
-        if context.get('is_professional') and context.get('professional') == instance.professional:
-            try:
-                draft = BookingDraft.objects.get(booking=instance)
-                if draft.draft_data:
-                    # Use draft data for response
-                    draft_data = draft.draft_data
-                    
-                    # Set original status on instance for serializer
-                    if draft.original_status:
-                        instance.original_status = draft.original_status
-                    
-                    # Create serializer with instance
-                    serializer = self.get_serializer(instance, context=context)
-                    data = serializer.data
-                    
-                    # Override fields from draft data
-                    if 'status' in draft_data:
-                        data['status'] = draft_data['status']
-                    if 'service_details' in draft_data:
-                        data['service_details'] = draft_data['service_details']
-                    if 'pets' in draft_data:
-                        data['pets'] = draft_data['pets']
-                    if 'occurrences' in draft_data:
-                        data['occurrences'] = draft_data['occurrences']
-                    if 'cost_summary' in draft_data:
-                        data['cost_summary'] = draft_data['cost_summary']
-                    
-                    return Response(data)
-            except BookingDraft.DoesNotExist:
-                pass
-        
-        # If no draft or user is client, return original booking data
-        serializer = self.get_serializer(instance, context=context)
-        return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error retrieving booking: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": "An error occurred while retrieving the booking"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class BookingUpdatePetsView(APIView):
     permission_classes = [IsAuthenticated]

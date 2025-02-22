@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useContext } from 'react';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { theme } from '../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { theme } from '../styles/theme';
+import { AuthContext } from '../context/AuthContext';
 
 const TimePicker = ({ 
   label, 
@@ -14,8 +15,8 @@ const TimePicker = ({
   disabled = false 
 }) => {
   const [showPicker, setShowPicker] = React.useState(false);
-  const windowWidth = Dimensions.get('window').width;
-  const isMobileWeb = Platform.OS === 'web' && windowWidth < 768;
+  const { screenWidth } = useContext(AuthContext);
+  const showClockIcon = screenWidth > 400;
 
   const handleChange = (event, selectedDate) => {
     setShowPicker(Platform.OS === 'ios');
@@ -28,29 +29,10 @@ const TimePicker = ({
     setShowPicker(true);
   };
 
-  const renderTimeDisplay = () => (
-    <TouchableOpacity 
-      onPress={showTimepicker}
-      style={[
-        styles.timeButton, 
-        !fullWidth && styles.compactTimeButton,
-        error && styles.errorBorder,
-        disabled && styles.disabled
-      ]}
-      disabled={disabled}
-    >
-      <Text style={[styles.timeText, disabled && styles.disabledText]}>
-        {value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </Text>
-      <MaterialCommunityIcons 
-        name="clock-outline" 
-        size={24} 
-        color={disabled ? theme.colors.placeholder : theme.colors.text} 
-      />
-    </TouchableOpacity>
-  );
-
   if (Platform.OS === 'web') {
+    // Add browser detection for Chrome
+    const isChrome = typeof navigator !== 'undefined' && /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+
     return (
       <View style={[styles.container, fullWidth && styles.fullWidth, containerStyle]}>
         {label && <Text style={[styles.label, error && styles.errorText]}>{label}</Text>}
@@ -60,19 +42,39 @@ const TimePicker = ({
           error && styles.errorBorder,
           disabled && styles.disabled
         ]}>
+          <style>
+            {`
+              input[type="time"]::-webkit-calendar-picker-indicator {
+                display: ${showClockIcon && isChrome ? 'block' : 'none'};
+              }
+              input[type="time"]::-webkit-inner-spin-button,
+              input[type="time"]::-webkit-clear-button {
+                display: none;
+              }
+            `}
+          </style>
           <input
             type="time"
             value={value.toTimeString().slice(0, 5)}
             onChange={(e) => onChange(new Date(`2000-01-01T${e.target.value}`))}
-            style={styles.webInput}
+            style={{
+              ...styles.webInput,
+              paddingRight: '12px',
+            }}
             disabled={disabled}
           />
-          <MaterialCommunityIcons 
-            name="clock-outline" 
-            size={24} 
-            color={disabled ? theme.colors.placeholder : theme.colors.text}
-            style={styles.webIcon}
-          />
+          {showClockIcon && !isChrome && (
+            <MaterialCommunityIcons 
+              name="clock-outline" 
+              size={24} 
+              color={disabled ? theme.colors.placeholder : theme.colors.text}
+              style={styles.webIcon}
+              onPress={disabled ? null : () => {
+                const input = document.querySelector('input[type="time"]');
+                if (input) input.showPicker();
+              }}
+            />
+          )}
         </View>
         {error && <Text style={styles.errorMessage}>{error}</Text>}
       </View>
@@ -82,7 +84,27 @@ const TimePicker = ({
   return (
     <View style={[styles.container, fullWidth && styles.fullWidth, containerStyle]}>
       {label && <Text style={[styles.label, error && styles.errorText]}>{label}</Text>}
-      {renderTimeDisplay()}
+      <TouchableOpacity 
+        onPress={showTimepicker}
+        style={[
+          styles.timeButton, 
+          !fullWidth && styles.compactTimeButton,
+          error && styles.errorBorder,
+          disabled && styles.disabled
+        ]}
+        disabled={disabled}
+      >
+        <Text style={[styles.timeText, disabled && styles.disabledText]}>
+          {value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+        {showClockIcon && (
+          <MaterialCommunityIcons 
+            name="clock-outline" 
+            size={24} 
+            color={disabled ? theme.colors.placeholder : theme.colors.text} 
+          />
+        )}
+      </TouchableOpacity>
       {error && <Text style={styles.errorMessage}>{error}</Text>}
       {showPicker && (
         <DateTimePicker
@@ -137,12 +159,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     overflow: 'hidden',
     height: 40,
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   webInput: {
-    padding: 8,
-    paddingRight: 36,
+    padding: '8px 36px 8px 12px',
     fontSize: theme.fontSizes.medium,
-    width: '100%',
+    marginLeft: 12,
+    width: '90%',
     height: '100%',
     border: 'none',
     outline: 'none',
@@ -151,10 +176,9 @@ const styles = StyleSheet.create({
   },
   webIcon: {
     position: 'absolute',
-    right: 8,
-    top: '50%',
-    transform: 'translateY(-50%)',
-    pointerEvents: 'none',
+    right: 12,
+    cursor: 'pointer',
+    pointerEvents: 'auto',
   },
   errorBorder: {
     borderColor: theme.colors.error,

@@ -49,7 +49,6 @@ const DatePicker = ({
       <div 
         onClick={handleWrapperEvents}
         onMouseDown={handleWrapperEvents}
-        style={{ width: '100%' }}
       >
         <input
           type="date"
@@ -110,7 +109,7 @@ const DatePicker = ({
 const styles = StyleSheet.create({
   webDatePicker: {
     padding: 8,
-    borderRadius: 4,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
     fontSize: theme.fontSizes.medium,
