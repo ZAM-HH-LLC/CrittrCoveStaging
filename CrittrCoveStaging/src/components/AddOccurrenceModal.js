@@ -286,6 +286,30 @@ const AddOccurrenceModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState(null);
 
+  useEffect(() => {
+    if (initialOccurrence?.rates?.timeUnit) {
+      setTimeUnit(initialOccurrence.rates.timeUnit);
+      setOccurrence(prev => ({
+        ...prev,
+        rates: {
+          ...prev.rates,
+          timeUnit: initialOccurrence.rates.timeUnit
+        }
+      }));
+    }
+  }, [initialOccurrence]);
+
+  // Update occurrence when timeUnit changes
+  useEffect(() => {
+    setOccurrence(prev => ({
+      ...prev,
+      rates: {
+        ...prev.rates,
+        timeUnit: timeUnit
+      }
+    }));
+  }, [timeUnit]);
+
   const calculateTotal = () => {
     // If we have a totalCost from the initialOccurrence, use that
     if (initialOccurrence?.totalCost) {
@@ -469,8 +493,17 @@ const AddOccurrenceModal = ({
                       <View style={styles.timeUnitInput}>
                         <Text style={styles.label}>Per</Text>
                         <Picker
-                          selectedValue={timeUnit}
-                          onValueChange={(itemValue) => setTimeUnit(itemValue)}
+                          selectedValue={occurrence.rates.timeUnit}
+                          onValueChange={(itemValue) => {
+                            setTimeUnit(itemValue);
+                            setOccurrence(prev => ({
+                              ...prev,
+                              rates: {
+                                ...prev.rates,
+                                timeUnit: itemValue
+                              }
+                            }));
+                          }}
                           style={styles.picker}
                         >
                           {renderPickerItems(TIME_OPTIONS)}

@@ -658,6 +658,25 @@ const BookingDetails = () => {
     try {
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
 
+      // Convert frontend time unit to backend format
+      const convertTimeUnitToBackend = (frontendUnit) => {
+        if (!frontendUnit) return 'PER_VISIT';
+        const mapping = {
+          'per visit': 'PER_VISIT',
+          'per day': 'PER_DAY',
+          'overnight': 'OVERNIGHT',
+          '1 hr': '1_HOUR',
+          '2 hr': '2_HOUR',
+          '4 hr': '4_HOUR',
+          '8 hr': '8_HOUR',
+          '24 hr': '24_HOUR',
+          '15 min': '15_MIN',
+          '30 min': '30_MIN',
+          '45 min': '45_MIN'
+        };
+        return mapping[frontendUnit] || 'PER_VISIT';
+      };
+
       // Transform the occurrence data for the backend
       const occurrenceData = {
         occurrence_id: updatedOccurrence.id || updatedOccurrence.occurrence_id,  // Try both id and occurrence_id
@@ -669,7 +688,7 @@ const BookingDetails = () => {
           base_rate: updatedOccurrence.rates.baseRate,
           additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
           applies_after: updatedOccurrence.rates.appliesAfterAnimals,
-          unit_of_time: updatedOccurrence.rates.timeUnit.toUpperCase().replace(/ /g, '_'),
+          unit_of_time: convertTimeUnitToBackend(updatedOccurrence.rates.timeUnit),
           holiday_rate: updatedOccurrence.rates.holidayRate,
           holiday_days: 0,
           additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
@@ -750,6 +769,25 @@ const BookingDetails = () => {
         throw new Error('No authentication token found');
       }
 
+      // Convert frontend time unit to backend format
+      const convertTimeUnitToBackend = (frontendUnit) => {
+        if (!frontendUnit) return 'PER_VISIT';
+        const mapping = {
+          'per visit': 'PER_VISIT',
+          'per day': 'PER_DAY',
+          'overnight': 'OVERNIGHT',
+          '1 hr': '1_HOUR',
+          '2 hr': '2_HOUR',
+          '4 hr': '4_HOUR',
+          '8 hr': '8_HOUR',
+          '24 hr': '24_HOUR',
+          '15 min': '15_MIN',
+          '30 min': '30_MIN',
+          '45 min': '45_MIN'
+        };
+        return mapping[frontendUnit] || 'PER_VISIT';
+      };
+
       // Transform the occurrence data to match backend expectations
       const occurrenceData = {
         start_date: newOccurrence.startDate,
@@ -761,7 +799,7 @@ const BookingDetails = () => {
           additional_animal_rate: newOccurrence.rates.additionalAnimalRate,
           applies_after: newOccurrence.rates.appliesAfterAnimals,
           holiday_rate: newOccurrence.rates.holidayRate,
-          unit_of_time: newOccurrence.rates.timeUnit.toUpperCase().replace(' ', '_'),
+          unit_of_time: convertTimeUnitToBackend(newOccurrence.rates.timeUnit),
           additional_rates: newOccurrence.rates.additionalRates.map(rate => ({
             title: rate.name,
             description: rate.description || '',
@@ -830,6 +868,25 @@ const BookingDetails = () => {
       console.log('Original occurrence:', occurrence);
     }
 
+    // Helper function to convert backend time unit to frontend format
+    const convertTimeUnit = (backendUnit) => {
+      if (!backendUnit) return 'per visit';
+      const mapping = {
+        'PER_VISIT': 'per visit',
+        'PER_DAY': 'per day',
+        'OVERNIGHT': 'overnight',
+        '1_HOUR': '1 hr',
+        '2_HOUR': '2 hr',
+        '4_HOUR': '4 hr',
+        '8_HOUR': '8 hr',
+        '24_HOUR': '24 hr',
+        '15_MIN': '15 min',
+        '30_MIN': '30 min',
+        '45_MIN': '45 min'
+      };
+      return mapping[backendUnit] || 'per visit';
+    };
+
     const transformedOccurrence = {
       id: occurrence.occurrence_id,
       occurrence_id: occurrence.occurrence_id,  // Make sure we set both id and occurrence_id
@@ -842,7 +899,7 @@ const BookingDetails = () => {
         additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
         appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
         holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
-        timeUnit: occurrence.rates?.unit_of_time?.toLowerCase().replace(/_/g, ' ') || 'per visit',
+        timeUnit: convertTimeUnit(occurrence.rates?.unit_of_time),
         additionalRates: (occurrence.rates?.additional_rates || [])
           .filter(rate => rate.title !== 'Booking Details Cost')
           .map(rate => ({
