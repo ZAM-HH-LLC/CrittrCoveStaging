@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Picker, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useEffect, useContext, useRef } from 'react';
+import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Picker, ActivityIndicator, Platform, Animated } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import DateTimePicker from './DateTimePicker';
@@ -73,10 +73,41 @@ const AddOccurrenceModal = ({
   hideRates = false,
   initialOccurrence = null,
   isEditing = false,
-  modalTitle = 'Add New Occurrence'
+  modalTitle = 'Add New Occurrence',
+  isFromRequestBooking = false
 }) => {
   const { is_DEBUG, screenWidth } = useContext(AuthContext);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [isAnyPickerActive, setIsAnyPickerActive] = useState(false);
+  const heightAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePickerStateChange = (isActive) => {
+    setIsAnyPickerActive(isActive);
+    if (is_DEBUG) {
+      console.log('MBA5678 Picker state changed:', {
+        isActive,
+        isFromRequestBooking,
+        currentModalHeight: isActive && isFromRequestBooking ? '65vh' : '80%'
+      });
+    }
+
+    // Animate to new height
+    Animated.timing(heightAnim, {
+      toValue: isActive && isFromRequestBooking ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA5678 Modal state:', {
+        isFromRequestBooking,
+        isAnyPickerActive,
+        visible
+      });
+    }
+  }, [isFromRequestBooking, isAnyPickerActive, visible]);
 
   const parseInitialDates = (initialOccurrence) => {
     if (is_DEBUG) {
@@ -357,7 +388,24 @@ const AddOccurrenceModal = ({
         transparent={true}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <Animated.View style={[
+            styles.modalContent,
+            isFromRequestBooking ? {
+              maxHeight: undefined,
+              height: heightAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['325px', '650px']
+              }),
+              transform: [{
+                translateY: heightAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -40]
+                })
+              }]
+            } : {
+              maxHeight: '80%'
+            }
+          ]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{modalTitle}</Text>
               <TouchableOpacity onPress={handleClose}>
@@ -365,7 +413,13 @@ const AddOccurrenceModal = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollableContent>
+            <ScrollView 
+              style={styles.scrollView}
+              contentContainerStyle={[
+                styles.scrollViewContent,
+                isFromRequestBooking && isAnyPickerActive && { paddingBottom: 300 }
+              ]}
+            >
               <View style={[styles.section, { zIndex: 10 }]}>
                 <Text style={styles.label}>Start Date & Time</Text>
                 <DateTimePicker
@@ -373,6 +427,7 @@ const AddOccurrenceModal = ({
                   onChange={handleStartDateTimeChange}
                   error={validationError?.startDateTime}
                   isMilitary={occurrence.isMilitary}
+                  onPickerStateChange={handlePickerStateChange}
                 />
               </View>
 
@@ -383,6 +438,7 @@ const AddOccurrenceModal = ({
                   onChange={handleEndDateTimeChange}
                   error={validationError?.endDateTime}
                   isMilitary={occurrence.isMilitary}
+                  onPickerStateChange={handlePickerStateChange}
                 />
               </View>
 
@@ -558,7 +614,7 @@ const AddOccurrenceModal = ({
 
                 </>
               )}
-            </ScrollableContent>
+            </ScrollView>
 
             <View style={styles.buttonContainer}>
               <Button 
@@ -577,7 +633,7 @@ const AddOccurrenceModal = ({
                 {isEditing ? 'Save Changes' : 'Add'}
               </Button>
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -604,7 +660,6 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '95%',
     maxWidth: 500,
-    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -766,6 +821,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginLeft: 10,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
   },
 });
 

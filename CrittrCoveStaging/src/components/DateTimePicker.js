@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Animated } from 'react-native';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,7 +10,8 @@ const DateTimePicker = ({
   error,
   disabled = false,
   containerStyle,
-  isMilitary = true // Default to military time if not specified
+  isMilitary = true,
+  onPickerStateChange
 }) => {
   const { is_DEBUG, screenWidth } = useContext(AuthContext);
   const [inputs, setInputs] = useState({
@@ -24,6 +25,19 @@ const DateTimePicker = ({
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const containerRef = useRef(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const animatePickerVisibility = (show) => {
+    Animated.timing(fadeAnim, {
+      toValue: show ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  useEffect(() => {
+    animatePickerVisibility(showCalendar || showTimeSelector);
+  }, [showCalendar, showTimeSelector]);
 
   useEffect(() => {
     if (value instanceof Date && !isNaN(value)) {
@@ -56,8 +70,22 @@ const DateTimePicker = ({
   }, [value, isMilitary]);
 
   useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA5678 DateTimePicker picker states:', {
+        showCalendar,
+        showTimeSelector,
+        isPickerActive: showCalendar || showTimeSelector
+      });
+    }
+    onPickerStateChange?.(showCalendar || showTimeSelector);
+  }, [showCalendar, showTimeSelector]);
+
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
+        if (is_DEBUG) {
+          console.log('MBA5678 Click outside - closing pickers');
+        }
         setShowCalendar(false);
         setShowTimeSelector(false);
       }
@@ -228,12 +256,18 @@ const DateTimePicker = ({
   };
 
   const handleDatePress = () => {
-    setShowCalendar(true);
+    if (is_DEBUG) {
+      console.log('MBA5678 Date press - toggling calendar');
+    }
+    setShowCalendar(prev => !prev);
     setShowTimeSelector(false);
   };
 
   const handleTimePress = () => {
-    setShowTimeSelector(true);
+    if (is_DEBUG) {
+      console.log('MBA5678 Time press - toggling time selector');
+    }
+    setShowTimeSelector(prev => !prev);
     setShowCalendar(false);
   };
 
@@ -348,139 +382,145 @@ const DateTimePicker = ({
         </Pressable>
       </View>
 
-      {showCalendar && !disabled && (
-        <View style={styles.calendar}>
-          <View style={styles.calendarHeader}>
-            <Text style={styles.calendarHeaderText}>
-              {value.toLocaleString('default', { month: 'long' })} {value.getFullYear()}
-            </Text>
-          </View>
-          <View style={styles.calendarWeekDays}>
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <Text key={day} style={styles.calendarWeekDay}>{day}</Text>
+      <Animated.View style={[
+        styles.pickerContainer,
+        { opacity: fadeAnim },
+        { display: (showCalendar || showTimeSelector) ? 'flex' : 'none' }
+      ]}>
+        {showCalendar && !disabled && (
+          <View style={styles.calendar}>
+            <View style={styles.calendarHeader}>
+              <Text style={styles.calendarHeaderText}>
+                {value.toLocaleString('default', { month: 'long' })} {value.getFullYear()}
+              </Text>
+            </View>
+            <View style={styles.calendarWeekDays}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <Text key={day} style={styles.calendarWeekDay}>{day}</Text>
+              ))}
+            </View>
+            {/* Calendar grid */}
+            {Array.from({ length: 6 }).map((_, weekIndex) => (
+              <View key={`week-${weekIndex}`} style={styles.calendarWeek}>
+                {Array.from({ length: 7 }).map((__, dayIndex) => {
+                  const dayNumber = weekIndex * 7 + dayIndex - value.getDay() + 1;
+                  const isCurrentMonth = dayNumber > 0 && dayNumber <= new Date(value.getFullYear(), value.getMonth() + 1, 0).getDate();
+                  const isSelected = parseInt(inputs.day) === dayNumber;
+                  
+                  return (
+                    <Pressable
+                      key={`day-${dayIndex}`}
+                      style={[
+                        styles.calendarDay,
+                        isSelected && styles.selectedDay,
+                        !isCurrentMonth && styles.disabledDay
+                      ]}
+                      onPress={() => isCurrentMonth && handleDaySelect(dayNumber)}
+                    >
+                      {isCurrentMonth && (
+                        <Text style={[
+                          styles.calendarDayText,
+                          isSelected && styles.selectedDayText
+                        ]}>
+                          {dayNumber}
+                        </Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
             ))}
           </View>
-          {/* Calendar grid */}
-          {Array.from({ length: 6 }).map((_, weekIndex) => (
-            <View key={`week-${weekIndex}`} style={styles.calendarWeek}>
-              {Array.from({ length: 7 }).map((__, dayIndex) => {
-                const dayNumber = weekIndex * 7 + dayIndex - value.getDay() + 1;
-                const isCurrentMonth = dayNumber > 0 && dayNumber <= new Date(value.getFullYear(), value.getMonth() + 1, 0).getDate();
-                const isSelected = parseInt(inputs.day) === dayNumber;
-                
-                return (
-                  <Pressable
-                    key={`day-${dayIndex}`}
-                    style={[
-                      styles.calendarDay,
-                      isSelected && styles.selectedDay,
-                      !isCurrentMonth && styles.disabledDay
-                    ]}
-                    onPress={() => isCurrentMonth && handleDaySelect(dayNumber)}
-                  >
-                    {isCurrentMonth && (
-                      <Text style={[
-                        styles.calendarDayText,
-                        isSelected && styles.selectedDayText
-                      ]}>
-                        {dayNumber}
-                      </Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ))}
-        </View>
-      )}
+        )}
 
-      {showTimeSelector && !disabled && (
-        <View style={styles.timeSelector}>
-          <View style={styles.timeSelectorColumn}>
-            <Text style={styles.timeSelectorLabel}>Hour</Text>
-            <ScrollView style={styles.timeSelectorScroll}>
-              {Array.from({ length: isMilitary ? 24 : 12 }, (_, i) => (
-                <Pressable
-                  key={i}
-                  style={[
-                    styles.timeSelectorItem,
-                    parseInt(inputs.hours) === (isMilitary ? i : i + 1) && styles.selectedTime
-                  ]}
-                  onPress={() => {
-                    handleInputChange('hours', String(isMilitary ? i : i + 1).padStart(2, '0'));
-                  }}
-                >
-                  <Text style={[
-                    styles.timeSelectorText,
-                    parseInt(inputs.hours) === (isMilitary ? i : i + 1) && styles.selectedTimeText
-                  ]}>
-                    {String(isMilitary ? i : i + 1).padStart(2, '0')}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.timeSelectorColumn}>
-            <Text style={styles.timeSelectorLabel}>Minute</Text>
-            <ScrollView style={styles.timeSelectorScroll}>
-              {Array.from({ length: 60 }, (_, i) => (
-                <Pressable
-                  key={i}
-                  style={[
-                    styles.timeSelectorItem,
-                    parseInt(inputs.minutes) === i && styles.selectedTime
-                  ]}
-                  onPress={() => handleInputChange('minutes', String(i).padStart(2, '0'))}
-                >
-                  <Text style={[
-                    styles.timeSelectorText,
-                    parseInt(inputs.minutes) === i && styles.selectedTimeText
-                  ]}>
-                    {String(i).padStart(2, '0')}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          {!isMilitary && (
+        {showTimeSelector && !disabled && (
+          <View style={styles.timeSelector}>
             <View style={styles.timeSelectorColumn}>
-              <Text style={styles.timeSelectorLabel}>Period</Text>
-              <View style={styles.periodContainer}>
-                <Pressable
-                  style={[
-                    styles.timeSelectorItem,
-                    inputs.period === 'AM' && styles.selectedTime
-                  ]}
-                  onPress={() => handleInputChange('period', 'AM')}
-                >
-                  <Text style={[
-                    styles.timeSelectorText,
-                    inputs.period === 'AM' && styles.selectedTimeText
-                  ]}>
-                    AM
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.timeSelectorItem,
-                    inputs.period === 'PM' && styles.selectedTime
-                  ]}
-                  onPress={() => handleInputChange('period', 'PM')}
-                >
-                  <Text style={[
-                    styles.timeSelectorText,
-                    inputs.period === 'PM' && styles.selectedTimeText
-                  ]}>
-                    PM
-                  </Text>
-                </Pressable>
-              </View>
+              <Text style={styles.timeSelectorLabel}>Hour</Text>
+              <ScrollView style={styles.timeSelectorScroll}>
+                {Array.from({ length: isMilitary ? 24 : 12 }, (_, i) => (
+                  <Pressable
+                    key={i}
+                    style={[
+                      styles.timeSelectorItem,
+                      parseInt(inputs.hours) === (isMilitary ? i : i + 1) && styles.selectedTime
+                    ]}
+                    onPress={() => {
+                      handleInputChange('hours', String(isMilitary ? i : i + 1).padStart(2, '0'));
+                    }}
+                  >
+                    <Text style={[
+                      styles.timeSelectorText,
+                      parseInt(inputs.hours) === (isMilitary ? i : i + 1) && styles.selectedTimeText
+                    ]}>
+                      {String(isMilitary ? i : i + 1).padStart(2, '0')}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
-          )}
-        </View>
-      )}
+
+            <View style={styles.timeSelectorColumn}>
+              <Text style={styles.timeSelectorLabel}>Minute</Text>
+              <ScrollView style={styles.timeSelectorScroll}>
+                {Array.from({ length: 60 }, (_, i) => (
+                  <Pressable
+                    key={i}
+                    style={[
+                      styles.timeSelectorItem,
+                      parseInt(inputs.minutes) === i && styles.selectedTime
+                    ]}
+                    onPress={() => handleInputChange('minutes', String(i).padStart(2, '0'))}
+                  >
+                    <Text style={[
+                      styles.timeSelectorText,
+                      parseInt(inputs.minutes) === i && styles.selectedTimeText
+                    ]}>
+                      {String(i).padStart(2, '0')}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            {!isMilitary && (
+              <View style={styles.timeSelectorColumn}>
+                <Text style={styles.timeSelectorLabel}>Period</Text>
+                <View style={styles.periodContainer}>
+                  <Pressable
+                    style={[
+                      styles.timeSelectorItem,
+                      inputs.period === 'AM' && styles.selectedTime
+                    ]}
+                    onPress={() => handleInputChange('period', 'AM')}
+                  >
+                    <Text style={[
+                      styles.timeSelectorText,
+                      inputs.period === 'AM' && styles.selectedTimeText
+                    ]}>
+                      AM
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.timeSelectorItem,
+                      inputs.period === 'PM' && styles.selectedTime
+                    ]}
+                    onPress={() => handleInputChange('period', 'PM')}
+                  >
+                    <Text style={[
+                      styles.timeSelectorText,
+                      inputs.period === 'PM' && styles.selectedTimeText
+                    ]}>
+                      PM
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+      </Animated.View>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -566,18 +606,20 @@ const styles = StyleSheet.create({
   icon: {
     marginLeft: 8,
   },
-  calendar: {
+  pickerContainer: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
+    zIndex: 1000,
+  },
+  calendar: {
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
     marginTop: 4,
     padding: 12,
-    zIndex: 1000,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -625,10 +667,6 @@ const styles = StyleSheet.create({
     color: theme.colors.surface,
   },
   timeSelector: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
@@ -637,7 +675,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     padding: 12,
     gap: 12,
-    zIndex: 1000,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

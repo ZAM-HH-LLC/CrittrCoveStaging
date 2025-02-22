@@ -448,6 +448,7 @@ const RequestBookingModal = ({ visible, onClose, onSubmit, conversationId }) => 
         hideRates={true}
         initialOccurrence={selectedOccurrence}
         modalTitle={selectedOccurrence ? 'Edit Occurrence' : 'Add New Occurrence'}
+        isFromRequestBooking={true}
       />
 
       <ConfirmationModal
