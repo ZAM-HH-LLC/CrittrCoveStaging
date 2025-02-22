@@ -169,7 +169,7 @@ const DateTimePicker = ({
         formattedValue = formatTwoDigitInput(value, 'minutes', inputs);
         break;
       case 'period':
-        formattedValue = value === 'AM' ? 'PM' : 'AM';
+        formattedValue = value;
         break;
     }
 
