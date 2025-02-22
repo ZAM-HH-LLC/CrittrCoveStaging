@@ -8,6 +8,7 @@ import { format, parse } from 'date-fns';
 import { TIME_OPTIONS } from '../data/mockData';
 import { validateDateTimeRange } from '../utils/dateTimeValidation';
 import { Button } from 'react-native-paper';
+import ConfirmationModal from './ConfirmationModal';
 
 const ANIMAL_COUNT_OPTIONS = ['1', '2', '3', '4', '5'];
 
@@ -75,6 +76,7 @@ const AddOccurrenceModal = ({
   modalTitle = 'Add New Occurrence'
 }) => {
   const { is_DEBUG, screenWidth } = useContext(AuthContext);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
   const parseInitialDates = (initialOccurrence) => {
     if (is_DEBUG) {
@@ -337,228 +339,255 @@ const AddOccurrenceModal = ({
     ));
   };
 
+  const handleDeleteClick = () => {
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    setShowDeleteConfirmation(false);
+    handleClose();
+  };
+
   return (
-    <Modal
-      visible={visible}
-      onRequestClose={handleClose}
-      animationType="slide"
-      transparent={true}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{modalTitle}</Text>
-            <TouchableOpacity onPress={handleClose}>
-              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollableContent>
-            <View style={[styles.section, { zIndex: 10 }]}>
-              <Text style={styles.label}>Start Date & Time</Text>
-              <DateTimePicker
-                value={occurrence.startDateTime}
-                onChange={handleStartDateTimeChange}
-                error={validationError?.startDateTime}
-                isMilitary={occurrence.isMilitary}
-              />
+    <>
+      <Modal
+        visible={visible}
+        onRequestClose={handleClose}
+        animationType="slide"
+        transparent={true}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{modalTitle}</Text>
+              <TouchableOpacity onPress={handleClose}>
+                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
             </View>
 
-            <View style={[styles.section, { zIndex: 9 }]}>
-              <Text style={styles.label}>End Date & Time</Text>
-              <DateTimePicker
-                value={occurrence.endDateTime}
-                onChange={handleEndDateTimeChange}
-                error={validationError?.endDateTime}
-                isMilitary={occurrence.isMilitary}
-              />
-            </View>
+            <ScrollableContent>
+              <View style={[styles.section, { zIndex: 10 }]}>
+                <Text style={styles.label}>Start Date & Time</Text>
+                <DateTimePicker
+                  value={occurrence.startDateTime}
+                  onChange={handleStartDateTimeChange}
+                  error={validationError?.startDateTime}
+                  isMilitary={occurrence.isMilitary}
+                />
+              </View>
 
-            {validationError && (
-              <Text style={styles.errorText}>{validationError}</Text>
-            )}
+              <View style={[styles.section, { zIndex: 9 }]}>
+                <Text style={styles.label}>End Date & Time</Text>
+                <DateTimePicker
+                  value={occurrence.endDateTime}
+                  onChange={handleEndDateTimeChange}
+                  error={validationError?.endDateTime}
+                  isMilitary={occurrence.isMilitary}
+                />
+              </View>
 
-            {!hideRates && (
-              <>
-                <View style={[styles.section, { zIndex: 8 }]}>
-                  <Text style={styles.label}>Base Rate</Text>
-                  <View style={styles.rateContainer}>
-                    <View style={styles.baseRateInput}>
-                      <TextInput
-                        style={styles.input}
-                        value={occurrence.rates.baseRate.toString()}
-                        onChangeText={(text) => setOccurrence(prev => ({
-                          ...prev,
-                          rates: {
-                            ...prev.rates,
-                            baseRate: text.replace(/[^0-9.]/g, '')
-                          }
-                        }))}
-                        keyboardType="decimal-pad"
-                        placeholder="0.00"
-                      />
-                    </View>
-                    <View style={styles.timeUnitInput}>
-                      <Text style={styles.label}>Per</Text>
-                      <Picker
-                        selectedValue={timeUnit}
-                        onValueChange={(itemValue) => setTimeUnit(itemValue)}
-                        style={styles.picker}
-                      >
-                        {renderPickerItems(TIME_OPTIONS)}
-                      </Picker>
-                    </View>
-                  </View>
-                </View>
+              {validationError && (
+                <Text style={styles.errorText}>{validationError}</Text>
+              )}
 
-                <View style={[styles.section, { zIndex: 7 }]}>
-                  <Text style={styles.label}>
-                    {screenWidth < 375 
-                      ? `+${occurrence.rates.appliesAfterAnimals} Pet Rate`
-                      : 'Additional Pet Rate'
-                    }
-                  </Text>
-                  <View style={styles.rateContainer}>
-                    <View style={styles.baseRateInput}>
-                      <TextInput
-                        style={styles.input}
-                        value={occurrence.rates.additionalAnimalRate.toString()}
-                        onChangeText={(text) => setOccurrence(prev => ({
-                          ...prev,
-                          rates: {
-                            ...prev.rates,
-                            additionalAnimalRate: text.replace(/[^0-9.]/g, '')
-                          }
-                        }))}
-                        keyboardType="decimal-pad"
-                        placeholder="0.00"
-                      />
-                    </View>
-                    <View style={styles.timeUnitInput}>
-                      <Text style={styles.label}>Applies After</Text>
-                      <Picker
-                        selectedValue={occurrence.rates.appliesAfterAnimals}
-                        onValueChange={(itemValue) => setOccurrence(prev => ({
-                          ...prev,
-                          rates: {
-                            ...prev.rates,
-                            appliesAfterAnimals: itemValue
-                          }
-                        }))}
-                        style={styles.picker}
-                      >
-                        {ANIMAL_COUNT_OPTIONS.map((option) => (
-                          <Picker.Item key={option} label={`${option} animal${option === '1' ? '' : 's'}`} value={option} />
-                        ))}
-                      </Picker>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={[styles.section, { zIndex: 6 }]}>
-                  <Text style={styles.label}>Holiday Rate</Text>
-                  <View style={styles.rateContainer}>
-                    <View style={styles.baseRateInput}>
-                      <TextInput
-                        style={styles.input}
-                        value={occurrence.rates.holidayRate.toString()}
-                        onChangeText={(text) => setOccurrence(prev => ({
-                          ...prev,
-                          rates: {
-                            ...prev.rates,
-                            holidayRate: text.replace(/[^0-9.]/g, '')
-                          }
-                        }))}
-                        keyboardType="decimal-pad"
-                        placeholder="0.00"
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                <View style={[styles.section, { zIndex: 5 }]}>
-                  <Text style={styles.label}>Additional Rates</Text>
-                  {occurrence.rates.additionalRates.map((rate, index) => (
-                    <View key={index} style={[styles.rateRow, {marginBottom: 10}]}>
-                      <TextInput
-                        style={[styles.input, styles.rateInput]}
-                        value={rate.name}
-                        editable={false}
-                      />
-                      <View style={[styles.rateAmountContainer]}>
+              {!hideRates && (
+                <>
+                  <View style={[styles.section, { zIndex: 8 }]}>
+                    <Text style={styles.label}>Base Rate</Text>
+                    <View style={styles.rateContainer}>
+                      <View style={styles.baseRateInput}>
                         <TextInput
-                          style={[styles.input, styles.rateAmountInput]}
-                          value={rate.amount.toString()}
-                          editable={false}
+                          style={styles.input}
+                          value={occurrence.rates.baseRate.toString()}
+                          onChangeText={(text) => setOccurrence(prev => ({
+                            ...prev,
+                            rates: {
+                              ...prev.rates,
+                              baseRate: text.replace(/[^0-9.]/g, '')
+                            }
+                          }))}
+                          keyboardType="decimal-pad"
+                          placeholder="0.00"
                         />
                       </View>
-                      <TouchableOpacity onPress={() => handleDeleteRate(index)}>
-                        <MaterialCommunityIcons name="close" size={24} color={theme.colors.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-
-                  {showAddRate ? (
-                    <>
-                      <View style={styles.rateLabelContainer}>
-                        <Text style={styles.rateTitleLabel}>Rate Title</Text>
-                        <Text style={styles.rateAmountLabel}>Rate Amount</Text>
+                      <View style={styles.timeUnitInput}>
+                        <Text style={styles.label}>Per</Text>
+                        <Picker
+                          selectedValue={timeUnit}
+                          onValueChange={(itemValue) => setTimeUnit(itemValue)}
+                          style={styles.picker}
+                        >
+                          {renderPickerItems(TIME_OPTIONS)}
+                        </Picker>
                       </View>
-                      <View style={styles.rateRow}>
+                    </View>
+                  </View>
+
+                  <View style={[styles.section, { zIndex: 7 }]}>
+                    <Text style={styles.label}>
+                      {screenWidth < 375 
+                        ? `+${occurrence.rates.appliesAfterAnimals} Pet Rate`
+                        : 'Additional Pet Rate'
+                      }
+                    </Text>
+                    <View style={styles.rateContainer}>
+                      <View style={styles.baseRateInput}>
+                        <TextInput
+                          style={styles.input}
+                          value={occurrence.rates.additionalAnimalRate.toString()}
+                          onChangeText={(text) => setOccurrence(prev => ({
+                            ...prev,
+                            rates: {
+                              ...prev.rates,
+                              additionalAnimalRate: text.replace(/[^0-9.]/g, '')
+                            }
+                          }))}
+                          keyboardType="decimal-pad"
+                          placeholder="0.00"
+                        />
+                      </View>
+                      <View style={styles.timeUnitInput}>
+                        <Text style={styles.label}>Applies After</Text>
+                        <Picker
+                          selectedValue={occurrence.rates.appliesAfterAnimals}
+                          onValueChange={(itemValue) => setOccurrence(prev => ({
+                            ...prev,
+                            rates: {
+                              ...prev.rates,
+                              appliesAfterAnimals: itemValue
+                            }
+                          }))}
+                          style={styles.picker}
+                        >
+                          {ANIMAL_COUNT_OPTIONS.map((option) => (
+                            <Picker.Item key={option} label={`${option} animal${option === '1' ? '' : 's'}`} value={option} />
+                          ))}
+                        </Picker>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={[styles.section, { zIndex: 6 }]}>
+                    <Text style={styles.label}>Holiday Rate</Text>
+                    <View style={styles.rateContainer}>
+                      <View style={styles.baseRateInput}>
+                        <TextInput
+                          style={styles.input}
+                          value={occurrence.rates.holidayRate.toString()}
+                          onChangeText={(text) => setOccurrence(prev => ({
+                            ...prev,
+                            rates: {
+                              ...prev.rates,
+                              holidayRate: text.replace(/[^0-9.]/g, '')
+                            }
+                          }))}
+                          keyboardType="decimal-pad"
+                          placeholder="0.00"
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={[styles.section, { zIndex: 5 }]}>
+                    <Text style={styles.label}>Additional Rates</Text>
+                    {occurrence.rates.additionalRates.map((rate, index) => (
+                      <View key={index} style={[styles.rateRow, {marginBottom: 10}]}>
                         <TextInput
                           style={[styles.input, styles.rateInput]}
-                          value={newRate.name}
-                          onChangeText={(text) => setNewRate(prev => ({ ...prev, name: text }))}
-                          placeholder="Rate Title"
+                          value={rate.name}
+                          editable={false}
                         />
                         <View style={[styles.rateAmountContainer]}>
                           <TextInput
                             style={[styles.input, styles.rateAmountInput]}
-                            value={newRate.amount}
-                            onChangeText={(text) => setNewRate(prev => ({ 
-                              ...prev, 
-                              amount: text.replace(/[^0-9.]/g, '') 
-                            }))}
-                            keyboardType="decimal-pad"
-                            placeholder="0.00"
+                            value={rate.amount.toString()}
+                            editable={false}
                           />
                         </View>
-                        <TouchableOpacity onPress={() => handleAddRate()}>
-                          <MaterialCommunityIcons name="plus" size={24} color={theme.colors.primary} />
+                        <TouchableOpacity onPress={() => handleDeleteRate(index)}>
+                          <MaterialCommunityIcons name="close" size={24} color={theme.colors.error} />
                         </TouchableOpacity>
                       </View>
-                    </>
-                  ) : (
-                    <TouchableOpacity 
-                      style={styles.addRateButton}
-                      onPress={() => setShowAddRate(true)}
-                    >
-                      <Text style={styles.addRateButtonText}>Add custom rate</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              
+                    ))}
 
-                <View style={styles.totalSection}>
-                  <Text style={styles.totalLabel}>Total:</Text>
-                  <Text style={styles.totalAmount}>${calculateTotal()}</Text>
-                </View>
+                    {showAddRate ? (
+                      <>
+                        <View style={styles.rateLabelContainer}>
+                          <Text style={styles.rateTitleLabel}>Rate Title</Text>
+                          <Text style={styles.rateAmountLabel}>Rate Amount</Text>
+                        </View>
+                        <View style={styles.rateRow}>
+                          <TextInput
+                            style={[styles.input, styles.rateInput]}
+                            value={newRate.name}
+                            onChangeText={(text) => setNewRate(prev => ({ ...prev, name: text }))}
+                            placeholder="Rate Title"
+                          />
+                          <View style={[styles.rateAmountContainer]}>
+                            <TextInput
+                              style={[styles.input, styles.rateAmountInput]}
+                              value={newRate.amount}
+                              onChangeText={(text) => setNewRate(prev => ({ 
+                                ...prev, 
+                                amount: text.replace(/[^0-9.]/g, '') 
+                              }))}
+                              keyboardType="decimal-pad"
+                              placeholder="0.00"
+                            />
+                          </View>
+                          <TouchableOpacity onPress={() => handleAddRate()}>
+                            <MaterialCommunityIcons name="plus" size={24} color={theme.colors.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : (
+                      <TouchableOpacity 
+                        style={styles.addRateButton}
+                        onPress={() => setShowAddRate(true)}
+                      >
+                        <Text style={styles.addRateButtonText}>Add custom rate</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                
 
-              </>
-            )}
-          </ScrollableContent>
+                  <View style={styles.totalSection}>
+                    <Text style={styles.totalLabel}>Total:</Text>
+                    <Text style={styles.totalAmount}>${calculateTotal()}</Text>
+                  </View>
 
-          <View style={styles.buttonContainer}>
-            <Button mode="outlined" onPress={handleClose} style={styles.button}>
-              Cancel
-            </Button>
-            <Button mode="contained" onPress={handleSubmit} style={styles.button}>
-              {isEditing ? 'Save Changes' : 'Add'}
-            </Button>
+                </>
+              )}
+            </ScrollableContent>
+
+            <View style={styles.buttonContainer}>
+              <Button 
+                mode="outlined" 
+                onPress={handleDeleteClick}
+                style={[styles.button, { borderColor: theme.colors.error }]}
+                textColor={theme.colors.error}
+              >
+                Delete
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handleSubmit}
+                style={styles.button}
+              >
+                {isEditing ? 'Save Changes' : 'Add'}
+              </Button>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+
+      <ConfirmationModal
+        visible={showDeleteConfirmation}
+        onClose={() => setShowDeleteConfirmation(false)}
+        onConfirm={handleDeleteConfirm}
+        actionText="delete this occurrence"
+      />
+    </>
   );
 };
 
@@ -573,7 +602,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderRadius: 8,
     padding: 20,
-    width: '90%',
+    width: '95%',
     maxWidth: 500,
     maxHeight: '80%',
   },

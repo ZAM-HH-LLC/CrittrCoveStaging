@@ -1361,6 +1361,13 @@ const BookingDetails = () => {
             {occ.formatted_start} - {occ.formatted_end}
             {'\n'}<Text style={[{ fontWeight: '525' }]}>Total: {occ.duration} ({occ.timezone})</Text>
           </Text>
+          {canEdit() && (
+            <MaterialCommunityIcons 
+              name="pencil" 
+              size={24} 
+              color={theme.colors.primary} 
+            />
+          )}
         </TouchableOpacity>
       ))}
       
@@ -2110,14 +2117,13 @@ const styles = StyleSheet.create({
   },
   occurrenceCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 8,
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    padding: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   occurrenceDetails: {
     flex: 1,
