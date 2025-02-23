@@ -274,8 +274,8 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         # Count holiday days in the occurrence range
         holiday_days = count_holidays(occurrence.start_date, occurrence.end_date)
         
-        # Get the unit of time from service
-        unit_of_time = occurrence.booking.service_id.unit_of_time if occurrence.booking.service_id else 'Per Visit'
+        # Use unit_of_time from booking_details instead of service
+        unit_of_time = booking_details.unit_of_time
         
         return {
             'base_rate': str(booking_details.base_rate),

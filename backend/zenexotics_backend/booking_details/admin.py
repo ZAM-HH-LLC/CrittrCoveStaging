@@ -16,5 +16,5 @@ class BookingDetailsAdmin(admin.ModelAdmin):
     )
 
     def get_unit_of_time(self, obj):
-        return obj.booking_occurrence.booking.service_id.unit_of_time
+        return obj.unit_of_time
     get_unit_of_time.short_description = 'Unit of Time'

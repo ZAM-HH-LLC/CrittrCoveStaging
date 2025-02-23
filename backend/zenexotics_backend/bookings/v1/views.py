@@ -910,6 +910,8 @@ class UpdateBookingOccurrencesView(APIView):
                 booking_details.applies_after = int(rates.get('applies_after', 1))
                 booking_details.holiday_rate = Decimal(str(rates.get('holiday_rate', 0)))
                 booking_details.unit_of_time = rates.get('unit_of_time', 'Per Visit')
+                # Set num_pets from the booking's pets
+                booking_details.num_pets = booking.booking_pets.count()
                 booking_details.save()
 
                 # Calculate costs
