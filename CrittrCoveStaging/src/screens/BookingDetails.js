@@ -11,7 +11,7 @@ import AddRateModal from '../components/AddRateModal';
 import { format } from 'date-fns';
 import AddOccurrenceModal from '../components/AddOccurrenceModal';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, getStorage } from '../context/AuthContext';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { handleBack } from '../components/Navigation';
@@ -651,8 +651,110 @@ const BookingDetails = () => {
   };
 
   const handleSaveOccurrence = async (updatedOccurrence) => {
+    try {
+      if (is_DEBUG) {
+        console.log('MBA9876 Saving occurrence:', updatedOccurrence);
+      }
+
+      const token = await getStorage('userToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const convertTimeUnitToBackend = (frontendUnit) => {
+        if (!frontendUnit) return 'per visit';
+        const mapping = {
+          'per visit': 'per visit',
+          'per day': 'per day',
+          'overnight': 'overnight',
+          '1 hr': '1 hr',
+          '2 hr': '2 hr',
+          '4 hr': '4 hr',
+          '8 hr': '8 hr',
+          '24 hr': '24 hr',
+          '15 min': '15 min',
+          '30 min': '30 min',
+          '45 min': '45 min'
+        };
+        return mapping[frontendUnit] || 'per visit';
+      };
+
+      // Format the occurrence data for the backend
+      const occurrenceData = {
+        booking_id: booking.booking_id,
+        occurrences: [{
+          occurrence_id: updatedOccurrence.occurrence_id,
+          start_date: updatedOccurrence.startDate,
+          end_date: updatedOccurrence.endDate,
+          start_time: updatedOccurrence.startTime,
+          end_time: updatedOccurrence.endTime,
+          rates: {
+            base_rate: updatedOccurrence.rates.baseRate,
+            additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
+            applies_after: updatedOccurrence.rates.appliesAfterAnimals,
+            holiday_rate: updatedOccurrence.rates.holidayRate,
+            time_unit: convertTimeUnitToBackend(updatedOccurrence.rates.timeUnit),
+            additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
+              title: rate.name,
+              description: rate.description || '',
+              amount: rate.amount
+            }))
+          }
+        }]
+      };
+
+      if (is_DEBUG) {
+        console.log('MBA9876 Sending occurrence data to backend:', occurrenceData);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/bookings/v1/update_occurrences/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(occurrenceData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (is_DEBUG) {
+        console.log('MBA9876 Backend response:', data);
+      }
+
+      // Update the local state with the response data
+      if (data.occurrences && data.occurrences.length > 0) {
+        const updatedOccurrences = booking.occurrences.map(occ => {
+          const matchingOcc = data.occurrences.find(
+            newOcc => newOcc.occurrence_id === occ.occurrence_id
+          );
+          return matchingOcc || occ;
+        });
+
+        setBooking(prev => ({
+          ...prev,
+          occurrences: updatedOccurrences,
+          cost_summary: data.cost_summary
+        }));
+      }
+
+      Alert.alert('Success', 'Occurrence updated successfully');
+      return true;
+    } catch (error) {
+      if (is_DEBUG) {
+        console.log('MBA9876 Error saving occurrence:', error);
+      }
+      Alert.alert('Error', 'Failed to update occurrence');
+      return false;
+    }
+  };
+
+  const handleAddOccurrence = async (newOccurrence) => {
     if (is_DEBUG) {
-      console.log('Saving occurrence:', updatedOccurrence);
+      console.log('MBA5678 Adding new occurrence:', newOccurrence);
     }
 
     try {
@@ -677,166 +779,67 @@ const BookingDetails = () => {
         return mapping[frontendUnit] || 'PER_VISIT';
       };
 
-      // Transform the occurrence data for the backend
+      // Format the occurrence data for the backend
       const occurrenceData = {
-        occurrence_id: updatedOccurrence.id || updatedOccurrence.occurrence_id,  // Try both id and occurrence_id
-        start_date: updatedOccurrence.startDate,
-        end_date: updatedOccurrence.endDate,
-        start_time: updatedOccurrence.startTime,
-        end_time: updatedOccurrence.endTime,
-        rates: {
-          base_rate: updatedOccurrence.rates.baseRate,
-          additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
-          applies_after: updatedOccurrence.rates.appliesAfterAnimals,
-          unit_of_time: convertTimeUnitToBackend(updatedOccurrence.rates.timeUnit),
-          holiday_rate: updatedOccurrence.rates.holidayRate,
-          holiday_days: 0,
-          additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
-            title: rate.name,
-            description: rate.description || '',
-            amount: `$${rate.amount}`
-          }))
-        }
-      };
-
-      if (is_DEBUG) {
-        console.log('Sending occurrence data to backend:', occurrenceData);
-      }
-
-      // Real API mode
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      // First update the occurrence
-      const updateResponse = await axios.patch(
-        `${API_BASE_URL}/api/booking-drafts/v1/${booking.booking_id}/update/`,
-        { occurrences: [occurrenceData] },
-        { headers: { Authorization: `Bearer ${token}` }}
-      );
-
-      if (is_DEBUG) {
-        console.log('Backend update response:', updateResponse.data);
-      }
-
-      // Then fetch the latest booking data to ensure we have the most up-to-date state
-      const bookingResponse = await axios.get(
-        `${API_BASE_URL}/api/bookings/v1/${booking.booking_id}/?is_prorated=true`,
-        { headers: { Authorization: `Bearer ${token}` }}
-      );
-
-      if (is_DEBUG) {
-        console.log('Fetched updated booking data:', bookingResponse.data);
-      }
-
-      // Transform API response to match the expected format
-      const transformedBooking = {
-        ...bookingResponse.data,
-        id: bookingResponse.data.booking_id,
-        clientName: bookingResponse.data.client_name,
-        professionalName: bookingResponse.data.professional_name,
-        serviceType: bookingResponse.data.service_details.service_type,
-        animalType: bookingResponse.data.service_details.animal_type,
-        numberOfPets: bookingResponse.data.service_details.num_pets,
-        costs: bookingResponse.data.cost_summary,
-        status: bookingResponse.data.status
-      };
-
-      // Update the booking state with the fresh data
-      setBooking(transformedBooking);
-
-      setShowAddOccurrenceModal(false);
-    } catch (error) {
-      console.error('Error saving occurrence:', error);
-      if (is_DEBUG) {
-        console.log('Error details:', error.response?.data || error.message);
-      }
-      Alert.alert('Error', 'Failed to save occurrence details');
-    }
-  };
-
-  const handleAddOccurrence = async (newOccurrence) => {
-    try {
-      if (!booking) return;
-
-      if (is_DEBUG) {
-        console.log('Adding new occurrence:', newOccurrence);
-      }
-
-      // Real API mode
-      const token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      // Convert frontend time unit to backend format
-      const convertTimeUnitToBackend = (frontendUnit) => {
-        if (!frontendUnit) return 'PER_VISIT';
-        const mapping = {
-          'per visit': 'PER_VISIT',
-          'per day': 'PER_DAY',
-          'overnight': 'OVERNIGHT',
-          '1 hr': '1_HOUR',
-          '2 hr': '2_HOUR',
-          '4 hr': '4_HOUR',
-          '8 hr': '8_HOUR',
-          '24 hr': '24_HOUR',
-          '15 min': '15_MIN',
-          '30 min': '30_MIN',
-          '45 min': '45_MIN'
-        };
-        return mapping[frontendUnit] || 'PER_VISIT';
-      };
-
-      // Transform the occurrence data to match backend expectations
-      const occurrenceData = {
-        start_date: newOccurrence.startDate,
-        end_date: newOccurrence.endDate,
-        start_time: newOccurrence.startTime,
-        end_time: newOccurrence.endTime,
+        start_date: format(newOccurrence.startDateTime, 'yyyy-MM-dd'),
+        end_date: format(newOccurrence.endDateTime, 'yyyy-MM-dd'),
+        start_time: format(newOccurrence.startDateTime, 'HH:mm'),
+        end_time: format(newOccurrence.endDateTime, 'HH:mm'),
         rates: {
           base_rate: newOccurrence.rates.baseRate,
           additional_animal_rate: newOccurrence.rates.additionalAnimalRate,
           applies_after: newOccurrence.rates.appliesAfterAnimals,
           holiday_rate: newOccurrence.rates.holidayRate,
-          unit_of_time: convertTimeUnitToBackend(newOccurrence.rates.timeUnit),
+          time_unit: convertTimeUnitToBackend(newOccurrence.rates.timeUnit),
           additional_rates: newOccurrence.rates.additionalRates.map(rate => ({
             title: rate.name,
             description: rate.description || '',
-            amount: `$${parseFloat(rate.amount).toFixed(2)}`
+            amount: rate.amount
           }))
         }
       };
 
       if (is_DEBUG) {
-        console.log('Sending new occurrence data to backend:', occurrenceData);
+        console.log('MBA5678 Formatted new occurrence data for backend:', occurrenceData);
       }
 
-      const response = await axios.patch(
-        `${API_BASE_URL}/api/booking-drafts/v1/${booking.booking_id}/update/`,
-        { occurrences: [occurrenceData] },
-        { headers: { Authorization: `Bearer ${token}` }}
-      );
+      // Make the API call to add the occurrence
+      const response = await fetch(`${API_BASE_URL}/api/bookings/v1/update_occurrences/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          booking_id: booking.booking_id,
+          occurrences: [occurrenceData]
+        })
+      });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
       if (is_DEBUG) {
-        console.log('Backend response:', response.data);
+        console.log('MBA5678 Add occurrence response:', data);
       }
 
-      // Update booking status and data from response
-      if (response.data.booking_status) {
-        setBooking(prevBooking => ({
-          ...prevBooking,
-          status: response.data.booking_status
+      // Update the local state with the response data
+      if (data.occurrences && data.occurrences.length > 0) {
+        setBooking(prev => ({
+          ...prev,
+          occurrences: [...prev.occurrences, data.occurrences[0]],
+          cost_summary: data.cost_summary
         }));
+
+        // Show success message
+        Alert.alert('Success', 'New occurrence added successfully');
       }
 
-      setShowAddOccurrenceModal(false);
     } catch (error) {
-      console.error('Error adding occurrence:', error);
-      if (is_DEBUG) {
-        console.log('Error details:', error.response?.data || error.message);
-      }
-      Alert.alert('Error', 'Failed to add occurrence');
+      console.error('MBA5678 Error adding occurrence:', error);
+      Alert.alert('Error', 'Failed to add occurrence. Please try again.');
     }
   };
 
@@ -899,7 +902,7 @@ const BookingDetails = () => {
         additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
         appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
         holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
-        timeUnit: convertTimeUnit(occurrence.rates?.unit_of_time),
+        timeUnit: convertTimeUnit(occurrence.rates?.time_unit),
         additionalRates: (occurrence.rates?.additional_rates || [])
           .filter(rate => rate.title !== 'Booking Details Cost')
           .map(rate => ({
@@ -964,23 +967,23 @@ const BookingDetails = () => {
           {expandedOccurrenceId === occurrence.occurrence_id && (
             <View style={styles.expandedCostDetails}>
               <View style={styles.costDetailRow}>
-                <Text style={styles.costDetailText}>Base Rate ({getTimeUnitDisplay(occurrence.rates?.unit_of_time)}):</Text>
+                <Text style={styles.costDetailText}>Base Rate ({getTimeUnitDisplay(occurrence.rates?.time_unit)}):</Text>
                 <Text style={styles.costDetailText}>
                   ${parseFloat(occurrence.rates?.base_rate || 0).toFixed(2)} × {
-                    calculateMultiple(occurrence.base_total, occurrence.rates?.base_rate)
-                  } = ${parseFloat(occurrence.base_total.replace('$', '')).toFixed(2)}
+                    parseFloat(calculateMultiple(occurrence.base_total, occurrence.rates?.base_rate) || 0).toFixed(2)
+                  } = ${parseFloat(occurrence.base_total?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}
                 </Text>
               </View>
-              {occurrence.rates?.additional_animal_rate_applies && occurrence.rates?.additional_animal_rate > 0 && (
+              {occurrence.rates?.additional_animal_rate_applies && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
                 <View style={styles.costDetailRow}>
                   <Text style={styles.costDetailText}>Additional Animal Rate (after {occurrence.rates.applies_after} animals):</Text>
-                  <Text style={styles.costDetailText}>${parseFloat(occurrence.rates.additional_animal_rate).toFixed(2)}</Text>
+                  <Text style={styles.costDetailText}>${parseFloat(occurrence.rates.additional_animal_rate || 0).toFixed(2)}</Text>
                 </View>
               )}
-              {occurrence.rates?.holiday_days > 0 && occurrence.rates?.holiday_rate > 0 && (
+              {occurrence.rates?.holiday_days > 0 && parseFloat(occurrence.rates?.holiday_rate || 0) > 0 && (
                 <View style={styles.costDetailRow}>
                   <Text style={styles.costDetailText}>Holiday Rate ({occurrence.rates.holiday_days} day{occurrence.rates.holiday_days > 1 ? 's' : ''}):</Text>
-                  <Text style={styles.costDetailText}>${(parseFloat(occurrence.rates.holiday_rate) * occurrence.rates.holiday_days).toFixed(2)}</Text>
+                  <Text style={styles.costDetailText}>${(parseFloat(occurrence.rates.holiday_rate || 0) * occurrence.rates.holiday_days).toFixed(2)}</Text>
                 </View>
               )}
               {(occurrence.rates?.additional_rates || [])
@@ -988,7 +991,7 @@ const BookingDetails = () => {
                 .map((rate, idx) => (
                   <View key={idx} style={styles.costDetailRow}>
                     <Text style={styles.costDetailText}>{rate.title}:</Text>
-                    <Text style={styles.costDetailText}>${parseFloat(rate.amount.replace('$', '')).toFixed(2)}</Text>
+                    <Text style={styles.costDetailText}>${parseFloat(rate.amount?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}</Text>
                   </View>
               ))}
             </View>
@@ -999,26 +1002,26 @@ const BookingDetails = () => {
       <View style={styles.costSummary}>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>Subtotal:</Text>
-          <Text style={styles.summaryText}>${(booking?.cost_summary?.subtotal || 0).toFixed(2)}</Text>
+          <Text style={styles.summaryText}>${parseFloat(booking?.cost_summary?.subtotal || 0).toFixed(2)}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>Platform Fee (10%):</Text>
-          <Text style={styles.summaryText}>${(booking?.cost_summary?.platform_fee || 0).toFixed(2)}</Text>
+          <Text style={styles.summaryText}>${parseFloat(booking?.cost_summary?.platform_fee || 0).toFixed(2)}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>Taxes (8%):</Text>
-          <Text style={styles.summaryText}>${(booking?.cost_summary?.taxes || 0).toFixed(2)}</Text>
+          <Text style={styles.summaryText}>${parseFloat(booking?.cost_summary?.taxes || 0).toFixed(2)}</Text>
         </View>
         <View style={[styles.summaryRow, styles.totalRow]}>
           <Text style={styles.totalLabel}>Total Cost to Client:</Text>
           <Text style={styles.totalAmount}>
-            ${(booking?.cost_summary?.total_client_cost || 0).toFixed(2)}
+            ${parseFloat(booking?.cost_summary?.total_client_cost || 0).toFixed(2)}
           </Text>
         </View>
         <View style={[styles.summaryRow, styles.payoutRow]}>
           <Text style={styles.payoutLabel}>Sitter Payout:</Text>
           <Text style={styles.payoutAmount}>
-            ${(booking?.cost_summary?.total_sitter_payout || 0).toFixed(2)}
+            ${parseFloat(booking?.cost_summary?.total_sitter_payout || 0).toFixed(2)}
           </Text>
         </View>
       </View>

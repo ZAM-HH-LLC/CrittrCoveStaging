@@ -735,5 +735,208 @@ class RequestBookingView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class UpdateBookingPetsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            booking_id = request.data.get('booking_id')
+            pet_ids = request.data.get('pet_ids', [])
+
+            # Get the booking
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+
+            # Verify user is the professional and booking is in correct state
+            if not (request.user == booking.professional.user and 
+                   booking.status == BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES):
+                return Response(
+                    {"error": "Not authorized or invalid booking state"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Remove all existing pets
+            BookingPets.objects.filter(booking=booking).delete()
+
+            # Add new pets
+            for pet_id in pet_ids:
+                pet = get_object_or_404(Pet, pet_id=pet_id)
+                BookingPets.objects.create(booking=booking, pet=pet)
+
+            # Return updated pets list
+            updated_pets = BookingPets.objects.filter(booking=booking).select_related('pet')
+            pets_data = [{
+                'pet_id': bp.pet.pet_id,
+                'name': bp.pet.name,
+                'species': bp.pet.species,
+                'breed': bp.pet.breed
+            } for bp in updated_pets]
+
+            return Response({
+                'status': 'success',
+                'message': 'Pets updated successfully',
+                'pets': pets_data
+            })
+
+        except Exception as e:
+            logger.error(f"Error updating booking pets: {str(e)}")
+            return Response(
+                {"error": "Failed to update pets"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UpdateBookingServiceTypeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            booking_id = request.data.get('booking_id')
+            service_id = request.data.get('service_id')
+
+            # Get the booking
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+
+            # Verify user is the professional and booking is in correct state
+            if not (request.user == booking.professional.user and 
+                   booking.status == BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES):
+                return Response(
+                    {"error": "Not authorized or invalid booking state"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get the service
+            service = get_object_or_404(Service, service_id=service_id)
+
+            # Update the service
+            booking.service_id = service
+            booking.save()
+
+            # Return updated service details
+            service_data = {
+                'service_id': service.service_id,
+                'service_type': service.service_name,
+                'description': service.description
+            }
+
+            return Response({
+                'status': 'success',
+                'message': 'Service type updated successfully',
+                'service_details': service_data
+            })
+
+        except Exception as e:
+            logger.error(f"Error updating booking service type: {str(e)}")
+            return Response(
+                {"error": "Failed to update service type"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UpdateBookingOccurrencesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            booking_id = request.data.get('booking_id')
+            occurrences = request.data.get('occurrences', [])
+
+            # Get the booking
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+
+            # Verify user is the professional and booking is in correct state
+            if not (request.user == booking.professional.user and 
+                   booking.status == BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES):
+                return Response(
+                    {"error": "Not authorized or invalid booking state"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            updated_occurrences = []
+            for occ_data in occurrences:
+                occurrence_id = occ_data.get('occurrence_id')
+                
+                # Get or create the occurrence
+                if occurrence_id:
+                    occurrence = get_object_or_404(BookingOccurrence, occurrence_id=occurrence_id)
+                else:
+                    occurrence = BookingOccurrence.objects.create(
+                        booking=booking,
+                        start_date=occ_data['start_date'],
+                        end_date=occ_data['end_date'],
+                        start_time=occ_data['start_time'],
+                        end_time=occ_data['end_time']
+                    )
+
+                # Update occurrence dates/times
+                occurrence.start_date = occ_data['start_date']
+                occurrence.end_date = occ_data['end_date']
+                occurrence.start_time = occ_data['start_time']
+                occurrence.end_time = occ_data['end_time']
+                occurrence.save()
+
+                # Update or create booking details
+                booking_details = BookingDetails.objects.get_or_create(
+                    booking_occurrence=occurrence
+                )[0]
+                
+                rates = occ_data.get('rates', {})
+                booking_details.base_rate = Decimal(str(rates.get('base_rate', 0)))
+                booking_details.additional_animal_rate = Decimal(str(rates.get('additional_animal_rate', 0)))
+                booking_details.applies_after = int(rates.get('applies_after', 1))
+                booking_details.holiday_rate = Decimal(str(rates.get('holiday_rate', 0)))
+                booking_details.time_unit = rates.get('time_unit', 'per visit')
+                booking_details.save()
+
+                # Update occurrence rates
+                if rates.get('additional_rates'):
+                    occurrence_rate = BookingOccurrenceRate.objects.get_or_create(
+                        occurrence=occurrence
+                    )[0]
+                    occurrence_rate.rates = rates['additional_rates']
+                    occurrence_rate.save()
+
+                # Get the updated occurrence data
+                updated_occurrence = {
+                    'occurrence_id': occurrence.occurrence_id,
+                    'start_date': occurrence.start_date,
+                    'end_date': occurrence.end_date,
+                    'start_time': occurrence.start_time,
+                    'end_time': occurrence.end_time,
+                    'calculated_cost': str(occurrence.calculated_cost),
+                    'rates': {
+                        'base_rate': str(booking_details.base_rate),
+                        'additional_animal_rate': str(booking_details.additional_animal_rate),
+                        'applies_after': booking_details.applies_after,
+                        'holiday_rate': str(booking_details.holiday_rate),
+                        'time_unit': booking_details.time_unit,
+                        'additional_rates': occurrence_rate.rates if hasattr(occurrence, 'rates') else []
+                    }
+                }
+                updated_occurrences.append(updated_occurrence)
+
+            # Get the updated booking summary
+            booking_summary = BookingSummary.objects.get(booking=booking)
+
+            return Response({
+                'status': 'success',
+                'message': 'Occurrences updated successfully',
+                'occurrences': updated_occurrences,
+                'cost_summary': {
+                    'subtotal': str(booking_summary.subtotal),
+                    'platform_fee': str(booking_summary.platform_fee),
+                    'taxes': str(booking_summary.taxes),
+                    'total_client_cost': str(booking_summary.total_client_cost),
+                    'total_sitter_payout': str(booking_summary.total_sitter_payout)
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"Error updating booking occurrences: {str(e)}")
+            return Response(
+                {"error": "Failed to update occurrences"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 # Placeholder: Ready for views to be added
 # Placeholder: Ready for views to be added
