@@ -201,7 +201,7 @@ const AddOccurrenceModal = ({
         additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
         appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
         holidayRate: defaultRates?.holidayRate?.toString() || '0',
-        timeUnit: (initialOccurrence?.rates?.unit_of_time || defaultRates?.timeUnit || 'PER_VISIT').toLowerCase().replace('_', ' '),
+        unit_of_time: initialOccurrence?.rates?.unit_of_time || defaultRates?.unit_of_time || 'Per Visit',
         additionalRates: defaultRates?.additionalRates || []
       }
   });
@@ -209,8 +209,16 @@ const AddOccurrenceModal = ({
   // Add effect to update dates when initialOccurrence changes
   useEffect(() => {
     if (initialOccurrence) {
+      if (is_DEBUG) {
+        console.log('MBA4321 Initial occurrence rates:', initialOccurrence.rates);
+        console.log('MBA4321 Initial unit_of_time:', initialOccurrence.rates?.unit_of_time);
+      }
       const dates = parseInitialDates(initialOccurrence);
-      const timeUnit = initialOccurrence.rates?.time_unit || initialOccurrence.rates?.timeUnit || 'per visit';
+      // Use unit_of_time directly from the rates object without any transformation
+      const unit_of_time = initialOccurrence.rates?.unit_of_time;
+      if (is_DEBUG) {
+        console.log('MBA4321 Setting unit_of_time to:', unit_of_time);
+      }
       setOccurrence(prev => ({
         ...prev,
         startDateTime: dates.startDateTime,
@@ -218,10 +226,10 @@ const AddOccurrenceModal = ({
         isMilitary: dates.isMilitary,
         rates: {
           ...initialOccurrence.rates,
-          timeUnit: timeUnit.toLowerCase().replace('_', ' ')
+          unit_of_time: unit_of_time
         }
       }));
-      setTimeUnit(timeUnit.toLowerCase().replace('_', ' '));
+      setUnitOfTime(unit_of_time);
     }
   }, [initialOccurrence]);
 
@@ -288,58 +296,35 @@ const AddOccurrenceModal = ({
 
   const [showAddRate, setShowAddRate] = useState(false);
   const [newRate, setNewRate] = useState({ name: '', amount: '' });
-  const [timeUnit, setTimeUnit] = useState(
-    initialOccurrence?.rates?.timeUnit || 
-    defaultRates?.timeUnit || 
-    'per visit'
+  const [unit_of_time, setUnitOfTime] = useState(
+    initialOccurrence?.rates?.unit_of_time || 
+    defaultRates?.unit_of_time || 
+    'Per Visit'
   );
   
   useEffect(() => {
     if (is_DEBUG) {
       console.log('MBA1234 Initial occurrence:', initialOccurrence);
-      console.log('MBA1234 Time unit set to:', timeUnit);
+      console.log('MBA1234 Unit of time set to:', unit_of_time);
     }
-  }, [timeUnit, initialOccurrence]);
+  }, [unit_of_time, initialOccurrence]);
 
-  useEffect(() => {
-    if (initialOccurrence?.rates) {
-      const newTimeUnit = (initialOccurrence.rates.unit_of_time || 
-                          initialOccurrence.rates.timeUnit || 
-                          'per visit').toLowerCase().replace('_', ' ');
-      if (is_DEBUG) {
-        console.log('MBA1234 Updating time unit from initialOccurrence:', {
-          oldTimeUnit: timeUnit,
-          newTimeUnit: newTimeUnit,
-          rawTimeUnit: initialOccurrence.rates.unit_of_time || initialOccurrence.rates.timeUnit
-        });
-      }
-      setTimeUnit(newTimeUnit);
-      setOccurrence(prev => ({
-        ...prev,
-        rates: {
-          ...prev.rates,
-          timeUnit: newTimeUnit
-        }
-      }));
-    }
-  }, [initialOccurrence]);
-
-  // Update occurrence when timeUnit changes
+  // Update occurrence when unit_of_time changes
   useEffect(() => {
     if (is_DEBUG) {
-      console.log('MBA1234 Time unit changed:', {
-        newTimeUnit: timeUnit,
-        occurrenceRatesTimeUnit: occurrence.rates.timeUnit
+      console.log('MBA4321 Unit of time changed:', {
+        newUnitOfTime: unit_of_time,
+        occurrenceRatesUnitOfTime: occurrence.rates.unit_of_time
       });
     }
     setOccurrence(prev => ({
       ...prev,
       rates: {
         ...prev.rates,
-        timeUnit: timeUnit
+        unit_of_time: unit_of_time
       }
     }));
-  }, [timeUnit]);
+  }, [unit_of_time]);
 
   const calculateTotal = () => {
     // If we have a totalCost from the initialOccurrence, use that
@@ -405,11 +390,11 @@ const AddOccurrenceModal = ({
         additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
         appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
         holidayRate: defaultRates?.holidayRate?.toString() || '0',
-        timeUnit: defaultRates?.timeUnit || 'per visit',
+        unit_of_time: defaultRates?.unit_of_time || 'Per Visit',
         additionalRates: defaultRates?.additionalRates || []
       }
     });
-    setTimeUnit(defaultRates?.timeUnit || 'per visit');
+    setUnitOfTime(defaultRates?.unit_of_time || 'Per Visit');
     setShowAddRate(false);
     setNewRate({ name: '', amount: '' });
   };
@@ -524,14 +509,17 @@ const AddOccurrenceModal = ({
                       <View style={styles.timeUnitInput}>
                         <Text style={styles.label}>Per</Text>
                         <Picker
-                          selectedValue={occurrence.rates.timeUnit}
+                          selectedValue={unit_of_time}
                           onValueChange={(itemValue) => {
-                            setTimeUnit(itemValue);
+                            if (is_DEBUG) {
+                              console.log('MBA4321 Picker value changed to:', itemValue);
+                            }
+                            setUnitOfTime(itemValue);
                             setOccurrence(prev => ({
                               ...prev,
                               rates: {
                                 ...prev.rates,
-                                timeUnit: itemValue
+                                unit_of_time: itemValue
                               }
                             }));
                           }}

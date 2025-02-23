@@ -909,7 +909,7 @@ class UpdateBookingOccurrencesView(APIView):
                 booking_details.additional_animal_rate = Decimal(str(rates.get('additional_animal_rate', 0)))
                 booking_details.applies_after = int(rates.get('applies_after', 1))
                 booking_details.holiday_rate = Decimal(str(rates.get('holiday_rate', 0)))
-                booking_details.time_unit = rates.get('time_unit', 'PER_VISIT')
+                booking_details.unit_of_time = rates.get('unit_of_time', 'Per Visit')
                 booking_details.save()
 
                 # Calculate costs
@@ -934,35 +934,33 @@ class UpdateBookingOccurrencesView(APIView):
                 base_rate = Decimal(str(booking_details.base_rate))
                 duration_hours = (end_dt_utc - start_dt_utc).total_seconds() / 3600
                 
-                # Get the time unit from service
-                time_unit = booking.service_id.unit_of_time if booking.service_id else 'PER_VISIT'
-                
-                # Calculate the multiplier based on duration and time unit
+                # Use unit_of_time from booking_details instead of service
+                from core.constants import UnitOfTime
+
                 unit_mapping = {
-                    '15_MIN': 0.25,
-                    '30_MIN': 0.5,
-                    '45_MIN': 0.75,
-                    '1_HOUR': 1,
-                    '2_HOUR': 2,
-                    '3_HOUR': 3,
-                    '4_HOUR': 4,
-                    '5_HOUR': 5,
-                    '6_HOUR': 6,
-                    '7_HOUR': 7,
-                    '8_HOUR': 8,
-                    '24_HOUR': 24,
-                    'PER_DAY': 24,
-                    'PER_VISIT': None,  # Special case - no proration
-                    'WEEK': 168  # 24 * 7
+                    UnitOfTime.FIFTEEN_MINUTES: 0.25,
+                    UnitOfTime.THIRTY_MINUTES: 0.5,
+                    UnitOfTime.FORTY_FIVE_MINUTES: 0.75,
+                    UnitOfTime.ONE_HOUR: 1,
+                    UnitOfTime.TWO_HOURS: 2,
+                    UnitOfTime.THREE_HOURS: 3,
+                    UnitOfTime.FOUR_HOURS: 4,
+                    UnitOfTime.FIVE_HOURS: 5,
+                    UnitOfTime.SIX_HOURS: 6,
+                    UnitOfTime.SEVEN_HOURS: 7,
+                    UnitOfTime.EIGHT_HOURS: 8,
+                    UnitOfTime.TWENTY_FOUR_HOURS: 24,
+                    UnitOfTime.PER_DAY: 24,
+                    UnitOfTime.PER_VISIT: None,  # Special case - no proration
+                    UnitOfTime.WEEK: 168  # 24 * 7
                 }
                 
-                unit_hours = unit_mapping.get(time_unit)
+                unit_hours = unit_mapping.get(booking_details.unit_of_time)
                 if unit_hours is None:  # PER_VISIT case
-                    multiplier = Decimal('1')
+                    base_total = base_rate
                 else:
                     multiplier = Decimal(str(duration_hours / unit_hours)).quantize(Decimal('0.00001'))
-                
-                base_total = (base_rate * multiplier).quantize(Decimal('0.01'))
+                    base_total = base_rate * multiplier
 
                 # Calculate total cost (booking details cost + additional rates)
                 additional_rates_total = Decimal('0')
@@ -971,7 +969,7 @@ class UpdateBookingOccurrencesView(APIView):
 
                 total_calculated_cost = calculated_cost + additional_rates_total
 
-                # Get the updated occurrence data
+                # Respond with the updated occurrence data
                 updated_occurrence = {
                     'occurrence_id': occurrence.occurrence_id,
                     'start_date': formatted_times['start_datetime'].split('T')[0],
@@ -989,7 +987,7 @@ class UpdateBookingOccurrencesView(APIView):
                         'additional_animal_rate': str(booking_details.additional_animal_rate),
                         'applies_after': booking_details.applies_after,
                         'holiday_rate': str(booking_details.holiday_rate),
-                        'time_unit': booking_details.time_unit.lower().replace('_', ' '),
+                        'unit_of_time': booking_details.unit_of_time,
                         'additional_rates': occurrence_rate.rates if hasattr(occurrence, 'rates') else []
                     }
                 }

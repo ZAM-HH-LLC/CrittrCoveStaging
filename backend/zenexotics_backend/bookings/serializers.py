@@ -274,15 +274,15 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         # Count holiday days in the occurrence range
         holiday_days = count_holidays(occurrence.start_date, occurrence.end_date)
         
-        # Format the time unit to match frontend format
-        time_unit = occurrence.booking.service_id.unit_of_time.lower().replace('_', ' ') if occurrence.booking.service_id else 'per visit'
+        # Get the unit of time from service
+        unit_of_time = occurrence.booking.service_id.unit_of_time if occurrence.booking.service_id else 'Per Visit'
         
         return {
             'base_rate': str(booking_details.base_rate),
             'additional_animal_rate': str(booking_details.additional_pet_rate),
             'additional_animal_rate_applies': additional_animal_rate_applies,
             'applies_after': booking_details.applies_after,
-            'unit_of_time': time_unit,
+            'unit_of_time': unit_of_time,
             'holiday_rate': str(booking_details.holiday_rate),
             'holiday_days': holiday_days,
             'additional_rates': additional_rates

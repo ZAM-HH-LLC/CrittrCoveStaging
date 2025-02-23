@@ -23,6 +23,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='bookingdetails',
             name='unit_of_time',
-            field=models.CharField(choices=[('15_MIN', '15 minutes'), ('30_MIN', '30 minutes'), ('45_MIN', '45 minutes'), ('1_HOUR', '1 hour'), ('2_HOUR', '2 hours'), ('3_HOUR', '3 hours'), ('4_HOUR', '4 hours'), ('5_HOUR', '5 hours'), ('6_HOUR', '6 hours'), ('7_HOUR', '7 hours'), ('8_HOUR', '8 hours'), ('24_HOUR', '24 hours'), ('PER_DAY', 'Per day'), ('PER_VISIT', 'Per visit')], default='PER_VISIT', max_length=20),
+            field=models.CharField(choices=[('15 Min', '15 Min'), ('30 Min', '30 Min'), ('45 Min', '45 Min'), ('1 Hour', '1 Hour'), ('2 Hour', '2 Hour'), ('3 Hour', '3 Hour'), ('4 Hour', '4 Hour'), ('5 Hour', '5 Hour'), ('6 Hour', '6 Hour'), ('7 Hour', '7 Hour'), ('8 Hour', '8 Hour'), ('24 Hour', '24 Hour'), ('Per Day', 'Per Day'), ('Per Visit', 'Per Visit')], default='Per Visit', max_length=20),
         ),
     ]

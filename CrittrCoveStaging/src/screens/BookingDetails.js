@@ -54,26 +54,26 @@ const calculateTimeUnits = (startDate, endDate, startTime, endTime, timeUnit) =>
   const diffMs = end - start;
   
   switch(timeUnit) {
-    case '15 min':
+    case '15 Min':
       return Math.ceil(diffMs / (15 * 60 * 1000));
-    case '30 min':
+    case '30 Min':
       return Math.ceil(diffMs / (30 * 60 * 1000));
-    case '45 min':
+    case '45 Min':
       return Math.ceil(diffMs / (45 * 60 * 1000));
-    case '1 hr':
+    case '1 Hour':
       return Math.ceil(diffMs / (60 * 60 * 1000));
-    case '2 hr':
+    case '2 Hour':
       return Math.ceil(diffMs / (2 * 60 * 60 * 1000));
-    case '4 hr':
+    case '4 Hour':
       return Math.ceil(diffMs / (4 * 60 * 60 * 1000));
-    case '8 hr':
+    case '8 Hour':
       return Math.ceil(diffMs / (8 * 60 * 60 * 1000));
-    case '24 hr':
-    case 'per day':
+    case '24 Hour':
+    case 'Per Day':
       return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
-    case 'overnight':
+    case 'Overnight':
       return 1; // Overnight is typically counted as one unit
-    case 'per visit':
+    case 'Per Visit':
       return 1; // Per visit is counted as one unit
     default:
       return 1;
@@ -661,24 +661,6 @@ const BookingDetails = () => {
         throw new Error('No authentication token found');
       }
 
-      const convertTimeUnitToBackend = (frontendUnit) => {
-        if (!frontendUnit) return 'per visit';
-        const mapping = {
-          'per visit': 'per visit',
-          'per day': 'per day',
-          'overnight': 'overnight',
-          '1 hr': '1 hr',
-          '2 hr': '2 hr',
-          '4 hr': '4 hr',
-          '8 hr': '8 hr',
-          '24 hr': '24 hr',
-          '15 min': '15 min',
-          '30 min': '30 min',
-          '45 min': '45 min'
-        };
-        return mapping[frontendUnit] || 'per visit';
-      };
-
       // Format the occurrence data for the backend
       const occurrenceData = {
         booking_id: booking.booking_id,
@@ -693,7 +675,7 @@ const BookingDetails = () => {
             additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
             applies_after: updatedOccurrence.rates.appliesAfterAnimals,
             holiday_rate: updatedOccurrence.rates.holidayRate,
-            time_unit: convertTimeUnitToBackend(updatedOccurrence.rates.timeUnit),
+            unit_of_time: updatedOccurrence.rates.unit_of_time,  // Use unit_of_time consistently
             additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
               title: rate.name,
               description: rate.description || '',
@@ -760,25 +742,6 @@ const BookingDetails = () => {
     try {
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
 
-      // Convert frontend time unit to backend format
-      const convertTimeUnitToBackend = (frontendUnit) => {
-        if (!frontendUnit) return 'PER_VISIT';
-        const mapping = {
-          'per visit': 'PER_VISIT',
-          'per day': 'PER_DAY',
-          'overnight': 'OVERNIGHT',
-          '1 hr': '1_HOUR',
-          '2 hr': '2_HOUR',
-          '4 hr': '4_HOUR',
-          '8 hr': '8_HOUR',
-          '24 hr': '24_HOUR',
-          '15 min': '15_MIN',
-          '30 min': '30_MIN',
-          '45 min': '45_MIN'
-        };
-        return mapping[frontendUnit] || 'PER_VISIT';
-      };
-
       // Format the occurrence data for the backend
       const occurrenceData = {
         start_date: format(newOccurrence.startDateTime, 'yyyy-MM-dd'),
@@ -790,7 +753,7 @@ const BookingDetails = () => {
           additional_animal_rate: newOccurrence.rates.additionalAnimalRate,
           applies_after: newOccurrence.rates.appliesAfterAnimals,
           holiday_rate: newOccurrence.rates.holidayRate,
-          time_unit: convertTimeUnitToBackend(newOccurrence.rates.timeUnit),
+          unit_of_time: newOccurrence.rates.unit_of_time,
           additional_rates: newOccurrence.rates.additionalRates.map(rate => ({
             title: rate.name,
             description: rate.description || '',
@@ -868,7 +831,7 @@ const BookingDetails = () => {
 
   const handleDateTimeCardPress = (occurrence) => {
     if (is_DEBUG) {
-      console.log('MBA1234 Original occurrence:', occurrence);
+      console.log('MBA4321 Original occurrence:', occurrence);
     }
 
     // Calculate base total from the rates and time unit
@@ -899,7 +862,7 @@ const BookingDetails = () => {
         additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
         appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
         holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
-        timeUnit: occurrence.rates?.unit_of_time,
+        unit_of_time: occurrence.rates?.unit_of_time,  // Keep the exact unit_of_time from backend
         additionalRates: (occurrence.rates?.additional_rates || [])
           .filter(rate => rate.title !== 'Booking Details Cost')
           .map(rate => ({
@@ -914,7 +877,8 @@ const BookingDetails = () => {
     };
 
     if (is_DEBUG) {
-      console.log('MBA1234 Transformed occurrence for modal:', transformedOccurrence);
+      console.log('MBA4321 Transformed occurrence for modal:', transformedOccurrence);
+      console.log('MBA4321 Unit of time being passed:', transformedOccurrence.rates.unit_of_time);
     }
     setSelectedOccurrence(transformedOccurrence);
     setShowAddOccurrenceModal(true);

@@ -14,6 +14,7 @@ class BookingDetails(models.Model):
     applies_after = models.PositiveIntegerField(default=1, help_text="Additional pet rate applies after this many pets")
     holiday_rate = models.DecimalField(max_digits=10, decimal_places=2)
     calculated_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_of_time = models.CharField(max_length=20, default='Per Visit')
 
     def __str__(self):
         return f"Details for Occurrence {self.booking_occurrence.occurrence_id}"
@@ -27,29 +28,33 @@ class BookingDetails(models.Model):
         duration_hours = (end_datetime - start_datetime).total_seconds() / 3600
         
         unit_mapping = {
-            '15 min': 0.25,
-            '30 min': 0.5,
-            '45 min': 0.75,
-            '1 hour': 1,
-            '2 hour': 2,
-            '3 hour': 3,
-            '4 hour': 4,
-            '5 hour': 5,
-            '6 hour': 6,
-            '7 hour': 7,
-            '8 hour': 8,
-            '24 hour': 24,
-            'per day': 24,
-            'per visit': None,  # Special case - no proration
-            'week': 168  # 24 * 7
+            '15 Min': 0.25,
+            '30 Min': 0.5,
+            '45 Min': 0.75,
+            '1 Hour': 1,
+            '2 Hour': 2,
+            '3 Hour': 3,
+            '4 Hour': 4,
+            '5 Hour': 5,
+            '6 Hour': 6,
+            '7 Hour': 7,
+            '8 Hour': 8,
+            '24 Hour': 24,
+            'Per Day': 24,
+            'Per Visit': None,  # Special case - no proration
+            'Week': 168  # 24 * 7
         }
 
-        unit_of_time = self.booking_occurrence.booking.service_id.unit_of_time
-        unit_hours = unit_mapping.get(unit_of_time)
+        # Debug logging for unit_of_time matching
+        logger.info(f"MBA1234 Exact unit_of_time from request: {self.unit_of_time}")
+        logger.info(f"MBA1234 Available mappings: {list(unit_mapping.keys())}")
+        
+        # Use exact case matching
+        unit_hours = unit_mapping.get(self.unit_of_time)
         
         logger.info(f"Calculating prorated multiplier for occurrence {self.booking_occurrence.occurrence_id}:")
         logger.info(f"  Duration: {duration_hours} hours")
-        logger.info(f"  Unit of time: {unit_of_time}")
+        logger.info(f"  Unit of time: {self.unit_of_time}")
         logger.info(f"  Unit hours: {unit_hours}")
 
         if unit_hours is None:  # PER_VISIT case

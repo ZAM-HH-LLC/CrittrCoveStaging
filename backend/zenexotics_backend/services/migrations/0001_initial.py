@@ -50,11 +50,11 @@ class Migration(migrations.Migration):
                     "unit_of_time",
                     models.CharField(
                         choices=[
-                            ("15_MIN", "15 Minutes"),
-                            ("30_MIN", "30 Minutes"),
-                            ("1_HOUR", "1 Hour"),
-                            ("DAY", "Day"),
-                            ("WEEK", "Week"),
+                            ("15 Min", "15 Min"),
+                            ("30 Min", "30 Min"),
+                            ("1 Hour", "1 Hour"),
+                            ("Per Day", "Per Day"),
+                            ("Week", "Week"),
                         ],
                         max_length=50,
                     ),

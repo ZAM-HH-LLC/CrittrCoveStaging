@@ -44,17 +44,21 @@ export const SERVICE_TYPES = [
 ];
 
 export const TIME_OPTIONS = [
-  '15 min',
-  '30 min',
-  '45 min',
-  '1 hr',
-  '2 hr',
-  '4 hr',
-  '8 hr',
-  '24 hr',
-  'overnight',
-  'per day',
-  'per visit'
+  '15 Min',
+  '30 Min',
+  '45 Min',
+  '1 Hour',
+  '2 Hour',
+  '3 Hour',
+  '4 Hour',
+  '5 Hour',
+  '6 Hour',
+  '7 Hour',
+  '8 Hour',
+  '24 Hour',
+  'Per Day',
+  'Per Visit',
+  'Week'
 ];
 
 export const mockAdditionalRates = {
