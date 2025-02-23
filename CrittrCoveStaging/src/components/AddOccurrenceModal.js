@@ -80,6 +80,7 @@ const AddOccurrenceModal = ({
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [isAnyPickerActive, setIsAnyPickerActive] = useState(false);
   const heightAnim = useRef(new Animated.Value(0)).current;
+  const [validationError, setValidationError] = useState(null);
 
   const handlePickerStateChange = (isActive) => {
     setIsAnyPickerActive(isActive);
@@ -200,7 +201,7 @@ const AddOccurrenceModal = ({
         additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
         appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
         holidayRate: defaultRates?.holidayRate?.toString() || '0',
-        timeUnit: defaultRates?.timeUnit || 'per visit',
+        timeUnit: (initialOccurrence?.rates?.unit_of_time || defaultRates?.timeUnit || 'PER_VISIT').toLowerCase().replace('_', ' '),
         additionalRates: defaultRates?.additionalRates || []
       }
   });
@@ -209,13 +210,18 @@ const AddOccurrenceModal = ({
   useEffect(() => {
     if (initialOccurrence) {
       const dates = parseInitialDates(initialOccurrence);
+      const timeUnit = initialOccurrence.rates?.time_unit || initialOccurrence.rates?.timeUnit || 'per visit';
       setOccurrence(prev => ({
         ...prev,
         startDateTime: dates.startDateTime,
         endDateTime: dates.endDateTime,
         isMilitary: dates.isMilitary,
-        rates: initialOccurrence.rates || prev.rates
+        rates: {
+          ...initialOccurrence.rates,
+          timeUnit: timeUnit.toLowerCase().replace('_', ' ')
+        }
       }));
+      setTimeUnit(timeUnit.toLowerCase().replace('_', ' '));
     }
   }, [initialOccurrence]);
 
@@ -282,18 +288,37 @@ const AddOccurrenceModal = ({
 
   const [showAddRate, setShowAddRate] = useState(false);
   const [newRate, setNewRate] = useState({ name: '', amount: '' });
-  const [timeUnit, setTimeUnit] = useState(initialOccurrence?.rates?.timeUnit || occurrence.rates.timeUnit);
-  const [isLoading, setIsLoading] = useState(false);
-  const [validationError, setValidationError] = useState(null);
+  const [timeUnit, setTimeUnit] = useState(
+    initialOccurrence?.rates?.timeUnit || 
+    defaultRates?.timeUnit || 
+    'per visit'
+  );
+  
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA1234 Initial occurrence:', initialOccurrence);
+      console.log('MBA1234 Time unit set to:', timeUnit);
+    }
+  }, [timeUnit, initialOccurrence]);
 
   useEffect(() => {
-    if (initialOccurrence?.rates?.timeUnit) {
-      setTimeUnit(initialOccurrence.rates.timeUnit);
+    if (initialOccurrence?.rates) {
+      const newTimeUnit = (initialOccurrence.rates.unit_of_time || 
+                          initialOccurrence.rates.timeUnit || 
+                          'per visit').toLowerCase().replace('_', ' ');
+      if (is_DEBUG) {
+        console.log('MBA1234 Updating time unit from initialOccurrence:', {
+          oldTimeUnit: timeUnit,
+          newTimeUnit: newTimeUnit,
+          rawTimeUnit: initialOccurrence.rates.unit_of_time || initialOccurrence.rates.timeUnit
+        });
+      }
+      setTimeUnit(newTimeUnit);
       setOccurrence(prev => ({
         ...prev,
         rates: {
           ...prev.rates,
-          timeUnit: initialOccurrence.rates.timeUnit
+          timeUnit: newTimeUnit
         }
       }));
     }
@@ -301,6 +326,12 @@ const AddOccurrenceModal = ({
 
   // Update occurrence when timeUnit changes
   useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA1234 Time unit changed:', {
+        newTimeUnit: timeUnit,
+        occurrenceRatesTimeUnit: occurrence.rates.timeUnit
+      });
+    }
     setOccurrence(prev => ({
       ...prev,
       rates: {
@@ -360,6 +391,7 @@ const AddOccurrenceModal = ({
       return;
     }
 
+    setValidationError(null);
     handleAdd();
   };
 
@@ -380,7 +412,6 @@ const AddOccurrenceModal = ({
     setTimeUnit(defaultRates?.timeUnit || 'per visit');
     setShowAddRate(false);
     setNewRate({ name: '', amount: '' });
-    setValidationError(null);
   };
 
   const renderPickerItems = (options) => {

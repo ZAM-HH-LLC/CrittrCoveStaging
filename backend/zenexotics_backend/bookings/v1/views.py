@@ -33,7 +33,8 @@ from interaction_logs.models import InteractionLog
 from engagement_logs.models import EngagementLog
 import traceback
 import pytz
-from core.time_utils import get_user_time_settings
+from core.time_utils import get_user_time_settings, format_booking_occurrence
+from rest_framework.renderers import JSONRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,7 @@ class BookingDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
     lookup_field = 'booking_id'
     lookup_url_kwarg = 'booking_id'
+    renderer_classes = [JSONRenderer]
 
     def initial(self, request, *args, **kwargs):
         """This runs before anything else in the view"""
@@ -852,6 +854,10 @@ class UpdateBookingOccurrencesView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+            # Get user's timezone settings
+            user_settings = get_user_time_settings(request.user.id)
+            user_tz = pytz.timezone(user_settings['timezone'])
+
             updated_occurrences = []
             for occ_data in occurrences:
                 occurrence_id = occ_data.get('occurrence_id')
@@ -868,11 +874,29 @@ class UpdateBookingOccurrencesView(APIView):
                         end_time=occ_data['end_time']
                     )
 
+                # Convert times to UTC
+                start_dt = datetime.combine(
+                    datetime.strptime(occ_data['start_date'], '%Y-%m-%d').date(),
+                    datetime.strptime(occ_data['start_time'], '%H:%M').time()
+                )
+                end_dt = datetime.combine(
+                    datetime.strptime(occ_data['end_date'], '%Y-%m-%d').date(),
+                    datetime.strptime(occ_data['end_time'], '%H:%M').time()
+                )
+                
+                # Make datetime objects timezone-aware in user's timezone
+                start_dt = user_tz.localize(start_dt)
+                end_dt = user_tz.localize(end_dt)
+                
+                # Convert to UTC
+                start_dt_utc = start_dt.astimezone(pytz.UTC)
+                end_dt_utc = end_dt.astimezone(pytz.UTC)
+
                 # Update occurrence dates/times
-                occurrence.start_date = occ_data['start_date']
-                occurrence.end_date = occ_data['end_date']
-                occurrence.start_time = occ_data['start_time']
-                occurrence.end_time = occ_data['end_time']
+                occurrence.start_date = start_dt_utc.date()
+                occurrence.end_date = end_dt_utc.date()
+                occurrence.start_time = start_dt_utc.time()
+                occurrence.end_time = end_dt_utc.time()
                 occurrence.save()
 
                 # Update or create booking details
@@ -885,8 +909,11 @@ class UpdateBookingOccurrencesView(APIView):
                 booking_details.additional_animal_rate = Decimal(str(rates.get('additional_animal_rate', 0)))
                 booking_details.applies_after = int(rates.get('applies_after', 1))
                 booking_details.holiday_rate = Decimal(str(rates.get('holiday_rate', 0)))
-                booking_details.time_unit = rates.get('time_unit', 'per visit')
+                booking_details.time_unit = rates.get('time_unit', 'PER_VISIT')
                 booking_details.save()
+
+                # Calculate costs
+                calculated_cost = booking_details.calculate_occurrence_cost(is_prorated=True)
 
                 # Update occurrence rates
                 if rates.get('additional_rates'):
@@ -896,20 +923,73 @@ class UpdateBookingOccurrencesView(APIView):
                     occurrence_rate.rates = rates['additional_rates']
                     occurrence_rate.save()
 
+                # Format times back to user's timezone for response
+                formatted_times = format_booking_occurrence(
+                    start_dt_utc,
+                    end_dt_utc,
+                    request.user.id
+                )
+
+                # Calculate base_total (base_rate * duration multiplier)
+                base_rate = Decimal(str(booking_details.base_rate))
+                duration_hours = (end_dt_utc - start_dt_utc).total_seconds() / 3600
+                
+                # Get the time unit from service
+                time_unit = booking.service_id.unit_of_time if booking.service_id else 'PER_VISIT'
+                
+                # Calculate the multiplier based on duration and time unit
+                unit_mapping = {
+                    '15_MIN': 0.25,
+                    '30_MIN': 0.5,
+                    '45_MIN': 0.75,
+                    '1_HOUR': 1,
+                    '2_HOUR': 2,
+                    '3_HOUR': 3,
+                    '4_HOUR': 4,
+                    '5_HOUR': 5,
+                    '6_HOUR': 6,
+                    '7_HOUR': 7,
+                    '8_HOUR': 8,
+                    '24_HOUR': 24,
+                    'PER_DAY': 24,
+                    'PER_VISIT': None,  # Special case - no proration
+                    'WEEK': 168  # 24 * 7
+                }
+                
+                unit_hours = unit_mapping.get(time_unit)
+                if unit_hours is None:  # PER_VISIT case
+                    multiplier = Decimal('1')
+                else:
+                    multiplier = Decimal(str(duration_hours / unit_hours)).quantize(Decimal('0.00001'))
+                
+                base_total = (base_rate * multiplier).quantize(Decimal('0.01'))
+
+                # Calculate total cost (booking details cost + additional rates)
+                additional_rates_total = Decimal('0')
+                if rates.get('additional_rates'):
+                    additional_rates_total = sum(Decimal(str(rate['amount']).replace('$', '')) for rate in rates['additional_rates'])
+
+                total_calculated_cost = calculated_cost + additional_rates_total
+
                 # Get the updated occurrence data
                 updated_occurrence = {
                     'occurrence_id': occurrence.occurrence_id,
-                    'start_date': occurrence.start_date,
-                    'end_date': occurrence.end_date,
-                    'start_time': occurrence.start_time,
-                    'end_time': occurrence.end_time,
-                    'calculated_cost': str(occurrence.calculated_cost),
+                    'start_date': formatted_times['start_datetime'].split('T')[0],
+                    'end_date': formatted_times['end_datetime'].split('T')[0],
+                    'start_time': formatted_times['formatted_start'].split('(')[1].split(')')[0].strip(),
+                    'end_time': formatted_times['formatted_end'].split('(')[1].split(')')[0].strip(),
+                    'formatted_start': formatted_times['formatted_start'],
+                    'formatted_end': formatted_times['formatted_end'],
+                    'duration': formatted_times['duration'],
+                    'timezone': formatted_times['timezone'],
+                    'calculated_cost': str(total_calculated_cost),
+                    'base_total': str(base_total),
                     'rates': {
                         'base_rate': str(booking_details.base_rate),
                         'additional_animal_rate': str(booking_details.additional_animal_rate),
                         'applies_after': booking_details.applies_after,
                         'holiday_rate': str(booking_details.holiday_rate),
-                        'time_unit': booking_details.time_unit,
+                        'time_unit': booking_details.time_unit.lower().replace('_', ' '),
                         'additional_rates': occurrence_rate.rates if hasattr(occurrence, 'rates') else []
                     }
                 }

@@ -27,21 +27,21 @@ class BookingDetails(models.Model):
         duration_hours = (end_datetime - start_datetime).total_seconds() / 3600
         
         unit_mapping = {
-            '15_MIN': 0.25,
-            '30_MIN': 0.5,
-            '45_MIN': 0.75,
-            '1_HOUR': 1,
-            '2_HOUR': 2,
-            '3_HOUR': 3,
-            '4_HOUR': 4,
-            '5_HOUR': 5,
-            '6_HOUR': 6,
-            '7_HOUR': 7,
-            '8_HOUR': 8,
-            '24_HOUR': 24,
-            'PER_DAY': 24,
-            'PER_VISIT': None,  # Special case - no proration
-            'WEEK': 168  # 24 * 7
+            '15 min': 0.25,
+            '30 min': 0.5,
+            '45 min': 0.75,
+            '1 hour': 1,
+            '2 hour': 2,
+            '3 hour': 3,
+            '4 hour': 4,
+            '5 hour': 5,
+            '6 hour': 6,
+            '7 hour': 7,
+            '8 hour': 8,
+            '24 hour': 24,
+            'per day': 24,
+            'per visit': None,  # Special case - no proration
+            'week': 168  # 24 * 7
         }
 
         unit_of_time = self.booking_occurrence.booking.service_id.unit_of_time

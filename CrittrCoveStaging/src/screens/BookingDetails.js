@@ -868,31 +868,28 @@ const BookingDetails = () => {
 
   const handleDateTimeCardPress = (occurrence) => {
     if (is_DEBUG) {
-      console.log('Original occurrence:', occurrence);
+      console.log('MBA1234 Original occurrence:', occurrence);
     }
 
-    // Helper function to convert backend time unit to frontend format
-    const convertTimeUnit = (backendUnit) => {
-      if (!backendUnit) return 'per visit';
-      const mapping = {
-        'PER_VISIT': 'per visit',
-        'PER_DAY': 'per day',
-        'OVERNIGHT': 'overnight',
-        '1_HOUR': '1 hr',
-        '2_HOUR': '2 hr',
-        '4_HOUR': '4 hr',
-        '8_HOUR': '8 hr',
-        '24_HOUR': '24 hr',
-        '15_MIN': '15 min',
-        '30_MIN': '30 min',
-        '45_MIN': '45 min'
-      };
-      return mapping[backendUnit] || 'per visit';
+    // Calculate base total from the rates and time unit
+    const calculateBaseTotal = (occurrence) => {
+      const baseRate = parseFloat(occurrence.rates?.base_rate || 0);
+      const timeUnit = occurrence.rates?.unit_of_time;
+      const timeUnits = calculateTimeUnits(
+        occurrence.start_date,
+        occurrence.end_date,
+        occurrence.start_time,
+        occurrence.end_time,
+        timeUnit
+      );
+      return baseRate * timeUnits;
     };
+
+    const baseTotal = calculateBaseTotal(occurrence);
 
     const transformedOccurrence = {
       id: occurrence.occurrence_id,
-      occurrence_id: occurrence.occurrence_id,  // Make sure we set both id and occurrence_id
+      occurrence_id: occurrence.occurrence_id,
       startDate: occurrence.start_date,
       endDate: occurrence.end_date,
       startTime: occurrence.start_time,
@@ -902,7 +899,7 @@ const BookingDetails = () => {
         additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
         appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
         holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
-        timeUnit: convertTimeUnit(occurrence.rates?.time_unit),
+        timeUnit: occurrence.rates?.unit_of_time,
         additionalRates: (occurrence.rates?.additional_rates || [])
           .filter(rate => rate.title !== 'Booking Details Cost')
           .map(rate => ({
@@ -912,12 +909,12 @@ const BookingDetails = () => {
           }))
       },
       totalCost: occurrence.calculated_cost?.toString() || '0',
-      baseTotal: (occurrence.base_total?.replace(/[^0-9.]/g, '') || '0').toString(),
-      multiple: calculateMultiple(occurrence.base_total, occurrence.rates?.base_rate)
+      baseTotal: baseTotal.toString(),
+      multiple: calculateMultiple(baseTotal.toString(), occurrence.rates?.base_rate)
     };
 
     if (is_DEBUG) {
-      console.log('Transformed occurrence for modal:', transformedOccurrence);
+      console.log('MBA1234 Transformed occurrence for modal:', transformedOccurrence);
     }
     setSelectedOccurrence(transformedOccurrence);
     setShowAddOccurrenceModal(true);
