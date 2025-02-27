@@ -15,6 +15,7 @@ class BookingDetails(models.Model):
     holiday_rate = models.DecimalField(max_digits=10, decimal_places=2)
     calculated_rate = models.DecimalField(max_digits=10, decimal_places=2)
     unit_of_time = models.CharField(max_length=20, default='Per Visit')
+    multiple = models.DecimalField(max_digits=10, decimal_places=5, default=1.00000)
 
     def __str__(self):
         return f"Details for Occurrence {self.booking_occurrence.occurrence_id}"
@@ -107,6 +108,13 @@ class BookingDetails(models.Model):
 
     def save(self, *args, **kwargs):
         """Override save to automatically calculate and set calculated_rate"""
+        # Get start and end datetime for multiple calculation
+        start_datetime = datetime.combine(self.booking_occurrence.start_date, self.booking_occurrence.start_time)
+        end_datetime = datetime.combine(self.booking_occurrence.end_date, self.booking_occurrence.end_time)
+        
+        # Calculate and store the multiple
+        self.multiple = self.calculate_prorated_multiplier(start_datetime, end_datetime)
+        
         # Calculate the rate before saving
         self.calculated_rate = self.calculate_occurrence_cost(is_prorated=True)
         super().save(*args, **kwargs)

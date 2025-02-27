@@ -50,7 +50,7 @@ def serialize_rates(rates):
         
         # Get the base rates
         base_rate = str(rates.base_rate) if hasattr(rates, 'base_rate') else "0.00"
-        additional_animal_rate = str(rates.additional_animal_rate) if hasattr(rates, 'additional_animal_rate') else "0.00"
+        additional_animal_rate = float(rates.additional_animal_rate) if hasattr(rates, 'additional_animal_rate') else "0"
         holiday_rate = str(rates.holiday_rate) if hasattr(rates, 'holiday_rate') else "0.00"
         
         # Format additional rates
@@ -432,7 +432,7 @@ class BookingDraftUpdateView(APIView):
 
                     # Count number of pets and check if additional animal rate applies
                     num_pets = booking.booking_pets.count()
-                    additional_animal_rate_applies = num_pets > rates['applies_after'] if rates and rates['applies_after'] else False
+                    additional_animal_rate_applies = float(num_pets > rates['applies_after']) if rates and rates['applies_after'] else False
 
                     # Create occurrence dictionary with ordered fields
                     occurrence_data = OrderedDict([

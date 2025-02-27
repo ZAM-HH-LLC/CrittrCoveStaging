@@ -256,7 +256,8 @@ class BookingDetailSerializer(serializers.ModelSerializer):
                 'formatted_start': formatted_times['formatted_start'],
                 'formatted_end': formatted_times['formatted_end'],
                 'duration': formatted_times['duration'],
-                'timezone': formatted_times['timezone']
+                'timezone': formatted_times['timezone'],
+                'multiple': str(booking_details.multiple)
             })
 
         return occurrences
@@ -269,7 +270,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         num_pets = occurrence.booking.booking_pets.count()
         
         # Check if additional animal rate applies
-        additional_animal_rate_applies = num_pets > booking_details.applies_after if booking_details.applies_after else False
+        additional_animal_rate_applies = float(num_pets > booking_details.applies_after) if booking_details.applies_after else 0
         
         # Count holiday days in the occurrence range
         holiday_days = count_holidays(occurrence.start_date, occurrence.end_date)
