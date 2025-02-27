@@ -214,5 +214,6 @@ def create_booking_details(sender, instance, created, **kwargs):
             additional_pet_rate=service.additional_animal_rate,
             holiday_rate=service.holiday_rate,
             applies_after=service.applies_after,
+            unit_of_time=service.unit_of_time,
             calculated_rate=Decimal('0.00')  # This will be updated by its own save method
         )
