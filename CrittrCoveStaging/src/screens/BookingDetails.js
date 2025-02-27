@@ -963,14 +963,14 @@ const BookingDetails = () => {
           {expandedOccurrenceId === occurrence.occurrence_id && (
             <View style={styles.expandedCostDetails}>
               <View style={styles.costDetailRow}>
-                <Text style={styles.costDetailText}>Base Rate ({getTimeUnitDisplay(occurrence.rates?.time_unit)}):</Text>
+                <Text style={styles.costDetailText}>Base Rate ({getTimeUnitDisplay(occurrence.rates?.unit_of_time)}):</Text>
                 <Text style={styles.costDetailText}>
                   ${parseFloat(occurrence.rates?.base_rate || 0).toFixed(2)} × {
-                    parseFloat(calculateMultiple(occurrence.base_total, occurrence.rates?.base_rate) || 0).toFixed(2)
+                    parseFloat(occurrence?.multiple || 0).toFixed(2)
                   } = ${parseFloat(occurrence.base_total?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}
                 </Text>
               </View>
-              {occurrence.rates?.additional_animal_rate_applies && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
+              {occurrence.rates?.additional_animal_rate_applies !== 0 && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
                 <View style={styles.costDetailRow}>
                   <Text style={styles.costDetailText}>Additional Animal Rate (after {occurrence.rates.applies_after} animals):</Text>
                   <Text style={styles.costDetailText}>${parseFloat(occurrence.rates.additional_animal_rate || 0).toFixed(2)}</Text>

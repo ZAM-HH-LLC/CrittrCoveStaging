@@ -84,7 +84,7 @@ def calculate_cost_summary(occurrences):
         subtotal = Decimal('0')
         for occ in occurrences:
             # Get both base_total and additional costs
-            base_total = Decimal(str(occ.get('base_total', '0')))
+            base_total = Decimal(str(occ.get('base_total', '0')).replace('$', '').strip())
             calculated_cost = Decimal(str(occ.get('calculated_cost', '0')))
             
             # Log the values for debugging
@@ -108,7 +108,7 @@ def calculate_cost_summary(occurrences):
             ('is_prorated', True)
         ])
     except Exception as e:
-        logger.error(f"Error calculating cost summary: {e}")
+        logger.error(f"Error calculating cost summary: {str(e)}")
         return None
 
 def create_draft_data(booking, request_pets, occurrences, cost_summary):
@@ -153,6 +153,7 @@ def create_draft_data(booking, request_pets, occurrences, cost_summary):
             ('end_time', local_end.strftime('%I:%M %p')),
             ('calculated_cost', occ['calculated_cost']),
             ('base_total', occ['base_total']),
+            ('multiple', occ['multiple']),  # Ensure multiple is preserved in the draft data
             ('rates', OrderedDict([
                 ('base_rate', occ['rates']['base_rate']),
                 ('additional_animal_rate', occ['rates']['additional_animal_rate']),
@@ -442,6 +443,7 @@ class BookingDraftUpdateView(APIView):
                         ('end_time', occurrence.end_time.strftime('%H:%M') if occurrence.end_time else None),
                         ('calculated_cost', str(total_cost)),
                         ('base_total', str(base_total)),  # Remove the '$' prefix
+                        ('multiple', occ['multiple']),  # Ensure multiple is preserved in the draft data
                         ('rates', OrderedDict([
                             ('base_rate', rates['base_rate']),
                             ('additional_animal_rate', rates['additional_animal_rate']),
@@ -651,7 +653,7 @@ class UpdateBookingPetsView(APIView):
                         'additional_animal_rate': str(booking_details.additional_pet_rate),
                         'applies_after': booking_details.applies_after,
                         'holiday_rate': str(booking_details.holiday_rate),
-                        'unit_of_time': "PER_DAY",  # TODO: Get from service
+                        'unit_of_time': str(booking_details.unit_of_time),  # TODO: Get from service
                         'holiday_days': 0,
                         'additional_rates': []
                     }
@@ -670,8 +672,39 @@ class UpdateBookingPetsView(APIView):
                                 ]))
                                 additional_rates_total += rate_amount
 
-                    # Calculate total cost
-                    total_cost = base_total + additional_rates_total
+                    # Calculate the multiple (time units)
+                    start_datetime = datetime.combine(occurrence.start_date, occurrence.start_time)
+                    end_datetime = datetime.combine(occurrence.end_date, occurrence.end_time)
+                    duration_hours = (end_datetime - start_datetime).total_seconds() / 3600
+                    unit_hours = 24  # Assuming PER_DAY for now
+                    multiple = Decimal(str(duration_hours / unit_hours)).quantize(Decimal('0.00001'))
+
+                    # Calculate base total components
+                    base_rate = Decimal(str(rates['base_rate']))
+                    base_amount = base_rate * multiple
+
+                    # Add additional animal rate if applicable
+                    additional_animal_amount = Decimal('0')
+                    if len(new_pet_ids) > rates['applies_after']:
+                        additional_animal_rate = Decimal(str(rates['additional_animal_rate']))
+                        additional_pets = len(new_pet_ids) - rates['applies_after']
+                        additional_animal_amount = additional_animal_rate * additional_pets
+
+                    # Add holiday rate if applicable
+                    holiday_amount = Decimal('0')
+                    if rates['holiday_days'] > 0:
+                        holiday_rate = Decimal(str(rates['holiday_rate']))
+                        holiday_amount = holiday_rate * rates['holiday_days']
+
+                    # Calculate total cost (base_total + additional_animal_amount + holiday_amount + additional_rates)
+                    total_cost = base_amount + additional_animal_amount + holiday_amount + additional_rates_total
+                    logger.info(f"MBA2573 - Occurrence {occurrence.occurrence_id} calculation:")
+                    logger.info(f"MBA2573 - Base rate: ${base_rate} * Multiple: {multiple} = ${base_amount}")
+                    logger.info(f"MBA2573 - Additional animal amount: ${additional_animal_amount}")
+                    logger.info(f"MBA2573 - Holiday amount: ${holiday_amount}")
+                    logger.info(f"MBA2573 - Base amount (without additional rates): ${base_amount}")
+                    logger.info(f"MBA2573 - Additional rates total: ${additional_rates_total}")
+                    logger.info(f"MBA2573 - Total cost: ${total_cost}")
 
                     # Create occurrence dictionary
                     occurrence_data = OrderedDict([
@@ -681,11 +714,12 @@ class UpdateBookingPetsView(APIView):
                         ('start_time', occurrence.start_time.strftime('%H:%M') if occurrence.start_time else None),
                         ('end_time', occurrence.end_time.strftime('%H:%M') if occurrence.end_time else None),
                         ('calculated_cost', str(total_cost)),
-                        ('base_total', str(base_total)),
+                        ('base_total', f"${base_amount}"),  # Only includes base_rate * multiple
+                        ('multiple', float(multiple)),  # Add multiple field for frontend access
                         ('rates', OrderedDict([
                             ('base_rate', rates['base_rate']),
                             ('additional_animal_rate', rates['additional_animal_rate']),
-                            ('additional_animal_rate_applies', len(new_pet_ids) > rates['applies_after']),
+                            ('additional_animal_rate_applies', float(len(new_pet_ids) > rates['applies_after'])),  # Return the total additional animal rate amount
                             ('applies_after', rates['applies_after']),
                             ('unit_of_time', rates['unit_of_time']),
                             ('holiday_rate', rates['holiday_rate']),
