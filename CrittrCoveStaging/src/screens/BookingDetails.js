@@ -390,7 +390,7 @@ const BookingDetails = () => {
               ...occ,
               rates: {
                 ...occ.rates,
-                additional_animal_rate_applies: occ.rates.additional_animal_rate_applies || false
+                additional_animal_rate_applies: occ.rates.additional_animal_rate_applies
               }
             })),
             cost_summary: data.draft_data.cost_summary,
@@ -963,6 +963,7 @@ const BookingDetails = () => {
                   } = ${parseFloat(occurrence.base_total?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}
                 </Text>
               </View>
+              {console.log('MBA12341234 additional_animal_rate_applies:', occurrence.rates?.additional_animal_rate_applies)}
               {occurrence.rates?.additional_animal_rate_applies !== 0 && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
                 <View style={styles.costDetailRow}>
                   <Text style={styles.costDetailText}>Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after > 1 ? 'pets' : 'pet'}):</Text>
