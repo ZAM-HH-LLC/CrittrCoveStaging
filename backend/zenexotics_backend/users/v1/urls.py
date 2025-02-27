@@ -10,4 +10,5 @@ urlpatterns = [
     path('contact/', views.ContactFormView.as_view(), name='contact_form'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change_password'),
     path('get-info/', views.get_user_info, name='get_user_info'),
+    path('time-settings/', views.get_time_settings, name='time_settings'),
 ] 

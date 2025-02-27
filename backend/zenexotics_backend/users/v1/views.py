@@ -17,6 +17,8 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
 from professional_status.models import ProfessionalStatus
+import pytz
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -200,4 +202,30 @@ def get_user_info(request):
             'email': '',
             'phone_number': '',
             'error': str(e)
-        }, status=status.HTTP_200_OK) 
+        }, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_time_settings(request):
+    """Get user's time settings including timezone and military time preference."""
+    try:
+        user = request.user
+        user_settings = user.settings
+        
+        # Get timezone abbreviation
+        tz = pytz.timezone(user_settings.timezone)
+        current_time = datetime.now(tz)
+        tz_abbrev = current_time.tzname()
+        
+        return Response({
+            'timezone': user_settings.timezone,
+            'timezone_abbrev': tz_abbrev,
+            'use_military_time': user_settings.use_military_time
+        })
+    except Exception as e:
+        logger.error(f"Error getting time settings for user {request.user.id}: {str(e)}")
+        return Response({
+            'timezone': 'UTC',
+            'timezone_abbrev': 'UTC',
+            'use_military_time': False
+        }) 

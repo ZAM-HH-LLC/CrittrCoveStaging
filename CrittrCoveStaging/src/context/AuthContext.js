@@ -32,6 +32,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const [firstName, setFirstName] = useState('');
+  const [timeSettings, setTimeSettings] = useState({
+    timezone: 'UTC',
+    timezone_abbrev: 'UTC',
+    use_military_time: false
+  });
 
   // SET TO "true" FOR NO API CALLS
   const [is_prototype, setIsPrototype] = useState(false);
@@ -345,6 +350,11 @@ export const AuthProvider = ({ children }) => {
         token: token
       });
 
+      if (response.status !== 200) {
+        console.log('Token validation error:', response.status);
+        return false;
+      }
+
       return true;
     } catch (error) {
       console.log('Token validation error:', error.response?.status);
@@ -578,6 +588,39 @@ export const AuthProvider = ({ children }) => {
     }
   }, [is_prototype]);
 
+  const fetchTimeSettings = async () => {
+    if (is_prototype) return;
+    
+    try {
+      let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+      if (!token) {
+        if (is_DEBUG) {
+          console.error('MBA9876 No token found for time settings');
+        }
+        return;
+      }
+      
+      const response = await axios.get(`${API_BASE_URL}/api/users/v1/time-settings/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (is_DEBUG) {
+        console.log('MBA9876 Time settings response:', response.data);
+      }
+      
+      setTimeSettings(response.data);
+    } catch (error) {
+      console.error('MBA9876 Error fetching time settings:', error.response ? error.response.data : error.message);
+    }
+  };
+
+  // Add effect to fetch time settings when user signs in
+  useEffect(() => {
+    if (isSignedIn && !is_prototype) {
+      fetchTimeSettings();
+    }
+  }, [isSignedIn, is_prototype]);
+
   return (
     <AuthContext.Provider value={{ 
       isSignedIn, 
@@ -596,7 +639,9 @@ export const AuthProvider = ({ children }) => {
       is_prototype,
       setIsPrototype,
       is_DEBUG,
-      setIsDebug
+      setIsDebug,
+      timeSettings,
+      fetchTimeSettings
     }}>
       {children}
     </AuthContext.Provider>

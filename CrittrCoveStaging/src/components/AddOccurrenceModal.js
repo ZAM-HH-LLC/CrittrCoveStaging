@@ -76,7 +76,7 @@ const AddOccurrenceModal = ({
   modalTitle = 'Add New Occurrence',
   isFromRequestBooking = false
 }) => {
-  const { is_DEBUG, screenWidth } = useContext(AuthContext);
+  const { is_DEBUG, screenWidth, timeSettings } = useContext(AuthContext);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [isAnyPickerActive, setIsAnyPickerActive] = useState(false);
   const heightAnim = useRef(new Animated.Value(0)).current;
@@ -113,6 +113,7 @@ const AddOccurrenceModal = ({
   const parseInitialDates = (initialOccurrence) => {
     if (is_DEBUG) {
       console.log('MBA1234 Parsing initial occurrence:', initialOccurrence);
+      console.log('MBA1234 Time settings:', timeSettings);
     }
 
     if (!initialOccurrence) {
@@ -121,21 +122,22 @@ const AddOccurrenceModal = ({
       return {
         startDateTime: now,
         endDateTime: oneHourLater,
-        isMilitary: true // Default to military time for new occurrences
+        isMilitary: timeSettings.use_military_time
       };
     }
 
     try {
       const { startDate, startTime, endDate, endTime } = initialOccurrence;
       
-      // Check if time is in military format (no AM/PM)
-      const isMilitary = !startTime.includes('AM') && !startTime.includes('PM');
+      // Use the user's time format preference from settings 
+      const isMilitary = timeSettings.use_military_time;
       
       if (is_DEBUG) {
         console.log('MBA1234 Time format detection:', {
           startTime,
           endTime,
-          isMilitary
+          isMilitary,
+          timeSettings
         });
       }
 
@@ -183,10 +185,10 @@ const AddOccurrenceModal = ({
       console.error('MBA1234 Error parsing dates:', error);
       const now = new Date();
       const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-    return {
+      return {
         startDateTime: now,
         endDateTime: oneHourLater,
-        isMilitary: true // Default to military time on error
+        isMilitary: timeSettings.use_military_time
       };
     }
   };
@@ -195,7 +197,7 @@ const AddOccurrenceModal = ({
   const [occurrence, setOccurrence] = useState({
     startDateTime: initialDates.startDateTime,
     endDateTime: initialDates.endDateTime,
-    isMilitary: initialDates.isMilitary,
+    isMilitary: timeSettings.use_military_time,
     rates: initialOccurrence?.rates || {
         baseRate: defaultRates?.baseRate?.toString() || '0',
         additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
@@ -205,6 +207,17 @@ const AddOccurrenceModal = ({
         additionalRates: defaultRates?.additionalRates || []
       }
   });
+
+  // Add effect to update military time preference when timeSettings changes
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA4321 Time settings changed:', timeSettings);
+    }
+    setOccurrence(prev => ({
+      ...prev,
+      isMilitary: timeSettings.use_military_time
+    }));
+  }, [timeSettings]);
 
   // Add effect to update dates when initialOccurrence changes
   useEffect(() => {
@@ -384,7 +397,7 @@ const AddOccurrenceModal = ({
     setOccurrence({
       startDateTime: new Date(),
       endDateTime: new Date(new Date().setHours(new Date().getHours() + 1)),
-      isMilitary: true,
+      isMilitary: timeSettings.use_military_time,
       rates: {
         baseRate: defaultRates?.baseRate?.toString() || '0',
         additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
