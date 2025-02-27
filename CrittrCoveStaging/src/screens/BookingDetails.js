@@ -972,7 +972,7 @@ const BookingDetails = () => {
               </View>
               {occurrence.rates?.additional_animal_rate_applies !== 0 && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
                 <View style={styles.costDetailRow}>
-                  <Text style={styles.costDetailText}>Additional Animal Rate (after {occurrence.rates.applies_after} animals):</Text>
+                  <Text style={styles.costDetailText}>Additional Pet Rate (after {occurrence.rates.applies_after} animals):</Text>
                   <Text style={styles.costDetailText}>${parseFloat(occurrence.rates.additional_animal_rate || 0).toFixed(2)}</Text>
                 </View>
               )}
