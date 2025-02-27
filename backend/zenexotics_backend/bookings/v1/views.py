@@ -737,56 +737,6 @@ class RequestBookingView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class UpdateBookingPetsView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @transaction.atomic
-    def post(self, request):
-        try:
-            booking_id = request.data.get('booking_id')
-            pet_ids = request.data.get('pet_ids', [])
-
-            # Get the booking
-            booking = get_object_or_404(Booking, booking_id=booking_id)
-
-            # Verify user is the professional and booking is in correct state
-            if not (request.user == booking.professional.user and 
-                   booking.status == BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES):
-                return Response(
-                    {"error": "Not authorized or invalid booking state"},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-
-            # Remove all existing pets
-            BookingPets.objects.filter(booking=booking).delete()
-
-            # Add new pets
-            for pet_id in pet_ids:
-                pet = get_object_or_404(Pet, pet_id=pet_id)
-                BookingPets.objects.create(booking=booking, pet=pet)
-
-            # Return updated pets list
-            updated_pets = BookingPets.objects.filter(booking=booking).select_related('pet')
-            pets_data = [{
-                'pet_id': bp.pet.pet_id,
-                'name': bp.pet.name,
-                'species': bp.pet.species,
-                'breed': bp.pet.breed
-            } for bp in updated_pets]
-
-            return Response({
-                'status': 'success',
-                'message': 'Pets updated successfully',
-                'pets': pets_data
-            })
-
-        except Exception as e:
-            logger.error(f"Error updating booking pets: {str(e)}")
-            return Response(
-                {"error": "Failed to update pets"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
 class UpdateBookingServiceTypeView(APIView):
     permission_classes = [IsAuthenticated]
 
