@@ -328,7 +328,7 @@ const BookingDetails = () => {
       }
       setIsLoadingPets(true);
       const response = await axios.get(
-        `${API_BASE_URL}/api/booking-drafts/v1/${booking.booking_id}/available_pets/`,
+        `${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/available_pets/`,
         { headers: { Authorization: `Bearer ${token}` }}
       );
       setAvailablePets(response.data);
@@ -349,13 +349,48 @@ const BookingDetails = () => {
       try {
         setIsPetsSaving(true);
         
+        if (is_DEBUG) {
+          console.log('MBA2573 Saving pets:', selectedPets);
+        }
+
+        const token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        // Call the new booking drafts endpoint with correct URL format
+        const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/update_pets/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            pets: selectedPets.map(pet => pet.pet_id)
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (is_DEBUG) {
+          console.log('MBA2573 Backend response:', data);
+        }
+
+        // Update local state
         setBooking(prev => ({
           ...prev,
-          pets: selectedPets
+          pets: selectedPets,
+          status: data.booking_status // Update the booking status from the response
         }));
         setIsPetsEditMode(false);
+
       } catch (error) {
-        console.error('Error updating pets:', error);
+        if (is_DEBUG) {
+          console.error('MBA2573 Error updating pets:', error);
+        }
         Alert.alert('Error', 'Failed to update pets');
       } finally {
         setIsPetsSaving(false);

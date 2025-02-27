@@ -20,6 +20,11 @@ from rest_framework.renderers import JSONRenderer
 from booking_occurrence_rates.models import BookingOccurrenceRate
 from booking_details.models import BookingDetails
 from datetime import datetime
+from interaction_logs.models import InteractionLog
+from engagement_logs.models import EngagementLog
+from error_logs.models import ErrorLog
+from core.time_utils import convert_to_utc, convert_from_utc, format_datetime_for_user, get_formatted_times
+from users.models import UserSettings
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +113,77 @@ def calculate_cost_summary(occurrences):
 
 def create_draft_data(booking, request_pets, occurrences, cost_summary):
     """Creates draft data in the exact order required"""
+    # Get user's timezone from settings
+    user_settings = UserSettings.objects.filter(user=booking.client.user).first()
+    user_timezone = user_settings.timezone if user_settings else 'UTC'
+    
+    # Format occurrences with timezone conversion and duration
+    formatted_occurrences = []
+    for occ in occurrences:
+        # Convert times from UTC to user's timezone
+        start_datetime = datetime.combine(
+            datetime.strptime(occ['start_date'], '%Y-%m-%d').date(),
+            datetime.strptime(occ['start_time'], '%H:%M').time()
+        )
+        end_datetime = datetime.combine(
+            datetime.strptime(occ['end_date'], '%Y-%m-%d').date(),
+            datetime.strptime(occ['end_time'], '%H:%M').time()
+        )
+        
+        # Convert to user's timezone
+        local_start = convert_from_utc(start_datetime, user_timezone)
+        local_end = convert_from_utc(end_datetime, user_timezone)
+        
+        # Get formatted times and duration
+        formatted_times = get_formatted_times(
+            occurrence=BookingOccurrence(
+                start_date=start_datetime.date(),
+                end_date=end_datetime.date(),
+                start_time=start_datetime.time(),
+                end_time=end_datetime.time()
+            ),
+            user_id=booking.client.user.id
+        )
+        
+        formatted_occ = OrderedDict([
+            ('occurrence_id', occ['occurrence_id']),
+            ('start_date', local_start.date().isoformat()),
+            ('end_date', local_end.date().isoformat()),
+            ('start_time', local_start.strftime('%I:%M %p')),
+            ('end_time', local_end.strftime('%I:%M %p')),
+            ('calculated_cost', occ['calculated_cost']),
+            ('base_total', occ['base_total']),
+            ('rates', OrderedDict([
+                ('base_rate', occ['rates']['base_rate']),
+                ('additional_animal_rate', occ['rates']['additional_animal_rate']),
+                ('additional_animal_rate_applies', occ['rates']['additional_animal_rate_applies']),
+                ('applies_after', occ['rates']['applies_after']),
+                ('unit_of_time', 'Per Day' if occ['rates']['unit_of_time'] == 'PER_DAY' else occ['rates']['unit_of_time']),
+                ('holiday_rate', occ['rates']['holiday_rate']),
+                ('holiday_days', occ['rates']['holiday_days']),
+                ('additional_rates', [
+                    OrderedDict([
+                        ('title', rate['title']),
+                        ('description', rate['description']),
+                        ('amount', rate['amount'])
+                    ]) for rate in occ['rates']['additional_rates']
+                ])
+            ])),
+            ('formatted_start', formatted_times['formatted_start']),
+            ('formatted_end', formatted_times['formatted_end']),
+            ('duration', formatted_times['duration']),
+            ('timezone', formatted_times['timezone'])
+        ])
+        formatted_occurrences.append(formatted_occ)
+
+    # Determine if booking can be edited
+    can_edit = booking.status in [
+        BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+        BookingStates.PENDING_PROFESSIONAL_CHANGES,
+        BookingStates.CONFIRMED,
+        BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+    ]
+
     return OrderedDict([
         ('booking_id', booking.booking_id),
         ('status', booking.status),
@@ -124,33 +200,7 @@ def create_draft_data(booking, request_pets, occurrences, cost_summary):
                 ('species', pet.get('species'))
             ]) for pet in request_pets
         ]),
-        ('occurrences', [
-            OrderedDict([
-                ('occurrence_id', occ['occurrence_id']),
-                ('start_date', occ['start_date']),
-                ('end_date', occ['end_date']),
-                ('start_time', occ['start_time']),
-                ('end_time', occ['end_time']),
-                ('calculated_cost', occ['calculated_cost']),
-                ('base_total', occ['base_total']),
-                ('rates', OrderedDict([
-                    ('base_rate', occ['rates']['base_rate']),
-                    ('additional_animal_rate', occ['rates']['additional_animal_rate']),
-                    ('additional_animal_rate_applies', occ['rates']['additional_animal_rate_applies']),
-                    ('applies_after', occ['rates']['applies_after']),
-                    ('unit_of_time', occ['rates']['unit_of_time']),
-                    ('holiday_rate', occ['rates']['holiday_rate']),
-                    ('holiday_days', occ['rates']['holiday_days']),
-                    ('additional_rates', [
-                        OrderedDict([
-                            ('title', rate['title']),
-                            ('description', rate['description']),
-                            ('amount', rate['amount'])
-                        ]) for rate in occ['rates']['additional_rates']
-                    ])
-                ]))
-            ]) for occ in occurrences
-        ]),
+        ('occurrences', formatted_occurrences),
         ('cost_summary', OrderedDict([
             ('subtotal', cost_summary['subtotal']),
             ('platform_fee', cost_summary['platform_fee']),
@@ -159,7 +209,7 @@ def create_draft_data(booking, request_pets, occurrences, cost_summary):
             ('total_sitter_payout', cost_summary['total_sitter_payout']),
             ('is_prorated', cost_summary['is_prorated'])
         ])),
-        ('original_status', booking.status)
+        ('can_edit', can_edit)
     ])
 
 def pets_are_different(current_pets, new_pets):
@@ -528,3 +578,225 @@ class AvailablePetsView(APIView):
         ]
 
         return Response(pets_data)
+
+class UpdateBookingPetsView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, booking_id):
+        logger.info("MBA2573 - Starting UpdateBookingPetsView.post")
+        logger.info(f"MBA2573 - Request data: {request.data}")
+        
+        try:
+            # Get the booking and verify professional access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if booking.professional != professional:
+                logger.error(f"MBA2573 - Unauthorized access attempt by {request.user.email} for booking {booking_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Validate booking status
+            valid_statuses = [
+                BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+                BookingStates.PENDING_PROFESSIONAL_CHANGES,
+                BookingStates.CONFIRMED,
+                BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+            ]
+            
+            if booking.status not in valid_statuses:
+                logger.error(f"MBA2573 - Invalid booking status {booking.status} for updating pets")
+                return Response(
+                    {"error": f"Cannot update pets when booking is in {BookingStates.get_display_state(booking.status)} status"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get the list of pet IDs from the request
+            new_pet_ids = request.data.get('pets', [])
+            if not isinstance(new_pet_ids, list):
+                logger.error("MBA2573 - Invalid pets data format")
+                return Response(
+                    {"error": "Invalid pets data format"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get or create booking draft
+            draft, created = BookingDraft.objects.get_or_create(
+                booking=booking,
+                defaults={
+                    'draft_data': {},
+                    'last_modified_by': 'PROFESSIONAL',
+                    'status': 'IN_PROGRESS',
+                    'original_status': booking.status
+                }
+            )
+
+            # Load existing draft data or initialize empty
+            current_draft_data = draft.draft_data if draft.draft_data else {}
+            logger.info(f"MBA2573 - Current draft data: {current_draft_data}")
+
+            # Get occurrences data
+            occurrences = []
+            for occurrence in BookingOccurrence.objects.filter(booking=booking):
+                try:
+                    # Get the booking details for this occurrence
+                    booking_details = occurrence.booking_details.first()
+                    if not booking_details:
+                        continue
+
+                    # Use existing rates from booking details
+                    base_total = booking_details.calculate_occurrence_cost(is_prorated=True)
+                    rates = {
+                        'base_rate': str(booking_details.base_rate),
+                        'additional_animal_rate': str(booking_details.additional_pet_rate),
+                        'applies_after': booking_details.applies_after,
+                        'holiday_rate': str(booking_details.holiday_rate),
+                        'unit_of_time': "PER_DAY",  # TODO: Get from service
+                        'holiday_days': 0,
+                        'additional_rates': []
+                    }
+
+                    # Get additional rates and their sum
+                    additional_rates = []
+                    additional_rates_total = Decimal('0')
+                    if hasattr(occurrence, 'rates') and occurrence.rates.rates:
+                        for rate in occurrence.rates.rates:
+                            if rate['title'] != 'Base Rate':
+                                rate_amount = Decimal(rate['amount'].replace('$', '').strip())
+                                additional_rates.append(OrderedDict([
+                                    ('title', rate['title']),
+                                    ('description', rate.get('description', '')),
+                                    ('amount', f"${rate_amount}")
+                                ]))
+                                additional_rates_total += rate_amount
+
+                    # Calculate total cost
+                    total_cost = base_total + additional_rates_total
+
+                    # Create occurrence dictionary
+                    occurrence_data = OrderedDict([
+                        ('occurrence_id', occurrence.occurrence_id),
+                        ('start_date', occurrence.start_date.isoformat() if occurrence.start_date else None),
+                        ('end_date', occurrence.end_date.isoformat() if occurrence.end_date else None),
+                        ('start_time', occurrence.start_time.strftime('%H:%M') if occurrence.start_time else None),
+                        ('end_time', occurrence.end_time.strftime('%H:%M') if occurrence.end_time else None),
+                        ('calculated_cost', str(total_cost)),
+                        ('base_total', str(base_total)),
+                        ('rates', OrderedDict([
+                            ('base_rate', rates['base_rate']),
+                            ('additional_animal_rate', rates['additional_animal_rate']),
+                            ('additional_animal_rate_applies', len(new_pet_ids) > rates['applies_after']),
+                            ('applies_after', rates['applies_after']),
+                            ('unit_of_time', rates['unit_of_time']),
+                            ('holiday_rate', rates['holiday_rate']),
+                            ('holiday_days', rates['holiday_days']),
+                            ('additional_rates', additional_rates)
+                        ]))
+                    ])
+                    
+                    occurrences.append(occurrence_data)
+                except Exception as e:
+                    logger.warning(f"MBA2573 - Error processing occurrence {occurrence.occurrence_id}: {e}")
+                    continue
+
+            # Calculate cost summary
+            cost_summary = calculate_cost_summary(occurrences)
+
+            # Get pet details for the new pet IDs
+            new_pets_data = []
+            for pet_id in new_pet_ids:
+                try:
+                    pet = Pet.objects.get(pet_id=pet_id, owner=booking.client.user)
+                    new_pets_data.append(OrderedDict([
+                        ('name', pet.name),
+                        ('breed', pet.breed),
+                        ('pet_id', pet.pet_id),
+                        ('species', pet.species)
+                    ]))
+                except Pet.DoesNotExist:
+                    logger.error(f"MBA2573 - Pet with ID {pet_id} not found or does not belong to client")
+                    return Response(
+                        {"error": f"Pet with ID {pet_id} not found or does not belong to client"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            # Create new draft data
+            draft_data = create_draft_data(
+                booking=booking,
+                request_pets=new_pets_data,
+                occurrences=occurrences,
+                cost_summary=cost_summary
+            )
+
+            # Check if pets have changed and update status if necessary
+            current_pets = [
+                {'pet_id': bp.pet.pet_id, 'name': bp.pet.name, 'species': bp.pet.species, 'breed': bp.pet.breed}
+                for bp in booking.booking_pets.select_related('pet').all()
+            ]
+            
+            if booking.status == BookingStates.CONFIRMED and pets_are_different(current_pets, new_pets_data):
+                draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+                logger.info("MBA2573 - Pets have changed, updating status to CONFIRMED_PENDING_PROFESSIONAL_CHANGES")
+            else:
+                draft_data['status'] = booking.status
+            
+            draft_data['original_status'] = booking.status
+
+            # Convert to JSON string maintaining order
+            draft_json = json.dumps(draft_data, cls=OrderedDictJSONEncoder)
+            
+            # Update the draft
+            draft.draft_data = json.loads(draft_json, object_hook=ordered_dict_hook)
+            draft.save()
+
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_PETS_UPDATED',
+                target_type='BOOKING_DRAFT',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'new_pets': new_pets_data,
+                    'previous_pets': current_pets,
+                    'status_changed': draft_data['status'] != booking.status
+                }
+            )
+
+            # Log engagement
+            EngagementLog.objects.create(
+                user=request.user,
+                page_name='BOOKING_DETAILS',
+                duration=0,  # Duration not applicable for this action
+                interactions={
+                    'action': 'UPDATE_PETS',
+                    'booking_id': booking.booking_id,
+                    'num_pets': len(new_pet_ids),
+                    'status_changed': draft_data['status'] != booking.status
+                }
+            )
+
+            logger.info(f"MBA2573 - Successfully updated booking draft for booking {booking_id}")
+            return Response({
+                'status': 'success',
+                'booking_status': draft_data['status']
+            })
+
+        except Exception as e:
+            logger.error(f"MBA2573 - Error in UpdateBookingPetsView: {str(e)}")
+            ErrorLog.objects.create(
+                user=request.user,
+                error_type='BOOKING_DRAFT_UPDATE_ERROR',
+                error_message=str(e),
+                endpoint='/api/booking_drafts/v1/update_pets',
+                metadata={
+                    'booking_id': booking_id,
+                    'request_data': request.data
+                }
+            )
+            return Response(
+                {"error": "An error occurred while updating the booking draft"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+# Placeholder: Ready for views to be added

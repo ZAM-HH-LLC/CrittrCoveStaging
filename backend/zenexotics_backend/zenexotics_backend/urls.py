@@ -57,7 +57,7 @@ urlpatterns = [
         path('booking-occurrence-rates/', include('booking_occurrence_rates.urls')),
         path('booking-details/', include('booking_details.urls')),
         path('booking-pets/', include('booking_pets.urls')),
-        path('booking-drafts/', include('booking_drafts.urls')),
+        path('booking_drafts/', include('booking_drafts.urls')),
         
         # Review Management
         path('review-moderation/', include('review_moderation.urls')),
