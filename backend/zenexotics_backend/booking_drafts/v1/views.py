@@ -813,7 +813,18 @@ class UpdateBookingPetsView(APIView):
             logger.info(f"MBA2573 - Successfully updated booking draft for booking {booking_id}")
             return Response({
                 'status': 'success',
-                'booking_status': draft_data['status']
+                'booking_status': draft_data['status'],
+                'draft_data': {
+                    'booking_id': draft_data['booking_id'],
+                    'status': draft_data['status'],
+                    'client_name': draft_data['client_name'],
+                    'professional_name': draft_data['professional_name'],
+                    'service_details': draft_data['service_details'],
+                    'pets': draft_data['pets'],
+                    'occurrences': draft_data['occurrences'],
+                    'cost_summary': draft_data['cost_summary'],
+                    'can_edit': draft_data['can_edit']
+                }
             })
 
         except Exception as e:

@@ -343,6 +343,7 @@ const BookingDetails = () => {
     }
   };
 
+  // This function also saves the pets to the booking draft
   const togglePetsEditMode = async () => {
     if (isPetsEditMode) {
       // Save changes
@@ -379,12 +380,27 @@ const BookingDetails = () => {
           console.log('MBA2573 Backend response:', data);
         }
 
-        // Update local state
-        setBooking(prev => ({
-          ...prev,
-          pets: selectedPets,
-          status: data.booking_status // Update the booking status from the response
-        }));
+        // Update local state with all the new data
+        if (data.draft_data) {
+          setBooking(prev => ({
+            ...prev,
+            status: data.draft_data.status,
+            pets: data.draft_data.pets,
+            occurrences: data.draft_data.occurrences.map(occ => ({
+              ...occ,
+              rates: {
+                ...occ.rates,
+                additional_animal_rate_applies: occ.rates.additional_animal_rate_applies || false
+              }
+            })),
+            cost_summary: data.draft_data.cost_summary,
+            can_edit: data.draft_data.can_edit
+          }));
+
+          // Force a re-render of the cost breakdown section
+          setExpandedOccurrenceId(null);
+        }
+
         setIsPetsEditMode(false);
 
       } catch (error) {
@@ -567,13 +583,6 @@ const BookingDetails = () => {
     return colors[status] || colors.Pending;
   };
 
-  const handleRemoveService = (index) => {
-    // Add this function since it's referenced in the code
-    if (is_DEBUG) {
-      console.log('Removing service at index:', index);
-    }
-  };
-
   const renderEditButton = () => (
     canEdit() && (
       <TouchableOpacity 
@@ -598,16 +607,6 @@ const BookingDetails = () => {
       </TouchableOpacity>
     )
   );
-
-  const handleUpdatePets = (text) => {
-    setEditedBooking(prev => ({
-      ...prev,
-      serviceDetails: {
-        ...prev.serviceDetails,
-        numberOfPets: text
-      }
-    }));
-  };
 
   const handleUpdateDuration = (newDuration) => {
     setEditedBooking(prev => ({
@@ -919,12 +918,6 @@ const BookingDetails = () => {
     setShowAddOccurrenceModal(true);
   };
 
-  const getTimeUnitDisplay = (unit) => {
-    if (!unit) return 'per visit';
-    const formatted = unit.toLowerCase().replace('_', ' ');
-    return formatted;
-  };
-
   const calculateMultiple = (baseTotal, baseRate) => {
     if (!baseRate || baseRate === 0) return 0;
     const total = parseFloat(baseTotal.replace('$', ''));
@@ -963,7 +956,7 @@ const BookingDetails = () => {
           {expandedOccurrenceId === occurrence.occurrence_id && (
             <View style={styles.expandedCostDetails}>
               <View style={styles.costDetailRow}>
-                <Text style={styles.costDetailText}>Base Rate ({getTimeUnitDisplay(occurrence.rates?.unit_of_time)}):</Text>
+                <Text style={styles.costDetailText}>Base Rate ({occurrence.rates?.unit_of_time}):</Text>
                 <Text style={styles.costDetailText}>
                   ${parseFloat(occurrence.rates?.base_rate || 0).toFixed(2)} × {
                     parseFloat(occurrence?.multiple || 0).toFixed(2)
@@ -972,8 +965,12 @@ const BookingDetails = () => {
               </View>
               {occurrence.rates?.additional_animal_rate_applies !== 0 && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
                 <View style={styles.costDetailRow}>
-                  <Text style={styles.costDetailText}>Additional Pet Rate (after {occurrence.rates.applies_after} animals):</Text>
-                  <Text style={styles.costDetailText}>${parseFloat(occurrence.rates.additional_animal_rate || 0).toFixed(2)}</Text>
+                  <Text style={styles.costDetailText}>Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after > 1 ? 'pets' : 'pet'}):</Text>
+                  <Text style={styles.costDetailText}>
+                    ${parseFloat(occurrence.rates.additional_animal_rate || 0).toFixed(2)} × {
+                      booking.pets.length - occurrence.rates.applies_after
+                    } = ${(parseFloat(occurrence.rates.additional_animal_rate || 0) * (booking.pets.length - occurrence.rates.applies_after)).toFixed(2)}
+                  </Text>
                 </View>
               )}
               {occurrence.rates?.holiday_days > 0 && parseFloat(occurrence.rates?.holiday_rate || 0) > 0 && (
