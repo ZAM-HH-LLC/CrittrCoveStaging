@@ -25,6 +25,7 @@ from engagement_logs.models import EngagementLog
 from error_logs.models import ErrorLog
 from core.time_utils import convert_to_utc, convert_from_utc, format_datetime_for_user, get_formatted_times
 from users.models import UserSettings
+from core.booking_operations import calculate_occurrence_rates, create_occurrence_data, calculate_cost_summary, create_draft_data
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ def calculate_cost_summary(occurrences):
         logger.error(f"Error calculating cost summary: {str(e)}")
         return None
 
-def create_draft_data(booking, request_pets, occurrences, cost_summary):
+def create_draft_data(booking, request_pets, occurrences, cost_summary, service=None):
     """Creates draft data in the exact order required"""
     # Get user's timezone from settings
     user_settings = UserSettings.objects.filter(user=booking.client.user).first()
@@ -294,6 +295,117 @@ def has_changes_from_original(booking, draft_data):
     except Exception as e:
         logger.error(f"Error comparing booking with draft: {e}")
         return True  # Default to True if comparison fails
+
+def update_draft_with_service(booking, service_id=None, occurrence_services=None):
+    """
+    Updates draft data with new service(s)
+    service_id: For main service updates
+    occurrence_services: Dict of occurrence_id: service_id for multiple services
+    """
+    try:
+        # Debug logging
+        logger.info(f"MBA9999 - create_draft_data function: {create_draft_data}")
+        logger.info(f"MBA9999 - create_draft_data parameters: {create_draft_data.__code__.co_varnames}")
+        
+        # Get or create draft
+        draft, created = BookingDraft.objects.get_or_create(
+            booking=booking,
+            defaults={
+                'draft_data': {},
+                'last_modified_by': 'PROFESSIONAL',
+                'status': 'IN_PROGRESS',
+                'original_status': booking.status
+            }
+        )
+        
+        # Load existing draft data
+        current_draft_data = draft.draft_data if draft.draft_data else {}
+        
+        # Get current pets from draft or booking
+        pets_data = []
+        if 'pets' in current_draft_data:
+            pets_data = current_draft_data['pets']
+        else:
+            for bp in booking.booking_pets.select_related('pet').all():
+                pets_data.append(OrderedDict([
+                    ('name', bp.pet.name),
+                    ('breed', bp.pet.breed),
+                    ('pet_id', bp.pet.pet_id),
+                    ('species', bp.pet.species)
+                ]))
+        
+        # Get main service if specified
+        main_service = None
+        if service_id:
+            main_service = get_object_or_404(
+                Service,
+                service_id=service_id,
+                professional=booking.professional,
+                moderation_status='APPROVED'
+            )
+        
+        # Process occurrences
+        processed_occurrences = []
+        num_pets = len(pets_data)
+        
+        for occurrence in BookingOccurrence.objects.filter(booking=booking):
+            # Determine which service to use for this occurrence
+            occurrence_service = None
+            if occurrence_services and str(occurrence.occurrence_id) in occurrence_services:
+                occurrence_service = get_object_or_404(
+                    Service,
+                    service_id=occurrence_services[str(occurrence.occurrence_id)],
+                    professional=booking.professional,
+                    moderation_status='APPROVED'
+                )
+            elif main_service:
+                occurrence_service = main_service
+            else:
+                # Use existing service or booking's service
+                occurrence_service = booking.service_id
+            
+            if occurrence_service:
+                occurrence_data = create_occurrence_data(
+                    occurrence=occurrence,
+                    service=occurrence_service,
+                    num_pets=num_pets,
+                    user_timezone=booking.client.user.settings.timezone
+                )
+                if occurrence_data:
+                    processed_occurrences.append(occurrence_data)
+        
+        # Calculate cost summary
+        cost_summary = calculate_cost_summary(processed_occurrences)
+        
+        # Debug logging
+        logger.info(f"MBA9999 - About to call create_draft_data with:")
+        logger.info(f"MBA9999 - booking: {booking}")
+        logger.info(f"MBA9999 - request_pets: {pets_data}")
+        logger.info(f"MBA9999 - occurrences: {processed_occurrences}")
+        logger.info(f"MBA9999 - cost_summary: {cost_summary}")
+        logger.info(f"MBA9999 - main_service: {main_service}")
+        
+        # Create new draft data
+        draft_data = create_draft_data(
+            booking,
+            pets_data,
+            processed_occurrences,
+            cost_summary,
+        )
+        
+        # Update draft status if needed
+        if booking.status == BookingStates.CONFIRMED:
+            draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+        
+        # Save draft
+        draft.draft_data = draft_data
+        draft.save()
+        
+        return draft_data
+        
+    except Exception as e:
+        logger.error(f"Error updating draft with service: {e}")
+        return None
 
 # Views for booking_drafts app will be added here
 
@@ -841,6 +953,71 @@ class UpdateBookingPetsView(APIView):
             )
             return Response(
                 {"error": "An error occurred while updating the booking draft"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UpdateServiceTypeView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, booking_id):
+        logger.info("MBA9999 - Starting UpdateServiceTypeView.post")
+        logger.info(f"MBA9999 - Request data: {request.data}")
+        
+        try:
+            # Get the booking and verify professional access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if booking.professional != professional:
+                logger.error(f"MBA9999 - Unauthorized access attempt by {request.user.email} for booking {booking_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Get the service
+            service = get_object_or_404(
+                Service,
+                service_id=request.data.get('service_id'),
+                professional=professional,
+                moderation_status='APPROVED'
+            )
+
+            # Update draft with new service
+            draft_data = update_draft_with_service(booking, service_id=service.service_id)
+            if not draft_data:
+                return Response({"error": "Failed to update service type"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Ensure service details are correctly set
+            draft_data['service_details'] = OrderedDict([
+                ('service_type', service.service_name),
+                ('service_id', service.service_id)
+            ])
+
+            # Get or create draft
+            draft, _ = BookingDraft.objects.get_or_create(
+                booking=booking,
+                defaults={
+                    'draft_data': {},
+                    'last_modified_by': 'PROFESSIONAL',
+                    'status': 'IN_PROGRESS',
+                    'original_status': booking.status
+                }
+            )
+
+            # Save updated draft data
+            draft.draft_data = draft_data
+            draft.save()
+
+            logger.info(f"MBA9999 - Successfully updated booking draft for booking {booking_id}")
+            return Response({
+                'status': 'success',
+                'booking_status': draft_data['status'],
+                'draft_data': draft_data
+            })
+
+        except Exception as e:
+            logger.error(f"MBA9999 - Error in UpdateServiceTypeView: {str(e)}")
+            return Response(
+                {"error": "An error occurred while updating the service type"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

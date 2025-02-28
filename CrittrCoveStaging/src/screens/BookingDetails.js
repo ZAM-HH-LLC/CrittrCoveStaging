@@ -15,6 +15,7 @@ import { AuthContext, getStorage } from '../context/AuthContext';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { handleBack } from '../components/Navigation';
+import SnackBar from '../components/SnackBar';
 
 const LAST_VIEWED_BOOKING_ID = 'last_viewed_booking_id';
 
@@ -197,6 +198,7 @@ const BookingDetails = () => {
   const [isLoadingPets, setIsLoadingPets] = useState(false);
   const [availableServices, setAvailableServices] = useState([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [snackBar, setSnackBar] = useState({ visible: false, message: '', type: 'success' });
 
   useEffect(() => {
     const fetchBooking = async () => {
@@ -528,31 +530,60 @@ const BookingDetails = () => {
   };
 
   const toggleServiceEditMode = async () => {
-    if (isServiceEditMode) {
-      // Save changes
-      try {
+    try {
+      if (isServiceEditMode) {
+        if (is_DEBUG) console.log('MBA1234 - Service type change initiated:', editedBooking?.service_details?.service_id);
         setIsServiceSaving(true);
-        
-        setBooking(prev => ({
-          ...prev,
-          service_details: editedBooking.service_details
-        }));
-        setIsServiceEditMode(false);
-      } catch (error) {
-        console.error('Error updating service:', error);
-        Alert.alert('Error', 'Failed to update service details');
-      } finally {
-        setIsServiceSaving(false);
-      }
-    } else {
-      setEditedBooking(prev => ({
-        ...prev,
-        service_details: {
-          ...booking.service_details
+
+        // Call the API to update the service type
+        const result = await updateServiceType(booking.booking_id, editedBooking?.service_details?.service_id);
+
+        // Update the local state with the new draft data
+        if (result.draft_data) {
+          if (is_DEBUG) console.log('MBA1234 - Received draft data:', result.draft_data);
+          
+          setBooking(prevBooking => ({
+            ...prevBooking,
+            ...result.draft_data,
+            service_details: {
+              ...prevBooking.service_details,
+              ...result.draft_data.service_details
+            },
+            serviceType: result.draft_data.service_details.service_type,
+            status: result.booking_status
+          }));
+
+          // Also update editedBooking to match
+          setEditedBooking(prev => ({
+            ...prev,
+            service_details: result.draft_data.service_details
+          }));
         }
-      }));
-      await fetchAvailableServices();
-      setIsServiceEditMode(true);
+
+        // Show success message
+        setSnackBar({
+          visible: true,
+          message: 'Service updated successfully',
+          type: 'success'
+        });
+      } else {
+        setEditedBooking(prev => ({
+          ...prev,
+          service_details: {
+            ...booking.service_details
+          }
+        }));
+        await fetchAvailableServices();
+      }
+      setIsServiceEditMode(!isServiceEditMode);
+    } catch (error) {
+      setSnackBar({
+        visible: true,
+        message: error.message || 'Failed to update service',
+        type: 'error'
+      });
+    } finally {
+      setIsServiceSaving(false);
     }
   };
 
@@ -1277,27 +1308,6 @@ const BookingDetails = () => {
     }
   }, [booking]);
 
-  const handleServiceTypeChange = (newServiceType) => {
-    if (is_DEBUG) {
-      console.log('Previous editedBooking:', editedBooking);
-      console.log('New service type:', newServiceType);
-    }
-    
-    setEditedBooking(prev => {
-      const updated = {
-        ...prev,
-        serviceDetails: {
-          ...prev.serviceDetails,
-          type: newServiceType
-        }
-      };
-      if (is_DEBUG) {
-        console.log('Updated editedBooking:', updated);
-      }
-      return updated;
-    });
-  };
-
   const renderServiceTypeDropdown = () => (
     <View style={styles.dropdownContainer}>
       <TouchableOpacity
@@ -1486,6 +1496,37 @@ const BookingDetails = () => {
     });
   };
 
+  const updateServiceType = async (bookingId, serviceId) => {
+    try {
+      if (is_DEBUG) console.log('MBA1234 - Updating service type:', { bookingId, serviceId });
+      const token = await getStorage('userToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${bookingId}/update_service_type/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ service_id: serviceId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update service type');
+      }
+
+      const data = await response.json();
+      if (is_DEBUG) console.log('MBA1234 - Service type update response:', data);
+      return data;
+    } catch (error) {
+      if (is_DEBUG) console.error('MBA1234 - Error updating service type:', error);
+      throw error;
+    }
+  };
+
   return (
     <CrossPlatformView fullWidthHeader={true}>
       <BackHeader
@@ -1640,6 +1681,11 @@ const BookingDetails = () => {
         }}
         onConfirm={confirmationModal.onConfirm}
         isLoading={confirmationModal.isLoading}
+      />
+      <SnackBar 
+        visible={snackBar.visible} 
+        message={snackBar.message} 
+        type={snackBar.type}
       />
     </CrossPlatformView>
   );

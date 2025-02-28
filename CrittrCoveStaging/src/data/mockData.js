@@ -2,7 +2,7 @@
 export const BOOKING_STATES = {
   // # Initial States
   DRAFT: 'Draft',
-  PENDING_INITIAL_PROFESSIONAL_CHANGES: 'Pending initial Professional Changes',
+  PENDING_INITIAL_PROFESSIONAL_CHANGES: 'Pending Initial Professional Changes',
     
   // # Review States
   PENDING_PROFESSIONAL_CHANGES: 'Pending Professional Changes',
@@ -21,7 +21,7 @@ export const BOOKING_STATES = {
   // # States where professionals can edit
   PROFESSIONAL_EDITABLE_STATES: [
     'Draft',
-    'Pending initial Professional Changes',
+    'Pending Initial Professional Changes',
     'Pending Professional Changes',
     'Confirmed Pending Professional Changes',
     'Confirmed'

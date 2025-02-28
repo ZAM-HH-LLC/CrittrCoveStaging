@@ -31,7 +31,7 @@ class BookingStates:
 
     # Initial States
     DRAFT = 'Draft'
-    PENDING_INITIAL_PROFESSIONAL_CHANGES = 'Pending initial Professional Changes'
+    PENDING_INITIAL_PROFESSIONAL_CHANGES = 'Pending Initial Professional Changes'
 
     # Review States
     PENDING_PROFESSIONAL_CHANGES = 'Pending Professional Changes'
