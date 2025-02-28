@@ -210,7 +210,8 @@ def create_draft_data(booking, request_pets, occurrences, cost_summary, service=
         
         # Create service details
         service_details = OrderedDict([
-            ('service_type', service.service_name if service else 'Multiple Services')
+            ('service_type', service.service_name if service else booking.service_id.service_name),
+            ('service_id', service.service_id if service else booking.service_id.service_id)
         ])
         
         # Create draft data
@@ -278,16 +279,35 @@ def update_draft_with_service(booking, service_id=None, occurrence_services=None
         # Get main service if specified
         main_service = None
         if service_id:
+            logger.info(f"MBA7777 - Looking up service by ID: {service_id}")
             main_service = get_object_or_404(
                 Service.objects.prefetch_related('additional_rates'),
                 service_id=service_id,
                 professional=booking.professional,
                 moderation_status='APPROVED'
             )
-            logger.info(f"MBA7777 - Found main service: {main_service.service_name}")
-            logger.info(f"MBA7777 - Service rates count: {main_service.additional_rates.count()}")
-            for rate in main_service.additional_rates.all():
-                logger.info(f"MBA7777 - Rate: {rate.title} - {rate.rate}")
+            logger.info(f"MBA7777 - Found service: {main_service.service_name} with {main_service.additional_rates.count()} additional rates")
+        elif 'service_details' in current_draft_data and 'service_type' in current_draft_data['service_details']:
+            # Try to find service by name from draft data
+            service_name = current_draft_data['service_details']['service_type']
+            logger.info(f"MBA7777 - Looking up service by name: {service_name}")
+            try:
+                main_service = Service.objects.prefetch_related('additional_rates').get(
+                    service_name=service_name,
+                    professional=booking.professional,
+                    moderation_status='APPROVED'
+                )
+                logger.info(f"MBA7777 - Found service by name with {main_service.additional_rates.count()} additional rates")
+            except Service.DoesNotExist:
+                logger.warning(f"MBA7777 - Service not found by name: {service_name}")
+                main_service = booking.service_id
+        else:
+            # Use booking's service as fallback
+            logger.info("MBA7777 - Using booking's service as fallback")
+            main_service = booking.service_id
+            
+        if main_service:
+            logger.info(f"MBA7777 - Using service: {main_service.service_name}")
         
         # Process occurrences
         processed_occurrences = []
@@ -306,27 +326,20 @@ def update_draft_with_service(booking, service_id=None, occurrence_services=None
             elif main_service:
                 occurrence_service = main_service
             else:
-                # Use existing service from booking
-                occurrence_service = get_object_or_404(
-                    Service.objects.prefetch_related('additional_rates'),
-                    service_id=booking.service_id,
-                    professional=booking.professional,
-                    moderation_status='APPROVED'
-                )
+                # Use existing service or booking's service
+                occurrence_service = booking.service_id
             
             if occurrence_service:
                 logger.info(f"MBA7777 - Processing occurrence {occurrence.occurrence_id} with service {occurrence_service.service_name}")
-                
-                # Get occurrence data with user's timezone
                 occurrence_data = create_occurrence_data(
                     occurrence=occurrence,
                     service=occurrence_service,
                     num_pets=num_pets,
                     user_timezone=booking.client.user.settings.timezone
                 )
-                
                 if occurrence_data:
                     processed_occurrences.append(occurrence_data)
+                    logger.info(f"MBA7777 - Occurrence processed with rates: {occurrence_data.get('rates', {})}")
         
         # Calculate cost summary
         cost_summary = calculate_cost_summary(processed_occurrences)
@@ -340,21 +353,16 @@ def update_draft_with_service(booking, service_id=None, occurrence_services=None
             service=main_service
         )
         
-        # Update draft status if needed
-        if booking.status == BookingStates.CONFIRMED:
-            draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
-        
-        # Save draft
-        draft.draft_data = draft_data
-        draft.save()
-        
-        logger.info(f"MBA7777 - Final draft data service details: {draft_data['service_details']}")
-        logger.info(f"MBA7777 - Final draft data occurrences count: {len(draft_data['occurrences'])}")
-        for occ in draft_data['occurrences']:
-            logger.info(f"MBA7777 - Occurrence {occ['occurrence_id']} rates: {occ['rates']}")
-        
-        return draft_data
-        
+        if draft_data:
+            # Update the draft
+            draft.draft_data = draft_data
+            draft.save()
+            logger.info("MBA7777 - Draft updated successfully")
+            return draft_data
+        else:
+            logger.error("MBA7777 - Failed to create draft data")
+            return None
+            
     except Exception as e:
-        logger.error(f"MBA7777 - Error updating draft with service: {e}")
+        logger.error(f"MBA7777 - Error in update_draft_with_service: {str(e)}")
         return None 
