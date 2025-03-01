@@ -25,7 +25,7 @@ from engagement_logs.models import EngagementLog
 from error_logs.models import ErrorLog
 from core.time_utils import convert_to_utc, convert_from_utc, format_datetime_for_user, get_formatted_times
 from users.models import UserSettings
-from core.booking_operations import calculate_occurrence_rates, create_occurrence_data, calculate_cost_summary, create_draft_data, update_draft_with_service
+from core.booking_operations import calculate_occurrence_rates, create_occurrence_data, calculate_cost_summary, create_draft_data
 
 logger = logging.getLogger(__name__)
 
