@@ -114,105 +114,83 @@ def calculate_cost_summary(occurrences):
 
 def create_draft_data(booking, request_pets, occurrences, cost_summary, service=None):
     """Creates draft data in the exact order required"""
-    # Get user's timezone from settings
-    user_settings = UserSettings.objects.filter(user=booking.client.user).first()
-    user_timezone = user_settings.timezone if user_settings else 'UTC'
-    
-    # Format occurrences with timezone conversion and duration
-    formatted_occurrences = []
-    for occ in occurrences:
-        # Convert times from UTC to user's timezone
-        start_datetime = datetime.combine(
-            datetime.strptime(occ['start_date'], '%Y-%m-%d').date(),
-            datetime.strptime(occ['start_time'], '%H:%M').time()
-        )
-        end_datetime = datetime.combine(
-            datetime.strptime(occ['end_date'], '%Y-%m-%d').date(),
-            datetime.strptime(occ['end_time'], '%H:%M').time()
-        )
+    try:
+        # Get user's timezone from settings
+        user_settings = UserSettings.objects.filter(user=booking.client.user).first()
+        user_timezone = user_settings.timezone if user_settings else 'UTC'
         
-        # Convert to user's timezone
-        local_start = convert_from_utc(start_datetime, user_timezone)
-        local_end = convert_from_utc(end_datetime, user_timezone)
+        # Determine if booking can be edited
+        can_edit = booking.status in [
+            BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+            BookingStates.PENDING_PROFESSIONAL_CHANGES,
+            BookingStates.CONFIRMED,
+            BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+        ]
         
-        # Get formatted times and duration
-        formatted_times = get_formatted_times(
-            occurrence=BookingOccurrence(
-                start_date=start_datetime.date(),
-                end_date=end_datetime.date(),
-                start_time=start_datetime.time(),
-                end_time=end_datetime.time()
-            ),
-            user_id=booking.client.user.id
-        )
-        
-        formatted_occ = OrderedDict([
-            ('occurrence_id', occ['occurrence_id']),
-            ('start_date', local_start.date().isoformat()),
-            ('end_date', local_end.date().isoformat()),
-            ('start_time', local_start.strftime('%I:%M %p')),
-            ('end_time', local_end.strftime('%I:%M %p')),
-            ('calculated_cost', occ['calculated_cost']),
-            ('base_total', occ['base_total']),
-            ('multiple', occ['multiple']),  # Ensure multiple is preserved in the draft data
-            ('rates', OrderedDict([
-                ('base_rate', occ['rates']['base_rate']),
-                ('additional_animal_rate', occ['rates']['additional_animal_rate']),
-                ('additional_animal_rate_applies', occ['rates']['additional_animal_rate_applies']),
-                ('applies_after', occ['rates']['applies_after']),
-                ('unit_of_time', 'Per Day' if occ['rates']['unit_of_time'] == 'PER_DAY' else occ['rates']['unit_of_time']),
-                ('holiday_rate', occ['rates']['holiday_rate']),
-                ('holiday_days', occ['rates']['holiday_days']),
-                ('additional_rates', [
-                    OrderedDict([
-                        ('title', rate['title']),
-                        ('description', rate['description']),
-                        ('amount', rate['amount'])
-                    ]) for rate in occ['rates']['additional_rates']
-                ])
-            ])),
-            ('formatted_start', formatted_times['formatted_start']),
-            ('formatted_end', formatted_times['formatted_end']),
-            ('duration', formatted_times['duration']),
-            ('timezone', formatted_times['timezone'])
+        # Create service details
+        service_details = OrderedDict([
+            ('service_type', service.service_name if service else booking.service_id.service_name),
+            ('service_id', service.service_id if service else booking.service_id.service_id)
         ])
-        formatted_occurrences.append(formatted_occ)
 
-    # Determine if booking can be edited
-    can_edit = booking.status in [
-        BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-        BookingStates.PENDING_PROFESSIONAL_CHANGES,
-        BookingStates.CONFIRMED,
-        BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
-    ]
+        # Process occurrences to ensure all required fields are present
+        processed_occurrences = []
+        for occ in occurrences:
+            # Ensure rates dictionary has all required fields
+            rates = occ.get('rates', {})
+            processed_rates = OrderedDict([
+                ('base_rate', rates.get('base_rate', '0')),
+                ('additional_animal_rate', rates.get('additional_animal_rate', '0')),
+                ('additional_animal_rate_applies', rates.get('additional_animal_rate_applies', 0)),
+                ('applies_after', rates.get('applies_after', 1)),
+                ('unit_of_time', rates.get('unit_of_time', 'Per Day')),
+                ('holiday_rate', rates.get('holiday_rate', '0')),
+                ('holiday_days', rates.get('holiday_days', 0)),
+                ('additional_rates', rates.get('additional_rates', []))
+            ])
 
-    return OrderedDict([
-        ('booking_id', booking.booking_id),
-        ('status', booking.status),
-        ('client_name', booking.client.user.name),
-        ('professional_name', booking.professional.user.name),
-        ('service_details', OrderedDict([
-            ('service_type', booking.service_id.service_name if booking.service_id else None)
-        ])),
-        ('pets', [
-            OrderedDict([
-                ('name', pet.get('name')),
-                ('breed', pet.get('breed')),
-                ('pet_id', pet.get('pet_id')),
-                ('species', pet.get('species'))
-            ]) for pet in request_pets
-        ]),
-        ('occurrences', formatted_occurrences),
-        ('cost_summary', OrderedDict([
-            ('subtotal', cost_summary['subtotal']),
-            ('platform_fee', cost_summary['platform_fee']),
-            ('taxes', cost_summary['taxes']),
-            ('total_client_cost', cost_summary['total_client_cost']),
-            ('total_sitter_payout', cost_summary['total_sitter_payout']),
-            ('is_prorated', cost_summary['is_prorated'])
-        ])),
-        ('can_edit', can_edit)
-    ])
+            processed_occ = OrderedDict([
+                ('occurrence_id', occ['occurrence_id']),
+                ('start_date', occ['start_date']),
+                ('end_date', occ['end_date']),
+                ('start_time', occ['start_time']),
+                ('end_time', occ['end_time']),
+                ('calculated_cost', occ.get('calculated_cost', '0')),
+                ('base_total', occ.get('base_total', '0')),
+                ('multiple', occ.get('multiple', 1.0)),
+                ('rates', processed_rates),
+                ('formatted_start', occ.get('formatted_start')),
+                ('formatted_end', occ.get('formatted_end')),
+                ('duration', occ.get('duration')),
+                ('timezone', occ.get('timezone', user_timezone))
+            ])
+            processed_occurrences.append(processed_occ)
+        
+        # Create draft data
+        draft_data = OrderedDict([
+            ('booking_id', booking.booking_id),
+            ('status', booking.status),
+            ('client_name', booking.client.user.name),
+            ('professional_name', booking.professional.user.name),
+            ('service_details', service_details),
+            ('pets', [
+                OrderedDict([
+                    ('name', pet.get('name')),
+                    ('breed', pet.get('breed')),
+                    ('pet_id', pet.get('pet_id')),
+                    ('species', pet.get('species'))
+                ]) for pet in request_pets
+            ]),
+            ('occurrences', processed_occurrences),
+            ('cost_summary', cost_summary),
+            ('can_edit', can_edit)
+        ])
+        
+        return draft_data
+        
+    except Exception as e:
+        logger.error(f"Error creating draft data: {e}")
+        return None
 
 def pets_are_different(current_pets, new_pets):
     """Compare current booking pets with new pets to determine if there are changes"""
@@ -875,9 +853,9 @@ class UpdateBookingPetsView(APIView):
 
         except Exception as e:
             logger.error(f"MBA2573 - Error in UpdateBookingPetsView: {str(e)}")
+            # Update error logging to match model fields
             ErrorLog.objects.create(
                 user=request.user,
-                error_type='BOOKING_DRAFT_UPDATE_ERROR',
                 error_message=str(e),
                 endpoint='/api/booking_drafts/v1/update_pets',
                 metadata={
@@ -952,6 +930,356 @@ class UpdateServiceTypeView(APIView):
             logger.error(f"MBA9999 - Error in UpdateServiceTypeView: {str(e)}")
             return Response(
                 {"error": "An error occurred while updating the service type"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UpdateBookingOccurrencesView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, booking_id):
+        logger.info("MBA1644 - Starting UpdateBookingOccurrencesView.post")
+        logger.info(f"MBA1644 - Request data: {request.data}")
+        
+        try:
+            # Get the booking and verify professional access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if booking.professional != professional:
+                logger.error(f"MBA1644 - Unauthorized access attempt by {request.user.email} for booking {booking_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Validate booking status
+            valid_statuses = [
+                BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+                BookingStates.PENDING_PROFESSIONAL_CHANGES,
+                BookingStates.CONFIRMED,
+                BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+            ]
+            
+            if booking.status not in valid_statuses:
+                logger.error(f"MBA1644 - Invalid booking status {booking.status} for updating occurrences")
+                return Response(
+                    {"error": f"Cannot update occurrences when booking is in {BookingStates.get_display_state(booking.status)} status"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get user's timezone
+            user_settings = UserSettings.objects.filter(user=booking.client.user).first()
+            user_timezone = user_settings.timezone if user_settings else 'UTC'
+
+            # Get or create draft
+            draft, created = BookingDraft.objects.get_or_create(
+                booking=booking,
+                defaults={
+                    'draft_data': {},
+                    'last_modified_by': 'PROFESSIONAL',
+                    'status': 'IN_PROGRESS',
+                    'original_status': booking.status
+                }
+            )
+
+            # Load existing draft data
+            current_draft_data = draft.draft_data if draft.draft_data else {}
+            
+            # Get current pets from draft or booking
+            pets_data = []
+            if 'pets' in current_draft_data:
+                pets_data = current_draft_data['pets']
+            else:
+                for bp in booking.booking_pets.select_related('pet').all():
+                    pets_data.append(OrderedDict([
+                        ('name', bp.pet.name),
+                        ('breed', bp.pet.breed),
+                        ('pet_id', bp.pet.pet_id),
+                        ('species', bp.pet.species)
+                    ]))
+
+            # Get service from draft or booking
+            service = None
+            if 'service_details' in current_draft_data and 'service_type' in current_draft_data['service_details']:
+                try:
+                    service = Service.objects.get(
+                        service_name=current_draft_data['service_details']['service_type'],
+                        professional=booking.professional,
+                        moderation_status='APPROVED'
+                    )
+                except Service.DoesNotExist:
+                    service = booking.service_id
+            else:
+                service = booking.service_id
+
+            # Process occurrences
+            processed_occurrences = []
+            num_pets = len(pets_data)
+            
+            for occurrence in BookingOccurrence.objects.filter(booking=booking):
+                # Find matching occurrence data from request
+                occurrence_data = next(
+                    (o for o in request.data.get('occurrences', []) 
+                     if str(o['occurrence_id']) == str(occurrence.occurrence_id)),
+                    None
+                )
+
+                if occurrence_data and occurrence_data.get('is_updated', False):
+                    logger.info(f"MBA1644 - Processing occurrence update for {occurrence.occurrence_id}")
+                    logger.info(f"MBA1644 - Received unit_of_time: {occurrence_data['rates'].get('unit_of_time')}")
+                    
+                    try:
+                        # Parse the date and time strings
+                        start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
+                        end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date()
+                        
+                        # Handle 12-hour time format
+                        start_time = datetime.strptime(occurrence_data['start_time'], '%I:%M %p').time()
+                        end_time = datetime.strptime(occurrence_data['end_time'], '%I:%M %p').time()
+
+                        # Combine date and time
+                        start_dt = datetime.combine(start_date, start_time)
+                        end_dt = datetime.combine(end_date, end_time)
+
+                        # Convert to UTC for calculations but don't save to occurrence
+                        start_utc = convert_to_utc(start_dt, user_timezone)
+                        end_utc = convert_to_utc(end_dt, user_timezone)
+
+                        # Create a temporary service object with updated rates
+                        temp_service = Service(
+                            service_id=service.service_id,
+                            service_name=service.service_name,
+                            professional=service.professional,
+                            base_rate=occurrence_data['rates'].get('base_rate', service.base_rate),
+                            additional_animal_rate=occurrence_data['rates'].get('additional_animal_rate', service.additional_animal_rate),
+                            applies_after=occurrence_data['rates'].get('applies_after', service.applies_after),
+                            holiday_rate=occurrence_data['rates'].get('holiday_rate', service.holiday_rate),
+                            unit_of_time=occurrence_data['rates'].get('unit_of_time', service.unit_of_time)
+                        )
+
+                        # Ensure unit_of_time is set correctly
+                        temp_service.unit_of_time = occurrence_data['rates'].get('unit_of_time', service.unit_of_time)
+                        logger.info(f"MBA1644 - Creating temp service with unit_of_time: {temp_service.unit_of_time}")
+
+                        # Create a temporary occurrence for calculations
+                        temp_occurrence = BookingOccurrence(
+                            booking=booking,
+                            start_date=start_utc.date(),
+                            end_date=end_utc.date(),
+                            start_time=start_utc.time(),
+                            end_time=end_utc.time()
+                        )
+
+                        # Get number of pets
+                        num_pets = booking.booking_pets.count()
+                        logger.info(f"MBA1644 - Number of pets: {num_pets}")
+
+                        # Calculate rates using the temporary service
+                        rate_data = calculate_occurrence_rates(temp_occurrence, temp_service, num_pets)
+
+                        if rate_data:
+                            # Get formatted times
+                            formatted_times = get_formatted_times(
+                                occurrence=temp_occurrence,
+                                user_id=booking.client.user.id
+                            )
+
+                            # Use the data from the request with calculated costs
+                            processed_occurrences.append({
+                                'occurrence_id': occurrence_data['occurrence_id'],
+                                'start_date': occurrence_data['start_date'],
+                                'end_date': occurrence_data['end_date'],
+                                'start_time': occurrence_data['start_time'],
+                                'end_time': occurrence_data['end_time'],
+                                'calculated_cost': rate_data['calculated_cost'],
+                                'base_total': rate_data['base_total'],
+                                'multiple': rate_data['multiple'],
+                                'rates': {
+                                    'base_rate': occurrence_data['rates']['base_rate'],
+                                    'additional_animal_rate': occurrence_data['rates']['additional_animal_rate'],
+                                    'applies_after': occurrence_data['rates']['applies_after'],
+                                    'unit_of_time': occurrence_data['rates']['unit_of_time'],
+                                    'holiday_rate': occurrence_data['rates']['holiday_rate'],
+                                    'holiday_days': occurrence_data['rates'].get('holiday_days', 0),
+                                    'additional_rates': occurrence_data['rates'].get('additional_rates', [])
+                                },
+                                'formatted_start': formatted_times['formatted_start'],
+                                'formatted_end': formatted_times['formatted_end'],
+                                'duration': formatted_times['duration'],
+                                'timezone': formatted_times['timezone']
+                            })
+
+                    except Exception as e:
+                        logger.error(f"MBA1644 - Error converting times: {e}")
+                        return Response(
+                            {"error": "Invalid date/time format"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                else:
+                    # For occurrences not being updated, use data from request if available, otherwise use existing data
+                    if occurrence_data:
+                        try:
+                            # Create a temporary service object for rate calculations
+                            temp_service = Service(
+                                service_id=service.service_id,
+                                service_name=service.service_name,
+                                professional=service.professional,
+                                base_rate=occurrence_data['rates'].get('base_rate', service.base_rate),
+                                additional_animal_rate=occurrence_data['rates'].get('additional_animal_rate', service.additional_animal_rate),
+                                applies_after=int(occurrence_data['rates'].get('applies_after', service.applies_after)),
+                                holiday_rate=occurrence_data['rates'].get('holiday_rate', service.holiday_rate),
+                                unit_of_time=occurrence_data['rates'].get('unit_of_time', service.unit_of_time)
+                            )
+                            # Ensure unit_of_time is set correctly
+                            temp_service.unit_of_time = occurrence_data['rates'].get('unit_of_time', service.unit_of_time)
+                            logger.info(f"MBA1644 - Non-updated occurrence using unit_of_time: {temp_service.unit_of_time}")
+
+                            # Parse and convert times for calculations
+                            start_dt = datetime.combine(
+                                datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date(),
+                                datetime.strptime(occurrence_data['start_time'], '%I:%M %p').time()
+                            )
+                            end_dt = datetime.combine(
+                                datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date(),
+                                datetime.strptime(occurrence_data['end_time'], '%I:%M %p').time()
+                            )
+
+                            # Convert to UTC for calculations
+                            start_utc = convert_to_utc(start_dt, user_timezone)
+                            end_utc = convert_to_utc(end_dt, user_timezone)
+
+                            # Create temporary occurrence for calculations
+                            temp_occurrence = BookingOccurrence(
+                                booking=booking,
+                                start_date=start_utc.date(),
+                                end_date=end_utc.date(),
+                                start_time=start_utc.time(),
+                                end_time=end_utc.time()
+                            )
+
+                            # Calculate rates using the temporary service
+                            rate_data = calculate_occurrence_rates(occurrence, temp_service, num_pets)
+
+                            if rate_data:
+                                # Get formatted times
+                                formatted_times = get_formatted_times(
+                                    occurrence=temp_occurrence,
+                                    user_id=booking.client.user.id
+                                )
+
+                                # Use the data from the request with calculated costs
+                                processed_occurrences.append({
+                                    'occurrence_id': occurrence_data['occurrence_id'],
+                                    'start_date': occurrence_data['start_date'],
+                                    'end_date': occurrence_data['end_date'],
+                                    'start_time': occurrence_data['start_time'],
+                                    'end_time': occurrence_data['end_time'],
+                                    'calculated_cost': rate_data['calculated_cost'],
+                                    'base_total': rate_data['base_total'],
+                                    'multiple': rate_data['multiple'],
+                                    'rates': {
+                                        'base_rate': occurrence_data['rates']['base_rate'],
+                                        'additional_animal_rate': occurrence_data['rates']['additional_animal_rate'],
+                                        'applies_after': occurrence_data['rates']['applies_after'],
+                                        'unit_of_time': occurrence_data['rates']['unit_of_time'],
+                                        'holiday_rate': occurrence_data['rates']['holiday_rate'],
+                                        'holiday_days': occurrence_data['rates'].get('holiday_days', 0),
+                                        'additional_rates': occurrence_data['rates'].get('additional_rates', [])
+                                    },
+                                    'formatted_start': formatted_times['formatted_start'],
+                                    'formatted_end': formatted_times['formatted_end'],
+                                    'duration': formatted_times['duration'],
+                                    'timezone': formatted_times['timezone']
+                                })
+                            else:
+                                raise Exception("Failed to calculate rates")
+
+                        except Exception as e:
+                            logger.error(f"MBA1644 - Error processing non-updated occurrence: {e}")
+                            # Create occurrence data from existing data as fallback
+                            new_occurrence_data = create_occurrence_data(
+                                occurrence=occurrence,
+                                service=service,
+                                num_pets=num_pets,
+                                user_timezone=user_timezone
+                            )
+                            if new_occurrence_data:
+                                processed_occurrences.append(new_occurrence_data)
+                    else:
+                        # Create occurrence data from existing data
+                        new_occurrence_data = create_occurrence_data(
+                            occurrence=occurrence,
+                            service=service,
+                            num_pets=num_pets,
+                            user_timezone=user_timezone
+                        )
+                        if new_occurrence_data:
+                            processed_occurrences.append(new_occurrence_data)
+
+            # Calculate new cost summary
+            cost_summary = calculate_cost_summary(processed_occurrences)
+            
+            # Create new draft data
+            draft_data = create_draft_data(
+                booking=booking,
+                request_pets=pets_data,
+                occurrences=processed_occurrences,
+                cost_summary=cost_summary,
+                service=service
+            )
+
+            # Update draft status if needed
+            if booking.status == BookingStates.CONFIRMED:
+                draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+
+            # Save the draft
+            draft.draft_data = draft_data
+            draft.save()
+
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_OCCURRENCES_UPDATED',
+                target_type='BOOKING_DRAFT',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'occurrences': request.data.get('occurrences', []),
+                    'status_changed': draft_data['status'] != booking.status
+                }
+            )
+
+            # Log engagement
+            EngagementLog.objects.create(
+                user=request.user,
+                page_name='BOOKING_DETAILS',
+                duration=0,
+                interactions={
+                    'action': 'UPDATE_OCCURRENCES',
+                    'booking_id': booking.booking_id,
+                    'num_occurrences': len(request.data.get('occurrences', [])),
+                    'status_changed': draft_data['status'] != booking.status
+                }
+            )
+
+            logger.info(f"MBA1644 - Successfully updated booking draft for booking {booking_id}")
+            return Response({
+                'status': 'success',
+                'draft_data': draft_data
+            })
+
+        except Exception as e:
+            logger.error(f"MBA1644 - Error in UpdateBookingOccurrencesView: {str(e)}")
+            # Update error logging to match model fields
+            ErrorLog.objects.create(
+                user=request.user,
+                error_message=str(e),
+                endpoint='/api/booking_drafts/v1/update_occurrences',
+                metadata={
+                    'booking_id': booking_id,
+                    'request_data': request.data
+                }
+            )
+            return Response(
+                {"error": "An error occurred while updating the booking draft"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

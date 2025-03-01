@@ -25,11 +25,17 @@ def calculate_time_units(start_datetime, end_datetime, unit_of_time):
         return Decimal(str(duration_hours / 0.75)).quantize(Decimal('0.00001'))
     elif unit_of_time == '1 Hour':
         return Decimal(str(duration_hours)).quantize(Decimal('0.00001'))
-    elif unit_of_time == '2 Hours':
+    elif unit_of_time == '2 Hour':
         return Decimal(str(duration_hours / 2)).quantize(Decimal('0.00001'))
-    elif unit_of_time == '4 Hours':
+    elif unit_of_time == '3 Hour':
+        return Decimal(str(duration_hours / 3)).quantize(Decimal('0.00001'))
+    elif unit_of_time == '4 Hour':
         return Decimal(str(duration_hours / 4)).quantize(Decimal('0.00001'))
-    elif unit_of_time == '8 Hours':
+    elif unit_of_time == '5 Hour':
+        return Decimal(str(duration_hours / 5)).quantize(Decimal('0.00001'))
+    elif unit_of_time == '6 Hour':
+        return Decimal(str(duration_hours / 6)).quantize(Decimal('0.00001'))
+    elif unit_of_time == '8 Hour':
         return Decimal(str(duration_hours / 8)).quantize(Decimal('0.00001'))
     elif unit_of_time in ['Per Day']:
         return Decimal(str(duration_hours / 24)).quantize(Decimal('0.00001'))
@@ -46,6 +52,7 @@ def calculate_occurrence_rates(occurrence, service, num_pets):
     try:
         logger.info(f"MBA7777 - Starting calculate_occurrence_rates for service: {service.service_name}")
         logger.info(f"MBA7777 - Service rates count: {service.additional_rates.count()}")
+        logger.info(f"MBA7777 - Using unit_of_time: {service.unit_of_time}")
         
         # Get start and end times
         start_datetime = datetime.combine(occurrence.start_date, occurrence.start_time)
@@ -63,9 +70,10 @@ def calculate_occurrence_rates(occurrence, service, num_pets):
         # Calculate additional animal rate if applicable
         additional_animal_amount = Decimal('0')
         additional_animal_rate_applies = 0  # Default to 0
-        if num_pets > service.applies_after:
+        applies_after = int(str(service.applies_after))  # Convert to int, handling string input
+        if num_pets > applies_after:
             additional_animal_rate = Decimal(str(service.additional_animal_rate))
-            additional_pets = num_pets - service.applies_after
+            additional_pets = num_pets - applies_after
             additional_animal_amount = additional_animal_rate * additional_pets
             additional_animal_rate_applies = additional_pets  # Set to number of additional pets
             logger.info(f"MBA7777 - Additional animal amount: {additional_animal_amount}")
@@ -99,8 +107,8 @@ def calculate_occurrence_rates(occurrence, service, num_pets):
             ('base_rate', str(base_rate)),
             ('additional_animal_rate', str(service.additional_animal_rate)),
             ('additional_animal_rate_applies', additional_animal_rate_applies),
-            ('applies_after', service.applies_after),
-            ('unit_of_time', service.unit_of_time),
+            ('applies_after', applies_after),
+            ('unit_of_time', service.unit_of_time),  # Use service's unit_of_time directly
             ('holiday_rate', str(service.holiday_rate)),
             ('holiday_days', holiday_days),
             ('additional_rates', additional_rates)
@@ -152,7 +160,16 @@ def create_occurrence_data(occurrence, service, num_pets, user_timezone='UTC'):
             ('calculated_cost', rate_data['calculated_cost']),
             ('base_total', rate_data['base_total']),
             ('multiple', rate_data['multiple']),
-            ('rates', rate_data['rates']),
+            ('rates', OrderedDict([
+                ('base_rate', rate_data['rates']['base_rate']),
+                ('additional_animal_rate', rate_data['rates']['additional_animal_rate']),
+                ('additional_animal_rate_applies', rate_data['rates']['additional_animal_rate_applies']),
+                ('applies_after', rate_data['rates']['applies_after']),
+                ('unit_of_time', rate_data['rates']['unit_of_time']),  # Use unit_of_time from rate_data instead of service directly
+                ('holiday_rate', rate_data['rates']['holiday_rate']),
+                ('holiday_days', rate_data['rates']['holiday_days']),
+                ('additional_rates', rate_data['rates']['additional_rates'])
+            ])),
             ('formatted_start', formatted_times['formatted_start']),
             ('formatted_end', formatted_times['formatted_end']),
             ('duration', formatted_times['duration']),
@@ -238,131 +255,4 @@ def create_draft_data(booking, request_pets, occurrences, cost_summary, service=
         
     except Exception as e:
         logger.error(f"Error creating draft data: {e}")
-        return None
-
-def update_draft_with_service(booking, service_id=None, occurrence_services=None):
-    """
-    Updates draft data with new service(s)
-    service_id: For main service updates
-    occurrence_services: Dict of occurrence_id: service_id for multiple services
-    """
-    try:
-        logger.info(f"MBA7777 - Starting update_draft_with_service with service_id: {service_id}")
-        
-        # Get or create draft
-        draft, created = BookingDraft.objects.get_or_create(
-            booking=booking,
-            defaults={
-                'draft_data': {},
-                'last_modified_by': 'PROFESSIONAL',
-                'status': 'IN_PROGRESS',
-                'original_status': booking.status
-            }
-        )
-        
-        # Load existing draft data
-        current_draft_data = draft.draft_data if draft.draft_data else {}
-        
-        # Get current pets from draft or booking
-        pets_data = []
-        if 'pets' in current_draft_data:
-            pets_data = current_draft_data['pets']
-        else:
-            for bp in booking.booking_pets.select_related('pet').all():
-                pets_data.append(OrderedDict([
-                    ('name', bp.pet.name),
-                    ('breed', bp.pet.breed),
-                    ('pet_id', bp.pet.pet_id),
-                    ('species', bp.pet.species)
-                ]))
-        
-        # Get main service if specified
-        main_service = None
-        if service_id:
-            logger.info(f"MBA7777 - Looking up service by ID: {service_id}")
-            main_service = get_object_or_404(
-                Service.objects.prefetch_related('additional_rates'),
-                service_id=service_id,
-                professional=booking.professional,
-                moderation_status='APPROVED'
-            )
-            logger.info(f"MBA7777 - Found service: {main_service.service_name} with {main_service.additional_rates.count()} additional rates")
-        elif 'service_details' in current_draft_data and 'service_type' in current_draft_data['service_details']:
-            # Try to find service by name from draft data
-            service_name = current_draft_data['service_details']['service_type']
-            logger.info(f"MBA7777 - Looking up service by name: {service_name}")
-            try:
-                main_service = Service.objects.prefetch_related('additional_rates').get(
-                    service_name=service_name,
-                    professional=booking.professional,
-                    moderation_status='APPROVED'
-                )
-                logger.info(f"MBA7777 - Found service by name with {main_service.additional_rates.count()} additional rates")
-            except Service.DoesNotExist:
-                logger.warning(f"MBA7777 - Service not found by name: {service_name}")
-                main_service = booking.service_id
-        else:
-            # Use booking's service as fallback
-            logger.info("MBA7777 - Using booking's service as fallback")
-            main_service = booking.service_id
-            
-        if main_service:
-            logger.info(f"MBA7777 - Using service: {main_service.service_name}")
-        
-        # Process occurrences
-        processed_occurrences = []
-        num_pets = len(pets_data)
-        
-        for occurrence in BookingOccurrence.objects.filter(booking=booking):
-            # Determine which service to use for this occurrence
-            occurrence_service = None
-            if occurrence_services and str(occurrence.occurrence_id) in occurrence_services:
-                occurrence_service = get_object_or_404(
-                    Service.objects.prefetch_related('additional_rates'),
-                    service_id=occurrence_services[str(occurrence.occurrence_id)],
-                    professional=booking.professional,
-                    moderation_status='APPROVED'
-                )
-            elif main_service:
-                occurrence_service = main_service
-            else:
-                # Use existing service or booking's service
-                occurrence_service = booking.service_id
-            
-            if occurrence_service:
-                logger.info(f"MBA7777 - Processing occurrence {occurrence.occurrence_id} with service {occurrence_service.service_name}")
-                occurrence_data = create_occurrence_data(
-                    occurrence=occurrence,
-                    service=occurrence_service,
-                    num_pets=num_pets,
-                    user_timezone=booking.client.user.settings.timezone
-                )
-                if occurrence_data:
-                    processed_occurrences.append(occurrence_data)
-                    logger.info(f"MBA7777 - Occurrence processed with rates: {occurrence_data.get('rates', {})}")
-        
-        # Calculate cost summary
-        cost_summary = calculate_cost_summary(processed_occurrences)
-        
-        # Create new draft data
-        draft_data = create_draft_data(
-            booking=booking,
-            request_pets=pets_data,
-            occurrences=processed_occurrences,
-            cost_summary=cost_summary,
-            service=main_service
-        )
-        
-        if draft_data:
-            # Update the draft
-            draft.draft_data = draft_data
-            draft.save()
-            logger.info("MBA7777 - Draft updated successfully")
-            return draft_data
-        else:
-            logger.error("MBA7777 - Failed to create draft data")
-            return None
-            
-    except Exception as e:
-        logger.error(f"MBA7777 - Error in update_draft_with_service: {str(e)}")
         return None 

@@ -967,6 +967,3 @@ class UpdateBookingOccurrencesView(APIView):
                 {"error": "Failed to update occurrences"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-# Placeholder: Ready for views to be added
-# Placeholder: Ready for views to be added

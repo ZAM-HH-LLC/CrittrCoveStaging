@@ -718,7 +718,7 @@ const BookingDetails = () => {
   const handleSaveOccurrence = async (updatedOccurrence) => {
     try {
       if (is_DEBUG) {
-        console.log('MBA9876 Saving occurrence:', updatedOccurrence);
+        console.log('MBA1644 Saving occurrence:', updatedOccurrence);
       }
 
       const token = await getStorage('userToken');
@@ -726,35 +726,75 @@ const BookingDetails = () => {
         throw new Error('No authentication token found');
       }
 
+      // Find the original occurrence to preserve dates if only unit_of_time changed
+      const originalOccurrence = booking.occurrences.find(
+        occ => occ.occurrence_id === updatedOccurrence.occurrence_id
+      );
+
+      // Convert times to 12-hour format
+      const formatTime = (timeStr) => {
+        // Parse the time string
+        const [hours, minutes] = timeStr.split(':').map(num => parseInt(num, 10));
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const hours12 = hours % 12 || 12; // Convert 0 to 12 for midnight
+        return `${hours12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+      };
+
+      // Format all occurrences for the backend, with updated data for the modified occurrence
+      const occurrences = booking.occurrences.map(occ => {
+        if (occ.occurrence_id === updatedOccurrence.occurrence_id) {
+          // This is the occurrence being updated
+          return {
+            occurrence_id: updatedOccurrence.occurrence_id,
+            // If only unit_of_time changed, use original dates, otherwise use updated dates
+            start_date: updatedOccurrence.startDate || originalOccurrence.start_date,
+            end_date: updatedOccurrence.endDate || originalOccurrence.end_date,
+            start_time: updatedOccurrence.startTime ? formatTime(updatedOccurrence.startTime) : originalOccurrence.start_time,
+            end_time: updatedOccurrence.endTime ? formatTime(updatedOccurrence.endTime) : originalOccurrence.end_time,
+            rates: {
+              base_rate: updatedOccurrence.rates.baseRate,
+              additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
+              applies_after: updatedOccurrence.rates.appliesAfterAnimals,
+              holiday_rate: updatedOccurrence.rates.holidayRate,
+              unit_of_time: updatedOccurrence.rates.unit_of_time,
+              additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
+                title: rate.name,
+                description: rate.description || '',
+                amount: rate.amount
+              }))
+            },
+            is_updated: true // Flag to indicate this occurrence is being modified
+          };
+        } else {
+          // Return existing occurrence data without modification
+          return {
+            occurrence_id: occ.occurrence_id,
+            start_date: occ.start_date,
+            end_date: occ.end_date,
+            start_time: occ.start_time,
+            end_time: occ.end_time,
+            rates: occ.rates,
+            is_updated: false
+          };
+        }
+      });
+
+      if (is_DEBUG) {
+        console.log('MBA1644 Original occurrence:', originalOccurrence);
+        console.log('MBA1644 Updated occurrence:', updatedOccurrence);
+        console.log('MBA1644 Final request data:', {
+          booking_id: booking.booking_id,
+          occurrences: occurrences
+        });
+      }
+
       // Format the occurrence data for the backend
       const occurrenceData = {
         booking_id: booking.booking_id,
-        occurrences: [{
-          occurrence_id: updatedOccurrence.occurrence_id,
-          start_date: updatedOccurrence.startDate,
-          end_date: updatedOccurrence.endDate,
-          start_time: updatedOccurrence.startTime,
-          end_time: updatedOccurrence.endTime,
-          rates: {
-            base_rate: updatedOccurrence.rates.baseRate,
-            additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
-            applies_after: updatedOccurrence.rates.appliesAfterAnimals,
-            holiday_rate: updatedOccurrence.rates.holidayRate,
-            unit_of_time: updatedOccurrence.rates.unit_of_time,  // Use unit_of_time consistently
-            additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
-              title: rate.name,
-              description: rate.description || '',
-              amount: rate.amount
-            }))
-          }
-        }]
+        occurrences: occurrences
       };
 
-      if (is_DEBUG) {
-        console.log('MBA9876 Sending occurrence data to backend:', occurrenceData);
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/bookings/v1/update_occurrences/`, {
+      const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/update_occurrences/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -769,32 +809,40 @@ const BookingDetails = () => {
 
       const data = await response.json();
       if (is_DEBUG) {
-        console.log('MBA9876 Backend response:', data);
+        console.log('MBA1644 Backend response:', data);
       }
 
       // Update the local state with the response data
-      if (data.occurrences && data.occurrences.length > 0) {
-        const updatedOccurrences = booking.occurrences.map(occ => {
-          const matchingOcc = data.occurrences.find(
-            newOcc => newOcc.occurrence_id === occ.occurrence_id
-          );
-          return matchingOcc || occ;
-        });
-
+      if (data.draft_data) {
         setBooking(prev => ({
           ...prev,
-          occurrences: updatedOccurrences,
-          cost_summary: data.cost_summary
+          ...data.draft_data,
+          status: data.draft_data.status
         }));
+
+        // Show success message
+        setSnackBar({
+          visible: true,
+          message: 'Occurrence updated successfully',
+          type: 'success'
+        });
+
+        // Close the modal
+        setShowAddOccurrenceModal(false);
+        return true;
       }
 
-      Alert.alert('Success', 'Occurrence updated successfully');
-      return true;
+      throw new Error('Invalid response from server');
+
     } catch (error) {
       if (is_DEBUG) {
-        console.log('MBA9876 Error saving occurrence:', error);
+        console.log('MBA1644 Error saving occurrence:', error);
       }
-      Alert.alert('Error', 'Failed to update occurrence');
+      setSnackBar({
+        visible: true,
+        message: error.message || 'Failed to update occurrence',
+        type: 'error'
+      });
       return false;
     }
   };
@@ -915,19 +963,45 @@ const BookingDetails = () => {
 
     const baseTotal = calculateBaseTotal(occurrence);
 
+    // Parse dates and times correctly
+    const parseDateTime = (dateStr, timeStr) => {
+      // Handle both 12-hour and 24-hour time formats
+      let time = timeStr;
+      if (!timeStr.includes('AM') && !timeStr.includes('PM')) {
+        // Convert 24-hour to 12-hour format
+        const [hours, minutes] = timeStr.split(':');
+        const hour = parseInt(hours, 10);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        time = `${hour12.toString().padStart(2, '0')}:${minutes} ${period}`;
+      }
+
+      if (is_DEBUG) {
+        console.log('MBA4321 Parsing datetime:', { dateStr, timeStr, parsedTime: time });
+      }
+
+      return {
+        date: dateStr,
+        time: time
+      };
+    };
+
+    const startDateTime = parseDateTime(occurrence.start_date, occurrence.start_time);
+    const endDateTime = parseDateTime(occurrence.end_date, occurrence.end_time);
+
     const transformedOccurrence = {
       id: occurrence.occurrence_id,
       occurrence_id: occurrence.occurrence_id,
-      startDate: occurrence.start_date,
-      endDate: occurrence.end_date,
-      startTime: occurrence.start_time,
-      endTime: occurrence.end_time,
+      startDate: startDateTime.date,
+      endDate: endDateTime.date,
+      startTime: startDateTime.time,
+      endTime: endDateTime.time,
       rates: {
         baseRate: occurrence.rates?.base_rate?.toString() || '0',
         additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
         appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
         holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
-        unit_of_time: occurrence.rates?.unit_of_time,  // Keep the exact unit_of_time from backend
+        unit_of_time: occurrence.rates?.unit_of_time,  // Preserve the exact unit_of_time
         additionalRates: (occurrence.rates?.additional_rates || [])
           .filter(rate => rate.title !== 'Booking Details Cost')
           .map(rate => ({
