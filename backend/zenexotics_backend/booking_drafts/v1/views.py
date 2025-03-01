@@ -766,12 +766,43 @@ class UpdateBookingPetsView(APIView):
             num_pets = len(new_pets_data)
             
             for occurrence in BookingOccurrence.objects.filter(booking=booking):
-                occurrence_data = create_occurrence_data(
-                    occurrence=occurrence,
-                    service=service,
-                    num_pets=num_pets,
-                    user_timezone=booking.client.user.settings.timezone
+                # Get existing occurrence data from draft if it exists
+                existing_occurrence = next(
+                    (o for o in current_draft_data.get('occurrences', [])
+                     if str(o['occurrence_id']) == str(occurrence.occurrence_id)),
+                    None
                 )
+
+                if existing_occurrence:
+                    # Create a temporary service with the rates from draft
+                    temp_service = Service(
+                        service_id=service.service_id,
+                        service_name=service.service_name,
+                        professional=service.professional,
+                        base_rate=existing_occurrence['rates'].get('base_rate', service.base_rate),
+                        additional_animal_rate=existing_occurrence['rates'].get('additional_animal_rate', service.additional_animal_rate),
+                        applies_after=existing_occurrence['rates'].get('applies_after', service.applies_after),
+                        holiday_rate=existing_occurrence['rates'].get('holiday_rate', service.holiday_rate),
+                        unit_of_time=existing_occurrence['rates'].get('unit_of_time', service.unit_of_time)
+                    )
+                    logger.info(f"MBA2573 - Using rates from draft for occurrence {occurrence.occurrence_id}")
+                    logger.info(f"MBA2573 - unit_of_time: {temp_service.unit_of_time}, base_rate: {temp_service.base_rate}")
+                    
+                    occurrence_data = create_occurrence_data(
+                        occurrence=occurrence,
+                        service=temp_service,
+                        num_pets=num_pets,
+                        user_timezone=booking.client.user.settings.timezone
+                    )
+                else:
+                    # Use the default service if no draft data exists
+                    occurrence_data = create_occurrence_data(
+                        occurrence=occurrence,
+                        service=service,
+                        num_pets=num_pets,
+                        user_timezone=booking.client.user.settings.timezone
+                    )
+                
                 if occurrence_data:
                     processed_occurrences.append(occurrence_data)
             

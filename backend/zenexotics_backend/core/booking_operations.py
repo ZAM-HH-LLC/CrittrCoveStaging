@@ -37,6 +37,8 @@ def calculate_time_units(start_datetime, end_datetime, unit_of_time):
         return Decimal(str(duration_hours / 6)).quantize(Decimal('0.00001'))
     elif unit_of_time == '8 Hour':
         return Decimal(str(duration_hours / 8)).quantize(Decimal('0.00001'))
+    elif unit_of_time == '24 Hour':
+        return Decimal(str(duration_hours / 24)).quantize(Decimal('0.00001'))
     elif unit_of_time in ['Per Day']:
         return Decimal(str(duration_hours / 24)).quantize(Decimal('0.00001'))
     elif unit_of_time in ['Per Visit']:
