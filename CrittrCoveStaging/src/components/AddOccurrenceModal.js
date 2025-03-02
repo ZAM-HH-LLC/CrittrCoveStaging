@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Picker, ActivityIndicator, Platform, Animated } from 'react-native';
+import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Picker, ActivityIndicator, Platform, Animated, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import DateTimePicker from './DateTimePicker';
@@ -9,6 +9,8 @@ import { TIME_OPTIONS } from '../data/mockData';
 import { validateDateTimeRange } from '../utils/dateTimeValidation';
 import { Button } from 'react-native-paper';
 import ConfirmationModal from './ConfirmationModal';
+import { getStorage } from '../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ANIMAL_COUNT_OPTIONS = ['1', '2', '3', '4', '5'];
 
@@ -74,13 +76,21 @@ const AddOccurrenceModal = ({
   initialOccurrence = null,
   isEditing = false,
   modalTitle = 'Add New Occurrence',
-  isFromRequestBooking = false
+  isFromRequestBooking = false,
+  booking
 }) => {
   const { is_DEBUG, screenWidth, timeSettings } = useContext(AuthContext);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [isAnyPickerActive, setIsAnyPickerActive] = useState(false);
   const heightAnim = useRef(new Animated.Value(0)).current;
   const [validationError, setValidationError] = useState(null);
+
+  // Clear validation error when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      setValidationError(null);
+    }
+  }, [visible]);
 
   const handlePickerStateChange = (isActive) => {
     setIsAnyPickerActive(isActive);
@@ -289,7 +299,7 @@ const AddOccurrenceModal = ({
         });
       }
 
-      const success = await onAdd({
+      const response = await onAdd({
         startDate,
         startTime,
         endDate,
@@ -297,13 +307,27 @@ const AddOccurrenceModal = ({
         rates: occurrence.rates
       });
 
-      if (success) {
-        handleClose();
+      if (is_DEBUG) {
+        console.log('MBA1234 Response from onAdd:', response);
+      }
+
+      if (response?.status === 'success') {
+        if (is_DEBUG) {
+          console.log('MBA1234 Successfully added/updated occurrence');
+        }
+        resetForm();
+        onClose();
+        // Show success message using Alert
+        Alert.alert('Success', response.message);
+      } else {
+        // Show error message but don't close modal
+        setValidationError(response?.message || 'Failed to add occurrence');
       }
     } catch (error) {
       if (is_DEBUG) {
         console.error('MBA1234 Error adding occurrence:', error);
       }
+      setValidationError(error.message || 'An unexpected error occurred');
     }
   };
 
@@ -432,6 +456,60 @@ const AddOccurrenceModal = ({
     handleClose();
   };
 
+  useEffect(() => {
+    if (visible && !initialOccurrence && booking?.booking_id) {
+      // Fetch service rates when opening modal for a new occurrence
+      const fetchServiceRates = async () => {
+        try {
+          const token = await getStorage('userToken');
+          if (!token) {
+            throw new Error('No authentication token found');
+          }
+
+          const response = await fetch(
+            `${API_BASE_URL}/api/bookings/v1/${booking.booking_id}/service_rates/`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          if (is_DEBUG) {
+            console.log('MBA9999 Service rates response:', data);
+          }
+
+          if (data.status === 'success' && data.rates) {
+            setOccurrence(prev => ({
+              ...prev,
+              rates: {
+                baseRate: data.rates.base_rate,
+                additionalAnimalRate: data.rates.additional_animal_rate,
+                appliesAfterAnimals: data.rates.applies_after,
+                holidayRate: data.rates.holiday_rate,
+                unit_of_time: data.rates.unit_of_time,
+                additionalRates: data.rates.additional_rates.map(rate => ({
+                  name: rate.title,
+                  description: rate.description,
+                  amount: rate.amount
+                }))
+              }
+            }));
+          }
+        } catch (error) {
+          console.error('MBA9999 Error fetching service rates:', error);
+        }
+      };
+
+      fetchServiceRates();
+    }
+  }, [visible, booking?.booking_id]);
+
   return (
     <>
       <Modal
@@ -494,10 +572,6 @@ const AddOccurrenceModal = ({
                   onPickerStateChange={handlePickerStateChange}
                 />
               </View>
-
-              {validationError && (
-                <Text style={styles.errorText}>{validationError}</Text>
-              )}
 
               {!hideRates && (
                 <>
@@ -698,6 +772,9 @@ const AddOccurrenceModal = ({
                 {isEditing ? 'Save Changes' : 'Add'}
               </Button>
             </View>
+            {validationError && (
+              <Text style={styles.errorMessage}>{validationError}</Text>
+            )}
           </Animated.View>
         </View>
       </Modal>
@@ -892,6 +969,13 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
+  },
+  errorMessage: {
+    color: theme.colors.error,
+    fontSize: 14,
+    textAlign: 'center',
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginTop: 8,
   },
 });
 

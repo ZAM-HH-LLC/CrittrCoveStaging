@@ -35,6 +35,7 @@ import traceback
 import pytz
 from core.time_utils import get_user_time_settings, format_booking_occurrence
 from rest_framework.renderers import JSONRenderer
+from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 
@@ -965,5 +966,74 @@ class UpdateBookingOccurrencesView(APIView):
             logger.error(f"Error updating booking occurrences: {str(e)}")
             return Response(
                 {"error": "Failed to update occurrences"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class GetServiceRatesView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request, booking_id):
+        logger.info("MBA9999 - Starting GetServiceRatesView.get")
+        try:
+            # Get the booking and verify professional access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if booking.professional != professional:
+                logger.error(f"MBA9999 - Unauthorized access attempt by {request.user.email} for booking {booking_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Get service from draft first, then fall back to booking service
+            service = None
+            draft = BookingDraft.objects.filter(booking=booking).first()
+            
+            if draft and draft.draft_data and 'service_details' in draft.draft_data:
+                try:
+                    service = Service.objects.get(
+                        service_name=draft.draft_data['service_details']['service_type'],
+                        professional=professional,
+                        moderation_status='APPROVED'
+                    )
+                    logger.info(f"MBA9999 - Using service from draft: {service.service_name}")
+                except Service.DoesNotExist:
+                    logger.warning(f"MBA9999 - Service from draft not found")
+
+            if not service and booking.service_id:
+                service = booking.service_id
+                logger.info(f"MBA9999 - Using service from booking: {service.service_name}")
+
+            if not service:
+                return Response(
+                    {"error": "No service found for this booking"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Format service rates
+            rates_data = OrderedDict([
+                ('base_rate', str(service.base_rate)),
+                ('additional_animal_rate', str(service.additional_animal_rate)),
+                ('applies_after', service.applies_after),
+                ('holiday_rate', str(service.holiday_rate)),
+                ('unit_of_time', service.unit_of_time),
+                ('additional_rates', [
+                    OrderedDict([
+                        ('title', rate.title),
+                        ('description', rate.description or ''),
+                        ('amount', str(rate.rate))
+                    ]) for rate in service.additional_rates.all()
+                ])
+            ])
+
+            return Response({
+                'status': 'success',
+                'rates': rates_data
+            })
+
+        except Exception as e:
+            logger.error(f"MBA9999 - Error getting service rates: {str(e)}")
+            logger.error(f"MBA9999 - Full error traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": "Failed to get service rates"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

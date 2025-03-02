@@ -153,6 +153,7 @@ const BookingDetails = () => {
   const [isProfessionalView, setIsProfessionalView] = useState(false);
   const [isPetsEditMode, setIsPetsEditMode] = useState(false);
   const [isServiceEditMode, setIsServiceEditMode] = useState(false);
+  const [expandedOccurrenceIds, setExpandedOccurrenceIds] = useState([]);
   const [editedBooking, setEditedBooking] = useState({
     serviceDetails: {
       type: '',
@@ -180,7 +181,6 @@ const BookingDetails = () => {
   const [showWeekendRate, setShowWeekendRate] = useState(true);
   const [selectedOccurrence, setSelectedOccurrence] = useState(null);
   const [showAddOccurrenceModal, setShowAddOccurrenceModal] = useState(false);
-  const [expandedOccurrenceId, setExpandedOccurrenceId] = useState(null);
   const [selectedPets, setSelectedPets] = useState([]);
   const [showPetDropdown, setShowPetDropdown] = useState(false);
   const [isPetsSaving, setIsPetsSaving] = useState(false);
@@ -199,6 +199,7 @@ const BookingDetails = () => {
   const [availableServices, setAvailableServices] = useState([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [snackBar, setSnackBar] = useState({ visible: false, message: '', type: 'success' });
+  const [occurrenceError, setOccurrenceError] = useState(null);
 
   useEffect(() => {
     const fetchBooking = async () => {
@@ -348,71 +349,87 @@ const BookingDetails = () => {
   // This function also saves the pets to the booking draft
   const togglePetsEditMode = async () => {
     if (isPetsEditMode) {
-      // Save changes
-      try {
-        setIsPetsSaving(true);
-        
+      // Check if pets have changed before saving
+      const currentPets = new Set(booking.pets.map(pet => pet.pet_id));
+      const selectedPetsSet = new Set(selectedPets.map(pet => pet.pet_id));
+  
+      if (![...currentPets].every(id => selectedPetsSet.has(id)) || 
+      ![...selectedPetsSet].every(id => currentPets.has(id))) {
+        // Pets have changed, show confirmation modal
         if (is_DEBUG) {
-          console.log('MBA2573 Saving pets:', selectedPets);
+          console.log('MBA2573 Pets have changed, saving...');
         }
+        // Save changes
+        try {
+          setIsPetsSaving(true);
+          
+          if (is_DEBUG) {
+            console.log('MBA2573 Saving pets:', selectedPets);
+          }
 
-        const token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-        if (!token) {
-          throw new Error('No authentication token found');
+          const token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+          if (!token) {
+            throw new Error('No authentication token found');
+          }
+
+          // Call the new booking drafts endpoint with correct URL format
+          const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/update_pets/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              pets: selectedPets.map(pet => pet.pet_id)
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          if (is_DEBUG) {
+            console.log('MBA2573 Backend response:', data);
+          }
+
+          // Update local state with all the new data
+          if (data.draft_data) {
+            setBooking(prev => ({
+              ...prev,
+              status: data.draft_data.status,
+              pets: data.draft_data.pets,
+              occurrences: data.draft_data.occurrences ? data.draft_data.occurrences.map(occ => ({
+                ...occ,
+                rates: {
+                  ...occ.rates,
+                  additional_animal_rate_applies: occ.rates.additional_animal_rate_applies
+                }
+              })) : [],
+              cost_summary: data.draft_data.cost_summary,
+              can_edit: data.draft_data.can_edit
+            }));
+
+            // Keep the expanded state as is
+            setExpandedOccurrenceIds(prev => [...prev]);
+          }
+
+          setIsPetsEditMode(false);
+
+        } catch (error) {
+          if (is_DEBUG) {
+            console.error('MBA2573 Error updating pets:', error);
+          }
+          Alert.alert('Error', 'Failed to update pets');
+        } finally {
+          setIsPetsSaving(false);
         }
-
-        // Call the new booking drafts endpoint with correct URL format
-        const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/update_pets/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            pets: selectedPets.map(pet => pet.pet_id)
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (is_DEBUG) {
-          console.log('MBA2573 Backend response:', data);
-        }
-
-        // Update local state with all the new data
-        if (data.draft_data) {
-          setBooking(prev => ({
-            ...prev,
-            status: data.draft_data.status,
-            pets: data.draft_data.pets,
-            occurrences: data.draft_data.occurrences.map(occ => ({
-              ...occ,
-              rates: {
-                ...occ.rates,
-                additional_animal_rate_applies: occ.rates.additional_animal_rate_applies
-              }
-            })),
-            cost_summary: data.draft_data.cost_summary,
-            can_edit: data.draft_data.can_edit
-          }));
-
-          // Force a re-render of the cost breakdown section
-          setExpandedOccurrenceId(null);
-        }
-
-        setIsPetsEditMode(false);
-
-      } catch (error) {
-        if (is_DEBUG) {
-          console.error('MBA2573 Error updating pets:', error);
-        }
-        Alert.alert('Error', 'Failed to update pets');
-      } finally {
-        setIsPetsSaving(false);
+     } else {
+      setIsPetsEditMode(false);
+      if (is_DEBUG) {
+        console.log('MBA2573 NO PET CHANGES');
       }
+     }
     } else {
       setSelectedPets(booking.pets || []);
       setIsPetsEditMode(true);
@@ -853,15 +870,32 @@ const BookingDetails = () => {
     }
 
     try {
-      let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+      let token = await getStorage('userToken');
 
-      // Format the occurrence data for the backend
-      const occurrenceData = {
-        start_date: format(newOccurrence.startDateTime, 'yyyy-MM-dd'),
-        end_date: format(newOccurrence.endDateTime, 'yyyy-MM-dd'),
-        start_time: format(newOccurrence.startDateTime, 'HH:mm'),
-        end_time: format(newOccurrence.endDateTime, 'HH:mm'),
-        rates: {
+      // Format the new occurrence data
+      let newOccurrenceData;
+      
+      if (newOccurrence.startDateTime && newOccurrence.endDateTime) {
+        // Client-initiated format with DateTime objects
+        newOccurrenceData = {
+          start_date: format(newOccurrence.startDateTime, 'yyyy-MM-dd'),
+          end_date: format(newOccurrence.endDateTime, 'yyyy-MM-dd'),
+          start_time: format(newOccurrence.startDateTime, 'HH:mm'),
+          end_time: format(newOccurrence.endDateTime, 'HH:mm')
+        };
+      } else {
+        // Professional-initiated format with separate date and time
+        newOccurrenceData = {
+          start_date: newOccurrence.startDate,
+          end_date: newOccurrence.endDate,
+          start_time: newOccurrence.startTime,
+          end_time: newOccurrence.endTime
+        };
+      }
+
+      // Add rates if they exist
+      if (newOccurrence.rates) {
+        newOccurrenceData.rates = {
           base_rate: newOccurrence.rates.baseRate,
           additional_animal_rate: newOccurrence.rates.additionalAnimalRate,
           applies_after: newOccurrence.rates.appliesAfterAnimals,
@@ -872,15 +906,28 @@ const BookingDetails = () => {
             description: rate.description || '',
             amount: rate.amount
           }))
-        }
-      };
-
-      if (is_DEBUG) {
-        console.log('MBA5678 Formatted new occurrence data for backend:', occurrenceData);
+        };
       }
 
-      // Make the API call to add the occurrence
-      const response = await fetch(`${API_BASE_URL}/api/bookings/v1/update_occurrences/`, {
+      // Get all existing occurrences and format them
+      const existingOccurrences = (booking?.occurrences || []).map(occ => ({
+        occurrence_id: occ.occurrence_id,
+        start_date: occ.start_date,
+        end_date: occ.end_date,
+        start_time: occ.start_time,
+        end_time: occ.end_time,
+        rates: occ.rates
+      }));
+
+      // Combine existing occurrences with new occurrence
+      const allOccurrences = [...existingOccurrences, newOccurrenceData];
+
+      if (is_DEBUG) {
+        console.log('MBA5678 Sending all occurrences:', allOccurrences);
+      }
+
+      // Make the API call with all occurrences to add the new occurrence
+      const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/update_occurrences/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -888,7 +935,7 @@ const BookingDetails = () => {
         },
         body: JSON.stringify({
           booking_id: booking.booking_id,
-          occurrences: [occurrenceData]
+          occurrences: allOccurrences
         })
       });
 
@@ -902,20 +949,35 @@ const BookingDetails = () => {
       }
 
       // Update the local state with the response data
-      if (data.occurrences && data.occurrences.length > 0) {
+      if (data.draft_data.occurrences && data.draft_data.occurrences.length > 0) {
         setBooking(prev => ({
           ...prev,
-          occurrences: [...prev.occurrences, data.occurrences[0]],
-          cost_summary: data.cost_summary
+          occurrences: data.draft_data.occurrences,
+          cost_summary: data.draft_data.cost_summary
         }));
 
-        // Show success message
-        Alert.alert('Success', 'New occurrence added successfully');
+        if (is_DEBUG) {
+          console.log('MBA5678 Adding Occurrence was Successful', data);
+        }
+        
+        return {
+          status: 'success',
+          data: data.occurrences,
+          message: 'New occurrence added successfully'
+        };
       }
+
+      return {
+        status: 'error',
+        message: 'Failed to add occurrence - no data returned'
+      };
 
     } catch (error) {
       console.error('MBA5678 Error adding occurrence:', error);
-      Alert.alert('Error', 'Failed to add occurrence. Please try again.');
+      return {
+        status: 'error',
+        message: error.message || 'Failed to add occurrence. Please try again.'
+      };
     }
   };
 
@@ -1030,73 +1092,135 @@ const BookingDetails = () => {
     return (total / rate).toFixed(2);
   };
 
+  const toggleOccurrenceExpansion = (occurrenceId) => {
+    if (is_DEBUG) {
+      console.log('MBA912341 ---- Toggle Start ----');
+      console.log('MBA912341 Clicked occurrence ID:', occurrenceId);
+      console.log('MBA912341 Current state type:', typeof expandedOccurrenceIds);
+      console.log('MBA912341 Current state value:', expandedOccurrenceIds);
+    }
+
+    setExpandedOccurrenceIds(prevIds => {
+      if (is_DEBUG) {
+        console.log('MBA912341 Previous state in setter:', prevIds);
+      }
+
+      // Ensure we're working with an array
+      const currentIds = Array.isArray(prevIds) ? prevIds : [];
+      
+      if (is_DEBUG) {
+        console.log('MBA912341 Normalized current IDs:', currentIds);
+        console.log('MBA912341 Does array include ID?', currentIds.includes(occurrenceId));
+      }
+
+      let newIds;
+      if (currentIds.includes(occurrenceId)) {
+        newIds = currentIds.filter(id => id !== occurrenceId);
+        if (is_DEBUG) {
+          console.log('MBA912341 Removing ID - New state:', newIds);
+        }
+      } else {
+        newIds = [...currentIds, occurrenceId];
+        if (is_DEBUG) {
+          console.log('MBA912341 Adding ID - New state:', newIds);
+        }
+      }
+
+      if (is_DEBUG) {
+        console.log('MBA912341 Final new state:', newIds);
+        console.log('MBA912341 ---- Toggle End ----');
+      }
+      return newIds;
+    });
+  };
+
+  const formatOccurrenceDate = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr.split('(')[0].trim());
+    return format(date, 'MMM dd');
+  };
+
   const renderCostBreakdown = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Cost Breakdown</Text>
       
-      {(booking?.occurrences || []).map((occurrence, index) => (
-        <TouchableOpacity 
-          key={index}
-          style={styles.occurrenceCostRow}
-          onPress={() => setExpandedOccurrenceId(
-            expandedOccurrenceId === occurrence.occurrence_id ? null : occurrence.occurrence_id
-          )}
-        >
-          <View style={styles.occurrenceCostHeader}>
-            <Text style={styles.occurrenceCostHeaderText}>
-              {occurrence.formatted_start}
-            </Text>
-            <View style={styles.costAndIcon}>
-              <Text style={styles.occurrenceCost}>
-                ${parseFloat(occurrence.calculated_cost || 0).toFixed(2)}
+      {(booking?.occurrences || []).map((occurrence, index) => {
+        if (is_DEBUG) {
+          console.log('MBA912341 Full occurrence object:', occurrence);
+          console.log('MBA912341 Rendering occurrence:', {
+            index,
+            occurrence_id: occurrence.occurrence_id,
+            expanded: expandedOccurrenceIds.includes(occurrence.occurrence_id)
+          });
+        }
+        
+        return (
+          <TouchableOpacity 
+            key={index}
+            style={styles.occurrenceCostRow}
+            onPress={() => {
+              if (is_DEBUG) {
+                console.log('MBA912341 Occurrence being toggled:', occurrence);
+              }
+              toggleOccurrenceExpansion(occurrence.id || occurrence.occurrence_id || index);
+            }}
+          >
+            <View style={styles.occurrenceCostHeader}>
+              <Text style={styles.occurrenceCostHeaderText}>
+                {formatOccurrenceDate(occurrence.formatted_start)} - {formatOccurrenceDate(occurrence.formatted_end)}
               </Text>
-              <MaterialCommunityIcons 
-                name={expandedOccurrenceId === occurrence.occurrence_id ? "chevron-up" : "chevron-down"}
-                size={20} 
-                color={theme.colors.text} 
-              />
-            </View>
-          </View>
-          
-          {expandedOccurrenceId === occurrence.occurrence_id && (
-            <View style={styles.expandedCostDetails}>
-              <View style={styles.costDetailRow}>
-                <Text style={styles.costDetailText}>Base Rate ({occurrence.rates?.unit_of_time}):</Text>
-                <Text style={styles.costDetailText}>
-                  ${parseFloat(occurrence.rates?.base_rate || 0).toFixed(2)} × {
-                    parseFloat(occurrence?.multiple || 0).toFixed(2)
-                  } = ${parseFloat(occurrence.base_total?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}
+              <View style={styles.costAndIcon}>
+                <Text style={styles.occurrenceCost}>
+                  ${parseFloat(occurrence.calculated_cost || 0).toFixed(2)}
                 </Text>
+                <MaterialCommunityIcons 
+                  name={expandedOccurrenceIds.includes(occurrence.id || occurrence.occurrence_id || index) ? "chevron-up" : "chevron-down"}
+                  size={20} 
+                  color={theme.colors.text} 
+                />
               </View>
-              {console.log('MBA12341234 additional_animal_rate_applies:', occurrence.rates?.additional_animal_rate_applies)}
-              {occurrence.rates?.additional_animal_rate_applies !== 0 && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
+            </View>
+            
+            {expandedOccurrenceIds.includes(occurrence.id || occurrence.occurrence_id || index) && (
+              <View style={styles.expandedCostDetails}>
                 <View style={styles.costDetailRow}>
-                  <Text style={styles.costDetailText}>Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after > 1 ? 'pets' : 'pet'}):</Text>
+                  <Text style={styles.costDetailText}>Base Rate ({occurrence.rates?.unit_of_time}):</Text>
                   <Text style={styles.costDetailText}>
-                    ${parseFloat(occurrence.rates.additional_animal_rate || 0).toFixed(2)} × {
-                      booking.pets.length - occurrence.rates.applies_after
-                    } = ${(parseFloat(occurrence.rates.additional_animal_rate || 0) * (booking.pets.length - occurrence.rates.applies_after)).toFixed(2)}
+                    ${parseFloat(occurrence.rates?.base_rate || 0).toFixed(2)} × {
+                      parseFloat(occurrence?.multiple || 0).toFixed(2)
+                    } = ${parseFloat(occurrence.base_total?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}
                   </Text>
                 </View>
-              )}
-              {occurrence.rates?.holiday_days > 0 && parseFloat(occurrence.rates?.holiday_rate || 0) > 0 && (
-                <View style={styles.costDetailRow}>
-                  <Text style={styles.costDetailText}>Holiday Rate ({occurrence.rates.holiday_days} day{occurrence.rates.holiday_days > 1 ? 's' : ''}):</Text>
-                  <Text style={styles.costDetailText}>${(parseFloat(occurrence.rates.holiday_rate || 0) * occurrence.rates.holiday_days).toFixed(2)}</Text>
-                </View>
-              )}
-              {(occurrence.rates?.additional_rates || [])
-                .filter(rate => rate.title !== 'Booking Details Cost')
-                .map((rate, idx) => (
-                  <View key={idx} style={styles.costDetailRow}>
-                    <Text style={styles.costDetailText}>{rate.title}:</Text>
-                    <Text style={styles.costDetailText}>${parseFloat(rate.amount?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}</Text>
+                {console.log('MBA12341234 additional_animal_rate_applies:', occurrence.rates?.additional_animal_rate_applies)}
+                {occurrence.rates?.additional_animal_rate_applies !== 0 && parseFloat(occurrence.rates?.additional_animal_rate || 0) > 0 && (
+                  <View style={styles.costDetailRow}>
+                    <Text style={styles.costDetailText}>Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after > 1 ? 'pets' : 'pet'}):</Text>
+                    <Text style={styles.costDetailText}>
+                      ${parseFloat(occurrence.rates.additional_animal_rate || 0).toFixed(2)} × {
+                        booking.pets.length - occurrence.rates.applies_after
+                      } = ${(parseFloat(occurrence.rates.additional_animal_rate || 0) * (booking.pets.length - occurrence.rates.applies_after)).toFixed(2)}
+                    </Text>
                   </View>
-              ))}
-            </View>
-          )}
-        </TouchableOpacity>
-      ))}
+                )}
+                {occurrence.rates?.holiday_days > 0 && parseFloat(occurrence.rates?.holiday_rate || 0) > 0 && (
+                  <View style={styles.costDetailRow}>
+                    <Text style={styles.costDetailText}>Holiday Rate ({occurrence.rates.holiday_days} day{occurrence.rates.holiday_days > 1 ? 's' : ''}):</Text>
+                    <Text style={styles.costDetailText}>${(parseFloat(occurrence.rates.holiday_rate || 0) * occurrence.rates.holiday_days).toFixed(2)}</Text>
+                  </View>
+                )}
+                {(occurrence.rates?.additional_rates || [])
+                  .filter(rate => rate.title !== 'Booking Details Cost')
+                  .map((rate, idx) => (
+                    <View key={idx} style={styles.costDetailRow}>
+                      <Text style={styles.costDetailText}>{rate.title}:</Text>
+                      <Text style={styles.costDetailText}>${parseFloat(rate.amount?.replace(/[^0-9.-]/g, '') || 0).toFixed(2)}</Text>
+                    </View>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
 
       <View style={styles.costSummary}>
         <View style={styles.summaryRow}>
@@ -1483,11 +1607,35 @@ const BookingDetails = () => {
     </View>
   );
 
+  const handleAddOccurrenceClick = () => {
+    // Clear any previous errors
+    setOccurrenceError(null);
+
+    // Validate pets
+    if (!booking?.pets?.length) {
+      setOccurrenceError('Please add pets before adding occurrences');
+      return;
+    }
+
+    // Validate service type
+    if (!booking?.service_details?.service_type) {
+      setOccurrenceError('Please select a service before adding occurrences');
+      return;
+    }
+
+    // If validation passes, open the modal
+    setSelectedOccurrence(null);
+    setShowAddOccurrenceModal(true);
+  };
+
   const renderDateTimeSection = () => (
     <View>
       <Text style={styles.sectionTitle}>
         {canEdit() ? "Dates & Times (Set Rates For Dates)" : "Dates & Times"}
       </Text>
+      {occurrenceError && (
+        <Text style={styles.errorMessage}>{occurrenceError}</Text>
+      )}
       {(booking?.occurrences || []).map((occ, index) => (
         <TouchableOpacity
           key={index}
@@ -1512,10 +1660,7 @@ const BookingDetails = () => {
       {canEdit() && (
         <TouchableOpacity
           style={styles.addOccurrenceButton}
-          onPress={() => {
-            setSelectedOccurrence(null);
-            setShowAddOccurrenceModal(true);
-          }}
+          onPress={handleAddOccurrenceClick}
         >
           <MaterialCommunityIcons name="plus" size={24} color={theme.colors.primary} />
           <Text style={styles.addOccurrenceText}>Add Occurrence</Text>
@@ -2610,6 +2755,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 4,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  errorMessage: {
+    color: theme.colors.error,
+    fontSize: 14,
+    textAlign: 'center',
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginTop: 8,
+    marginBottom: 8,
   },
 });
 

@@ -10,6 +10,7 @@ from booking_occurrences.models import BookingOccurrence
 from booking_details.models import BookingDetails
 from core.time_utils import convert_from_utc, get_formatted_times
 from users.models import UserSettings
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -224,9 +225,18 @@ def calculate_cost_summary(occurrences):
         logger.error(f"Error calculating cost summary: {e}")
         return None
 
-def create_draft_data(booking, request_pets, occurrences, cost_summary, service=None):
-    """Creates draft data in the exact order required"""
+def create_professional_draft_data(booking, request_pets, occurrences=None, cost_summary=None, service=None):
+    """
+    Creates draft data specifically for professional-initiated bookings.
+    This handles the special case where pros need to add things in a specific order:
+    1. First edit: Add pets/service (no occurrences yet)
+    2. Second edit: Add occurrences (with service and pets already set)
+    """
     try:
+        logger.info("MBA2573 - Creating professional draft data")
+        logger.info(f"MBA2573 - Has service: {service is not None}")
+        logger.info(f"MBA2573 - Has occurrences: {occurrences is not None}")
+        
         # Get user's timezone from settings
         user_settings = UserSettings.objects.filter(user=booking.client.user).first()
         user_timezone = user_settings.timezone if user_settings else 'UTC'
@@ -239,34 +249,34 @@ def create_draft_data(booking, request_pets, occurrences, cost_summary, service=
             BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
         ]
         
-        # Create service details
-        service_details = OrderedDict([
-            ('service_type', service.service_name if service else booking.service_id.service_name),
-            ('service_id', service.service_id if service else booking.service_id.service_id)
-        ])
-        
-        # Create draft data
+        # Create base draft data
         draft_data = OrderedDict([
             ('booking_id', booking.booking_id),
             ('status', booking.status),
+            ('original_status', booking.status),
             ('client_name', booking.client.user.name),
             ('professional_name', booking.professional.user.name),
-            ('service_details', service_details),
-            ('pets', [
-                OrderedDict([
-                    ('name', pet.get('name')),
-                    ('breed', pet.get('breed')),
-                    ('pet_id', pet.get('pet_id')),
-                    ('species', pet.get('species'))
-                ]) for pet in request_pets
-            ]),
-            ('occurrences', occurrences),
-            ('cost_summary', cost_summary),
-            ('can_edit', can_edit)
+            ('can_edit', can_edit),
+            ('pets', request_pets)  # Always include pets
         ])
-        
+
+        # Add service details if service exists
+        if service:
+            draft_data['service_details'] = OrderedDict([
+                ('service_type', service.service_name),
+                ('service_id', service.service_id)
+            ])
+
+        # Add occurrences and cost summary only if they exist and we have a service
+        if service and occurrences:
+            draft_data['occurrences'] = occurrences
+            if cost_summary:
+                draft_data['cost_summary'] = cost_summary
+
+        logger.info(f"MBA2573 - Created draft with keys: {list(draft_data.keys())}")
         return draft_data
         
     except Exception as e:
-        logger.error(f"Error creating draft data: {e}")
+        logger.error(f"MBA2573 - Error creating professional draft data: {str(e)}")
+        logger.error(f"MBA2573 - Full error traceback: {traceback.format_exc()}")
         return None 

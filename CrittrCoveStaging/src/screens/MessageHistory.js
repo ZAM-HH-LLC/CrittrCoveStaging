@@ -861,12 +861,14 @@ const MessageHistory = ({ navigation, route }) => {
                   <View style={styles.occurrenceDetails}>
                     <Text style={styles.detailText}>
                       {occ.formatted_start} to {occ.formatted_end}
-                      {'\n'}<Text style={[{ fontWeight: '502' }]}>Total: {occ.duration} ({occ.timezone})</Text>
+                      {'\n'}<Text style={[{ fontWeight: '502' }]}>Instance Total: {occ.duration} ({occ.timezone})</Text>
                     </Text>
                   </View>
                 </View>
               ))}
             </View>
+
+            <Text style={[{ fontWeight: '502' }]}>Total: blbla</Text>
 
             {item.metadata.booking_id && !item.is_deleted && (
               <TouchableOpacity 
