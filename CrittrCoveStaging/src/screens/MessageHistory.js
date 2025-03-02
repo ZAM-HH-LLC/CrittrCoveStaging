@@ -876,7 +876,7 @@ const MessageHistory = ({ navigation, route }) => {
                   initialData: null
                 })}
               >
-                <Text style={styles.viewBookingText}>View Booking Details</Text>
+                <Text style={styles.viewBookingText}>Click for Details</Text>
               </TouchableOpacity>
             )}
 
@@ -1411,7 +1411,7 @@ const MessageHistory = ({ navigation, route }) => {
           style={styles.viewBookingButton}
           onPress={handleViewBooking}
         >
-          <Text style={styles.viewBookingText}>View Booking Details</Text>
+          <Text style={styles.viewBookingText}>Click for Details</Text>
         </TouchableOpacity>
       </View>
     );

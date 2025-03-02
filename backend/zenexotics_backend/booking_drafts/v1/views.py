@@ -537,7 +537,7 @@ class BookingDraftUpdateView(APIView):
                         ('rates', OrderedDict([
                             ('base_rate', rates['base_rate']),
                             ('additional_animal_rate', rates['additional_animal_rate']),
-                            ('additional_animal_rate_applies', additional_animal_rate_applies),
+                            ('additional_animal_rate_applies', (num_pets - rates['applies_after']) if num_pets > rates['applies_after'] else 0),
                             ('applies_after', rates['applies_after']),
                             ('unit_of_time', rates['unit_of_time']),
                             ('holiday_rate', rates['holiday_rate']),
@@ -1099,9 +1099,13 @@ class UpdateBookingOccurrencesView(APIView):
                             end_time=end_utc.time()
                         )
 
-                        # Get number of pets
-                        num_pets = booking.booking_pets.count()
-                        logger.info(f"MBA1644 - Number of pets: {num_pets}")
+                        # Get number of pets from draft if it exists, otherwise from booking
+                        if current_draft_data and 'pets' in current_draft_data:
+                            num_pets = len(current_draft_data['pets'])
+                            logger.info(f"MBA1644 - Using number of pets from draft: {num_pets}")
+                        else:
+                            num_pets = booking.booking_pets.count()
+                            logger.info(f"MBA1644 - Using number of pets from booking: {num_pets}")
 
                         # Calculate rates using the temporary service
                         rate_data = calculate_occurrence_rates(temp_occurrence, temp_service, num_pets)
@@ -1130,7 +1134,8 @@ class UpdateBookingOccurrencesView(APIView):
                                     'unit_of_time': occurrence_data['rates']['unit_of_time'],
                                     'holiday_rate': occurrence_data['rates']['holiday_rate'],
                                     'holiday_days': occurrence_data['rates'].get('holiday_days', 0),
-                                    'additional_rates': occurrence_data['rates'].get('additional_rates', [])
+                                    'additional_rates': occurrence_data['rates'].get('additional_rates', []),
+                                    'additional_animal_rate_applies': rate_data['rates']['additional_animal_rate_applies']
                                 },
                                 'formatted_start': formatted_times['formatted_start'],
                                 'formatted_end': formatted_times['formatted_end'],
@@ -1186,6 +1191,14 @@ class UpdateBookingOccurrencesView(APIView):
                                 end_time=end_utc.time()
                             )
 
+                            # Get number of pets from draft if it exists, otherwise from booking
+                            if current_draft_data and 'pets' in current_draft_data:
+                                num_pets = len(current_draft_data['pets'])
+                                logger.info(f"MBA1644 - Using number of pets from draft for non-updated occurrence: {num_pets}")
+                            else:
+                                num_pets = booking.booking_pets.count()
+                                logger.info(f"MBA1644 - Using number of pets from booking for non-updated occurrence: {num_pets}")
+
                             # Calculate rates using the temporary service
                             rate_data = calculate_occurrence_rates(occurrence, temp_service, num_pets)
 
@@ -1213,7 +1226,8 @@ class UpdateBookingOccurrencesView(APIView):
                                         'unit_of_time': occurrence_data['rates']['unit_of_time'],
                                         'holiday_rate': occurrence_data['rates']['holiday_rate'],
                                         'holiday_days': occurrence_data['rates'].get('holiday_days', 0),
-                                        'additional_rates': occurrence_data['rates'].get('additional_rates', [])
+                                        'additional_rates': occurrence_data['rates'].get('additional_rates', []),
+                                        'additional_animal_rate_applies': rate_data['rates']['additional_animal_rate_applies']
                                     },
                                     'formatted_start': formatted_times['formatted_start'],
                                     'formatted_end': formatted_times['formatted_end'],

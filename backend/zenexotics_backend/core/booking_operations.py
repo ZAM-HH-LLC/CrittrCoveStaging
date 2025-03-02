@@ -152,13 +152,25 @@ def create_occurrence_data(occurrence, service, num_pets, user_timezone='UTC'):
         # Get formatted times
         formatted_times = get_formatted_times(occurrence, occurrence.booking.client.user.id)
         
+        # Convert times to user's timezone and 12-hour format
+        start_dt = datetime.combine(occurrence.start_date, occurrence.start_time)
+        end_dt = datetime.combine(occurrence.end_date, occurrence.end_time)
+        
+        # Convert to user's timezone
+        user_start = convert_from_utc(start_dt, user_timezone)
+        user_end = convert_from_utc(end_dt, user_timezone)
+        
+        # Format in 12-hour time
+        start_time = user_start.strftime('%I:%M %p')
+        end_time = user_end.strftime('%I:%M %p')
+        
         # Create occurrence dictionary
         occurrence_data = OrderedDict([
             ('occurrence_id', occurrence.occurrence_id),
             ('start_date', occurrence.start_date.isoformat()),
             ('end_date', occurrence.end_date.isoformat()),
-            ('start_time', occurrence.start_time.strftime('%H:%M')),
-            ('end_time', occurrence.end_time.strftime('%H:%M')),
+            ('start_time', start_time),  # Now in 12-hour format
+            ('end_time', end_time),      # Now in 12-hour format
             ('calculated_cost', rate_data['calculated_cost']),
             ('base_total', rate_data['base_total']),
             ('multiple', rate_data['multiple']),
@@ -167,7 +179,7 @@ def create_occurrence_data(occurrence, service, num_pets, user_timezone='UTC'):
                 ('additional_animal_rate', rate_data['rates']['additional_animal_rate']),
                 ('additional_animal_rate_applies', rate_data['rates']['additional_animal_rate_applies']),
                 ('applies_after', rate_data['rates']['applies_after']),
-                ('unit_of_time', rate_data['rates']['unit_of_time']),  # Use unit_of_time from rate_data instead of service directly
+                ('unit_of_time', rate_data['rates']['unit_of_time']),
                 ('holiday_rate', rate_data['rates']['holiday_rate']),
                 ('holiday_days', rate_data['rates']['holiday_days']),
                 ('additional_rates', rate_data['rates']['additional_rates'])
