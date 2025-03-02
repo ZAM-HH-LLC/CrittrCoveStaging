@@ -873,7 +873,8 @@ const MessageHistory = ({ navigation, route }) => {
                 style={styles.viewBookingButton}
                 onPress={() => navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
                   bookingId: item.metadata.booking_id,
-                  initialData: null
+                  initialData: null,
+                  isProfessional: selectedConversationData?.is_professional
                 })}
               >
                 <Text style={styles.viewBookingText}>Click for Details</Text>
