@@ -327,6 +327,13 @@ def update_draft_with_service(booking, service_id=None, occurrence_services=None
         num_pets = len(pets_data)
         
         for occurrence in BookingOccurrence.objects.filter(booking=booking):
+            # Get existing occurrence data from draft if it exists
+            existing_occurrence = next(
+                (o for o in current_draft_data.get('occurrences', [])
+                 if str(o['occurrence_id']) == str(occurrence.occurrence_id)),
+                None
+            )
+
             # Determine which service to use for this occurrence
             occurrence_service = None
             if occurrence_services and str(occurrence.occurrence_id) in occurrence_services:
@@ -339,13 +346,25 @@ def update_draft_with_service(booking, service_id=None, occurrence_services=None
             elif main_service:
                 occurrence_service = main_service
             else:
-                # Use existing service or booking's service
                 occurrence_service = booking.service_id
-            
+
             if occurrence_service:
+                # Create a temporary service that preserves the unit_of_time from draft
+                temp_service = Service(
+                    service_id=occurrence_service.service_id,
+                    service_name=occurrence_service.service_name,
+                    professional=occurrence_service.professional,
+                    base_rate=occurrence_service.base_rate,
+                    additional_animal_rate=occurrence_service.additional_animal_rate,
+                    applies_after=occurrence_service.applies_after,
+                    holiday_rate=occurrence_service.holiday_rate,
+                    unit_of_time=existing_occurrence['rates']['unit_of_time'] if existing_occurrence else occurrence_service.unit_of_time
+                )
+                logger.info(f"MBA9999 - Using unit_of_time from draft: {temp_service.unit_of_time}")
+
                 occurrence_data = create_occurrence_data(
                     occurrence=occurrence,
-                    service=occurrence_service,
+                    service=temp_service,
                     num_pets=num_pets,
                     user_timezone=booking.client.user.settings.timezone
                 )
