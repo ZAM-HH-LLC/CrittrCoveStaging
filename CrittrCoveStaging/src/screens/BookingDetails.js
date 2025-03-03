@@ -857,6 +857,8 @@ const BookingDetails = () => {
     }
   };
 
+  // This is the callback function for the AddOccurrenceModal when the submit button is pressed
+  // It calls the update_occurrences endpoint to add the new occurrence to the booking
   const handleAddOccurrence = async (newOccurrence) => {
     if (is_DEBUG) {
       console.log('MBA5678 Adding new occurrence:', newOccurrence);
@@ -1600,6 +1602,7 @@ const BookingDetails = () => {
     </View>
   );
 
+  // When the user clicks the "Add Occurrence" button
   const handleAddOccurrenceClick = () => {
     // Clear any previous errors
     setOccurrenceError(null);
