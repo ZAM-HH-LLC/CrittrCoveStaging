@@ -10,7 +10,6 @@ import { validateDateTimeRange } from '../utils/dateTimeValidation';
 import { Button } from 'react-native-paper';
 import ConfirmationModal from './ConfirmationModal';
 import { getStorage } from '../context/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ANIMAL_COUNT_OPTIONS = ['1', '2', '3', '4', '5'];
 

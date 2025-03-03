@@ -167,18 +167,11 @@ const BookingDetails = () => {
       extraServices: []
     }
   });
-  const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   const [timeDropdownPosition, setTimeDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const timeInputRef = useRef(null);
   const [showAddRateModal, setShowAddRateModal] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [showServiceDropdown, setShowServiceDropdown] = useState(false);
   const [showAnimalDropdown, setShowAnimalDropdown] = useState(false);
-  const [showPetRateDropdown, setShowPetRateDropdown] = useState(false);
-  const [showAdditionalPetRate, setShowAdditionalPetRate] = useState(true);
-  const [showHolidayRate, setShowHolidayRate] = useState(true);
-  const [showWeekendRate, setShowWeekendRate] = useState(true);
   const [selectedOccurrence, setSelectedOccurrence] = useState(null);
   const [showAddOccurrenceModal, setShowAddOccurrenceModal] = useState(false);
   const [selectedPets, setSelectedPets] = useState([]);
@@ -208,14 +201,11 @@ const BookingDetails = () => {
       try {
         let bookingId = route.params?.bookingId;
         let initialData = route.params?.initialData;
-        let isProfessional = route.params?.isProfessional;
-        setIsProfessionalView(isProfessional);
 
         if (is_DEBUG) {
-          console.log('BookingDetails: Fetching booking with params:', {
+          console.log('MBA77123 BookingDetails: Fetching booking with params:', {
             bookingId,
-            initialData,
-            isProfessional
+            initialData
           });
         }
 
@@ -249,9 +239,12 @@ const BookingDetails = () => {
         };
 
         if (is_DEBUG) {
-          console.log('BookingDetails: Fetched and transformed booking data:', transformedBooking);
+          console.log('MBA77123 BookingDetails: Fetched and transformed booking data:', transformedBooking);
+          console.log('MBA77123 Setting isProfessionalView based on can_edit:', transformedBooking.can_edit);
         }
+
         setBooking(transformedBooking);
+        setIsProfessionalView(transformedBooking.can_edit);
       } catch (error) {
         console.error('Error fetching booking details:', error);
         Alert.alert(
