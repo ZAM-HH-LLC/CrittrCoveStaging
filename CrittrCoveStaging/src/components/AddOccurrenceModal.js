@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Picker, ActivityIndicator, Platform, Animated, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -10,6 +10,7 @@ import { validateDateTimeRange } from '../utils/dateTimeValidation';
 import { Button } from 'react-native-paper';
 import ConfirmationModal from './ConfirmationModal';
 import { getStorage } from '../context/AuthContext';
+import { debounce } from 'lodash';
 
 const ANIMAL_COUNT_OPTIONS = ['1', '2', '3', '4', '5'];
 
@@ -224,12 +225,14 @@ const AddOccurrenceModal = ({
         holidayRate: '0',
         unit_of_time: 'Per Visit',
         additionalRates: []
-      }
+      },
+      calculatedCost: '0'
     };
 
     // If we have an initial occurrence, use its rates
     if (initialOccurrence?.rates) {
       initialState.rates = initialOccurrence.rates;
+      initialState.calculatedCost = initialOccurrence.calculatedCost || '0';
     }
     // Otherwise if we have default rates, use those
     else if (defaultRates) {
@@ -245,6 +248,7 @@ const AddOccurrenceModal = ({
           amount: rate.amount
         })) || []
       };
+      initialState.calculatedCost = defaultRates.calculated_cost?.toString() || '0';
     }
 
     if (is_DEBUG) {
@@ -279,12 +283,14 @@ const AddOccurrenceModal = ({
 
       if (is_DEBUG) {
         console.log('MBA565656 Setting new rates:', newRates);
+        console.log('MBA565656 Setting calculated cost:', defaultRates.calculated_cost);
       }
 
       setOccurrence(prev => {
         const updated = {
           ...prev,
-          rates: newRates
+          rates: newRates,
+          calculatedCost: defaultRates.calculated_cost?.toString() || '0'
         };
         if (is_DEBUG) {
           console.log('MBA565656 Updated occurrence state:', updated);
@@ -295,6 +301,88 @@ const AddOccurrenceModal = ({
       setUnitOfTime(defaultRates.unit_of_time || 'Per Visit');
     }
   }, [defaultRates, initialOccurrence]);
+
+  // Add debounced function for cost calculation
+  const debouncedCalculateCosts = useCallback(
+    debounce(async (occurrenceData) => {
+      if (!booking?.booking_id) return;
+
+      try {
+        const token = await getStorage('userToken');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/bookings/v1/${booking.booking_id}/calculate_occurrence_cost/`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(occurrenceData)
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (is_DEBUG) {
+          console.log('MBA565656 Cost calculation response:', data);
+        }
+
+        if (data.status === 'success') {
+          setOccurrence(prev => ({
+            ...prev,
+            calculatedCost: data.calculated_cost
+          }));
+        }
+      } catch (error) {
+        if (is_DEBUG) {
+          console.error('MBA565656 Error calculating costs:', error);
+        }
+      }
+    }, 500),
+    [booking?.booking_id]
+  );
+
+  // Add effect to calculate costs when relevant fields change
+  useEffect(() => {
+    const occurrenceData = {
+      start_date: format(occurrence.startDateTime, 'yyyy-MM-dd'),
+      end_date: format(occurrence.endDateTime, 'yyyy-MM-dd'),
+      start_time: format(occurrence.startDateTime, 'HH:mm'),
+      end_time: format(occurrence.endDateTime, 'HH:mm'),
+      rates: {
+        base_rate: occurrence.rates.baseRate,
+        additional_animal_rate: occurrence.rates.additionalAnimalRate,
+        applies_after: occurrence.rates.appliesAfterAnimals,
+        holiday_rate: occurrence.rates.holidayRate,
+        unit_of_time: occurrence.rates.unit_of_time,
+        additional_rates: occurrence.rates.additionalRates
+      }
+    };
+
+    debouncedCalculateCosts(occurrenceData);
+
+    // Cleanup function
+    return () => {
+      debouncedCalculateCosts.cancel();
+    };
+  }, [
+    occurrence.startDateTime,
+    occurrence.endDateTime,
+    occurrence.rates.baseRate,
+    occurrence.rates.additionalAnimalRate,
+    occurrence.rates.appliesAfterAnimals,
+    occurrence.rates.holidayRate,
+    occurrence.rates.unit_of_time,
+    occurrence.rates.additionalRates,
+    debouncedCalculateCosts
+  ]);
 
   // Add effect to update unit_of_time when rates change
   useEffect(() => {
@@ -462,27 +550,6 @@ const AddOccurrenceModal = ({
     }));
   }, [unit_of_time]);
 
-  const calculateTotal = () => {
-    // If we have a totalCost from the initialOccurrence, use that
-    if (initialOccurrence?.totalCost) {
-      return parseFloat(initialOccurrence.totalCost).toFixed(2);
-    }
-
-    // Otherwise calculate it
-    const baseAmount = parseFloat(occurrence.rates.baseRate) || 0;
-    const additionalAnimalAmount = parseFloat(occurrence.rates.additionalAnimalRate) || 0;
-    const holidayAmount = parseFloat(occurrence.rates.holidayRate) || 0;
-    const customRatesAmount = occurrence.rates.additionalRates?.reduce((sum, rate) => 
-      sum + (parseFloat(rate.amount) || 0), 0) || 0;
-
-    const subtotal = baseAmount + additionalAnimalAmount + holidayAmount + customRatesAmount;
-    const platformFee = subtotal * 0.10; // 10% platform fee
-    const taxes = (subtotal + platformFee) * 0.09; // 9% tax
-    const totalClientCost = subtotal + platformFee + taxes;
-
-    return totalClientCost.toFixed(2);
-  };
-
   const handleDeleteRate = (index) => {
     setOccurrence(prev => ({
       ...prev,
@@ -532,7 +599,8 @@ const AddOccurrenceModal = ({
           description: rate.description || '',
           amount: rate.amount
         })) || []
-      }
+      },
+      calculatedCost: '0'
     });
     setUnitOfTime(defaultRates?.unit_of_time || 'Per Visit');
     setShowAddRate(false);
@@ -797,7 +865,7 @@ const AddOccurrenceModal = ({
 
                   <View style={styles.totalSection}>
                     <Text style={styles.totalLabel}>Total:</Text>
-                    <Text style={styles.totalAmount}>${calculateTotal()}</Text>
+                    <Text style={styles.totalAmount}>${occurrence.calculatedCost}</Text>
                   </View>
 
                 </>

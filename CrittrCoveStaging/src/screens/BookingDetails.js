@@ -1664,7 +1664,8 @@ const BookingDetails = () => {
             title: rate.title,
             description: rate.description,
             amount: rate.amount
-          }))
+          })),
+          calculated_cost: Math.round(data.rates.calculated_cost * 100) / 100
         };
 
         if (is_DEBUG) {

@@ -24,7 +24,7 @@ from booking_occurrence_rates.models import BookingOccurrenceRate
 from service_rates.models import ServiceRate
 from booking_summary.models import BookingSummary
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.core.serializers.json import DjangoJSONEncoder
 import json
 from time import time as current_time  # Rename import to avoid confusion
@@ -969,6 +969,83 @@ class UpdateBookingOccurrencesView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+def calculate_cost(base_rate, additional_animal_rate, applies_after, holiday_rate, unit_of_time, num_pets, start_dt, end_dt, additional_rates=None):
+    """
+    Calculate the cost for an occurrence without using model instances.
+    All rate parameters should be Decimal objects.
+    start_dt and end_dt should be timezone-aware datetime objects.
+    """
+    from core.constants import UnitOfTime
+    logger.info(f"MBA7777 Starting cost calculation with params: base_rate={base_rate}, unit_of_time={unit_of_time}, num_pets={num_pets}, applies_after={applies_after}")
+
+    # Calculate duration in hours
+    duration_hours = (end_dt - start_dt).total_seconds() / 3600
+    logger.info(f"MBA7777 Duration in hours: {duration_hours}")
+
+    # Get the unit multiplier based on unit_of_time
+    unit_mapping = {
+        UnitOfTime.FIFTEEN_MINUTES: 0.25,
+        UnitOfTime.THIRTY_MINUTES: 0.5,
+        UnitOfTime.FORTY_FIVE_MINUTES: 0.75,
+        UnitOfTime.ONE_HOUR: 1,
+        UnitOfTime.TWO_HOURS: 2,
+        UnitOfTime.THREE_HOURS: 3,
+        UnitOfTime.FOUR_HOURS: 4,
+        UnitOfTime.FIVE_HOURS: 5,
+        UnitOfTime.SIX_HOURS: 6,
+        UnitOfTime.SEVEN_HOURS: 7,
+        UnitOfTime.EIGHT_HOURS: 8,
+        UnitOfTime.TWENTY_FOUR_HOURS: 24,
+        UnitOfTime.PER_DAY: 24,
+        UnitOfTime.PER_VISIT: None,  # Special case - no proration
+        UnitOfTime.WEEK: 168  # 24 * 7
+    }
+
+    unit_hours = unit_mapping.get(unit_of_time)
+    logger.info(f"MBA7777 Unit hours for {unit_of_time}: {unit_hours}")
+    
+    # Calculate base cost
+    if unit_hours is None:  # PER_VISIT case
+        multiplier = Decimal('1')
+        base_total = base_rate
+    else:
+        # Calculate how many units are needed
+        multiplier = Decimal(str(duration_hours / unit_hours)).quantize(Decimal('0.00001'))
+        base_total = base_rate * multiplier
+
+    logger.info(f"MBA7777 Calculated multiplier: {multiplier}")
+    logger.info(f"MBA7777 Base total: {base_total}")
+
+    # Calculate additional animal cost
+    additional_animal_rate_total = Decimal('0')
+    if num_pets > applies_after:
+        additional_pets = num_pets - applies_after
+        additional_animal_rate_total = additional_animal_rate * additional_pets * multiplier
+    logger.info(f"MBA7777 Additional animal rate total: {additional_animal_rate_total}")
+
+    # Add holiday rate if applicable (currently not implemented)
+    holiday_rate_total = Decimal('0')
+    logger.info(f"MBA7777 Holiday rate total: {holiday_rate_total}")
+
+    # Calculate additional rates total
+    additional_rates_total = Decimal('0')
+    if additional_rates:
+        additional_rates_total = sum(Decimal(str(rate['amount'])) for rate in additional_rates)
+    logger.info(f"MBA7777 Additional rates total: {additional_rates_total}")
+
+    # Calculate total
+    total_cost = base_total + additional_animal_rate_total + holiday_rate_total + additional_rates_total
+    logger.info(f"MBA7777 Final total cost: {total_cost}")
+
+    return {
+        'base_total': base_total,
+        'multiplier': multiplier,
+        'additional_animal_rate_total': additional_animal_rate_total,
+        'holiday_rate_total': holiday_rate_total,
+        'additional_rates_total': additional_rates_total,
+        'total_cost': total_cost
+    }
+
 class GetServiceRatesView(APIView):
     permission_classes = [IsAuthenticated]
     renderer_classes = [JSONRenderer]
@@ -1009,6 +1086,32 @@ class GetServiceRatesView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
+            # Calculate cost for 1 hour
+            now = datetime.now(pytz.UTC)
+            one_hour_later = now + timedelta(hours=1)
+
+            # Get additional rates
+            additional_rates = [
+                OrderedDict([
+                    ('title', rate.title),
+                    ('description', rate.description or ''),
+                    ('amount', str(rate.rate))
+                ]) for rate in service.additional_rates.all()
+            ]
+
+            # Calculate costs
+            costs = calculate_cost(
+                base_rate=service.base_rate,
+                additional_animal_rate=service.additional_animal_rate,
+                applies_after=service.applies_after,
+                holiday_rate=service.holiday_rate,
+                unit_of_time=service.unit_of_time,
+                num_pets=booking.booking_pets.count(),
+                start_dt=now,
+                end_dt=one_hour_later,
+                additional_rates=additional_rates
+            )
+
             # Format service rates
             rates_data = OrderedDict([
                 ('base_rate', str(service.base_rate)),
@@ -1016,14 +1119,11 @@ class GetServiceRatesView(APIView):
                 ('applies_after', service.applies_after),
                 ('holiday_rate', str(service.holiday_rate)),
                 ('unit_of_time', service.unit_of_time),
-                ('additional_rates', [
-                    OrderedDict([
-                        ('title', rate.title),
-                        ('description', rate.description or ''),
-                        ('amount', str(rate.rate))
-                    ]) for rate in service.additional_rates.all()
-                ])
+                ('additional_rates', additional_rates),
+                ('calculated_cost', str(costs['total_cost']))
             ])
+
+            logger.info(f"MBA9999 - Returning rates data: {rates_data}")
 
             return Response({
                 'status': 'success',
@@ -1035,5 +1135,86 @@ class GetServiceRatesView(APIView):
             logger.error(f"MBA9999 - Full error traceback: {traceback.format_exc()}")
             return Response(
                 {"error": "Failed to get service rates"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class CalculateOccurrenceCostView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, booking_id):
+        try:
+            # Get the booking and verify access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            if not (request.user == booking.client.user or request.user == booking.professional.user):
+                return Response(
+                    {"error": "Not authorized to access this booking"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get occurrence data from request
+            occurrence_data = request.data
+            if not occurrence_data:
+                return Response(
+                    {"error": "No occurrence data provided"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get user's timezone settings
+            user_settings = get_user_time_settings(request.user.id)
+            user_tz = pytz.timezone(user_settings['timezone'])
+
+            # Convert times to UTC for calculation
+            start_dt = datetime.strptime(
+                f"{occurrence_data['start_date']} {occurrence_data['start_time']}", 
+                '%Y-%m-%d %H:%M'
+            )
+            end_dt = datetime.strptime(
+                f"{occurrence_data['end_date']} {occurrence_data['end_time']}", 
+                '%Y-%m-%d %H:%M'
+            )
+
+            # Make datetime objects timezone-aware in user's timezone
+            start_dt = user_tz.localize(start_dt)
+            end_dt = user_tz.localize(end_dt)
+
+            # Convert to UTC
+            start_dt_utc = start_dt.astimezone(pytz.UTC)
+            end_dt_utc = end_dt.astimezone(pytz.UTC)
+
+            # Calculate costs
+            costs = calculate_cost(
+                base_rate=Decimal(str(occurrence_data['rates']['base_rate'])),
+                additional_animal_rate=Decimal(str(occurrence_data['rates']['additional_animal_rate'])),
+                applies_after=int(occurrence_data['rates']['applies_after']),
+                holiday_rate=Decimal(str(occurrence_data['rates']['holiday_rate'])),
+                unit_of_time=occurrence_data['rates']['unit_of_time'],
+                num_pets=booking.booking_pets.count(),
+                start_dt=start_dt_utc,
+                end_dt=end_dt_utc,
+                additional_rates=occurrence_data['rates'].get('additional_rates', [])
+            )
+
+            # Format times back to user's timezone
+            formatted_times = format_booking_occurrence(
+                start_dt_utc,
+                end_dt_utc,
+                request.user.id
+            )
+
+            logger.info(f"MBA9999 - Calculated costs: {costs}")
+
+            return Response({
+                'status': 'success',
+                'calculated_cost': str(costs['total_cost']),
+                'base_cost': str(costs['base_cost']),
+                'additional_rates_total': str(costs['additional_rates_total']),
+                'formatted_times': formatted_times
+            })
+
+        except Exception as e:
+            logger.error(f"Error calculating occurrence cost: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": "Failed to calculate occurrence cost"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
