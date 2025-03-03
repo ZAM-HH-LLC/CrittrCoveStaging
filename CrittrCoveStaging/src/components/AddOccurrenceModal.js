@@ -203,19 +203,119 @@ const AddOccurrenceModal = ({
   };
 
   const initialDates = parseInitialDates(initialOccurrence);
-  const [occurrence, setOccurrence] = useState({
-    startDateTime: initialDates.startDateTime,
-    endDateTime: initialDates.endDateTime,
-    isMilitary: timeSettings.use_military_time,
-    rates: initialOccurrence?.rates || {
-        baseRate: defaultRates?.baseRate?.toString() || '0',
-        additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
-        appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-        holidayRate: defaultRates?.holidayRate?.toString() || '0',
-        unit_of_time: initialOccurrence?.rates?.unit_of_time || defaultRates?.unit_of_time || 'Per Visit',
-        additionalRates: defaultRates?.additionalRates || []
+  
+  if (is_DEBUG) {
+    console.log('MBA565656 AddOccurrenceModal initializing with:', {
+      defaultRates,
+      initialOccurrence,
+      initialDates
+    });
+  }
+
+  const [occurrence, setOccurrence] = useState(() => {
+    const initialState = {
+      startDateTime: initialDates.startDateTime,
+      endDateTime: initialDates.endDateTime,
+      isMilitary: timeSettings.use_military_time,
+      rates: {
+        baseRate: '0',
+        additionalAnimalRate: '0',
+        appliesAfterAnimals: '1',
+        holidayRate: '0',
+        unit_of_time: 'Per Visit',
+        additionalRates: []
       }
+    };
+
+    // If we have an initial occurrence, use its rates
+    if (initialOccurrence?.rates) {
+      initialState.rates = initialOccurrence.rates;
+    }
+    // Otherwise if we have default rates, use those
+    else if (defaultRates) {
+      initialState.rates = {
+        baseRate: defaultRates.base_rate?.toString() || '0',
+        additionalAnimalRate: defaultRates.additional_animal_rate?.toString() || '0',
+        appliesAfterAnimals: defaultRates.applies_after?.toString() || '1',
+        holidayRate: defaultRates.holiday_rate?.toString() || '0',
+        unit_of_time: defaultRates.unit_of_time || 'Per Visit',
+        additionalRates: defaultRates.additional_rates?.map(rate => ({
+          name: rate.title,
+          description: rate.description || '',
+          amount: rate.amount
+        })) || []
+      };
+    }
+
+    if (is_DEBUG) {
+      console.log('MBA565656 Initial state calculated:', initialState);
+    }
+
+    return initialState;
   });
+
+  // Add effect to update rates when defaultRates changes
+  useEffect(() => {
+    if (!initialOccurrence && defaultRates) {
+      if (is_DEBUG) {
+        console.log('MBA565656 Updating rates from defaultRates:', {
+          defaultRates,
+          currentRates: occurrence.rates
+        });
+      }
+
+      const newRates = {
+        baseRate: defaultRates.base_rate?.toString() || '0',
+        additionalAnimalRate: defaultRates.additional_animal_rate?.toString() || '0',
+        appliesAfterAnimals: defaultRates.applies_after?.toString() || '1',
+        holidayRate: defaultRates.holiday_rate?.toString() || '0',
+        unit_of_time: defaultRates.unit_of_time || 'Per Visit',
+        additionalRates: defaultRates.additional_rates?.map(rate => ({
+          name: rate.title,
+          description: rate.description || '',
+          amount: rate.amount
+        })) || []
+      };
+
+      if (is_DEBUG) {
+        console.log('MBA565656 Setting new rates:', newRates);
+      }
+
+      setOccurrence(prev => {
+        const updated = {
+          ...prev,
+          rates: newRates
+        };
+        if (is_DEBUG) {
+          console.log('MBA565656 Updated occurrence state:', updated);
+        }
+        return updated;
+      });
+      
+      setUnitOfTime(defaultRates.unit_of_time || 'Per Visit');
+    }
+  }, [defaultRates, initialOccurrence]);
+
+  // Add effect to update unit_of_time when rates change
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA565656 Rates changed:', occurrence.rates);
+    }
+    setUnitOfTime(occurrence.rates.unit_of_time);
+  }, [occurrence.rates]);
+
+  // Add effect to log when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      if (is_DEBUG) {
+        console.log('MBA565656 Modal became visible:', {
+          defaultRates,
+          initialOccurrence,
+          currentRates: occurrence.rates
+        });
+      }
+    }
+  }, [visible]);
 
   // Add effect to update military time preference when timeSettings changes
   useEffect(() => {
@@ -422,12 +522,16 @@ const AddOccurrenceModal = ({
       endDateTime: new Date(new Date().setHours(new Date().getHours() + 1)),
       isMilitary: timeSettings.use_military_time,
       rates: {
-        baseRate: defaultRates?.baseRate?.toString() || '0',
-        additionalAnimalRate: defaultRates?.additionalAnimalRate?.toString() || '0',
-        appliesAfterAnimals: defaultRates?.appliesAfterAnimals || '1',
-        holidayRate: defaultRates?.holidayRate?.toString() || '0',
+        baseRate: defaultRates?.base_rate?.toString() || '0',
+        additionalAnimalRate: defaultRates?.additional_animal_rate?.toString() || '0',
+        appliesAfterAnimals: defaultRates?.applies_after?.toString() || '1',
+        holidayRate: defaultRates?.holiday_rate?.toString() || '0',
         unit_of_time: defaultRates?.unit_of_time || 'Per Visit',
-        additionalRates: defaultRates?.additionalRates || []
+        additionalRates: defaultRates?.additional_rates?.map(rate => ({
+          name: rate.title,
+          description: rate.description || '',
+          amount: rate.amount
+        })) || []
       }
     });
     setUnitOfTime(defaultRates?.unit_of_time || 'Per Visit');
@@ -454,60 +558,6 @@ const AddOccurrenceModal = ({
     setShowDeleteConfirmation(false);
     handleClose();
   };
-
-  useEffect(() => {
-    if (visible && !initialOccurrence && booking?.booking_id) {
-      // Fetch service rates when opening modal for a new occurrence
-      const fetchServiceRates = async () => {
-        try {
-          const token = await getStorage('userToken');
-          if (!token) {
-            throw new Error('No authentication token found');
-          }
-
-          const response = await fetch(
-            `${API_BASE_URL}/api/bookings/v1/${booking.booking_id}/service_rates/`,
-            {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const data = await response.json();
-          if (is_DEBUG) {
-            console.log('MBA9999 Service rates response:', data);
-          }
-
-          if (data.status === 'success' && data.rates) {
-            setOccurrence(prev => ({
-              ...prev,
-              rates: {
-                baseRate: data.rates.base_rate,
-                additionalAnimalRate: data.rates.additional_animal_rate,
-                appliesAfterAnimals: data.rates.applies_after,
-                holidayRate: data.rates.holiday_rate,
-                unit_of_time: data.rates.unit_of_time,
-                additionalRates: data.rates.additional_rates.map(rate => ({
-                  name: rate.title,
-                  description: rate.description,
-                  amount: rate.amount
-                }))
-              }
-            }));
-          }
-        } catch (error) {
-          console.error('MBA9999 Error fetching service rates:', error);
-        }
-      };
-
-      fetchServiceRates();
-    }
-  }, [visible, booking?.booking_id]);
 
   return (
     <>

@@ -154,6 +154,10 @@ const BookingDetails = () => {
   const [isPetsEditMode, setIsPetsEditMode] = useState(false);
   const [isServiceEditMode, setIsServiceEditMode] = useState(false);
   const [expandedOccurrenceIds, setExpandedOccurrenceIds] = useState([]);
+  const [selectedOccurrence, setSelectedOccurrence] = useState(null);
+  const [defaultOccurrenceRates, setDefaultOccurrenceRates] = useState(null);
+  const [showAddOccurrenceModal, setShowAddOccurrenceModal] = useState(false);
+  const [occurrenceError, setOccurrenceError] = useState(null);
   const [editedBooking, setEditedBooking] = useState({
     serviceDetails: {
       type: '',
@@ -172,8 +176,6 @@ const BookingDetails = () => {
   const [showAddRateModal, setShowAddRateModal] = useState(false);
   const [showServiceDropdown, setShowServiceDropdown] = useState(false);
   const [showAnimalDropdown, setShowAnimalDropdown] = useState(false);
-  const [selectedOccurrence, setSelectedOccurrence] = useState(null);
-  const [showAddOccurrenceModal, setShowAddOccurrenceModal] = useState(false);
   const [selectedPets, setSelectedPets] = useState([]);
   const [showPetDropdown, setShowPetDropdown] = useState(false);
   const [isPetsSaving, setIsPetsSaving] = useState(false);
@@ -192,7 +194,6 @@ const BookingDetails = () => {
   const [availableServices, setAvailableServices] = useState([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [snackBar, setSnackBar] = useState({ visible: false, message: '', type: 'success' });
-  const [occurrenceError, setOccurrenceError] = useState(null);
 
   useEffect(() => {
     const fetchBooking = async () => {
@@ -1000,6 +1001,9 @@ const BookingDetails = () => {
   };
 
   const handleDateTimeCardPress = (occurrence) => {
+    // Clear default rates when editing an existing occurrence
+    setDefaultOccurrenceRates(null);
+    
     if (is_DEBUG) {
       console.log('MBA4321 Original occurrence:', occurrence);
     }
@@ -1603,7 +1607,7 @@ const BookingDetails = () => {
   );
 
   // When the user clicks the "Add Occurrence" button
-  const handleAddOccurrenceClick = () => {
+  const handleAddOccurrenceClick = async () => {
     // Clear any previous errors
     setOccurrenceError(null);
 
@@ -1619,9 +1623,71 @@ const BookingDetails = () => {
       return;
     }
 
-    // If validation passes, open the modal
-    setSelectedOccurrence(null);
-    setShowAddOccurrenceModal(true);
+    try {
+      // Fetch service rates before opening modal
+      const token = await getStorage('userToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      if (is_DEBUG) {
+        console.log('MBA565656 Fetching service rates for booking:', booking.booking_id);
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/bookings/v1/${booking.booking_id}/service_rates/`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (is_DEBUG) {
+        console.log('MBA565656 Service rates response:', data);
+      }
+
+      if (data.status === 'success' && data.rates) {
+        // Create default rates object
+        const defaultRates = {
+          base_rate: data.rates.base_rate,
+          additional_animal_rate: data.rates.additional_animal_rate,
+          applies_after: data.rates.applies_after,
+          holiday_rate: data.rates.holiday_rate,
+          unit_of_time: data.rates.unit_of_time,
+          additional_rates: data.rates.additional_rates.map(rate => ({
+            title: rate.title,
+            description: rate.description,
+            amount: rate.amount
+          }))
+        };
+
+        if (is_DEBUG) {
+          console.log('MBA565656 Setting defaultOccurrenceRates:', defaultRates);
+        }
+
+        // Set the default rates
+        setDefaultOccurrenceRates(defaultRates);
+        
+        // Clear selected occurrence
+        setSelectedOccurrence(null);
+
+        // Open the modal
+        setShowAddOccurrenceModal(true);
+      } else {
+        throw new Error('Invalid response format from service rates endpoint');
+      }
+    } catch (error) {
+      if (is_DEBUG) {
+        console.error('MBA565656 Error fetching service rates:', error);
+      }
+      setOccurrenceError('Failed to load service rates. Please try again.');
+    }
   };
 
   const renderDateTimeSection = () => (
@@ -1870,6 +1936,7 @@ const BookingDetails = () => {
         visible={showAddOccurrenceModal}
         onClose={() => {
           setShowAddOccurrenceModal(false);
+          setDefaultOccurrenceRates(null);
           setTimeout(() => {
             setSelectedOccurrence(null);
           }, 300);
@@ -1877,9 +1944,10 @@ const BookingDetails = () => {
         onAdd={selectedOccurrence ? 
           (updatedData) => handleSaveOccurrence({...updatedData, occurrence_id: selectedOccurrence.occurrence_id}) : 
           handleAddOccurrence}
-        defaultRates={booking?.rates}
+        defaultRates={defaultOccurrenceRates}
         initialOccurrence={selectedOccurrence}
         isEditing={!!selectedOccurrence}
+        booking={booking}
       />
       <ConfirmationModal
         visible={confirmationModal.visible}
