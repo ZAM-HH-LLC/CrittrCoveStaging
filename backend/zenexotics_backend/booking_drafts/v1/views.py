@@ -787,9 +787,6 @@ class UpdateBookingOccurrencesView(APIView):
             processed_occurrences = []
             num_pets = len(pets_data)
             
-            # Get existing occurrences from booking
-            existing_occurrences = list(BookingOccurrence.objects.filter(booking=booking))
-            
             # Process each occurrence from the request
             for occurrence_data in request.data.get('occurrences', []):
                 try:
@@ -820,21 +817,26 @@ class UpdateBookingOccurrencesView(APIView):
                     start_dt_utc = start_dt.astimezone(pytz.UTC)
                     end_dt_utc = end_dt.astimezone(pytz.UTC)
 
-                    # Create or update occurrence with UTC times
-                    occurrence = next(
-                        (o for o in existing_occurrences if str(o.occurrence_id) == str(occurrence_data.get('occurrence_id'))),
-                        BookingOccurrence(
-                            booking=booking,
-                            start_date=start_dt_utc.date(),
-                            end_date=end_dt_utc.date(),
-                            start_time=start_dt_utc.time(),
-                            end_time=end_dt_utc.time()
+                    # Find existing occurrence in draft data or create new one
+                    occurrence_id = occurrence_data.get('occurrence_id')
+                    existing_draft_occurrences = current_draft_data.get('occurrences', [])
+                    
+                    if occurrence_id:
+                        # Try to find existing occurrence in draft data
+                        existing_occurrence = next(
+                            (o for o in existing_draft_occurrences 
+                             if str(o.get('occurrence_id')) == str(occurrence_id)),
+                            None
                         )
-                    )
-
-                    # Save new occurrence if it's not an existing one
-                    if not hasattr(occurrence, 'occurrence_id'):
-                        occurrence.save()
+                        if not existing_occurrence:
+                            logger.warning(f"MBA1644 - Occurrence {occurrence_id} not found in draft")
+                            occurrence_id = None
+                    
+                    if not occurrence_id:
+                        # Generate new unique ID for new occurrence
+                        # Use timestamp + random number to ensure uniqueness
+                        occurrence_id = f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"
+                        logger.info(f"MBA1644 - Generated new occurrence ID: {occurrence_id}")
 
                     # Create a temporary service with the rates from the request
                     temp_service = Service(
@@ -848,22 +850,37 @@ class UpdateBookingOccurrencesView(APIView):
                         unit_of_time=occurrence_data['rates'].get('unit_of_time', service.unit_of_time)
                     )
 
-                    # Calculate rates using the temporary service
-                    rate_data = calculate_occurrence_rates(occurrence, temp_service, num_pets)
+                    # Create a temporary occurrence object for rate calculation
+                    class TempOccurrence:
+                        def __init__(self, start_date, end_date, start_time, end_time):
+                            self.start_date = start_date
+                            self.end_date = end_date
+                            self.start_time = start_time
+                            self.end_time = end_time
+
+                    temp_occurrence = TempOccurrence(
+                        start_date=start_dt_utc.date(),
+                        end_date=end_dt_utc.date(),
+                        start_time=start_dt_utc.time(),
+                        end_time=end_dt_utc.time()
+                    )
+
+                    # Calculate rates using the temporary service and occurrence
+                    rate_data = calculate_occurrence_rates(temp_occurrence, temp_service, num_pets)
                     if not rate_data:
                         raise Exception("Failed to calculate rates")
 
-                    # Get formatted times
+                    # Get formatted times using the temp occurrence
                     formatted_times = get_formatted_times(
-                        occurrence=occurrence,
+                        occurrence=temp_occurrence,
                         user_id=booking.client.user.id
                     )
 
-                    logger.info(f"MBA162e32v44 - occurrence_id: {occurrence.occurrence_id}")
+                    logger.info(f"MBA162e32v44 - occurrence_id: {occurrence_id}")
 
                     # Create occurrence data
                     processed_occurrence = OrderedDict([
-                        ('occurrence_id', occurrence.occurrence_id),
+                        ('occurrence_id', occurrence_id),
                         ('start_date', start_date.isoformat()),
                         ('end_date', end_date.isoformat()),
                         ('start_time', occurrence_data['start_time']),

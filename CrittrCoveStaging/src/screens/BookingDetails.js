@@ -742,6 +742,15 @@ const BookingDetails = () => {
 
       // Find the occurrence index by matching dates and times
       const occurrenceIndex = booking.occurrences.findIndex((occ, index) => {
+        // First try to match by occurrence_id
+        if (updatedOccurrence.occurrence_id && occ.occurrence_id === updatedOccurrence.occurrence_id) {
+          if (is_DEBUG) {
+            console.log('MBA9740174 Found match by occurrence_id:', occ.occurrence_id);
+          }
+          return true;
+        }
+
+        // Fall back to date/time matching if no ID match
         const updatedStartTime = convertTo24Hour(updatedOccurrence.startTime);
         const updatedEndTime = convertTo24Hour(updatedOccurrence.endTime);
 
@@ -1089,92 +1098,96 @@ const BookingDetails = () => {
     setDefaultOccurrenceRates(null);
     
     if (is_DEBUG) {
-      console.log('MBA9740174 handleDateTimeCardPress - Original occurrence:', occurrence);
+        console.log('MBA9740174 handleDateTimeCardPress - Original occurrence:', occurrence);
     }
 
     // Calculate base total from the rates and time unit
     const calculateBaseTotal = (occurrence) => {
-      const baseRate = parseFloat(occurrence.rates?.base_rate || 0);
-      const timeUnit = occurrence.rates?.unit_of_time;
-      const timeUnits = calculateTimeUnits(
-        occurrence.start_date,
-        occurrence.end_date,
-        occurrence.start_time,
-        occurrence.end_time,
-        timeUnit
-      );
-      if (is_DEBUG) {
-        console.log('MBA9740174 calculateBaseTotal:', {
-          baseRate,
-          timeUnit,
-          timeUnits,
-          total: baseRate * timeUnits
-        });
-      }
-      return baseRate * timeUnits;
+        const baseRate = parseFloat(occurrence.rates?.base_rate || 0);
+        const timeUnit = occurrence.rates?.unit_of_time;
+        const timeUnits = calculateTimeUnits(
+            occurrence.start_date,
+            occurrence.end_date,
+            occurrence.start_time,
+            occurrence.end_time,
+            timeUnit
+        );
+        if (is_DEBUG) {
+            console.log('MBA9740174 calculateBaseTotal:', {
+                baseRate,
+                timeUnit,
+                timeUnits,
+                total: baseRate * timeUnits
+            });
+        }
+        return baseRate * timeUnits;
     };
 
     const baseTotal = calculateBaseTotal(occurrence);
 
     // Parse dates and times correctly
     const parseDateTime = (dateStr, timeStr) => {
-      // Handle both 12-hour and 24-hour time formats
-      let time = timeStr;
-      if (!timeStr.includes('AM') && !timeStr.includes('PM')) {
-        // Convert 24-hour to 12-hour format
-        const [hours, minutes] = timeStr.split(':');
-        const hour = parseInt(hours, 10);
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const hour12 = hour % 12 || 12;
-        time = `${hour12.toString().padStart(2, '0')}:${minutes} ${period}`;
-      }
+        let time = timeStr;
+        if (!timeStr.includes('AM') && !timeStr.includes('PM')) {
+            const [hours, minutes] = timeStr.split(':');
+            const hour = parseInt(hours, 10);
+            const period = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            time = `${hour12.toString().padStart(2, '0')}:${minutes} ${period}`;
+        }
 
-      if (is_DEBUG) {
-        console.log('MBA9740174 parseDateTime:', { dateStr, timeStr, parsedTime: time });
-      }
+        if (is_DEBUG) {
+            console.log('MBA9740174 parseDateTime:', { dateStr, timeStr, parsedTime: time });
+        }
 
-      return {
-        date: dateStr,
-        time: time
-      };
+        return {
+            date: dateStr,
+            time: time
+        };
     };
 
     const startDateTime = parseDateTime(occurrence.start_date, occurrence.start_time);
     const endDateTime = parseDateTime(occurrence.end_date, occurrence.end_time);
 
+    // Extract the occurrence ID, ensuring we get the correct one
+    const occurrenceId = occurrence.occurrence_id;
+    
+    if (is_DEBUG) {
+        console.log('MBA9740174 Using occurrence ID:', occurrenceId);
+    }
+
     const transformedOccurrence = {
-      id: occurrence.id || occurrence.occurrence_id,  // Try both possible ID fields
-      occurrence_id: occurrence.id || occurrence.occurrence_id,  // Try both possible ID fields
-      startDate: startDateTime.date,
-      endDate: endDateTime.date,
-      startTime: startDateTime.time,
-      endTime: endDateTime.time,
-      rates: {
-        baseRate: occurrence.rates?.base_rate?.toString() || '0',
-        additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
-        appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
-        holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
-        unit_of_time: occurrence.rates?.unit_of_time,
-        additionalRates: (occurrence.rates?.additional_rates || [])
-          .filter(rate => rate.title !== 'Booking Details Cost')
-          .map(rate => ({
-            name: rate.title,
-            description: rate.description || '',
-            amount: (rate.amount?.replace(/[^0-9.]/g, '') || '0').toString()
-          }))
-      },
-      totalCost: occurrence.calculated_cost?.toString() || '0',
-      baseTotal: baseTotal.toString(),
-      multiple: calculateMultiple(baseTotal.toString(), occurrence.rates?.base_rate)
+        occurrence_id: occurrenceId,  // Use the actual occurrence_id from the database
+        startDate: startDateTime.date,
+        endDate: endDateTime.date,
+        startTime: startDateTime.time,
+        endTime: endDateTime.time,
+        rates: {
+            baseRate: occurrence.rates?.base_rate?.toString() || '0',
+            additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
+            appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
+            holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
+            unit_of_time: occurrence.rates?.unit_of_time,
+            additionalRates: (occurrence.rates?.additional_rates || [])
+                .filter(rate => rate.title !== 'Booking Details Cost')
+                .map(rate => ({
+                    name: rate.title,
+                    description: rate.description || '',
+                    amount: (rate.amount?.replace(/[^0-9.]/g, '') || '0').toString()
+                }))
+        },
+        totalCost: occurrence.calculated_cost?.toString() || '0',
+        baseTotal: baseTotal.toString(),
+        multiple: calculateMultiple(baseTotal.toString(), occurrence.rates?.base_rate)
     };
 
     if (is_DEBUG) {
-      console.log('MBA9740174 transformedOccurrence:', transformedOccurrence);
-      console.log('MBA9740174 Original occurrence:', occurrence);
+        console.log('MBA9740174 transformedOccurrence:', transformedOccurrence);
+        console.log('MBA9740174 Original occurrence:', occurrence);
     }
     setSelectedOccurrence(transformedOccurrence);
     setShowAddOccurrenceModal(true);
-  };
+};
 
   const calculateMultiple = (baseTotal, baseRate) => {
     if (!baseRate || baseRate === 0) return 0;
