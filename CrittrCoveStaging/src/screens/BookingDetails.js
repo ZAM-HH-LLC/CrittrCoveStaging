@@ -528,7 +528,7 @@ const BookingDetails = () => {
   const toggleServiceEditMode = async () => {
     try {
       if (isServiceEditMode) {
-        if (is_DEBUG) console.log('MBA1234 - Service type change initiated:', editedBooking?.service_details?.service_id);
+        if (is_DEBUG) console.log('MBA123a73hv - Service type change initiated:', editedBooking?.service_details?.service_id);
         setIsServiceSaving(true);
 
         // Call the API to update the service type
@@ -536,7 +536,7 @@ const BookingDetails = () => {
 
         // Update the local state with the new draft data
         if (result.draft_data) {
-          if (is_DEBUG) console.log('MBA1234 - Received draft data:', result.draft_data);
+          if (is_DEBUG) console.log('MBA123a73hv - Received draft data:', result.draft_data);
           
           setBooking(prevBooking => ({
             ...prevBooking,
@@ -1890,7 +1890,7 @@ const BookingDetails = () => {
 
   const updateServiceType = async (bookingId, serviceId) => {
     try {
-      if (is_DEBUG) console.log('MBA1234 - Updating service type:', { bookingId, serviceId });
+      if (is_DEBUG) console.log('MBA123a73hv - Updating service type:', { bookingId, serviceId });
       const token = await getStorage('userToken');
       if (!token) {
         throw new Error('No authentication token found');
@@ -1907,14 +1907,15 @@ const BookingDetails = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
+        if (is_DEBUG) console.error('MBA123a73hv - Error updating service type:', errorData);
         throw new Error(errorData.error || 'Failed to update service type');
       }
 
       const data = await response.json();
-      if (is_DEBUG) console.log('MBA1234 - Service type update response:', data);
+      if (is_DEBUG) console.log('MBA123a73hv - Service type update response:', data);
       return data;
     } catch (error) {
-      if (is_DEBUG) console.error('MBA1234 - Error updating service type:', error);
+      if (is_DEBUG) console.error('MBA123a73hv - Error updating service type:', error);
       throw error;
     }
   };
