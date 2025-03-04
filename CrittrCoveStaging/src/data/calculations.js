@@ -192,7 +192,7 @@ export const calculateOccurrenceCost = (occurrenceData, numPets = 0) => {
     let additionalAnimalRateTotal = 0;
     if (numPets > parseInt(applies_after)) {
         const additionalPets = numPets - parseInt(applies_after);
-        additionalAnimalRateTotal = parseFloat(additional_animal_rate) * additionalPets * numberOfUnits;
+        additionalAnimalRateTotal = parseFloat(additional_animal_rate) * additionalPets;
     }
 
     console.log('MBA93652 Additional animal cost:', {
