@@ -15,14 +15,23 @@ export const handleBack = async (navigation) => {
       currentRoute = sessionStorage.getItem('currentRoute');
       
       if (previousRoute) {
-        sessionStorage.setItem('currentRoute', previousRoute);
-        sessionStorage.setItem('previousRoute', currentRoute);
-        // if (is_DEBUG) {
-        //   console.log('Previous Route:', previousRoute);
-        //   console.log('Current Route:', currentRoute);
-        // }
+        console.log('MBA98386196v Previous Route Before:', previousRoute);
+        console.log('MBA98386196v Current Route Before:', currentRoute);
+        
+        // Get the previous-previous route
+        const prevPrevRoute = sessionStorage.getItem('prevPrevRoute');
+        
+        // Navigate to previous route
         navigation.navigate(previousRoute);
+        
+        // Update the chain
+        sessionStorage.setItem('currentRoute', previousRoute);
+        sessionStorage.setItem('previousRoute', prevPrevRoute || '');
+        
+        console.log('MBA98386196v Previous Route After:', sessionStorage.getItem('previousRoute'));
+        console.log('MBA98386196v Current Route After:', sessionStorage.getItem('currentRoute'));
       } else {
+        console.log('MBA98386196v No Previous Route');
         // Default to More screen if no previous route
         navigation.navigate('More');
       }
@@ -31,11 +40,18 @@ export const handleBack = async (navigation) => {
       currentRoute = await AsyncStorage.getItem('currentRoute');
       
       if (previousRoute) {
-        await AsyncStorage.setItem('currentRoute', previousRoute);
-        await AsyncStorage.setItem('previousRoute', currentRoute);
-        // console.log('Previous Route:', previousRoute);
-        // console.log('Current Route:', currentRoute);
+        // Get the previous-previous route
+        const prevPrevRoute = await AsyncStorage.getItem('prevPrevRoute');
+        
+        // Navigate to previous route
         navigation.navigate(previousRoute);
+        
+        // Update the chain
+        await AsyncStorage.setItem('currentRoute', previousRoute);
+        await AsyncStorage.setItem('previousRoute', prevPrevRoute || '');
+        
+        console.log('MBA98386196v Previous Route:', previousRoute);
+        console.log('MBA98386196v Current Route:', currentRoute);
       } else {
         // Default to More screen if no previous route
         navigation.navigate('More');
@@ -55,19 +71,28 @@ export const handleBack = async (navigation) => {
 
 export const navigateToFrom = async (navigation, toLocation, fromLocation, params = {}) => {
   try {
-    // if (is_DEBUG) {
-    //   console.log('Navigating from:', fromLocation, 'to:', toLocation);
-    // }
     if (Platform.OS === 'web') {
+      // Store the current previousRoute as prevPrevRoute before updating
+      const currentPreviousRoute = sessionStorage.getItem('previousRoute');
+      if (currentPreviousRoute) {
+        sessionStorage.setItem('prevPrevRoute', currentPreviousRoute);
+      }
+      
       sessionStorage.setItem('previousRoute', fromLocation);
       sessionStorage.setItem('currentRoute', toLocation);
-      // console.log('Web - Set previousRoute:', fromLocation);
-      // console.log('Web - Set currentRoute:', toLocation);
+      console.log('MBA98386196v Web - Set previousRoute:', fromLocation);
+      console.log('MBA98386196v Web - Set currentRoute:', toLocation);
     } else {
+      // Store the current previousRoute as prevPrevRoute before updating
+      const currentPreviousRoute = await AsyncStorage.getItem('previousRoute');
+      if (currentPreviousRoute) {
+        await AsyncStorage.setItem('prevPrevRoute', currentPreviousRoute);
+      }
+      
       await AsyncStorage.setItem('previousRoute', fromLocation);
       await AsyncStorage.setItem('currentRoute', toLocation);
-      // console.log('Mobile - Set previousRoute:', fromLocation);
-      // console.log('Mobile - Set currentRoute:', toLocation);
+      console.log('MBA98386196v Mobile - Set previousRoute:', fromLocation);
+      console.log('MBA98386196v Mobile - Set currentRoute:', toLocation);
     }
     setTimeout(() => {
       navigation.navigate(toLocation, params);
@@ -107,25 +132,26 @@ export default function Navigation({ navigation }) {
       console.log('Screen name:', screenName);
     }
     try {
+      let currentRoute = '';
       if (Platform.OS === 'web') {
         // Web: Use sessionStorage
-        const currentRoute = sessionStorage.getItem('currentRoute');
+        currentRoute = sessionStorage.getItem('currentRoute');
         if (currentRoute) {
           sessionStorage.setItem('previousRoute', currentRoute);
         }
         sessionStorage.setItem('currentRoute', screenName);
       } else {
         // Mobile: Use AsyncStorage
-        const currentRoute = await AsyncStorage.getItem('currentRoute');
+        currentRoute = await AsyncStorage.getItem('currentRoute');
         if (currentRoute) {
           await AsyncStorage.setItem('previousRoute', currentRoute);
         }
         await AsyncStorage.setItem('currentRoute', screenName);
       }
-      navigation.navigate(screenName);
+      navigateToFrom(navigation, screenName, currentRoute);
     } catch (error) {
       console.error('Error handling navigation:', error);
-      navigation.navigate(screenName);
+      navigateToFrom(navigation, screenName, currentRoute);
     }
   };
 

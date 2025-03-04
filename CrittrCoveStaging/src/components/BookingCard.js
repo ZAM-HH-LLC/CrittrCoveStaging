@@ -33,15 +33,6 @@ const BookingCard = ({ booking, type, onViewDetails, onCancel }) => {
         </Text>
 
         <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.viewButton]}
-            onPress={(e) => {
-              e.stopPropagation(); // Prevent card click when button is clicked
-              onViewDetails();
-            }}
-          >
-            <Text style={styles.buttonText}>View Details</Text>
-          </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.button, styles.cancelButton]}
@@ -53,6 +44,16 @@ const BookingCard = ({ booking, type, onViewDetails, onCancel }) => {
             <Text style={[styles.buttonText, styles.cancelButtonText]}>
               Cancel Booking
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.viewButton]}
+            onPress={(e) => {
+              e.stopPropagation(); // Prevent card click when button is clicked
+              onViewDetails();
+            }}
+          >
+            <Text style={styles.buttonText}>View Details</Text>
           </TouchableOpacity>
         </View>
       </View>
