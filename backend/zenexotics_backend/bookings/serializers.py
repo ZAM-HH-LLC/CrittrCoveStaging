@@ -75,6 +75,62 @@ class PetSerializer(serializers.ModelSerializer):
         model = Pet
         fields = ['pet_id', 'name', 'species', 'breed']
 
+class BookingResponseSerializer:
+    """
+    Shared serializer for booking responses.
+    Used by both BookingDetailSerializer and UpdateBookingView.
+    """
+    @staticmethod
+    def format_response(booking, draft_data=None, user=None):
+        """
+        Format a booking response with optional draft data.
+        If draft_data is provided, it will override the booking data.
+        """
+        logger.info(f"MBA976asd2n2h5 Formatting booking response for booking {booking.booking_id}")
+        
+        # Get base data from booking
+        response_data = {
+            'booking_id': booking.booking_id,
+            'status': booking.status,
+            'client_name': booking.client.user.name,
+            'professional_name': booking.professional.user.name,
+            'service_details': {
+                'service_id': booking.service_id.service_id,
+                'service_type': booking.service_id.service_name
+            } if booking.service_id else None,
+            'pets': [
+                {
+                    'pet_id': bp.pet.pet_id,
+                    'name': bp.pet.name,
+                    'species': bp.pet.species,
+                    'breed': bp.pet.breed
+                }
+                for bp in booking.booking_pets.select_related('pet').all()
+            ],
+            'occurrences': [],
+            'cost_summary': None,
+            'can_edit': BookingStates.can_professional_edit(booking.status)
+        }
+
+        # Override with draft data if provided
+        if draft_data:
+            logger.info(f"MBA976asd2n2h5 Using draft data to override booking data")
+            if 'status' in draft_data:
+                response_data['status'] = draft_data['status']
+            if 'service_details' in draft_data:
+                response_data['service_details'] = draft_data['service_details']
+            if 'pets' in draft_data:
+                response_data['pets'] = draft_data['pets']
+            if 'occurrences' in draft_data:
+                response_data['occurrences'] = draft_data['occurrences']
+            if 'cost_summary' in draft_data:
+                response_data['cost_summary'] = draft_data['cost_summary']
+            if 'original_status' in draft_data:
+                response_data['original_status'] = draft_data['original_status']
+
+        logger.info(f"MBA976asd2n2h5 Formatted response data: {response_data}")
+        return response_data
+
 class BookingDetailSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.user.name')
     professional_name = serializers.CharField(source='professional.user.name')
@@ -275,7 +331,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         # Count holiday days in the occurrence range
         holiday_days = count_holidays(occurrence.start_date, occurrence.end_date)
         
-        # Use unit_of_time from booking_details instead of service
+        # Use unit_of_time from booking details instead of service
         unit_of_time = booking_details.unit_of_time
         
         return {

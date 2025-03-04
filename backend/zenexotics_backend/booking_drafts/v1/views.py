@@ -983,18 +983,6 @@ class UpdateBookingOccurrencesView(APIView):
 
                     # Find existing occurrence in draft data or create new one
                     occurrence_id = occurrence_data.get('occurrence_id')
-                    existing_draft_occurrences = current_draft_data.get('occurrences', [])
-                    
-                    if occurrence_id:
-                        # Try to find existing occurrence in draft data
-                        existing_occurrence = next(
-                            (o for o in existing_draft_occurrences 
-                             if str(o.get('occurrence_id')) == str(occurrence_id)),
-                            None
-                        )
-                        if not existing_occurrence:
-                            logger.warning(f"MBA1644 - Occurrence {occurrence_id} not found in draft")
-                            occurrence_id = None
                     
                     if not occurrence_id:
                         # Generate new unique ID for new occurrence
