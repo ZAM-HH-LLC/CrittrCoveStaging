@@ -1135,6 +1135,8 @@ class UpdateBookingOccurrencesView(APIView):
                         user_id=booking.client.user.id
                     )
 
+                    logger.info(f"MBA162e32v44 - occurrence_id: {occurrence.occurrence_id}")
+
                     # Create occurrence data
                     processed_occurrence = OrderedDict([
                         ('occurrence_id', occurrence.occurrence_id),
@@ -1151,6 +1153,12 @@ class UpdateBookingOccurrencesView(APIView):
                         ('duration', formatted_times['duration']),
                         ('timezone', formatted_times['timezone'])
                     ])
+
+                    # Check for DST change by comparing UTC offsets
+                    if start_dt.utcoffset() != end_dt.utcoffset():
+                        processed_occurrence['dst_message'] = "Elapsed time may be different than expected due to Daylight Savings Time."
+                    else:
+                        processed_occurrence['dst_message'] = ""
 
                     processed_occurrences.append(processed_occurrence)
                 except Exception as e:

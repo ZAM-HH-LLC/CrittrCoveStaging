@@ -8,9 +8,11 @@ import { format, parse } from 'date-fns';
 import { TIME_OPTIONS } from '../data/mockData';
 import { validateDateTimeRange } from '../utils/dateTimeValidation';
 import { Button } from 'react-native-paper';
+import { API_BASE_URL } from '../config/config';
 import ConfirmationModal from './ConfirmationModal';
 import { getStorage } from '../context/AuthContext';
 import { debounce } from 'lodash';
+import { calculateOccurrenceCost } from '../data/calculations';
 
 const ANIMAL_COUNT_OPTIONS = ['1', '2', '3', '4', '5'];
 
@@ -84,41 +86,8 @@ const AddOccurrenceModal = ({
   const [isAnyPickerActive, setIsAnyPickerActive] = useState(false);
   const heightAnim = useRef(new Animated.Value(0)).current;
   const [validationError, setValidationError] = useState(null);
-
-  // Clear validation error when modal becomes visible
-  useEffect(() => {
-    if (visible) {
-      setValidationError(null);
-    }
-  }, [visible]);
-
-  const handlePickerStateChange = (isActive) => {
-    setIsAnyPickerActive(isActive);
-    if (is_DEBUG) {
-      console.log('MBA5678 Picker state changed:', {
-        isActive,
-        isFromRequestBooking,
-        currentModalHeight: isActive && isFromRequestBooking ? '65vh' : '80%'
-      });
-    }
-
-    // Animate to new height
-    Animated.timing(heightAnim, {
-      toValue: isActive && isFromRequestBooking ? 1 : 0,
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  useEffect(() => {
-    if (is_DEBUG) {
-      console.log('MBA5678 Modal state:', {
-        isFromRequestBooking,
-        isAnyPickerActive,
-        visible
-      });
-    }
-  }, [isFromRequestBooking, isAnyPickerActive, visible]);
+  const initialValues = useRef(null);
+  const [isCalculatingCost, setIsCalculatingCost] = useState(false);
 
   const parseInitialDates = (initialOccurrence) => {
     if (is_DEBUG) {
@@ -258,6 +227,60 @@ const AddOccurrenceModal = ({
     return initialState;
   });
 
+  const [unit_of_time, setUnitOfTime] = useState(
+    initialOccurrence?.rates?.unit_of_time || 
+    defaultRates?.unit_of_time || 
+    'Per Visit'
+  );
+
+  // Clear validation error and set initial values when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      setValidationError(null);
+      // Store initial values when modal opens, including dates
+      initialValues.current = {
+        baseRate: occurrence.rates.baseRate,
+        additionalAnimalRate: occurrence.rates.additionalAnimalRate,
+        holidayRate: occurrence.rates.holidayRate,
+        unit_of_time: occurrence.rates.unit_of_time,
+        additionalRates: [...occurrence.rates.additionalRates],
+        startDateTime: new Date(occurrence.startDateTime),
+        endDateTime: new Date(occurrence.endDateTime)
+      };
+      if (is_DEBUG) {
+        console.log('MBA565656 Setting initial values:', initialValues.current);
+      }
+    }
+  }, [visible]); // Only depend on visible prop
+
+  const handlePickerStateChange = (isActive) => {
+    setIsAnyPickerActive(isActive);
+    if (is_DEBUG) {
+      console.log('MBA5678 Picker state changed:', {
+        isActive,
+        isFromRequestBooking,
+        currentModalHeight: isActive && isFromRequestBooking ? '65vh' : '80%'
+      });
+    }
+
+    // Animate to new height
+    Animated.timing(heightAnim, {
+      toValue: isActive && isFromRequestBooking ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA5678 Modal state:', {
+        isFromRequestBooking,
+        isAnyPickerActive,
+        visible
+      });
+    }
+  }, [isFromRequestBooking, isAnyPickerActive, visible]);
+
   // Add effect to update rates when defaultRates changes
   useEffect(() => {
     if (!initialOccurrence && defaultRates) {
@@ -302,77 +325,149 @@ const AddOccurrenceModal = ({
     }
   }, [defaultRates, initialOccurrence]);
 
-  // Add debounced function for cost calculation
+  // Replace the debounced API call with frontend calculation
   const debouncedCalculateCosts = useCallback(
-    debounce(async (occurrenceData) => {
+    debounce((occurrenceData) => {
       if (!booking?.booking_id) return;
 
       try {
-        const token = await getStorage('userToken');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
+        setIsCalculatingCost(true);
+        
+        // Calculate cost using frontend function
+        const result = calculateOccurrenceCost(occurrenceData, booking.pets?.length || 0);
 
-        const response = await fetch(
-          `${API_BASE_URL}/api/bookings/v1/${booking.booking_id}/calculate_occurrence_cost/`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(occurrenceData)
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
         if (is_DEBUG) {
-          console.log('MBA565656 Cost calculation response:', data);
+          console.log('MBA565656 Cost calculation result:', result);
         }
 
-        if (data.status === 'success') {
-          setOccurrence(prev => ({
-            ...prev,
-            calculatedCost: data.calculated_cost
-          }));
-        }
+        setOccurrence(prev => ({
+          ...prev,
+          calculatedCost: result.total_cost.toFixed(2)
+        }));
       } catch (error) {
         if (is_DEBUG) {
           console.error('MBA565656 Error calculating costs:', error);
         }
+      } finally {
+        setIsCalculatingCost(false);
       }
     }, 500),
-    [booking?.booking_id]
+    [booking?.booking_id, booking?.pets?.length]
   );
 
-  // Add effect to calculate costs when relevant fields change
+  // Update the cost calculation effect
   useEffect(() => {
-    const occurrenceData = {
-      start_date: format(occurrence.startDateTime, 'yyyy-MM-dd'),
-      end_date: format(occurrence.endDateTime, 'yyyy-MM-dd'),
-      start_time: format(occurrence.startDateTime, 'HH:mm'),
-      end_time: format(occurrence.endDateTime, 'HH:mm'),
-      rates: {
-        base_rate: occurrence.rates.baseRate,
-        additional_animal_rate: occurrence.rates.additionalAnimalRate,
-        applies_after: occurrence.rates.appliesAfterAnimals,
-        holiday_rate: occurrence.rates.holidayRate,
-        unit_of_time: occurrence.rates.unit_of_time,
-        additional_rates: occurrence.rates.additionalRates
+    // Only calculate costs if:
+    // 1. Modal is visible
+    // 2. We have initial values set
+    // 3. Have a valid booking ID
+    // 4. User has made actual changes to the form
+    if (visible && initialValues.current && booking?.booking_id) {
+      if (is_DEBUG) {
+        console.log('MBA565656 Checking for changes:', {
+          current: {
+            rates: occurrence.rates,
+            startDateTime: occurrence.startDateTime.toISOString(),
+            endDateTime: occurrence.endDateTime.toISOString()
+          },
+          initial: {
+            rates: initialValues.current,
+            startDateTime: initialValues.current.startDateTime.toISOString(),
+            endDateTime: initialValues.current.endDateTime.toISOString()
+          }
+        });
       }
-    };
 
-    debouncedCalculateCosts(occurrenceData);
+      // Track if any changes were made that require recalculation
+      const timeDiffs = {
+        start: Math.abs(occurrence.startDateTime.getTime() - initialValues.current.startDateTime.getTime()),
+        end: Math.abs(occurrence.endDateTime.getTime() - initialValues.current.endDateTime.getTime())
+      };
+
+      const rateChanges = {
+        baseRate: occurrence.rates.baseRate !== initialValues.current.baseRate,
+        additionalAnimalRate: occurrence.rates.additionalAnimalRate !== initialValues.current.additionalAnimalRate,
+        holidayRate: occurrence.rates.holidayRate !== initialValues.current.holidayRate,
+        unit_of_time: occurrence.rates.unit_of_time !== initialValues.current.unit_of_time,
+        additionalRatesLength: occurrence.rates.additionalRates.length !== initialValues.current.additionalRates.length
+      };
+
+      const hasChanges = 
+        rateChanges.baseRate ||
+        rateChanges.additionalAnimalRate ||
+        rateChanges.holidayRate ||
+        rateChanges.unit_of_time ||
+        rateChanges.additionalRatesLength ||
+        timeDiffs.start >= 1000 ||
+        timeDiffs.end >= 1000;
+
+      if (is_DEBUG) {
+        console.log('MBA565656 Change detection details:', {
+          timeDiffs,
+          rateChanges,
+          hasChanges
+        });
+      }
+
+      if (hasChanges) {
+        if (is_DEBUG) {
+          console.log('MBA565656 Changes detected, calculating costs:', {
+            current: {
+              rates: occurrence.rates,
+              startDateTime: occurrence.startDateTime.toISOString(),
+              endDateTime: occurrence.endDateTime.toISOString()
+            },
+            initial: {
+              rates: initialValues.current,
+              startDateTime: initialValues.current.startDateTime.toISOString(),
+              endDateTime: initialValues.current.endDateTime.toISOString()
+            },
+            timeDiffs,
+            rateChanges
+          });
+        }
+
+        const occurrenceData = {
+          start_date: format(occurrence.startDateTime, 'yyyy-MM-dd'),
+          end_date: format(occurrence.endDateTime, 'yyyy-MM-dd'),
+          start_time: format(occurrence.startDateTime, 'HH:mm'),
+          end_time: format(occurrence.endDateTime, 'HH:mm'),
+          rates: {
+            base_rate: occurrence.rates.baseRate,
+            additional_animal_rate: occurrence.rates.additionalAnimalRate,
+            applies_after: occurrence.rates.appliesAfterAnimals,
+            holiday_rate: occurrence.rates.holidayRate,
+            unit_of_time: occurrence.rates.unit_of_time,
+            additional_rates: occurrence.rates.additionalRates
+          }
+        };
+
+        if (is_DEBUG) {
+          console.log('MBA565656 Calling debouncedCalculateCosts with:', occurrenceData);
+        }
+
+        debouncedCalculateCosts(occurrenceData);
+      } else {
+        if (is_DEBUG) {
+          console.log('MBA565656 No changes detected, skipping calculation');
+        }
+      }
+    } else {
+      if (is_DEBUG) {
+        console.log('MBA565656 Skipping cost calculation:', {
+          visible,
+          hasInitialValues: !!initialValues.current,
+          hasBookingId: !!booking?.booking_id
+        });
+      }
+    }
 
     // Cleanup function
     return () => {
       debouncedCalculateCosts.cancel();
     };
   }, [
+    visible,
     occurrence.startDateTime,
     occurrence.endDateTime,
     occurrence.rates.baseRate,
@@ -381,7 +476,8 @@ const AddOccurrenceModal = ({
     occurrence.rates.holidayRate,
     occurrence.rates.unit_of_time,
     occurrence.rates.additionalRates,
-    debouncedCalculateCosts
+    debouncedCalculateCosts,
+    booking?.booking_id
   ]);
 
   // Add effect to update unit_of_time when rates change
@@ -445,25 +541,57 @@ const AddOccurrenceModal = ({
 
   const handleStartDateTimeChange = (date) => {
     if (is_DEBUG) {
-      console.log('MBA1234 Start datetime changed:', date?.toISOString());
+      console.log('MBA1234 Start datetime changed:', {
+        newDate: date?.toISOString(),
+        currentInitialValues: initialValues.current,
+        currentOccurrence: {
+          startDateTime: occurrence.startDateTime.toISOString(),
+          endDateTime: occurrence.endDateTime.toISOString()
+        }
+      });
     }
     if (date && !isNaN(date.getTime())) {
-      setOccurrence(prev => ({
-        ...prev,
-        startDateTime: date
-      }));
+      setOccurrence(prev => {
+        const updated = {
+          ...prev,
+          startDateTime: date
+        };
+        if (is_DEBUG) {
+          console.log('MBA1234 Updated occurrence:', {
+            startDateTime: updated.startDateTime.toISOString(),
+            endDateTime: updated.endDateTime.toISOString()
+          });
+        }
+        return updated;
+      });
     }
   };
 
   const handleEndDateTimeChange = (date) => {
     if (is_DEBUG) {
-      console.log('MBA1234 End datetime changed:', date?.toISOString());
+      console.log('MBA1234 End datetime changed:', {
+        newDate: date?.toISOString(),
+        currentInitialValues: initialValues.current,
+        currentOccurrence: {
+          startDateTime: occurrence.startDateTime.toISOString(),
+          endDateTime: occurrence.endDateTime.toISOString()
+        }
+      });
     }
     if (date && !isNaN(date.getTime())) {
-      setOccurrence(prev => ({
-        ...prev,
-        endDateTime: date
-      }));
+      setOccurrence(prev => {
+        const updated = {
+          ...prev,
+          endDateTime: date
+        };
+        if (is_DEBUG) {
+          console.log('MBA1234 Updated occurrence:', {
+            startDateTime: updated.startDateTime.toISOString(),
+            endDateTime: updated.endDateTime.toISOString()
+          });
+        }
+        return updated;
+      });
     }
   };
 
@@ -520,11 +648,6 @@ const AddOccurrenceModal = ({
 
   const [showAddRate, setShowAddRate] = useState(false);
   const [newRate, setNewRate] = useState({ name: '', amount: '' });
-  const [unit_of_time, setUnitOfTime] = useState(
-    initialOccurrence?.rates?.unit_of_time || 
-    defaultRates?.unit_of_time || 
-    'Per Visit'
-  );
   
   useEffect(() => {
     if (is_DEBUG) {
@@ -865,7 +988,13 @@ const AddOccurrenceModal = ({
 
                   <View style={styles.totalSection}>
                     <Text style={styles.totalLabel}>Total:</Text>
-                    <Text style={styles.totalAmount}>${occurrence.calculatedCost}</Text>
+                    {isCalculatingCost ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                      </View>
+                    ) : (
+                      <Text style={styles.totalAmount}>${parseFloat(occurrence.calculatedCost).toFixed(2)}</Text>
+                    )}
                   </View>
 
                 </>
@@ -1093,6 +1222,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: theme.fonts.regular.fontFamily,
     marginTop: 8,
+  },
+  loadingContainer: {
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
 });
 

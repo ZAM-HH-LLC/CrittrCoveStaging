@@ -38,9 +38,7 @@ def calculate_time_units(start_datetime, end_datetime, unit_of_time):
         return Decimal(str(duration_hours / 6)).quantize(Decimal('0.00001'))
     elif unit_of_time == '8 Hour':
         return Decimal(str(duration_hours / 8)).quantize(Decimal('0.00001'))
-    elif unit_of_time == '24 Hour':
-        return Decimal(str(duration_hours / 24)).quantize(Decimal('0.00001'))
-    elif unit_of_time in ['Per Day']:
+    elif unit_of_time in ['24 Hour', 'Per Day']:  # Handle both daily cases the same way
         return Decimal(str(duration_hours / 24)).quantize(Decimal('0.00001'))
     elif unit_of_time in ['Per Visit']:
         return Decimal('1')
@@ -152,14 +150,22 @@ def create_occurrence_data(occurrence, service, num_pets, user_timezone='UTC'):
             
         # Get formatted times
         formatted_times = get_formatted_times(occurrence, occurrence.booking.client.user.id)
+        logger.info(f"MBA72373457437 - Formatted times: {formatted_times}")
         
         # Convert times to user's timezone and 12-hour format
         start_dt = datetime.combine(occurrence.start_date, occurrence.start_time)
         end_dt = datetime.combine(occurrence.end_date, occurrence.end_time)
+        logger.info(f"MBA72373457437 - Start dt: {start_dt}, End dt: {end_dt}")
         
         # Convert to user's timezone
         user_start = convert_from_utc(start_dt, user_timezone)
         user_end = convert_from_utc(end_dt, user_timezone)
+        logger.info(f"MBA72373457437 - User start: {user_start}, User end: {user_end}")
+        
+        # Check for DST change by comparing UTC offsets
+        dst_message = ""
+        if user_start.utcoffset() != user_end.utcoffset():
+            dst_message = "Elapsed time may be different than expected due to Daylight Savings Time."
         
         # Format in 12-hour time
         start_time = user_start.strftime('%I:%M %p')
@@ -188,7 +194,8 @@ def create_occurrence_data(occurrence, service, num_pets, user_timezone='UTC'):
             ('formatted_start', formatted_times['formatted_start']),
             ('formatted_end', formatted_times['formatted_end']),
             ('duration', formatted_times['duration']),
-            ('timezone', formatted_times['timezone'])
+            ('timezone', formatted_times['timezone']),
+            ('dst_message', dst_message)
         ])
         
         return occurrence_data

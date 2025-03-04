@@ -65,41 +65,26 @@ const calculateTimeUnits = (startDate, endDate, startTime, endTime, timeUnit) =>
       return Math.ceil(diffMs / (60 * 60 * 1000));
     case '2 Hour':
       return Math.ceil(diffMs / (2 * 60 * 60 * 1000));
+    case '3 Hour':
+      return Math.ceil(diffMs / (3 * 60 * 60 * 1000));
     case '4 Hour':
       return Math.ceil(diffMs / (4 * 60 * 60 * 1000));
+    case '5 Hour':
+      return Math.ceil(diffMs / (5 * 60 * 60 * 1000));
+    case '6 Hour':
+      return Math.ceil(diffMs / (6 * 60 * 60 * 1000));
+    case '7 Hour':
+      return Math.ceil(diffMs / (7 * 60 * 60 * 1000));
     case '8 Hour':
       return Math.ceil(diffMs / (8 * 60 * 60 * 1000));
     case '24 Hour':
     case 'Per Day':
       return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
-    case 'Overnight':
-      return 1; // Overnight is typically counted as one unit
     case 'Per Visit':
       return 1; // Per visit is counted as one unit
     default:
       return 1;
   }
-};
-
-const calculateOccurrenceCost = (occurrence) => {
-  // If occurrence doesn't have rates, return 0
-  if (!occurrence.rates) {
-    return 0;
-  }
-  
-  const timeUnits = calculateTimeUnits(
-    occurrence.startDate,
-    occurrence.endDate,
-    occurrence.startTime,
-    occurrence.endTime,
-    occurrence.rates.timeUnit
-  );
-  
-  const baseTotal = occurrence.rates.baseRate * timeUnits;
-  const additionalRatesTotal = (occurrence.rates.additionalRates || [])
-    .reduce((sum, rate) => sum + parseFloat(rate.amount || 0), 0);
-    
-  return baseTotal + additionalRatesTotal;
 };
 
 const RequestChangesModal = ({ visible, onClose, onSubmit, loading }) => {
@@ -729,7 +714,10 @@ const BookingDetails = () => {
   const handleSaveOccurrence = async (updatedOccurrence) => {
     try {
       if (is_DEBUG) {
-        console.log('MBA1644 Saving occurrence:', updatedOccurrence);
+        console.log('MBA9740174 handleSaveOccurrence - Start:', {
+          updatedOccurrence,
+          currentBookingOccurrences: booking.occurrences
+        });
       }
 
       const token = await getStorage('userToken');
@@ -737,73 +725,147 @@ const BookingDetails = () => {
         throw new Error('No authentication token found');
       }
 
-      // Find the original occurrence to preserve dates if only unit_of_time changed
-      const originalOccurrence = booking.occurrences.find(
-        occ => occ.occurrence_id === updatedOccurrence.occurrence_id
-      );
-
-      // Convert times to 12-hour format
-      const formatTime = (timeStr) => {
-        // Parse the time string
-        const [hours, minutes] = timeStr.split(':').map(num => parseInt(num, 10));
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const hours12 = hours % 12 || 12; // Convert 0 to 12 for midnight
-        return `${hours12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+      // Convert 12-hour time to 24-hour time for comparison
+      const convertTo24Hour = (time12h) => {
+        const [time, modifier] = time12h.split(' ');
+        let [hours, minutes] = time.split(':');
+        hours = parseInt(hours, 10);
+        
+        if (modifier === 'PM' && hours < 12) {
+          hours += 12;
+        } else if (modifier === 'AM' && hours === 12) {
+          hours = 0;
+        }
+        
+        return `${hours.toString().padStart(2, '0')}:${minutes}`;
       };
 
-      // Format all occurrences for the backend, with updated data for the modified occurrence
-      const occurrences = booking.occurrences.map(occ => {
-        if (occ.occurrence_id === updatedOccurrence.occurrence_id) {
-          // This is the occurrence being updated
-          return {
-            occurrence_id: updatedOccurrence.occurrence_id,
-            // If only unit_of_time changed, use original dates, otherwise use updated dates
-            start_date: updatedOccurrence.startDate || originalOccurrence.start_date,
-            end_date: updatedOccurrence.endDate || originalOccurrence.end_date,
-            start_time: updatedOccurrence.startTime ? formatTime(updatedOccurrence.startTime) : originalOccurrence.start_time,
-            end_time: updatedOccurrence.endTime ? formatTime(updatedOccurrence.endTime) : originalOccurrence.end_time,
-            rates: {
-              base_rate: updatedOccurrence.rates.baseRate,
-              additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
-              applies_after: updatedOccurrence.rates.appliesAfterAnimals,
-              holiday_rate: updatedOccurrence.rates.holidayRate,
-              unit_of_time: updatedOccurrence.rates.unit_of_time,
-              additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
-                title: rate.name,
-                description: rate.description || '',
-                amount: rate.amount
-              }))
+      // Find the occurrence index by matching dates and times
+      const occurrenceIndex = booking.occurrences.findIndex((occ, index) => {
+        const updatedStartTime = convertTo24Hour(updatedOccurrence.startTime);
+        const updatedEndTime = convertTo24Hour(updatedOccurrence.endTime);
+
+        if (is_DEBUG) {
+          console.log('MBA9740174 Comparing occurrence at index:', index, {
+            original: {
+              start_date: occ.start_date,
+              start_time: occ.start_time,
+              end_date: occ.end_date,
+              end_time: occ.end_time
             },
-            is_updated: true // Flag to indicate this occurrence is being modified
-          };
-        } else {
-          // Return existing occurrence data without modification
-          return {
-            occurrence_id: occ.occurrence_id,
-            start_date: occ.start_date,
-            end_date: occ.end_date,
-            start_time: occ.start_time,
-            end_time: occ.end_time,
-            rates: occ.rates,
-            is_updated: false
-          };
+            updated: {
+              start_date: updatedOccurrence.startDate,
+              start_time: updatedStartTime,
+              end_date: updatedOccurrence.endDate,
+              end_time: updatedEndTime
+            },
+            matches: {
+              start_date: occ.start_date === updatedOccurrence.startDate,
+              start_time: occ.start_time === updatedStartTime,
+              end_date: occ.end_date === updatedOccurrence.endDate,
+              end_time: occ.end_time === updatedEndTime
+            }
+          });
         }
+
+        return occ.start_date === updatedOccurrence.startDate &&
+               occ.start_time === updatedStartTime &&
+               occ.end_date === updatedOccurrence.endDate &&
+               occ.end_time === updatedEndTime;
       });
 
       if (is_DEBUG) {
-        console.log('MBA1644 Original occurrence:', originalOccurrence);
-        console.log('MBA1644 Updated occurrence:', updatedOccurrence);
-        console.log('MBA1644 Final request data:', {
-          booking_id: booking.booking_id,
-          occurrences: occurrences
+        console.log('MBA9740174 Found occurrence at index:', occurrenceIndex);
+        if (occurrenceIndex === -1) {
+          console.log('MBA9740174 WARNING: No matching occurrence found. Trying to match by start date/time only...');
+          
+          // Try to find by start date/time only
+          const startTimeOnly = booking.occurrences.findIndex((occ, index) => {
+            const updatedStartTime = convertTo24Hour(updatedOccurrence.startTime);
+            return occ.start_date === updatedOccurrence.startDate && 
+                   occ.start_time === updatedStartTime;
+          });
+          
+          console.log('MBA9740174 Start date/time match found at index:', startTimeOnly);
+        }
+      }
+
+      // If no match found by exact comparison, try to find by start date/time only
+      let finalIndex = occurrenceIndex;
+      if (finalIndex === -1) {
+        finalIndex = booking.occurrences.findIndex((occ) => {
+          const updatedStartTime = convertTo24Hour(updatedOccurrence.startTime);
+          return occ.start_date === updatedOccurrence.startDate && 
+                 occ.start_time === updatedStartTime;
         });
       }
 
-      // Format the occurrence data for the backend
-      const occurrenceData = {
-        booking_id: booking.booking_id,
-        occurrences: occurrences
+      if (finalIndex === -1) {
+        throw new Error('Could not find matching occurrence to update');
+      }
+
+      // Format the updated occurrence data
+      const updatedOccurrenceData = {
+        occurrence_id: booking.occurrences[finalIndex]?.occurrence_id,
+        start_date: updatedOccurrence.startDate,
+        end_date: updatedOccurrence.endDate,
+        start_time: convertTo24Hour(updatedOccurrence.startTime),
+        end_time: convertTo24Hour(updatedOccurrence.endTime),
+        rates: {
+          base_rate: updatedOccurrence.rates.baseRate,
+          additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
+          applies_after: updatedOccurrence.rates.appliesAfterAnimals,
+          holiday_rate: updatedOccurrence.rates.holidayRate,
+          unit_of_time: updatedOccurrence.rates.unit_of_time,
+          additional_rates: updatedOccurrence.rates.additionalRates.map(rate => ({
+            title: rate.name,
+            description: rate.description || '',
+            amount: rate.amount
+          }))
+        },
+        is_updated: true
       };
+
+      if (is_DEBUG) {
+        console.log('MBA9740174 Formatted updatedOccurrenceData:', updatedOccurrenceData);
+      }
+
+      // Get all existing occurrences and format them
+      const existingOccurrences = booking.occurrences.map((occ, index) => {
+        if (index === finalIndex) {
+          if (is_DEBUG) {
+            console.log('MBA9740174 Updating occurrence at index:', index);
+          }
+          return {
+            ...updatedOccurrenceData,
+            occurrence_id: occ.occurrence_id  // Preserve the original occurrence_id
+          };
+        }
+        return {
+          occurrence_id: occ.occurrence_id,
+          start_date: occ.start_date,
+          end_date: occ.end_date,
+          start_time: occ.start_time,
+          end_time: occ.end_time,
+          rates: occ.rates,
+          is_updated: false
+        };
+      });
+
+      if (is_DEBUG) {
+        console.log('MBA9740174 Final request data:', {
+          booking_id: booking.booking_id,
+          occurrences: existingOccurrences.map((occ, index) => ({
+            index,
+            occurrence_id: occ.occurrence_id,
+            start_date: occ.start_date,
+            end_date: occ.end_date,
+            is_updated: occ.is_updated,
+            start_time: occ.start_time,
+            end_time: occ.end_time
+          }))
+        });
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/update_occurrences/`, {
         method: 'POST',
@@ -811,7 +873,10 @@ const BookingDetails = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(occurrenceData)
+        body: JSON.stringify({
+          booking_id: booking.booking_id,
+          occurrences: existingOccurrences
+        })
       });
 
       if (!response.ok) {
@@ -820,11 +885,30 @@ const BookingDetails = () => {
 
       const data = await response.json();
       if (is_DEBUG) {
-        console.log('MBA1644 Backend response:', data);
+        console.log('MBA9740174 Backend response:', data);
       }
 
       // Update the local state with the response data
       if (data.draft_data) {
+        if (is_DEBUG) {
+          console.log('MBA9740174 Updating local state with draft data:', {
+            oldOccurrences: booking.occurrences.map(occ => ({
+              occurrence_id: occ.occurrence_id,
+              start_date: occ.start_date,
+              end_date: occ.end_date,
+              start_time: occ.start_time,
+              end_time: occ.end_time
+            })),
+            newOccurrences: data.draft_data.occurrences.map(occ => ({
+              occurrence_id: occ.occurrence_id,
+              start_date: occ.start_date,
+              end_date: occ.end_date,
+              start_time: occ.start_time,
+              end_time: occ.end_time
+            }))
+          });
+        }
+
         setBooking(prev => ({
           ...prev,
           ...data.draft_data,
@@ -847,7 +931,7 @@ const BookingDetails = () => {
 
     } catch (error) {
       if (is_DEBUG) {
-        console.log('MBA1644 Error saving occurrence:', error);
+        console.log('MBA9740174 Error saving occurrence:', error);
       }
       setSnackBar({
         visible: true,
@@ -1005,7 +1089,7 @@ const BookingDetails = () => {
     setDefaultOccurrenceRates(null);
     
     if (is_DEBUG) {
-      console.log('MBA4321 Original occurrence:', occurrence);
+      console.log('MBA9740174 handleDateTimeCardPress - Original occurrence:', occurrence);
     }
 
     // Calculate base total from the rates and time unit
@@ -1019,6 +1103,14 @@ const BookingDetails = () => {
         occurrence.end_time,
         timeUnit
       );
+      if (is_DEBUG) {
+        console.log('MBA9740174 calculateBaseTotal:', {
+          baseRate,
+          timeUnit,
+          timeUnits,
+          total: baseRate * timeUnits
+        });
+      }
       return baseRate * timeUnits;
     };
 
@@ -1038,7 +1130,7 @@ const BookingDetails = () => {
       }
 
       if (is_DEBUG) {
-        console.log('MBA4321 Parsing datetime:', { dateStr, timeStr, parsedTime: time });
+        console.log('MBA9740174 parseDateTime:', { dateStr, timeStr, parsedTime: time });
       }
 
       return {
@@ -1051,8 +1143,8 @@ const BookingDetails = () => {
     const endDateTime = parseDateTime(occurrence.end_date, occurrence.end_time);
 
     const transformedOccurrence = {
-      id: occurrence.occurrence_id,
-      occurrence_id: occurrence.occurrence_id,
+      id: occurrence.id || occurrence.occurrence_id,  // Try both possible ID fields
+      occurrence_id: occurrence.id || occurrence.occurrence_id,  // Try both possible ID fields
       startDate: startDateTime.date,
       endDate: endDateTime.date,
       startTime: startDateTime.time,
@@ -1062,7 +1154,7 @@ const BookingDetails = () => {
         additionalAnimalRate: occurrence.rates?.additional_animal_rate?.toString() || '0',
         appliesAfterAnimals: occurrence.rates?.applies_after?.toString() || '1',
         holidayRate: occurrence.rates?.holiday_rate?.toString() || '0',
-        unit_of_time: occurrence.rates?.unit_of_time,  // Preserve the exact unit_of_time
+        unit_of_time: occurrence.rates?.unit_of_time,
         additionalRates: (occurrence.rates?.additional_rates || [])
           .filter(rate => rate.title !== 'Booking Details Cost')
           .map(rate => ({
@@ -1077,8 +1169,8 @@ const BookingDetails = () => {
     };
 
     if (is_DEBUG) {
-      console.log('MBA4321 Transformed occurrence for modal:', transformedOccurrence);
-      console.log('MBA4321 Unit of time being passed:', transformedOccurrence.rates.unit_of_time);
+      console.log('MBA9740174 transformedOccurrence:', transformedOccurrence);
+      console.log('MBA9740174 Original occurrence:', occurrence);
     }
     setSelectedOccurrence(transformedOccurrence);
     setShowAddOccurrenceModal(true);
@@ -1709,6 +1801,11 @@ const BookingDetails = () => {
           <Text style={styles.dateTimeText}>
             {occ.formatted_start} - {occ.formatted_end}
             {'\n'}<Text style={[{ fontWeight: '525' }]}>Total: {occ.duration} ({occ.timezone})</Text>
+            {occ.dst_message && (
+              <Text style={[{ color: theme.colors.danger, fontSize: 12 }]}>
+                {'\n'}{occ.dst_message}
+              </Text>
+            )}
           </Text>
           {canEdit() && (
             <MaterialCommunityIcons 
