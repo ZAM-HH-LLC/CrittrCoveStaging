@@ -1516,6 +1516,22 @@ const BookingDetails = () => {
     const buttons = [];
 
     if (isProfessionalView) {
+      // Deny button - Professional Only// Deny button - Professional Only
+      if (booking.status === BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES) {
+        buttons.push(
+          <TouchableOpacity
+            key="deny"
+            style={[styles.button, styles.denyButton]}
+            onPress={() => showConfirmation(
+              'deny this booking',
+              () => handleStatusUpdate(BOOKING_STATES.DENIED)
+            )}
+          >
+            <Text style={styles.denybuttonText}>Deny</Text>
+          </TouchableOpacity>
+        );
+      }
+
       // Send to Client button - Professional Only
       if ([
         BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
@@ -1536,21 +1552,6 @@ const BookingDetails = () => {
         );
       }
 
-      // Deny button - Professional Only
-      if (booking.status === BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES) {
-        buttons.push(
-          <TouchableOpacity
-            key="deny"
-            style={[styles.button, styles.denyButton]}
-            onPress={() => showConfirmation(
-              'deny this booking',
-              () => handleStatusUpdate(BOOKING_STATES.DENIED)
-            )}
-          >
-            <Text style={styles.buttonText}>Deny</Text>
-          </TouchableOpacity>
-        );
-      }
     }
 
     // Cancel button - Both Professional and Client
@@ -2187,14 +2188,42 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   button: {
+    flex: 1,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonText: {
     color: theme.colors.surface,
-    fontSize: 16,
+    fontSize: theme.fontSizes.mediumLarge,
     fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  denybuttonText: {
+    color: theme.colors.error,
+    fontSize: theme.fontSizes.mediumLarge,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  primaryButton: {
+    backgroundColor: theme.colors.mainColors.main,
+  },
+  denyButton: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+    textColor: theme.colors.error,
+  },
+  approveButton: {
+    backgroundColor: theme.colors.mainColors.tertiary,
+  },
+  cancelButton: {
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+    padding: 8,
+    borderRadius: 8,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   cancelButtonText: {
@@ -2489,6 +2518,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     gap: 12,
   },
   modalContainer: {
@@ -2527,12 +2558,6 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: theme.colors.surface,
     fontWeight: '500',
-  },
-  primaryButton: {
-    backgroundColor: theme.colors.primary,
-  },
-  denyButton: {
-    backgroundColor: theme.colors.error,
   },
   serviceEditContainer: {
     gap: 16,
