@@ -8,6 +8,7 @@ const BookingMessageCard = ({
   data,
   isFromMe,
   onPress,
+  isProfessional
 }) => {
   const getIcon = () => {
     switch (type) {
@@ -112,7 +113,7 @@ const BookingMessageCard = ({
           >
             <Text style={styles.detailsButtonText}>Click for Details</Text>
           </TouchableOpacity>
-          {type === 'approval' && (
+          {type === 'approval' && !isProfessional && (
             <TouchableOpacity 
               style={styles.approveButton}
               onPress={onPress}

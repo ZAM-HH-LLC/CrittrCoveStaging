@@ -921,6 +921,7 @@ const MessageHistory = ({ navigation, route }) => {
             occurrences: item.metadata.occurrences || [],
           }}
           isFromMe={isFromMe}
+          isProfessional={selectedConversationData?.is_professional}
           onPress={() => navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
             bookingId: item.metadata.booking_id,
             initialData: null,
