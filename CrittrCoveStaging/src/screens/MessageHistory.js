@@ -215,7 +215,8 @@ const createStyles = (screenWidth) => StyleSheet.create({
     backgroundColor: 'transparent',
     paddingVertical: '8px',
     paddingLeft: '12px',
-    height: screenWidth <= 600 ? 36 : 40,
+    height: 24,
+    maxHeight: '120px', // This will accommodate 5 lines of text
     border: '1px solid ' + theme.colors.border,
     borderRadius: 20,
     fontFamily: theme.fonts.regular.fontFamily,
@@ -225,6 +226,10 @@ const createStyles = (screenWidth) => StyleSheet.create({
     WebkitTapHighlightColor: 'transparent',
     WebkitUserSelect: 'none',
     userSelect: 'none',
+    resize: 'none',
+    overflowY: 'auto', // Enable scrolling
+    lineHeight: '20px',
+    paddingRight: '12px', // Add right padding for scroll bar
   },
   conversationContent: {
     flex: 1,
@@ -930,12 +935,40 @@ const MessageHistory = ({ navigation, route }) => {
     const [message, setMessage] = useState('');
     const inputRef = useRef(null);
 
+    const adjustHeight = () => {
+      if (inputRef.current) {
+        // Store the current scroll position
+        const scrollTop = inputRef.current.scrollTop;
+        
+        // Reset height to recalculate
+        inputRef.current.style.height = 'inherit';
+        
+        // Set new height
+        const newHeight = Math.min(inputRef.current.scrollHeight, 120);
+        inputRef.current.style.height = `${newHeight}px`;
+        
+        // If we've hit max height, restore scroll position
+        if (inputRef.current.scrollHeight > 120) {
+          inputRef.current.scrollTop = scrollTop;
+        }
+      }
+    };
+
+    const handleChange = (e) => {
+      setMessage(e.target.value);
+      adjustHeight();
+    };
+
     const handleSend = async () => {
       if (message.trim() && !isSending) {
         setIsSending(true);
         try {
           await SendNormalMessage(message.trim());
           setMessage('');
+          if (inputRef.current) {
+            inputRef.current.style.height = '24px';
+            inputRef.current.scrollTop = 0;
+          }
         } catch (error) {
           console.error('Failed to send message:', error);
         } finally {
@@ -946,13 +979,12 @@ const MessageHistory = ({ navigation, route }) => {
 
     return (
       <View style={styles.inputInnerContainer}>
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
           style={styles.webInput}
           placeholder="Type a message..."
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={handleChange}
           onKeyPress={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -960,6 +992,7 @@ const MessageHistory = ({ navigation, route }) => {
             }
           }}
           disabled={isSending}
+          rows={1}
         />
         <Button 
           mode="contained" 
