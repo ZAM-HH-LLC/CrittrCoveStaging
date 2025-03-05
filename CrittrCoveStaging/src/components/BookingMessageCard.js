@@ -93,7 +93,7 @@ const BookingMessageCard = ({
                   {occ.formatted_start} to {occ.formatted_end}
                 </Text>
                 <Text style={styles.durationText}>
-                  Instance Total: {occ.duration} ({occ.timezone})
+                  Event Duration: {occ.duration} ({occ.timezone})
                 </Text>
                 {occ.dst_message && (
                   <Text style={styles.dstMessage}>

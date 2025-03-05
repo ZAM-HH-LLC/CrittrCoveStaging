@@ -165,7 +165,7 @@ def create_occurrence_data(occurrence, service, num_pets, user_timezone='UTC'):
         # Check for DST change by comparing UTC offsets
         dst_message = ""
         if user_start.utcoffset() != user_end.utcoffset():
-            dst_message = "Elapsed time may be different than expected due to Daylight Savings Time."
+            dst_message = "Daylight Savings Time may alter this event's duration."
         
         # Format in 12-hour time
         start_time = user_start.strftime('%I:%M %p')

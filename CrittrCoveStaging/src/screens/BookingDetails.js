@@ -1042,7 +1042,7 @@ const BookingDetails = () => {
 
       const data = await response.json();
       if (is_DEBUG) {
-        console.log('MBA5678 Add occurrence response:', data);
+        console.log('MBA5678 Add event response:', data);
       }
 
       // Update the local state with the response data
@@ -1066,14 +1066,14 @@ const BookingDetails = () => {
 
       return {
         status: 'error',
-        message: 'Failed to add occurrence - no data returned'
+        message: 'Failed to add event - no data returned'
       };
 
     } catch (error) {
       console.error('MBA5678 Error adding occurrence:', error);
       return {
         status: 'error',
-        message: error.message || 'Failed to add occurrence. Please try again.'
+        message: error.message || 'Failed to add event. Please try again.'
       };
     }
   };
@@ -1815,20 +1815,20 @@ const BookingDetails = () => {
     </View>
   );
 
-  // When the user clicks the "Add Occurrence" button
+  // When the user clicks the "Add Event" button
   const handleAddOccurrenceClick = async () => {
     // Clear any previous errors
     setOccurrenceError(null);
 
     // Validate pets
     if (!booking?.pets?.length) {
-      setOccurrenceError('Please add and save pets before adding occurrences');
+      setOccurrenceError('Please add and save pets before adding an event');
       return;
     }
 
     // Validate service type
     if (!booking?.service_details?.service_type) {
-      setOccurrenceError('Please select and save a service before adding occurrences');
+      setOccurrenceError('Please select and save a service before adding an event');
       return;
     }
 
@@ -1940,7 +1940,7 @@ const BookingDetails = () => {
           onPress={handleAddOccurrenceClick}
         >
           <MaterialCommunityIcons name="plus" size={24} color={theme.colors.primary} />
-          <Text style={styles.addOccurrenceText}>Add Occurrence</Text>
+          <Text style={styles.addOccurrenceText}>Add Event</Text>
         </TouchableOpacity>
       )}
     </View>

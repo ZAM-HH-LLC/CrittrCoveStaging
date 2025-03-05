@@ -636,7 +636,7 @@ const AddOccurrenceModal = ({
         Alert.alert('Success', response.message);
       } else {
         // Show error message but don't close modal
-        setValidationError(response?.message || 'Failed to add occurrence');
+        setValidationError(response?.message || 'Failed to add event');
       }
     } catch (error) {
       if (is_DEBUG) {
