@@ -636,6 +636,9 @@ const MessageHistory = ({ navigation, route }) => {
       // Find and set the conversation data
       const conversation = conversations.find(conv => conv.conversation_id === route.params.conversationId);
       if (conversation) {
+        if (is_DEBUG) {
+          console.log('MBA98765sk49h3 Conversation found:', conversation);
+        }
         setSelectedConversationData(conversation);
       }
     }

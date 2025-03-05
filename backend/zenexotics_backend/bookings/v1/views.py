@@ -1071,22 +1071,25 @@ class UpdateBookingView(APIView):
                 )
 
             # Get draft data
-            draft = get_object_or_404(
-                BookingDraft,
+            draft = BookingDraft.objects.filter(
                 booking=booking,
                 status='IN_PROGRESS'
-            )
-            draft_data = draft.draft_data
+            ).first()
+            draft_data = draft.draft_data if draft else None
 
-            if not draft_data:
-                logger.error(f"MBA976asd2n2h5 No draft data found for booking {booking_id}")
-                return Response(
-                    {"error": "No draft data found"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # Initialize cost_summary data and occurrences list
+            cost_summary = {}
+            occurrences = []
 
-            try:
-                # Update service type
+            if draft_data:
+                # Use draft data for cost summary and occurrences
+                cost_summary = {
+                    'total_client_cost': draft_data.get('cost_summary', {}).get('total_client_cost'),
+                    'total_sitter_payout': draft_data.get('cost_summary', {}).get('total_sitter_payout')
+                }
+                occurrences = draft_data.get('occurrences', [])
+
+                # Process draft data updates (existing code for updating service, pets, occurrences)
                 if 'service_details' in draft_data:
                     service = get_object_or_404(
                         Service,
@@ -1203,94 +1206,158 @@ class UpdateBookingView(APIView):
                             rates=rates_list
                         )
 
-                # Send approval message to client
-                conversation = Conversation.objects.filter(
-                    Q(participant1=booking.client.user, participant2=booking.professional.user) |
-                    Q(participant1=booking.professional.user, participant2=booking.client.user)
-                ).first()
-
-                if not conversation:
-                    conversation = Conversation.objects.create(
-                        participant1=booking.professional.user,
-                        participant2=booking.client.user
-                    )
-
-                message = UserMessage.objects.create(
-                    conversation=conversation,
-                    sender=request.user,
-                    content='Booking Update',
-                    type_of_message='send_approved_message',
-                    is_clickable=True,
-                    status='sent',
-                    booking=booking,
-                    metadata={
-                        'booking_id': booking.booking_id,
-                        'service_type': booking.service_id.service_name,
-                        'pets': [{'name': bp.pet.name, 'species': bp.pet.species} for bp in booking.booking_pets.all()],
-                        'occurrences': draft_data.get('occurrences', []),
-                        'cost_summary': draft_data.get('cost_summary', {})
+            else:
+                # Get cost summary from BookingSummary table
+                booking_summary = BookingSummary.objects.filter(booking=booking).first()
+                if booking_summary:
+                    cost_summary = {
+                        'total_client_cost': str(booking_summary.total_client_cost),
+                        'total_sitter_payout': str(booking_summary.total_sitter_payout)
                     }
+                
+                # Get occurrences from database tables
+                booking_occurrences = BookingOccurrence.objects.filter(booking=booking)
+                occurrences = []
+                
+                for occurrence in booking_occurrences:
+                    # Get the booking details and rates separately
+                    booking_details = BookingDetails.objects.filter(booking_occurrence=occurrence).first()
+                    occurrence_rates = BookingOccurrenceRate.objects.filter(occurrence=occurrence).first()
+                    
+                    # Get user's timezone settings
+                    user_settings = get_user_time_settings(booking.client.user.id)
+                    user_timezone = user_settings['timezone']
+                    user_tz = pytz.timezone(user_timezone)
+                    
+                    # Convert timezone name to standard abbreviation
+                    timezone_abbr = user_tz.tzname(datetime.now())
+                    
+                    # Create datetime objects in UTC
+                    start_dt = datetime.combine(occurrence.start_date, occurrence.start_time)
+                    end_dt = datetime.combine(occurrence.end_date, occurrence.end_time)
+                    
+                    # Convert to user's timezone for formatting
+                    start_dt_local = pytz.utc.localize(start_dt).astimezone(user_tz)
+                    end_dt_local = pytz.utc.localize(end_dt).astimezone(user_tz)
+                    
+                    # Calculate duration
+                    duration_delta = end_dt - start_dt
+                    days = duration_delta.days
+                    hours = duration_delta.seconds // 3600
+                    duration_str = ""
+                    if days > 0:
+                        duration_str += f"{days} day{'s' if days != 1 else ''}"
+                        if hours > 0:
+                            duration_str += f", {hours} hour{'s' if hours != 1 else ''}"
+                    else:
+                        if hours > 0:
+                            duration_str = f"{hours} hour{'s' if hours != 1 else ''}"
+                        else:
+                            minutes = (duration_delta.seconds % 3600) // 60
+                            duration_str = f"{minutes} minute{'s' if minutes != 1 else ''}"
+                    
+                    # Build the occurrence data structure
+                    occurrence_data = {
+                        'occurrence_id': occurrence.occurrence_id,
+                        'start_date': occurrence.start_date.strftime('%Y-%m-%d'),
+                        'end_date': occurrence.end_date.strftime('%Y-%m-%d'),
+                        'start_time': occurrence.start_time.strftime('%H:%M'),
+                        'end_time': occurrence.end_time.strftime('%H:%M'),
+                        'formatted_start': start_dt_local.strftime('%b %d, %Y (%I:%M %p)'),
+                        'formatted_end': end_dt_local.strftime('%b %d, %Y (%I:%M %p)'),
+                        'duration': duration_str,
+                        'timezone': timezone_abbr,
+                        'rates': {
+                            'base_rate': str(booking_details.base_rate) if booking_details else '0',
+                            'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0',
+                            'applies_after': booking_details.applies_after if booking_details else 1,
+                            'holiday_rate': str(booking_details.holiday_rate) if booking_details else '0',
+                            'unit_of_time': booking_details.unit_of_time if booking_details else 'Per Visit',
+                            'additional_rates': occurrence_rates.rates if occurrence_rates else []
+                        }
+                    }
+                    occurrences.append(occurrence_data)
+
+            # Send approval message to client
+            conversation = Conversation.objects.filter(
+                Q(participant1=booking.client.user, participant2=booking.professional.user) |
+                Q(participant1=booking.professional.user, participant2=booking.client.user)
+            ).first()
+
+            if not conversation:
+                conversation = Conversation.objects.create(
+                    participant1=booking.professional.user,
+                    participant2=booking.client.user
                 )
 
-                # Update conversation's last message and time
-                conversation.last_message = "Booking Update"
-                conversation.last_message_time = timezone.now()
-                conversation.save()
+            message = UserMessage.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                content='Booking Update',
+                type_of_message='send_approved_message',
+                is_clickable=True,
+                status='sent',
+                booking=booking,
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'service_type': booking.service_id.service_name,
+                    'occurrences': occurrences,
+                    'cost_summary': cost_summary
+                }
+            )
 
-                # Update booking status to PENDING_CLIENT_APPROVAL
-                booking.status = BookingStates.PENDING_CLIENT_APPROVAL
-                booking.save()
-                logger.info(f"MBA976asd2n2h5 Updated booking status to {booking.status}")
+            # Update conversation's last message and time
+            conversation.last_message = "Booking Update"
+            conversation.last_message_time = timezone.now()
+            conversation.save()
 
-                # Delete the draft
+            # Update booking status to PENDING_CLIENT_APPROVAL
+            booking.status = BookingStates.PENDING_CLIENT_APPROVAL
+            booking.save()
+            logger.info(f"MBA976asd2n2h5 Updated booking status to {booking.status}")
+
+            # Delete the draft if it exists
+            if draft:
                 draft.delete()
                 logger.info(f"MBA976asd2n2h5 Deleted draft {draft.draft_id}")
 
-                # Log successful interaction
-                InteractionLog.objects.create(
-                    user=request.user,
-                    action='BOOKING_UPDATE_SENT',
-                    target_type='BOOKING',
-                    target_id=str(booking.booking_id),
-                    metadata={
-                        'booking_id': booking.booking_id,
-                        'service_type': booking.service_id.service_name,
-                        'num_pets': len(draft_data.get('pets', [])),
-                        'num_occurrences': len(draft_data.get('occurrences', [])),
-                        'cost_summary': draft_data.get('cost_summary', {})
-                    }
-                )
+            # Log successful interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_UPDATE_SENT',
+                target_type='BOOKING',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'service_type': booking.service_id.service_name,
+                    'occurrences': occurrences,
+                    'cost_summary': cost_summary
+                }
+            )
 
-                # Log engagement
-                duration = current_time() - request_start_time
-                EngagementLog.objects.create(
-                    user=request.user,
-                    page_name='BOOKING_DETAILS',
-                    duration=int(duration),
-                    interactions={
-                        'action': 'SEND_TO_CLIENT',
-                        'booking_id': booking.booking_id,
-                        'num_pets': len(draft_data.get('pets', [])),
-                        'num_occurrences': len(draft_data.get('occurrences', [])),
-                        'success': True
-                    }
-                )
+            # Log engagement
+            duration = current_time() - request_start_time
+            EngagementLog.objects.create(
+                user=request.user,
+                page_name='BOOKING_DETAILS',
+                duration=int(duration),
+                interactions={
+                    'action': 'SEND_TO_CLIENT',
+                    'booking_id': booking.booking_id,
+                    'success': True
+                }
+            )
 
-                # Commit the transaction
-                transaction.savepoint_commit(sid)
+            # Commit the transaction
+            transaction.savepoint_commit(sid)
 
-                # Return simplified success response
-                return Response({
-                    'status': 'success',
-                    'message': 'Booking updated and sent to client',
-                    'message_id': message.message_id,  # Include message ID for redirection
-                    'conversation_id': conversation.conversation_id  # Add conversation ID
-                })
-
-            except Exception as e:
-                # Roll back all changes to bookings and related tables if any part fails
-                transaction.savepoint_rollback(sid)
-                raise e
+            # Return simplified success response
+            return Response({
+                'status': 'success',
+                'message': 'Booking updated and sent to client',
+                'message_id': message.message_id,
+                'conversation_id': conversation.conversation_id
+            })
 
         except Exception as e:
             logger.error(f"MBA976asd2n2h5 Error updating booking: {str(e)}")
