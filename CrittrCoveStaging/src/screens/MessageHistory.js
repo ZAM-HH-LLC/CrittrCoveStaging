@@ -12,6 +12,7 @@ import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { navigateToFrom } from '../components/Navigation';
+import BookingMessageCard from '../components/BookingMessageCard';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth) => StyleSheet.create({
@@ -553,6 +554,27 @@ const createStyles = (screenWidth) => StyleSheet.create({
     padding: 8,
     borderRadius: 4,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: theme.colors.placeholder,
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  emptyText: {
+    padding: 16,
+    color: theme.colors.placeholder,
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    textAlign: 'center',
+  },
+  loadingMore: {
+    padding: 16,
+  },
 });
 
 const MessageHistory = ({ navigation, route }) => {
@@ -589,6 +611,35 @@ const MessageHistory = ({ navigation, route }) => {
       setHasMore(true);
     };
   }, []);
+
+  // Add new effect to handle navigation params
+  useEffect(() => {
+    if (route.params?.messageId && route.params?.conversationId) {
+      if (is_DEBUG) {
+        console.log('MBA98765 Received navigation params:', {
+          messageId: route.params.messageId,
+          conversationId: route.params.conversationId,
+          messages: route.params.messages
+        });
+      }
+
+      // Set the selected conversation
+      setSelectedConversation(route.params.conversationId);
+
+     
+      // If no messages in params, fetch them
+      if (is_DEBUG) {
+        console.log('MBA98765 No messages in params, fetching messages');
+      }
+      fetchMessages(route.params.conversationId);
+      
+      // Find and set the conversation data
+      const conversation = conversations.find(conv => conv.conversation_id === route.params.conversationId);
+      if (conversation) {
+        setSelectedConversationData(conversation);
+      }
+    }
+  }, [route.params?.messageId, route.params?.conversationId]);
 
   // Function to fetch conversations
   const fetchConversations = async () => {
@@ -650,7 +701,7 @@ const MessageHistory = ({ navigation, route }) => {
     }
   };
 
-  // Function to fetch messages for a conversation
+  // Modify fetchMessages to handle message updates better
   const fetchMessages = async (conversationId, page = 1) => {
     console.log('MBABOSS [1] Starting fetchMessages with conversationId:', conversationId, 'type:', typeof conversationId);
     try {
@@ -680,16 +731,31 @@ const MessageHistory = ({ navigation, route }) => {
       
       console.log('MBABOSS [7] Got response:', response.status);
       
+      // Update the messages state based on the page
       if (page === 1) {
         console.log('MBABOSS [8] Setting messages for page 1');
-        setMessages(response.data.messages);
+        setMessages(response.data.messages || []);
       } else {
         console.log('MBABOSS [8] Appending messages for page:', page);
-        setMessages(prev => [...prev, ...response.data.messages]);
+        setMessages(prev => [...prev, ...(response.data.messages || [])]);
       }
       
+      // Update pagination state
       setHasMore(response.data.has_more);
       setCurrentPage(page);
+
+      // If this is the first page and we have a messageId from navigation,
+      // ensure that message is in the list
+      if (page === 1 && route.params?.messageId) {
+        const messageExists = response.data.messages?.some(msg => msg.message_id === route.params.messageId);
+        if (!messageExists) {
+          // Message not found in first page, fetch next page
+          if (response.data.has_more) {
+            fetchMessages(conversationId, page + 1);
+          }
+        }
+      }
+
       console.log('MBABOSS [9] Successfully completed fetchMessages');
     } catch (error) {
       console.error('MBABOSS [ERROR] Error in fetchMessages:', {
@@ -828,68 +894,39 @@ const MessageHistory = ({ navigation, route }) => {
   }, [navigation, selectedConversationData, CURRENT_USER_ID]);
 
   const renderMessage = useCallback(({ item }) => {
-    // Handle booking request messages
-    if (item.type_of_message === 'initial_booking_request') {
+    // Handle booking messages (both requests and approvals)
+    if (item.type_of_message === 'initial_booking_request' || 
+        item.type_of_message === 'send_approved_message') {
       const isFromMe = !item.sent_by_other_user;
+
+      // Safely get total client cost
+      const totalClientCost = item.metadata?.cost_summary?.total_client_cost || 
+                            item.metadata?.total_client_cost || 
+                            0;
+
+      if (is_DEBUG) {
+        console.log('MBA9876 Message data:', {
+          type: item.type_of_message,
+          metadata: item.metadata,
+          totalClientCost
+        });
+      }
+
       return (
-        <View style={[
-          styles.bookingRequestCard,
-          isFromMe ? styles.sentBookingRequest : styles.receivedBookingRequest
-        ]}>
-          <View style={styles.bookingRequestHeader}>
-            <MaterialCommunityIcons name="calendar-clock" size={24} color={theme.colors.primary} />
-            <Text style={styles.bookingRequestTitle}>Booking Request</Text>
-          </View>
-          
-          <View style={styles.bookingRequestDetails}>
-            <View style={styles.inlineDetailRow}>
-              <Text style={styles.detailLabel}>Service:</Text>
-              <Text style={styles.detailText}>{item.metadata.service_type}</Text>
-            </View>
-            
-            <View style={styles.inlineDetailRow}>
-              <Text style={styles.detailLabel}>Pets:</Text>
-              <Text style={styles.detailText}>
-                {item.metadata.pets.join(', ')}
-              </Text>
-            </View>
-            
-            <View style={styles.dateSection}>
-              <Text style={styles.detailLabel}>Dates:</Text>
-              {item.metadata.occurrences.map((occ, index) => (
-                <View key={index} style={styles.occurrenceItem}>
-                  <View style={styles.occurrenceDetails}>
-                    <Text style={styles.detailText}>
-                      {occ.formatted_start} to {occ.formatted_end}
-                      {'\n'}<Text style={[{ fontWeight: '502' }]}>Instance Total: {occ.duration} ({occ.timezone})</Text>
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <Text style={[{ fontWeight: '502' }]}>Total: blbla</Text>
-
-            {item.metadata.booking_id && !item.is_deleted && (
-              <TouchableOpacity 
-                style={styles.viewBookingButton}
-                onPress={() => navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
-                  bookingId: item.metadata.booking_id,
-                  initialData: null,
-                  isProfessional: selectedConversationData?.is_professional
-                })}
-              >
-                <Text style={styles.viewBookingText}>Click for Details</Text>
-              </TouchableOpacity>
-            )}
-
-            {item.is_deleted && (
-              <View style={styles.deletedOverlay}>
-                <Text style={styles.deletedText}>Booking Deleted</Text>
-              </View>
-            )}
-          </View>
-        </View>
+        <BookingMessageCard
+          type={item.type_of_message === 'initial_booking_request' ? 'request' : 'approval'}
+          data={{
+            service_type: item.metadata.service_type,
+            total_client_cost: totalClientCost,
+            occurrences: item.metadata.occurrences || [],
+          }}
+          isFromMe={isFromMe}
+          onPress={() => navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
+            bookingId: item.metadata.booking_id,
+            initialData: null,
+            isProfessional: selectedConversationData.is_professional
+          })}
+        />
       );
     }
 
@@ -912,7 +949,7 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
       </View>
     );
-  }, [navigation, selectedConversationData, CURRENT_USER_ID]);
+  }, [navigation, selectedConversationData]);
 
   const WebInput = () => {
     const [message, setMessage] = useState('');
@@ -1027,13 +1064,6 @@ const MessageHistory = ({ navigation, route }) => {
       return;
     }
 
-    // Log participant and role information
-    if (is_DEBUG) {
-      console.log('MBABOSS Participant1 ID:', currentConversation.participant1_id);
-      console.log('MBABOSS Participant2 ID:', currentConversation.participant2_id);
-      console.log('MBABOSS Role map:', currentConversation.role_map);
-    }
-
     // Check if current user is the professional by checking their role in the conversation
     const isProfessional = currentConversation.is_professional === true;
     
@@ -1068,13 +1098,15 @@ const MessageHistory = ({ navigation, route }) => {
           if (is_DEBUG) {
             console.log('MBABOSS Navigating to BookingDetails with:', {
               bookingId: response.data.booking_id,
-              initialData: null
+              initialData: null,
+              isProfessional: currentConversation.is_professional
             });
           }
           
           navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
             bookingId: response.data.booking_id,
-            initialData: null
+            initialData: null,
+            isProfessional: currentConversation.is_professional
           });
         }
       } catch (error) {
@@ -1240,13 +1272,18 @@ const MessageHistory = ({ navigation, route }) => {
         {screenWidth > 1000 && selectedConversationData && (
           <View style={styles.messageHeader}>
             <Text style={styles.messageHeaderName}>
-              {selectedConversationData.name || selectedConversationData.other_user_name}
+              {selectedConversationData.other_user_name}
             </Text>
           </View>
         )}
         <View style={styles.messagesContainer}>
-          {messages.length === 0 ? (
-            <Text style={{ padding: 16, color: theme.colors.placeholder }}>
+          {isLoadingMessages ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={styles.loadingText}>Loading messages...</Text>
+            </View>
+          ) : messages.length === 0 ? (
+            <Text style={styles.emptyText}>
               No messages yet. Start the conversation!
             </Text>
           ) : (
@@ -1267,6 +1304,13 @@ const MessageHistory = ({ navigation, route }) => {
                 minIndexForVisible: 0,
                 autoscrollToTopThreshold: 10
               }}
+              ListFooterComponent={isLoadingMore && (
+                <ActivityIndicator 
+                  size="small" 
+                  color={theme.colors.primary}
+                  style={styles.loadingMore}
+                />
+              )}
             />
           )}
         </View>
@@ -1338,7 +1382,8 @@ const MessageHistory = ({ navigation, route }) => {
     const handleViewBooking = () => {
       navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
         bookingId: data.bookingId,
-        readOnly: !isFromMe
+        readOnly: !isFromMe,
+        isProfessional: selectedConversationData.is_professional
       });
     };
 

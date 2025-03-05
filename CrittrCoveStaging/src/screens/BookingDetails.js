@@ -14,7 +14,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { AuthContext, getStorage } from '../context/AuthContext';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
-import { handleBack } from '../components/Navigation';
+import { handleBack, navigateToFrom } from '../components/Navigation';
 import SnackBar from '../components/SnackBar';
 
 const LAST_VIEWED_BOOKING_ID = 'last_viewed_booking_id';
@@ -180,6 +180,16 @@ const BookingDetails = () => {
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [snackBar, setSnackBar] = useState({ visible: false, message: '', type: 'success' });
 
+  // Add useEffect to set isProfessionalView from route params
+  useEffect(() => {
+    if (route.params?.isProfessional !== undefined) {
+      if (is_DEBUG) {
+        console.log('MBA44321 Setting isProfessionalView from route params:', route.params.isProfessional);
+      }
+      setIsProfessionalView(route.params.isProfessional);
+    }
+  }, [route.params?.isProfessional]);
+
   useEffect(() => {
     const fetchBooking = async () => {
       setLoading(true);
@@ -226,11 +236,9 @@ const BookingDetails = () => {
 
         if (is_DEBUG) {
           console.log('MBA77123 BookingDetails: Fetched and transformed booking data:', transformedBooking);
-          console.log('MBA77123 Setting isProfessionalView based on can_edit:', transformedBooking.can_edit);
         }
 
         setBooking(transformedBooking);
-        setIsProfessionalView(transformedBooking.can_edit);
       } catch (error) {
         console.error('Error fetching booking details:', error);
         Alert.alert(
@@ -1510,13 +1518,109 @@ const BookingDetails = () => {
     });
   };
 
+  const handleActionButtonClick = async (action, additionalData = null) => {
+    if (is_DEBUG) {
+      console.log('MBA12345 Action button clicked:', action, additionalData);
+    }
+    if (action === 'Send to Client') {
+      try {
+        setConfirmationModal(prev => ({ ...prev, isLoading: true }));
+        
+        const token = await getStorage('userToken');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        if (is_DEBUG) {
+          console.log('MBA12345 Sending booking update to client for booking:', booking.booking_id);
+        }
+
+        // Call the update endpoint
+        const response = await axios.post(
+          `${API_BASE_URL}/api/bookings/v1/${booking.booking_id}/update/`,
+          {},  // Empty body since all data is in the draft
+          {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (is_DEBUG) {
+          console.log('MBA12345 Update response:', response.data);
+        }
+
+        // Show success message
+        setSnackBar({
+          visible: true,
+          message: response.data.message || 'Booking sent to client successfully',
+          type: 'success'
+        });
+
+        navigateToFrom(navigation, 'MessageHistory', 'BookingDetails', {
+          messageId: response.data.message_id,
+          conversationId: response.data.conversation_id,
+        });
+
+      } catch (error) {
+        console.error('Error in handleActionButtonClick:', error);
+        
+        if (error.response?.status === 400) {
+          // Show error for no draft data
+          setSnackBar({
+            visible: true,
+            message: error.response.data.error || 'No draft data found',
+            type: 'error'
+          });
+        } else {
+          setSnackBar({
+            visible: true,
+            message: 'Failed to process action. Please try again.',
+            type: 'error'
+          });
+        }
+      } finally {
+        setConfirmationModal(prev => ({ 
+          ...prev, 
+          isLoading: false,
+          visible: false
+        }));
+      }
+    } else if (action === 'Deny') {
+      // Handle deny action
+      try {
+        setConfirmationModal(prev => ({ ...prev, isLoading: true }));
+        await handleStatusUpdate(BOOKING_STATES.DENIED);
+        setSnackBar({
+          visible: true,
+          message: 'Booking denied successfully',
+          type: 'success'
+        });
+      } catch (error) {
+        console.error('Error denying booking:', error);
+        setSnackBar({
+          visible: true,
+          message: 'Failed to deny booking. Please try again.',
+          type: 'error'
+        });
+      } finally {
+        setConfirmationModal(prev => ({ 
+          ...prev, 
+          isLoading: false,
+          visible: false
+        }));
+      }
+    }
+  };
+
   const renderActionButtons = () => {
     if (!booking) return null;
 
     const buttons = [];
 
     if (isProfessionalView) {
-      // Deny button - Professional Only// Deny button - Professional Only
+      // Deny button - Professional Only
       if (booking.status === BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES) {
         buttons.push(
           <TouchableOpacity
@@ -1524,7 +1628,7 @@ const BookingDetails = () => {
             style={[styles.button, styles.denyButton]}
             onPress={() => showConfirmation(
               'deny this booking',
-              () => handleStatusUpdate(BOOKING_STATES.DENIED)
+              () => handleActionButtonClick('Deny')
             )}
           >
             <Text style={styles.denybuttonText}>Deny</Text>
@@ -1544,14 +1648,13 @@ const BookingDetails = () => {
             style={[styles.button, styles.primaryButton]}
             onPress={() => showConfirmation(
               'send these changes to the client',
-              () => handleStatusUpdate(BOOKING_STATES.PENDING_CLIENT_APPROVAL)
+              () => handleActionButtonClick('Send to Client')
             )}
           >
             <Text style={styles.buttonText}>Send to Client</Text>
           </TouchableOpacity>
         );
       }
-
     }
 
     // Cancel button - Both Professional and Client
@@ -1567,7 +1670,7 @@ const BookingDetails = () => {
           style={[styles.button, styles.cancelButton]}
           onPress={() => showConfirmation(
             'cancel this booking',
-            () => handleStatusUpdate(BOOKING_STATES.CANCELLED)
+            () => handleActionButtonClick('Cancel')
           )}
         >
           <Text style={styles.cancelButtonText}>Cancel Booking</Text>
@@ -1588,7 +1691,7 @@ const BookingDetails = () => {
             style={[styles.button, styles.approveButton]}
             onPress={() => showConfirmation(
               'approve this booking',
-              () => handleStatusUpdate(BOOKING_STATES.CONFIRMED)
+              () => handleActionButtonClick('Approve')
             )}
           >
             <Text style={styles.buttonText}>Approve</Text>
@@ -1719,13 +1822,13 @@ const BookingDetails = () => {
 
     // Validate pets
     if (!booking?.pets?.length) {
-      setOccurrenceError('Please add pets before adding occurrences');
+      setOccurrenceError('Please add and save pets before adding occurrences');
       return;
     }
 
     // Validate service type
     if (!booking?.service_details?.service_type) {
-      setOccurrenceError('Please select a service before adding occurrences');
+      setOccurrenceError('Please select and save a service before adding occurrences');
       return;
     }
 
