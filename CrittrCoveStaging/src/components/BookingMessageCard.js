@@ -87,23 +87,25 @@ const BookingMessageCard = ({
 
         <View style={styles.datesSection}>
           <Text style={styles.label}>Dates:</Text>
-          {(data.occurrences || []).map((occ, index) => (
-            <View key={index} style={styles.occurrenceContainer}>
-              <View style={styles.occurrenceItem}>
-                <Text style={styles.dateTimeText}>
-                  {occ.formatted_start} to {occ.formatted_end}
-                </Text>
-                <Text style={styles.durationText}>
-                  Event Duration: {occ.duration} ({occ.timezone})
-                </Text>
-                {occ.dst_message && (
-                  <Text style={styles.dstMessage}>
-                    {occ.dst_message}
+          {(data.occurrences || []).map((occ, index) => {
+            return (
+              <View key={index} style={styles.occurrenceContainer}>
+                <View style={styles.occurrenceItem}>
+                  <Text style={styles.dateTimeText}>
+                    {occ.formatted_start} to {occ.formatted_end}
                   </Text>
-                )}
+                  <Text style={styles.durationText}>
+                    Event Duration: {occ.duration} ({occ.timezone})
+                  </Text>
+                  {occ.dst_message ? (
+                    <Text style={styles.dstMessage}>
+                      {occ.dst_message}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         <View style={styles.buttonContainer}>
