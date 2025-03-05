@@ -13,6 +13,7 @@ from pets.models import Pet
 import logging
 from datetime import datetime
 from bookings.models import Booking
+from booking_summary.models import BookingSummary
 from django.db.models import Q
 from core.time_utils import (
     convert_to_utc,
@@ -21,6 +22,7 @@ from core.time_utils import (
     get_user_time_settings
 )
 import pytz
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -278,21 +280,34 @@ def send_request_booking(request):
     - occurrences: List of occurrence objects with start_date, end_date, start_time, end_time
     """
     try:
+        logger.info("Starting send_request_booking")
+        logger.info(f"Request data: {request.data}")
+
         # Get the user's timezone settings
         user_settings = get_user_time_settings(request.user.id)
         user_tz = pytz.timezone(user_settings['timezone'])
         
         # Get service name
-        service = get_object_or_404(Service, service_id=request.data.get('service_type'))
-        service_name = service.service_name
+        service_id = request.data.get('service_type')
+        logger.info(f"Looking for service with ID: {service_id}")
+        try:
+            service = Service.objects.get(service_id=service_id)
+            service_name = service.service_name
+            logger.info(f"Found service: {service_name}")
+        except Service.DoesNotExist:
+            logger.error(f"Service not found with ID: {service_id}")
+            return Response({'error': 'Service not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Get pet details
         pet_ids = request.data.get('pets', [])
+        logger.info(f"Looking for pets with IDs: {pet_ids}")
         pets = Pet.objects.filter(pet_id__in=pet_ids)
         pet_details = [f"{pet.name} ({pet.species})" for pet in pets]
+        logger.info(f"Found pets: {pet_details}")
         
-        # Process occurrences to include timezone-aware datetimes
+        # Process occurrences
         occurrences = request.data.get('occurrences', [])
+        logger.info(f"Processing {len(occurrences)} occurrences")
         processed_occurrences = []
         
         for occ in occurrences:
@@ -337,9 +352,35 @@ def send_request_booking(request):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # Create the message with processed occurrences
-        conversation = get_object_or_404(Conversation, conversation_id=request.data.get('conversation_id'))
+        # Get conversation
+        conversation_id = request.data.get('conversation_id')
+        logger.info(f"Looking for conversation with ID: {conversation_id}")
+        try:
+            conversation = Conversation.objects.get(conversation_id=conversation_id)
+            logger.info("Found conversation")
+        except Conversation.DoesNotExist:
+            logger.error(f"Conversation not found with ID: {conversation_id}")
+            return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
         
+        # Initialize cost data
+        cost_data = {'total_client_cost': 0, 'total_sitter_payout': 0}
+        booking_id = request.data.get('booking_id')
+        logger.info(f"Booking ID from request: {booking_id}")
+
+        if booking_id:
+            logger.info(f"Looking for BookingSummary with booking_id: {booking_id}")
+            try:
+                booking_summary = BookingSummary.objects.get(booking_id=booking_id)
+                cost_data = {
+                    'total_client_cost': float(booking_summary.total_client_cost.quantize(Decimal('0.01'))),
+                    'total_sitter_payout': float(booking_summary.total_sitter_payout.quantize(Decimal('0.01')))
+                }
+                logger.info(f"Found cost data: {cost_data}")
+            except BookingSummary.DoesNotExist:
+                logger.warning(f"No BookingSummary found for booking_id: {booking_id}")
+        
+        # Create message
+        logger.info("Creating message")
         message = UserMessage.objects.create(
             conversation=conversation,
             sender=request.user,
@@ -351,14 +392,17 @@ def send_request_booking(request):
                 'service_type': service_name,
                 'pets': pet_details,
                 'occurrences': processed_occurrences,
-                'booking_id': request.data.get('booking_id')
+                'booking_id': booking_id,
+                'cost_summary': cost_data
             }
         )
+        logger.info("Message created successfully")
         
-        # Update conversation's last message and time
+        # Update conversation
         conversation.last_message = "Booking Request"
         conversation.last_message_time = timezone.now()
         conversation.save()
+        logger.info("Conversation updated")
 
         return Response({
             'message_id': message.message_id,
@@ -371,7 +415,8 @@ def send_request_booking(request):
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        logger.error(f"Error in send_request_booking: {str(e)}")
+        logger.error(f"Unexpected error in send_request_booking: {str(e)}")
+        logger.exception("Full traceback:")
         return Response(
             {'error': 'An error occurred while sending the booking request'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

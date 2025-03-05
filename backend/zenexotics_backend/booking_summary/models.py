@@ -63,22 +63,26 @@ class BookingSummary(models.Model):
     @property
     def platform_fee(self):
         """Calculate platform fee based on subtotal and fee percentage"""
-        return self.subtotal * (self.fee_percentage / Decimal('100.00'))
+        return (self.subtotal * (self.fee_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
 
     @property
     def taxes(self):
         """Calculate taxes based on subtotal and tax percentage"""
-        return (self.subtotal + self.platform_fee) * (self.tax_percentage / Decimal('100.00'))
+        platform_fee = self.platform_fee
+        return ((self.subtotal + platform_fee) * (self.tax_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
 
     @property
     def total_client_cost(self):
         """Calculate total cost for the client including fees and taxes"""
-        return self.subtotal + self.platform_fee + self.taxes
+        platform_fee = self.platform_fee
+        taxes = self.taxes
+        return (self.subtotal + platform_fee + taxes).quantize(Decimal('0.01'))
 
     @property
     def total_sitter_payout(self):
         """Calculate total payout for the sitter (subtotal minus platform fee)"""
-        return self.subtotal - self.platform_fee
+        platform_fee = self.platform_fee
+        return (self.subtotal - platform_fee).quantize(Decimal('0.01'))
 
 @receiver([post_save], sender='booking_occurrences.BookingOccurrence')
 def update_booking_summary(sender, instance, **kwargs):
