@@ -864,35 +864,6 @@ const MessageHistory = ({ navigation, route }) => {
     }
   };
 
-  const isCurrentUserMessage = useCallback((message) => {
-    return message.sender === 'Me';
-  }, []);
-
-  const renderBookingRequestMessage = useCallback(({ item }) => {
-    const isFromMe = item.sender === CURRENT_USER_ID;
-    
-    return (
-      <BookingRequestMessage 
-        data={item.data}
-        isFromMe={isFromMe}
-        timestamp={item.timestamp}
-        onAccept={() => {
-          navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
-            bookingId: null,
-            initialData: {
-              serviceType: item.data.serviceType,
-              pets: item.data.pets,
-              occurrences: item.data.occurrences,
-              status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-              clientName: selectedConversationData.name || selectedConversationData.other_user_name,
-              professionalName: 'Me'
-            }
-          });
-        }}
-      />
-    );
-  }, [navigation, selectedConversationData, CURRENT_USER_ID]);
-
   const renderMessage = useCallback(({ item }) => {
     // Handle booking messages (both requests and approvals)
     if (item.type_of_message === 'initial_booking_request' || 
