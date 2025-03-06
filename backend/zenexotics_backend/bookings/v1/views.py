@@ -1293,7 +1293,7 @@ class UpdateBookingView(APIView):
             message = UserMessage.objects.create(
                 conversation=conversation,
                 sender=request.user,
-                content='Booking Update',
+                content='Approval Request',
                 type_of_message='send_approved_message',
                 is_clickable=True,
                 status='sent',
@@ -1307,7 +1307,7 @@ class UpdateBookingView(APIView):
             )
 
             # Update conversation's last message and time
-            conversation.last_message = "Booking Update"
+            conversation.last_message = "Approval Request"
             conversation.last_message_time = timezone.now()
             conversation.save()
 
@@ -1354,7 +1354,7 @@ class UpdateBookingView(APIView):
             # Return simplified success response
             return Response({
                 'status': 'success',
-                'message': 'Booking updated and sent to client',
+                'message': 'Approval Request sent to client',
                 'message_id': message.message_id,
                 'conversation_id': conversation.conversation_id
             })

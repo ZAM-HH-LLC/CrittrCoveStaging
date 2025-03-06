@@ -1426,7 +1426,7 @@ const BookingDetails = () => {
       // Update the conversation's last message
       const conversation = mockConversations.find(conv => conv.id === conversationId);
       if (conversation) {
-        conversation.lastMessage = "Booking update sent";
+        conversation.lastMessage = "Approval Request sent";
         conversation.timestamp = new Date().toISOString();
         conversation.unread = true;
       }
