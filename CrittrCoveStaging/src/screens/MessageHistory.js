@@ -96,7 +96,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    paddingRight: screenWidth > 1000 ? 5 : 0,
+    paddingHorizontal: 5,
   },
   messageHeader: {
     padding: 16,
@@ -167,7 +167,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   messageCard: {
     marginVertical: 4,
-    maxWidth: screenWidth > 1000 ? '40%' : '80%',
+    maxWidth: screenWidth > 1000 ? '40%' : '75%',
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -413,7 +413,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
     margin: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    maxWidth: '80%',
+    maxWidth: '75%',
     position: 'relative',
   },
   sentBookingRequest: {
@@ -565,11 +565,40 @@ const MessageHistory = ({ navigation, route }) => {
   const [isSending, setIsSending] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const { is_DEBUG, is_prototype, isApprovedProfessional } = useContext(AuthContext);
+  const { is_DEBUG, is_prototype, isApprovedProfessional, userRole } = useContext(AuthContext);
   const [conversations, setConversations] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const prevScreenWidthRef = useRef(screenWidth);
+  const hasLoadedInitialDataRef = useRef(false);
+
+  // Effect to handle route params
+  useEffect(() => {
+    if (route.params?.messageId && route.params?.conversationId) {
+      if (is_DEBUG) {
+        console.log('MBA98765 Route params detected:', {
+          messageId: route.params.messageId,
+          conversationId: route.params.conversationId
+        });
+      }
+      
+      // Set the selected conversation and fetch data
+      setSelectedConversation(route.params.conversationId);
+      
+      // Reset pagination state
+      setCurrentPage(1);
+      setHasMore(true);
+      
+      // Fetch fresh conversations and messages
+      fetchConversations().then(() => {
+        fetchMessages(route.params.conversationId, 1);
+      });
+      
+      // Clear the params to prevent re-fetching
+      navigation.setParams({ messageId: null, conversationId: null });
+    }
+  }, [route.params]);
 
   // Clear data on unmount
   useEffect(() => {
@@ -578,44 +607,116 @@ const MessageHistory = ({ navigation, route }) => {
       setMessages([]);
       setSelectedConversation(null);
       setSelectedConversationData(null);
-      setIsLoadingConversations(is_prototype ? false :true);
+      setIsLoadingConversations(true);
       setIsLoadingMessages(false);
       setCurrentPage(1);
       setHasMore(true);
+      hasLoadedInitialDataRef.current = false;
     };
   }, []);
 
-  // Add new effect to handle navigation params
+  // Effect to handle screen width changes
   useEffect(() => {
-    if (route.params?.messageId && route.params?.conversationId) {
+    const prevWidth = prevScreenWidthRef.current;
+    const hasWidthCrossedThreshold = 
+      (prevWidth <= 1000 && screenWidth > 1000) || 
+      (prevWidth > 1000 && screenWidth <= 1000);
+
+    if (is_DEBUG) {
+      console.log('MBA98765 Screen width change:', {
+        prev: prevWidth,
+        current: screenWidth,
+        crossedThreshold: hasWidthCrossedThreshold,
+        hasLoadedInitial: hasLoadedInitialDataRef.current
+      });
+    }
+
+    // Update the previous width reference
+    prevScreenWidthRef.current = screenWidth;
+
+    // If we haven't loaded initial data or we crossed the threshold, load data
+    if (!hasLoadedInitialDataRef.current || hasWidthCrossedThreshold) {
       if (is_DEBUG) {
-        console.log('MBA98765 Received navigation params:', {
-          messageId: route.params.messageId,
-          conversationId: route.params.conversationId,
-          messages: route.params.messages
+        console.log('MBA98765 Loading data due to:', {
+          initialLoad: !hasLoadedInitialDataRef.current,
+          thresholdCross: hasWidthCrossedThreshold
         });
       }
 
-      // Set the selected conversation
-      setSelectedConversation(route.params.conversationId);
-
-     
-      // If no messages in params, fetch them
-      if (is_DEBUG) {
-        console.log('MBA98765 No messages in params, fetching messages');
-      }
-      fetchMessages(route.params.conversationId);
-      
-      // Find and set the conversation data
-      const conversation = conversations.find(conv => conv.conversation_id === route.params.conversationId);
-      if (conversation) {
+      // First check URL parameters
+      let urlConversationId = null;
+      if (Platform.OS === 'web') {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlConversationId = urlParams.get('conversationId');
         if (is_DEBUG) {
-          console.log('MBA98765sk49h3 Conversation found:', conversation);
+          console.log('MBA98765 URL conversation ID:', urlConversationId);
         }
-        setSelectedConversationData(conversation);
+      }
+
+      // Fetch conversations and handle selection
+      fetchConversations().then((response) => {
+        if (urlConversationId) {
+          // If we have a URL param, use that
+          setSelectedConversation(urlConversationId);
+        } else if (screenWidth > 1000 && conversations.length > 0) {
+          // On wide screens, auto-select first conversation if no URL param
+          const firstConversation = conversations[0];
+          if (firstConversation) {
+            if (is_DEBUG) {
+              console.log('MBA98765 Auto-selecting first conversation:', firstConversation.conversation_id);
+            }
+            setSelectedConversation(firstConversation.conversation_id);
+          }
+        }
+      });
+
+      hasLoadedInitialDataRef.current = true;
+    }
+  }, [screenWidth]);
+
+  // Effect to load messages when conversation is selected
+  useEffect(() => {
+    if (!selectedConversation) {
+      if (is_DEBUG) {
+        console.log('MBA98765 No conversation selected, skipping message fetch');
+      }
+      return;
+    }
+
+    if (is_DEBUG) {
+      console.log('MBA98765 Selected conversation changed:', {
+        id: selectedConversation,
+        type: typeof selectedConversation
+      });
+    }
+
+    // Find the conversation in our list
+    const conversation = conversations.find(conv => String(conv.conversation_id) === String(selectedConversation));
+    
+    if (is_DEBUG) {
+      console.log('MBA98765 Found conversation data:', conversation);
+    }
+
+    if (conversation) {
+      setSelectedConversationData(conversation);
+      
+      // Update URL on web platform
+      if (Platform.OS === 'web') {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('conversationId', selectedConversation);
+        window.history.pushState({}, '', newUrl.toString());
+      }
+
+      // Reset pagination state and fetch first page
+      setCurrentPage(1);
+      setHasMore(true);
+      fetchMessages(selectedConversation, 1);
+    } else {
+      if (is_DEBUG) {
+        console.log('MBA98765 Could not find conversation data for ID:', selectedConversation);
       }
     }
-  }, [route.params?.messageId, route.params?.conversationId]);
+  }, [selectedConversation, conversations]);
 
   // Function to fetch conversations
   const fetchConversations = async () => {
@@ -649,15 +750,29 @@ const MessageHistory = ({ navigation, route }) => {
       });
       
       console.log('MBABOSS Conversations response status:', response.status);
-      console.log('MBABOSS Conversations data:', response.data);
+      if (is_DEBUG) {
+        console.log('MBA98765 Conversations data:', response.data);
+      }
       
       if (response.data && Array.isArray(response.data)) {
+        // Store conversations
         setConversations(response.data);
         
+        // If we have a selected conversation, update its data
+        if (selectedConversation) {
+          const conversation = response.data.find(conv => String(conv.conversation_id) === String(selectedConversation));
+          if (conversation) {
+            if (is_DEBUG) {
+              console.log('MBA98765 Setting selected conversation data:', conversation);
+            }
+            setSelectedConversationData(conversation);
+          }
+        }
         // Auto-select first conversation on web
-        if (response.data.length > 0 && screenWidth > 1000) {
+        else if (response.data.length > 0 && screenWidth > 1000) {
           console.log('MBABOSS Auto-selecting first conversation:', response.data[0].conversation_id);
           setSelectedConversation(response.data[0].conversation_id);
+          setSelectedConversationData(response.data[0]);
         }
       } else {
         console.error('Invalid response format:', response.data);
@@ -677,15 +792,17 @@ const MessageHistory = ({ navigation, route }) => {
     }
   };
 
-  // Modify fetchMessages to handle message updates better
+  // Modify fetchMessages to handle pagination better
   const fetchMessages = async (conversationId, page = 1) => {
-    console.log('MBABOSS [1] Starting fetchMessages with conversationId:', conversationId, 'type:', typeof conversationId);
+    console.log('MBABOSS [1] Starting fetchMessages with conversationId:', conversationId, 'page:', page);
     try {
       console.log('MBABOSS [2] Entered try block');
       
       if (page === 1) {
         console.log('MBABOSS [3] Setting loading messages for page 1');
         setIsLoadingMessages(true);
+        // Reset messages when fetching first page
+        setMessages([]);
       } else {
         console.log('MBABOSS [3] Setting loading more for page:', page);
         setIsLoadingMore(true);
@@ -720,18 +837,6 @@ const MessageHistory = ({ navigation, route }) => {
       setHasMore(response.data.has_more);
       setCurrentPage(page);
 
-      // If this is the first page and we have a messageId from navigation,
-      // ensure that message is in the list
-      if (page === 1 && route.params?.messageId) {
-        const messageExists = response.data.messages?.some(msg => msg.message_id === route.params.messageId);
-        if (!messageExists) {
-          // Message not found in first page, fetch next page
-          if (response.data.has_more) {
-            fetchMessages(conversationId, page + 1);
-          }
-        }
-      }
-
       console.log('MBABOSS [9] Successfully completed fetchMessages');
     } catch (error) {
       console.error('MBABOSS [ERROR] Error in fetchMessages:', {
@@ -751,91 +856,124 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Function to send a message
   const SendNormalMessage = async (messageContent) => {
-    if (is_prototype) {
-      // Keep existing prototype message send logic
-      try {
-        const messageData = {
-          content: messageContent,
-          sender: 'Me',
-          timestamp: new Date().toISOString(),
-        };
+    try {
+      const token = await getStorage('userToken');
+      const response = await axios.post(`${API_BASE_URL}/api/messages/v1/send_norm_message/`, {
+        conversation_id: selectedConversation,
+        content: messageContent
+      }, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-        const response = await new Promise((resolve) => {
-          setTimeout(() => {
-            resolve({ status: 200, data: messageData });
-          }, 1000);
-        });
+      // Add new message to the beginning of the list since FlatList is inverted
+      setMessages(prevMessages => [response.data, ...prevMessages]);
 
-        console.log('MBABOSS Message sent:', response.data);
-        setMessages(prevMessages => [response.data, ...prevMessages]);
-        return response.data;
-      } catch (error) {
-        console.error('Error sending message:', error);
-        throw error;
-      }
-    } else {
-      try {
-        const token = await getStorage('userToken');
-        const response = await axios.post(`${API_BASE_URL}/api/messages/v1/send_norm_message/`, {
-          conversation_id: selectedConversation,
-          content: messageContent
-        }, {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+      // Update conversation's last message
+      setConversations(prev => prev.map(conv => 
+        conv.conversation_id === selectedConversation 
+          ? {
+              ...conv,
+              last_message: messageContent,
+              last_message_time: response.data.timestamp
+            }
+          : conv
+      ));
 
-        // Add new message to the beginning of the list since FlatList is inverted
-        setMessages(prevMessages => [response.data, ...prevMessages]);
-
-        // Update conversation's last message
-        setConversations(prev => prev.map(conv => 
-          conv.conversation_id === selectedConversation 
-            ? {
-                ...conv,
-                last_message: messageContent,
-                last_message_time: response.data.timestamp
-              }
-            : conv
-        ));
-
-        return response.data;
-      } catch (error) {
-        console.error('Error sending message:', error);
-        throw error;
-      }
+      return response.data;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
     }
   };
 
-  // Effect to load initial data
-  useEffect(() => {
-    console.log('MBABOSS MessageHistory mounted, is_prototype:', is_prototype);
-    if (is_prototype) {
-      console.log('MBABOSS Setting mock conversations');
-      setIsLoadingConversations(false);
-      setConversations(mockConversations);
-      if (mockConversations.length > 0 && screenWidth > 1000) {
-        setSelectedConversation(mockConversations[0].id);
+  // Update the handleCreateBooking function to use selectedConversationData consistently
+  const handleCreateBooking = async () => {
+    if (is_DEBUG) {
+      console.log('MBA98765 handleCreateBooking:', {
+        selectedConversationData,
+        selectedConversation,
+        isProfessional: selectedConversationData?.is_professional
+      });
+    }
+    
+    if (!selectedConversationData) {
+      console.log('MBA98765 No conversation data found, refreshing conversations');
+      await fetchConversations();
+      const updatedConversation = conversations.find(conv => conv.conversation_id === selectedConversation);
+      if (!updatedConversation) {
+        console.log('MBA98765 Still no conversation data after refresh');
+        return;
+      }
+      setSelectedConversationData(updatedConversation);
+      if (is_DEBUG) {
+        console.log('MBA98765 Updated conversation data:', updatedConversation);
+      }
+    }
+
+    // Check if current user is the professional by checking their role in the conversation
+    const isProfessional = selectedConversationData.is_professional === true;
+    
+    if (is_DEBUG) {
+      console.log('MBA98765 Is Professional?', isProfessional);
+    }
+
+    if (isProfessional) {
+      if (is_DEBUG) {
+        console.log('MBA98765 User is professional - creating booking and navigating to details');
+      }
+      try {
+        const token = await getStorage('userToken');
+        const response = await axios.post(
+          `${API_BASE_URL}/api/bookings/v1/create/`,
+          {
+            conversation_id: selectedConversation
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (is_DEBUG) {
+          console.log('MBA98765 Created booking with ID:', response.data.booking_id);
+        }
+
+        if (response.data.booking_id) {
+          navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
+            bookingId: response.data.booking_id,
+            initialData: null,
+            isProfessional: selectedConversationData.is_professional
+          });
+        }
+      } catch (error) {
+        console.error('Error creating booking:', error);
+        Alert.alert('Error', 'Unable to create booking. Please try again.');
       }
     } else {
-      console.log('MBABOSS Fetching real conversations');
-      fetchConversations();
+      console.log('MBA98765 User is client - showing request modal');
+      setShowRequestModal(true);
     }
-  }, [is_prototype, screenWidth]);
+    
+    setShowDropdown(false);
+  };
 
-  // Effect to load messages when conversation is selected
-  useEffect(() => {
-    if (!selectedConversation) return;
-    console.log('MBABOSS Fetching messages for conversation:', selectedConversation);
-    fetchMessages(selectedConversation);
-    const conversation = conversations.find(conv => conv.conversation_id === selectedConversation);
-    setSelectedConversationData(conversation);
-  }, [selectedConversation]);
-
-  // Add loadMoreMessages function for infinite scroll
+  // Update loadMoreMessages to check current state before loading
   const loadMoreMessages = () => {
-    if (hasMore && !isLoadingMore && !is_prototype) {
+    if (is_DEBUG) {
+      console.log('MBA98765 loadMoreMessages called:', {
+        hasMore,
+        isLoadingMore,
+        currentPage,
+        selectedConversation
+      });
+    }
+    
+    if (hasMore && !isLoadingMore && selectedConversation) {
       fetchMessages(selectedConversation, currentPage + 1);
     }
   };
@@ -866,6 +1004,7 @@ const MessageHistory = ({ navigation, route }) => {
             service_type: item.metadata.service_type,
             total_client_cost: totalClientCost,
             occurrences: item.metadata.occurrences || [],
+            booking_id: item.metadata.booking_id,
           }}
           isFromMe={isFromMe}
           isProfessional={selectedConversationData?.is_professional}
@@ -1027,76 +1166,6 @@ const MessageHistory = ({ navigation, route }) => {
 
   const MessageInput = Platform.OS === 'web' ? <WebInput /> : <MobileInput />;
   
-  const handleCreateBooking = async () => {
-    const currentConversation = conversations.find(c => c.conversation_id === selectedConversation);
-    if (is_DEBUG) {
-      console.log('MBABOSS Current conversation:', currentConversation);
-      console.log('MBABOSS CURRENT_USER_ID:', CURRENT_USER_ID);
-      console.log('MBABOSS Selected conversation ID:', selectedConversation);
-    }
-    
-    if (!currentConversation) {
-      console.log('MBABOSS No conversation found');
-      return;
-    }
-
-    // Check if current user is the professional by checking their role in the conversation
-    const isProfessional = currentConversation.is_professional === true;
-    
-    if (is_DEBUG) {
-      console.log('MBABOSS Is Professional?', isProfessional);
-    }
-
-    if (isProfessional) {
-      if (is_DEBUG) {
-        console.log('MBABOSS User is professional - creating booking and navigating to details');
-      }
-      try {
-        const token = await getStorage('userToken');
-        const response = await axios.post(
-          `${API_BASE_URL}/api/bookings/v1/create/`,
-          {
-            conversation_id: selectedConversation
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (is_DEBUG) {
-          console.log('MBABOSS Created booking with ID:', response.data.booking_id);
-        }
-
-        if (response.data.booking_id) {
-          if (is_DEBUG) {
-            console.log('MBABOSS Navigating to BookingDetails with:', {
-              bookingId: response.data.booking_id,
-              initialData: null,
-              isProfessional: currentConversation.is_professional
-            });
-          }
-          
-          navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
-            bookingId: response.data.booking_id,
-            initialData: null,
-            isProfessional: currentConversation.is_professional
-          });
-        }
-      } catch (error) {
-        console.error('Error creating booking:', error);
-        Alert.alert('Error', 'Unable to create booking. Please try again.');
-      }
-    } else {
-      console.log('MBABOSS User is client - showing request modal');
-      setShowRequestModal(true);
-    }
-    
-    setShowDropdown(false);
-  };
-
   const handleBookingRequest = async (modalData) => {
     try {
       const token = await getStorage('userToken');
@@ -1178,22 +1247,28 @@ const MessageHistory = ({ navigation, route }) => {
           conv.participant2_name : conv.participant1_name;
         
         if (is_DEBUG) {
-          console.log('MBABOSSY Rendering conversation:', {
-            id: conv.conversation_id,
-            type: typeof conv.conversation_id
+          console.log('MBA98765 Rendering conversation item:', {
+            convId: conv.conversation_id,
+            convIdType: typeof conv.conversation_id,
+            selectedId: selectedConversation,
+            selectedIdType: typeof selectedConversation,
+            isSelected: String(conv.conversation_id) === String(selectedConversation)
           });
         }
+        
+        // Convert both IDs to strings for comparison
+        const isSelected = String(conv.conversation_id) === String(selectedConversation);
         
         return (
           <TouchableOpacity
             key={conv.conversation_id}
             style={[
               styles.conversationItem,
-              selectedConversation === conv.conversation_id && styles.selectedConversation
+              isSelected && styles.selectedConversation
             ]}
             onPress={() => {
               if (is_DEBUG) {
-                console.log('MBABOSSY Setting selected conversation:', {
+                console.log('MBA98765 Setting selected conversation:', {
                   id: conv.conversation_id,
                   type: typeof conv.conversation_id
                 });
@@ -1203,7 +1278,9 @@ const MessageHistory = ({ navigation, route }) => {
           >
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
-                <Text style={styles.conversationName}>
+                <Text style={[
+                  styles.conversationName
+                ]}>
                   {otherParticipantName || conv.name || conv.other_user_name || 'Unknown'}
                 </Text>
                 <Text style={styles.conversationTime}>
@@ -1213,7 +1290,7 @@ const MessageHistory = ({ navigation, route }) => {
               <Text 
                 style={[
                   styles.conversationLastMessage,
-                  selectedConversation === conv.conversation_id && styles.activeConversationText,
+                  isSelected && styles.activeConversationText,
                   conv.unread && styles.unreadMessage
                 ]} 
                 numberOfLines={1}
@@ -1264,13 +1341,18 @@ const MessageHistory = ({ navigation, route }) => {
               </View>
             ) : messages.length === 0 ? (
               <Text style={styles.emptyText}>
-                No messages yet. Start the conversation!
+                No messages yet, start the conversation!
               </Text>
             ) : (
               <FlatList
                 data={messages}
                 renderItem={renderMessage}
-                keyExtractor={item => (item.message_id || Date.now().toString())}
+                keyExtractor={item => {
+                  // Use message_id if available, fallback to timestamp + content as unique key
+                  return item.message_id ? 
+                    `message-${item.message_id}` : 
+                    `message-${item.timestamp}-${item.content?.substring(0, 10)}`;
+                }}
                 style={styles.messageList}
                 onEndReached={loadMoreMessages}
                 onEndReachedThreshold={0.5}
@@ -1357,97 +1439,7 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Move BookingRequestMessage inside the component
-  const BookingRequestMessage = ({ data, onAccept, isFromMe, timestamp }) => {
-    const navigation = useNavigation();
-    
-    const handleViewBooking = () => {
-      navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
-        bookingId: data.bookingId,
-        readOnly: !isFromMe,
-        isProfessional: selectedConversationData.is_professional
-      });
-    };
-
-    // Handle both old and new message formats
-    const renderDates = () => {
-      if (data.dates) {
-        // New format
-        return data.dates.map((date, index) => (
-          <Text key={index} style={styles.detailText}>
-            {format(new Date(date.startDate), 'MMM d, yyyy')} {date.startTime} - {date.endTime}
-          </Text>
-        ));
-      } else if (data.occurrences) {
-        // Old format
-        return data.occurrences.map((occ, index) => (
-          <Text key={index} style={styles.detailText}>
-            {format(new Date(occ.startDate), 'MMM d, yyyy')} {occ.startTime} - {occ.endTime}
-          </Text>
-        ));
-      }
-      return null;
-    };
-
-    return (
-      <View style={[
-        styles.bookingRequestCard,
-        isFromMe ? styles.sentBookingRequest : styles.receivedBookingRequest
-      ]}>
-        <View style={styles.bookingRequestHeader}>
-          <MaterialCommunityIcons name="calendar-clock" size={24} color={theme.colors.primary} />
-          <Text style={styles.bookingRequestTitle}>
-            {data.messageType === 'professional_changes' ? 'Booking Update' : 
-             data.messageType === 'client_approval' ? 'Booking Approval' : 
-             'Booking Request'}
-          </Text>
-        </View>
-        
-        {data.status && (
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>
-              Status: {data.status}
-            </Text>
-          </View>
-        )}
-        
-        <View style={styles.bookingRequestDetails}>
-          <Text style={styles.detailLabel}>Service:</Text>
-          <Text style={styles.detailText}>{data.serviceType}</Text>
-          
-          {data.pets && (
-            <>
-              <Text style={styles.detailLabel}>Pets:</Text>
-              <Text style={styles.detailText}>
-                {data.pets.map(pet => pet.name).join(', ')}
-              </Text>
-            </>
-          )}
-          
-          <Text style={styles.detailLabel}>Dates:</Text>
-          {renderDates()}
-          
-          {data.totalCost !== undefined && (
-            <>
-              <Text style={styles.detailLabel}>Total Cost:</Text>
-              <Text style={styles.detailText}>
-                ${data.totalCost.toFixed(2)}
-              </Text>
-            </>
-          )}
-        </View>
-
-        <TouchableOpacity 
-          style={styles.viewBookingButton}
-          onPress={handleViewBooking}
-        >
-          <Text style={styles.viewBookingText}>Click for Details</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  // Add new component for empty state
+  // Update renderEmptyState to remove prototype references
   const renderEmptyState = () => (
     <View style={{
       flex: 1,
@@ -1476,16 +1468,16 @@ const MessageHistory = ({ navigation, route }) => {
         marginBottom: 24,
         textAlign: 'center'
       }}>
-        {is_prototype ? 
+        {userRole === 'professional' ? 
           'Create services to start getting bookings and messages from clients' :
           'Search professionals to find services and start messaging'}
       </Text>
       <Button
         mode="contained"
-        onPress={() => navigateToFrom(navigation, is_prototype ? 'Services' : 'SearchProfessionalListing', 'MessageHistory')}
+        onPress={() => navigateToFrom(navigation, userRole === 'professional' ? 'Services' : 'SearchProfessionalListing', 'MessageHistory')}
         style={{ borderRadius: 8 }}
       >
-        {is_prototype ? 'Create Services' : 'Find Professionals'}
+        {userRole === 'professional' ? 'Create Services' : 'Find Professionals'}
       </Button>
     </View>
   );

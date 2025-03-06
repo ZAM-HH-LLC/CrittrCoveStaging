@@ -71,6 +71,10 @@ const BookingMessageCard = ({
       <View style={styles.content}>
         <View style={styles.infoSection}>
           <View style={styles.row}>
+            <Text style={styles.label}>Booking ID:</Text>
+            <Text style={styles.value}>{data.booking_id || 'N/A'}</Text>
+          </View>
+          <View style={styles.row}>
             <Text style={styles.label}>Service:</Text>
             <Text style={styles.value}>{data.service_type || 'N/A'}</Text>
           </View>
