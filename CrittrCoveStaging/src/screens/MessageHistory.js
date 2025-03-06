@@ -57,6 +57,17 @@ const createStyles = (screenWidth) => StyleSheet.create({
     overflow: 'hidden',
     height: '100%',
   },
+  mainSection: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    maxWidth: Platform.OS === 'web' ? 
+      (screenWidth <= 1000 ? '100%' : '70%') : 
+      '100%',
+    alignSelf: screenWidth <= 1000 ? 'stretch' : 'flex-start',
+    width: screenWidth <= 1000 ? '100%' : 'auto',
+    height: '100%',
+  },
   conversationListContainer: {
     width: screenWidth <= 1000 ? '100%' : '30%',
     maxWidth: screenWidth < 1000 ? '' : 600,
@@ -84,45 +95,63 @@ const createStyles = (screenWidth) => StyleSheet.create({
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    position: 'relative',
-    height: '100%',
-    marginLeft: screenWidth > 1000 ? 0 : 0,
-    maxWidth: Platform.OS === 'web' ? 
-      (screenWidth <= 1000 ? '100%' : '70%') : 
-      '100%',
-    alignSelf: screenWidth <= 1000 ? 'stretch' : 'flex-start',
-    width: screenWidth <= 1000 ? '100%' : 'auto',
     overflow: 'hidden',
-    paddingRight: screenWidth > 1000 ? 100 : 0,
-    paddingBottom: 60,
+    paddingRight: screenWidth > 1000 ? 5 : 0,
+  },
+  messageHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    width: '100%',
+  },
+  messageHeaderName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    textAlign: 'center',
+    fontFamily: theme.fonts.header.fontFamily,
   },
   messagesContainer: {
     flex: 1,
     overflow: 'auto',
     width: '100%',
-    position: 'absolute',
-    padding: 16,
-    paddingTop: screenWidth > 1000 ? 72 : 0,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   messageList: {
-    // padding: 16,
     width: '100%',
-    paddingTop: 80, // the list is inverted, so we need to pad the top to account for the footer on mobile
+    paddingBottom: 16,
   },
-  messageInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
+  inputSection: {
+    width: '100%',
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
+    padding: screenWidth > 600 ? 16 : 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  attachButtonContainer: {
+    marginRight: 8,
   },
   attachButton: {
     padding: 8,
+    backgroundColor: theme.colors.background,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputInnerContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    borderRadius: 20,
+    marginRight: 8,
   },
   messageInput: {
     flex: 1,
@@ -134,10 +163,11 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   sendButton: {
     borderRadius: 20,
+    marginLeft: 8,
   },
   messageCard: {
     marginVertical: 4,
-    maxWidth: screenWidth > 1000 ? '40%' : '60%',
+    maxWidth: screenWidth > 1000 ? '40%' : '80%',
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -196,19 +226,6 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   receivedMessageText: {
     color: theme.colors.text,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    maxHeight: 100,
   },
   webInput: {
     flex: 1,
@@ -291,37 +308,6 @@ const createStyles = (screenWidth) => StyleSheet.create({
     width: '100%',
     padding: screenWidth > 600 ? 16 : 8,
   },
-  inputInnerContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-    borderRadius: 20,
-    marginRight: screenWidth <= 600 ? 4 : 8,
-    
-  },
-  attachButton: {
-    padding: 8,
-    marginRight: 8,
-    backgroundColor: theme.colors.background,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButton: {
-    marginLeft: 8,
-    borderRadius: 20,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  attachButtonContainer: {
-    position: 'relative',
-    zIndex: 2,
-  },
   dropdownMenu: {
     position: 'absolute',
     bottom: '100%',
@@ -399,24 +385,6 @@ const createStyles = (screenWidth) => StyleSheet.create({
     marginLeft: 4,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  messageHeader: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 2,
-  },
-  messageHeaderName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    textAlign: 'center',
-    fontFamily: theme.fonts.header.fontFamily,
   },
   mobileHeaderContent: {
     flexDirection: 'row',
@@ -1276,86 +1244,92 @@ const MessageHistory = ({ navigation, route }) => {
     }
 
     return (
-      <View style={styles.messageSection}>
-        {screenWidth > 1000 && selectedConversationData && (
+      <View style={styles.mainSection}>
+        {/* Header - only show on web full screen */}
+        {screenWidth > 1000 && (
           <View style={styles.messageHeader}>
             <Text style={styles.messageHeaderName}>
-              {selectedConversationData.other_user_name}
+              {selectedConversationData?.other_user_name}
             </Text>
           </View>
         )}
-        <View style={styles.messagesContainer}>
-          {isLoadingMessages ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.loadingText}>Loading messages...</Text>
-            </View>
-          ) : messages.length === 0 ? (
-            <Text style={styles.emptyText}>
-              No messages yet. Start the conversation!
-            </Text>
-          ) : (
-            <FlatList
-              data={messages}
-              renderItem={renderMessage}
-              keyExtractor={item => (item.message_id || Date.now().toString())}
-              style={styles.messageList}
-              onEndReached={loadMoreMessages}
-              onEndReachedThreshold={0.5}
-              inverted={true}
-              contentContainerStyle={{
-                flexGrow: 1,
-                justifyContent: 'flex-end',
-                paddingBottom: 16
-              }}
-              maintainVisibleContentPosition={{
-                minIndexForVisible: 0,
-                autoscrollToTopThreshold: 10
-              }}
-              ListFooterComponent={isLoadingMore && (
-                <ActivityIndicator 
-                  size="small" 
-                  color={theme.colors.primary}
-                  style={styles.loadingMore}
-                />
-              )}
-            />
-          )}
-        </View>
-        <View style={styles.inputWrapper}>
-          <View style={styles.attachButtonContainer}>
-            <TouchableOpacity 
-              style={styles.attachButton}
-              onPress={() => setShowDropdown(!showDropdown)}
-            >
-              <MaterialCommunityIcons 
-                name={showDropdown ? "close" : "plus"} 
-                size={24} 
-                color={theme.colors.primary} 
-              />
-            </TouchableOpacity>
-            {showDropdown && (
-              <View style={styles.dropdownMenu}>
-                <TouchableOpacity 
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    handleCreateBooking();
-                    setShowDropdown(false);
-                  }}
-                >
-                  <MaterialCommunityIcons 
-                    name="calendar-plus" 
-                    size={20} 
-                    color={theme.colors.primary} 
-                  />
-                  <Text style={styles.dropdownText}>
-                    {selectedConversationData?.is_professional ? "Create Booking" : "Request Booking"}
-                  </Text>
-                </TouchableOpacity>
+
+        {/* Messages */}
+        <View style={styles.messageSection}>
+          <View style={styles.messagesContainer}>
+            {isLoadingMessages ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading messages...</Text>
               </View>
+            ) : messages.length === 0 ? (
+              <Text style={styles.emptyText}>
+                No messages yet. Start the conversation!
+              </Text>
+            ) : (
+              <FlatList
+                data={messages}
+                renderItem={renderMessage}
+                keyExtractor={item => (item.message_id || Date.now().toString())}
+                style={styles.messageList}
+                onEndReached={loadMoreMessages}
+                onEndReachedThreshold={0.5}
+                inverted={true}
+                contentContainerStyle={{
+                  flexGrow: 1,
+                  justifyContent: 'flex-end'
+                }}
+                maintainVisibleContentPosition={{
+                  minIndexForVisible: 0,
+                  autoscrollToTopThreshold: 10
+                }}
+                ListFooterComponent={isLoadingMore && (
+                  <ActivityIndicator 
+                    size="small" 
+                    color={theme.colors.primary}
+                    style={styles.loadingMore}
+                  />
+                )}
+              />
             )}
           </View>
+        </View>
+
+        {/* Input Section */}
+        <View style={styles.inputSection}>
           <View style={styles.inputContainer}>
+            <View style={styles.attachButtonContainer}>
+              <TouchableOpacity 
+                style={styles.attachButton}
+                onPress={() => setShowDropdown(!showDropdown)}
+              >
+                <MaterialCommunityIcons 
+                  name={showDropdown ? "close" : "plus"} 
+                  size={24} 
+                  color={theme.colors.primary} 
+                />
+              </TouchableOpacity>
+              {showDropdown && (
+                <View style={styles.dropdownMenu}>
+                  <TouchableOpacity 
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      handleCreateBooking();
+                      setShowDropdown(false);
+                    }}
+                  >
+                    <MaterialCommunityIcons 
+                      name="calendar-plus" 
+                      size={20} 
+                      color={theme.colors.primary} 
+                    />
+                    <Text style={styles.dropdownText}>
+                      {selectedConversationData?.is_professional ? "Create Booking" : "Request Booking"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
             {Platform.OS === 'web' ? <WebInput /> : <MobileInput />}
           </View>
         </View>
@@ -1529,24 +1503,12 @@ const MessageHistory = ({ navigation, route }) => {
       ) : conversations.length > 0 ? (
         <>
           {renderHeader()}
-          <View style={[
-            styles.contentContainer,
-            screenWidth <= 1000 && selectedConversation && styles.mobileContent
-          ]}>
+          <View style={styles.contentContainer}>
             {screenWidth <= 1000 ? (
               selectedConversation ? (
                 <View style={styles.mobileMessageView}>
                   {renderMobileHeader()}
-                  <View style={styles.mobileContent}>
-                    {isLoadingMessages ? (
-                      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                        <ActivityIndicator size="large" color={theme.colors.primary} />
-                        <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading messages...</Text>
-                      </View>
-                    ) : (
-                      renderMessageSection()
-                    )}
-                  </View>
+                  {renderMessageSection()}
                 </View>
               ) : (
                 renderConversationList()
@@ -1554,14 +1516,7 @@ const MessageHistory = ({ navigation, route }) => {
             ) : (
               <>
                 {renderConversationList()}
-                {isLoadingMessages ? (
-                  <View style={[styles.messageSection, { justifyContent: 'center', alignItems: 'center' }]}>
-                    <ActivityIndicator size="large" color={theme.colors.primary} />
-                    <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading messages...</Text>
-                  </View>
-                ) : (
-                  renderMessageSection()
-                )}
+                {renderMessageSection()}
               </>
             )}
           </View>
