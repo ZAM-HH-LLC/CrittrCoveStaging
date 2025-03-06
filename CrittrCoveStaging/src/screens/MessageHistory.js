@@ -643,27 +643,25 @@ const MessageHistory = ({ navigation, route }) => {
         });
       }
 
-      // First check URL parameters
-      let urlConversationId = null;
-      if (Platform.OS === 'web') {
-        const urlParams = new URLSearchParams(window.location.search);
-        urlConversationId = urlParams.get('conversationId');
-        if (is_DEBUG) {
-          console.log('MBA98765 URL conversation ID:', urlConversationId);
+      // On initial load, clear any URL parameters
+      if (!hasLoadedInitialDataRef.current && Platform.OS === 'web') {
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.has('conversationId')) {
+          currentUrl.searchParams.delete('conversationId');
+          window.history.replaceState({}, '', currentUrl.toString());
+          if (is_DEBUG) {
+            console.log('MBA98765 Cleared URL parameters on initial load');
+          }
         }
       }
 
-      // Fetch conversations and handle selection
+      // Fetch conversations and always select the first one on initial load
       fetchConversations().then((response) => {
-        if (urlConversationId) {
-          // If we have a URL param, use that
-          setSelectedConversation(urlConversationId);
-        } else if (screenWidth > 1000 && conversations.length > 0) {
-          // On wide screens, auto-select first conversation if no URL param
+        if (!hasLoadedInitialDataRef.current && conversations.length > 0) {
           const firstConversation = conversations[0];
           if (firstConversation) {
             if (is_DEBUG) {
-              console.log('MBA98765 Auto-selecting first conversation:', firstConversation.conversation_id);
+              console.log('MBA98765 Auto-selecting first conversation on initial load:', firstConversation.conversation_id);
             }
             setSelectedConversation(firstConversation.conversation_id);
           }
