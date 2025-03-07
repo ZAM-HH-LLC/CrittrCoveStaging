@@ -572,111 +572,134 @@ const MessageHistory = ({ navigation, route }) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const prevScreenWidthRef = useRef(screenWidth);
   const hasLoadedInitialDataRef = useRef(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const initialLoadRef = useRef(true);
 
-  // Effect to handle route params
+  // Add a ref to track if we're handling route params
+  const isHandlingRouteParamsRef = useRef(false);
+
+  // Add a ref to track if messages have been fetched for the current conversation
+  const hasLoadedMessagesRef = useRef(false);
+
+  // Modify the mount effect to handle initial load
   useEffect(() => {
-    if (route.params?.messageId && route.params?.conversationId) {
-      if (is_DEBUG) {
-        console.log('MBA98765 Route params detected:', {
-          messageId: route.params.messageId,
-          conversationId: route.params.conversationId
-        });
-      }
-      
-      // Set the selected conversation and fetch data
-      setSelectedConversation(route.params.conversationId);
-      
-      // Reset pagination state
-      setCurrentPage(1);
-      setHasMore(true);
-      
-      // Fetch fresh conversations and messages
-      fetchConversations().then(() => {
-        fetchMessages(route.params.conversationId, 1);
-      });
-      
-      // Clear the params to prevent re-fetching
-      navigation.setParams({ messageId: null, conversationId: null });
+    if (!initialLoadRef.current) return; // Only run on first mount
+    
+    if (is_DEBUG) {
+      console.log('MBA98765 Component mounted - initializing data');
     }
-  }, [route.params]);
 
-  // Clear data on unmount
-  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        // Reset states
+        setConversations([]);
+        setMessages([]);
+        setSelectedConversation(null);
+        setSelectedConversationData(null);
+        setIsLoadingConversations(true);
+        setIsLoadingMessages(false);
+        setCurrentPage(1);
+        setHasMore(true);
+
+        // Handle URL parameters on web
+        if (Platform.OS === 'web') {
+          const currentUrl = new URL(window.location.href);
+          const urlConversationId = currentUrl.searchParams.get('conversationId');
+          
+          // Clear URL parameters
+          if (currentUrl.searchParams.has('conversationId')) {
+            currentUrl.searchParams.delete('conversationId');
+            window.history.replaceState({}, '', currentUrl.toString());
+            if (is_DEBUG) {
+              console.log('MBA98765 Cleared URL parameters on initial load');
+            }
+          }
+
+          // If we have a conversation ID in URL, we'll use that instead of auto-selecting
+          if (urlConversationId) {
+            const conversationsData = await fetchConversations();
+            setSelectedConversation(urlConversationId);
+            return;
+          }
+        }
+
+        // If we have route params on initial load, handle them here
+        if (route.params?.messageId && route.params?.conversationId) {
+          isHandlingRouteParamsRef.current = true;
+          const conversationsData = await fetchConversations();
+          setSelectedConversation(route.params.conversationId);
+          navigation.setParams({ messageId: null, conversationId: null });
+          return;
+        }
+
+        // Normal initialization
+        const conversationsData = await fetchConversations();
+        if (Platform.OS === 'web' && screenWidth > 1000 && conversationsData?.length > 0) {
+          setSelectedConversation(conversationsData[0].conversation_id);
+        }
+      } catch (error) {
+        console.error('Error in initialization:', error);
+      } finally {
+        initialLoadRef.current = false;
+        setIsInitialLoad(false);
+        isHandlingRouteParamsRef.current = false;
+      }
+    };
+
+    initializeData();
+
     return () => {
+      if (is_DEBUG) {
+        console.log('MBA98765 Component unmounting - cleaning up');
+      }
       setConversations([]);
       setMessages([]);
       setSelectedConversation(null);
       setSelectedConversationData(null);
-      setIsLoadingConversations(true);
-      setIsLoadingMessages(false);
-      setCurrentPage(1);
-      setHasMore(true);
-      hasLoadedInitialDataRef.current = false;
+      initialLoadRef.current = true;
+      setIsInitialLoad(true);
+      isHandlingRouteParamsRef.current = false;
+      hasLoadedMessagesRef.current = false;
     };
-  }, []);
+  }, []); // Empty dependency array means this runs once on mount
 
-  // Effect to handle screen width changes
+  // Modify route params effect to only handle non-reload cases
   useEffect(() => {
-    const prevWidth = prevScreenWidthRef.current;
-    const hasWidthCrossedThreshold = 
-      (prevWidth <= 1000 && screenWidth > 1000) || 
-      (prevWidth > 1000 && screenWidth <= 1000);
+    // Skip if this is the initial load/reload or if we're already handling route params
+    if (initialLoadRef.current || isHandlingRouteParamsRef.current || !route.params?.messageId || !route.params?.conversationId) {
+      return;
+    }
 
     if (is_DEBUG) {
-      console.log('MBA98765 Screen width change:', {
-        prev: prevWidth,
-        current: screenWidth,
-        crossedThreshold: hasWidthCrossedThreshold,
-        hasLoadedInitial: hasLoadedInitialDataRef.current
+      console.log('MBA98765 Route params detected (non-reload):', {
+        messageId: route.params.messageId,
+        conversationId: route.params.conversationId
       });
     }
+    
+    isHandlingRouteParamsRef.current = true;
+    
+    // Set the selected conversation and fetch data
+    setSelectedConversation(route.params.conversationId);
+    
+    // Reset pagination state
+    setCurrentPage(1);
+    setHasMore(true);
+    
+    // Fetch fresh conversations and messages
+    fetchConversations().then(() => {
+      isHandlingRouteParamsRef.current = false;
+    });
+    
+    // Clear the params to prevent re-fetching
+    navigation.setParams({ messageId: null, conversationId: null });
+  }, [route.params]);
 
-    // Update the previous width reference
-    prevScreenWidthRef.current = screenWidth;
-
-    // If we haven't loaded initial data or we crossed the threshold, load data
-    if (!hasLoadedInitialDataRef.current || hasWidthCrossedThreshold) {
-      if (is_DEBUG) {
-        console.log('MBA98765 Loading data due to:', {
-          initialLoad: !hasLoadedInitialDataRef.current,
-          thresholdCross: hasWidthCrossedThreshold
-        });
-      }
-
-      // On initial load, clear any URL parameters
-      if (!hasLoadedInitialDataRef.current && Platform.OS === 'web') {
-        const currentUrl = new URL(window.location.href);
-        if (currentUrl.searchParams.has('conversationId')) {
-          currentUrl.searchParams.delete('conversationId');
-          window.history.replaceState({}, '', currentUrl.toString());
-          if (is_DEBUG) {
-            console.log('MBA98765 Cleared URL parameters on initial load');
-          }
-        }
-      }
-
-      // Fetch conversations and always select the first one on initial load
-      fetchConversations().then((response) => {
-        if (!hasLoadedInitialDataRef.current && conversations.length > 0) {
-          const firstConversation = conversations[0];
-          if (firstConversation) {
-            if (is_DEBUG) {
-              console.log('MBA98765 Auto-selecting first conversation on initial load:', firstConversation.conversation_id);
-            }
-            setSelectedConversation(firstConversation.conversation_id);
-          }
-        }
-      });
-
-      hasLoadedInitialDataRef.current = true;
-    }
-  }, [screenWidth]);
-
-  // Effect to load messages when conversation is selected
+  // Keep the conversation selection effect but remove message fetching
   useEffect(() => {
-    if (!selectedConversation) {
+    if (!selectedConversation || isInitialLoad) {
       if (is_DEBUG) {
-        console.log('MBA98765 No conversation selected, skipping message fetch');
+        console.log('MBA98765 Skipping conversation data update - initial load or no conversation');
       }
       return;
     }
@@ -684,17 +707,14 @@ const MessageHistory = ({ navigation, route }) => {
     if (is_DEBUG) {
       console.log('MBA98765 Selected conversation changed:', {
         id: selectedConversation,
-        type: typeof selectedConversation
+        type: typeof selectedConversation,
+        isHandlingRouteParams: isHandlingRouteParamsRef.current
       });
     }
 
     // Find the conversation in our list
     const conversation = conversations.find(conv => String(conv.conversation_id) === String(selectedConversation));
     
-    if (is_DEBUG) {
-      console.log('MBA98765 Found conversation data:', conversation);
-    }
-
     if (conversation) {
       setSelectedConversationData(conversation);
       
@@ -705,40 +725,71 @@ const MessageHistory = ({ navigation, route }) => {
         window.history.pushState({}, '', newUrl.toString());
       }
 
-      // Reset pagination state and fetch first page
+      // Reset pagination state
       setCurrentPage(1);
       setHasMore(true);
-      fetchMessages(selectedConversation, 1);
+      
+      // Reset message loading flag for new conversation
+      hasLoadedMessagesRef.current = false;
     } else {
       if (is_DEBUG) {
         console.log('MBA98765 Could not find conversation data for ID:', selectedConversation);
       }
     }
-  }, [selectedConversation, conversations]);
+  }, [selectedConversation, conversations, isInitialLoad]);
 
-  // Function to fetch conversations
+  // Add dedicated effect for message fetching
+  useEffect(() => {
+    if (!selectedConversation || isInitialLoad || hasLoadedMessagesRef.current) {
+      return;
+    }
+
+    if (is_DEBUG) {
+      console.log('MBA98765 Fetching messages for conversation:', {
+        id: selectedConversation,
+        hasLoaded: hasLoadedMessagesRef.current
+      });
+    }
+
+    hasLoadedMessagesRef.current = true;
+    fetchMessages(selectedConversation, 1);
+  }, [selectedConversation, isInitialLoad]);
+
+  // Modify existing screen width effect
+  useEffect(() => {
+    const prevWidth = prevScreenWidthRef.current;
+    const hasWidthCrossedThreshold = 
+      (prevWidth <= 1000 && screenWidth > 1000) || 
+      (prevWidth > 1000 && screenWidth <= 1000);
+
+    if (is_DEBUG) {
+      console.log('MBA98765 Screen width change:', {
+        prev: prevWidth,
+        current: screenWidth,
+        crossedThreshold: hasWidthCrossedThreshold
+      });
+    }
+
+    prevScreenWidthRef.current = screenWidth;
+
+    // Only handle width threshold crossing
+    if (hasWidthCrossedThreshold) {
+      if (screenWidth > 1000 && conversations.length > 0 && !selectedConversation) {
+        if (is_DEBUG) {
+          console.log('MBA98765 Auto-selecting first conversation on width change');
+        }
+        setSelectedConversation(conversations[0].conversation_id);
+      }
+    }
+  }, [screenWidth]);
+
+  // Modify fetchConversations to return the data
   const fetchConversations = async () => {
     try {
       setIsLoadingConversations(true);
-      
-      if (is_prototype) {
-        // In prototype mode, use mock data
-        console.log('MBABOSS Setting mock conversations in prototype mode');
-        setConversations(mockConversations);
-        if (mockConversations.length > 0 && screenWidth > 1000) {
-          setSelectedConversation(mockConversations[0].id);
-        }
-        setIsLoadingConversations(false);
-        return;
-      }
 
-      console.log('MBABOSS Fetching conversations...');
       const token = await getStorage('userToken');
-      console.log('MBABOSS User token exists:', !!token);
-      
-      // Log the full request details
       const requestUrl = `${API_BASE_URL}/api/conversations/v1/`;
-      console.log('MBABOSS Making request to:', requestUrl);
       
       const response = await axios.get(requestUrl, {
         headers: { 
@@ -747,44 +798,14 @@ const MessageHistory = ({ navigation, route }) => {
         }
       });
       
-      console.log('MBABOSS Conversations response status:', response.status);
-      if (is_DEBUG) {
-        console.log('MBA98765 Conversations data:', response.data);
-      }
-      
       if (response.data && Array.isArray(response.data)) {
-        // Store conversations
         setConversations(response.data);
-        
-        // If we have a selected conversation, update its data
-        if (selectedConversation) {
-          const conversation = response.data.find(conv => String(conv.conversation_id) === String(selectedConversation));
-          if (conversation) {
-            if (is_DEBUG) {
-              console.log('MBA98765 Setting selected conversation data:', conversation);
-            }
-            setSelectedConversationData(conversation);
-          }
-        }
-        // Auto-select first conversation on web
-        else if (response.data.length > 0 && screenWidth > 1000) {
-          console.log('MBABOSS Auto-selecting first conversation:', response.data[0].conversation_id);
-          setSelectedConversation(response.data[0].conversation_id);
-          setSelectedConversationData(response.data[0]);
-        }
-      } else {
-        console.error('Invalid response format:', response.data);
+        return response.data;
       }
+      return [];
     } catch (error) {
       console.error('Error fetching conversations:', error);
-      if (error.response) {
-        console.error('Error response:', error.response.data);
-        console.error('Error status:', error.response.status);
-      } else if (error.request) {
-        console.error('No response received:', error.request);
-      } else {
-        console.error('Error setting up request:', error.message);
-      }
+      return [];
     } finally {
       setIsLoadingConversations(false);
     }
