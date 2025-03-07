@@ -232,7 +232,6 @@ def calculate_cost_summary(occurrences):
         logger.error(f"Error calculating cost summary: {e}")
         return None
 
-def create_professional_draft_data(booking, request_pets, occurrences=None, cost_summary=None, service=None):
     """
     Creates draft data specifically for professional-initiated bookings.
     This handles the special case where pros need to add things in a specific order:

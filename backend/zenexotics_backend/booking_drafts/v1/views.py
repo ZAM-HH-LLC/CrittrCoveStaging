@@ -26,8 +26,8 @@ from users.models import UserSettings
 from core.booking_operations import (
     calculate_occurrence_rates, 
     create_occurrence_data, 
-    calculate_cost_summary,
-    create_professional_draft_data
+    calculate_cost_summary
+    
 )
 import traceback
 import pytz
