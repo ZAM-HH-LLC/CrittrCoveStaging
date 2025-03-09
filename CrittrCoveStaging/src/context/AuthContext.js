@@ -351,6 +351,12 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (response.status !== 200) {
+        console.log('Retrying refresh token');
+        const newToken = await refreshUserToken(refreshToken);
+        if (newToken) {
+          console.log('Got token:', newToken);
+          return await validateToken(newToken);
+        }
         console.log('Token validation error:', response.status);
         return false;
       }
@@ -364,20 +370,6 @@ export const AuthProvider = ({ children }) => {
 
   const refreshUserToken = async (refreshToken) => {
     try {
-      if (is_prototype) {
-        // In prototype mode, return a mock token
-        if (is_DEBUG) {
-          console.log('Prototype mode: Mock token refresh successful');
-        }
-        const mockNewToken = 'mock_refreshed_token';
-        if (Platform.OS === 'web') {
-          sessionStorage.setItem('userToken', mockNewToken);
-        } else {
-          await AsyncStorage.setItem('userToken', mockNewToken);
-        }
-        return mockNewToken;
-      }
-
       // Ensure refresh token is retrieved correctly in refreshUserToken
       const refreshToken = Platform.OS === "web" ? sessionStorage.getItem('refreshToken') : await AsyncStorage.getItem('refreshToken');
       if (!refreshToken) {

@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { navigateToFrom } from '../components/Navigation';
 import BookingMessageCard from '../components/BookingMessageCard';
+import { getFormattedTimes, checkDSTChange, convertFromUTC } from '../utils/time_utils';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth) => StyleSheet.create({
@@ -565,7 +566,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [isSending, setIsSending] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const { is_DEBUG, is_prototype, isApprovedProfessional, userRole } = useContext(AuthContext);
+  const { is_DEBUG, is_prototype, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
   const [conversations, setConversations] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -1009,10 +1010,186 @@ const MessageHistory = ({ navigation, route }) => {
                             0;
 
       if (is_DEBUG) {
-        console.log('MBA9876 Message data:', {
+        console.log('MBA9876i2ghv93 Message data:', {
           type: item.type_of_message,
           metadata: item.metadata,
-          totalClientCost
+          totalClientCost,
+          userTimezone: timeSettings.timezone,
+          occurrences: item.metadata.occurrences
+        });
+      }
+
+      // Format the occurrences with proper timezone handling
+      const formattedOccurrences = (item.metadata.occurrences || []).map(occ => {
+        try {
+          // For initial booking requests, use the pre-formatted dates
+          if (item.type_of_message === 'initial_booking_request') {
+            if (occ.formatted_start && occ.formatted_end && occ.duration && occ.timezone) {
+              if (is_DEBUG) {
+                console.log('MBA9876i2ghv93 Using pre-formatted dates:', occ);
+              }
+              return {
+                ...occ,
+                formatted_start: occ.formatted_start,
+                formatted_end: occ.formatted_end,
+                duration: occ.duration,
+                timezone: occ.timezone,
+                dst_message: ''  // DST message will be handled by the backend
+              };
+            }
+          }
+
+          // For approval messages, convert UTC to local time
+          let startTime = occ.start_time;
+          let endTime = occ.end_time;
+          let startDate = occ.start_date;
+          let endDate = occ.end_date;
+
+          // Always convert UTC to local time for approval messages
+          if (item.type_of_message === 'send_approved_message') {
+            if (is_DEBUG) {
+              console.log('MBA9876i2ghv93 Converting UTC to local for approval message:', {
+                startDate,
+                startTime,
+                endDate,
+                endTime,
+                timezone: timeSettings.timezone,
+                originalTimes: {
+                  start: occ.start_time,
+                  end: occ.end_time
+                }
+              });
+            }
+
+            // For approval messages, the times are in UTC
+            // First convert UTC to local time
+            const localStartTime = convertFromUTC(startDate, startTime, timeSettings.timezone);
+            const localEndTime = convertFromUTC(endDate, endTime, timeSettings.timezone);
+
+            if (is_DEBUG) {
+              console.log('MBA9876i2ghv93 Converted UTC to local:', {
+                original: {
+                  startTime,
+                  endTime
+                },
+                local: {
+                  startTime: localStartTime,
+                  endTime: localEndTime
+                },
+                timezone: timeSettings.timezone
+              });
+            }
+
+            // Create datetime objects for formatting
+            const [startHours, startMinutes] = localStartTime.split(':').map(Number);
+            const [endHours, endMinutes] = localEndTime.split(':').map(Number);
+
+            // Format the dates
+            const startDateTime = new Date(startDate);
+            startDateTime.setHours(startHours, startMinutes);
+            const endDateTime = new Date(endDate);
+            endDateTime.setHours(endHours, endMinutes);
+
+            // Calculate duration
+            const durationMs = endDateTime - startDateTime;
+            const days = Math.floor(durationMs / (24 * 60 * 60 * 1000));
+            const remainingMs = durationMs % (24 * 60 * 60 * 1000);
+            const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+
+            // Format duration string
+            let durationStr = '';
+            if (days > 0) {
+                durationStr += `${days} day${days > 1 ? 's' : ''}`;
+                if (hours > 0) {
+                    durationStr += `, ${hours} hour${hours > 1 ? 's' : ''}`;
+                }
+            } else if (hours > 0) {
+                durationStr += `${hours} hour${hours > 1 ? 's' : ''}`;
+            }
+
+            // Format the times in 12-hour format
+            const formatTime = (date) => {
+                let hours = date.getHours();
+                const minutes = date.getMinutes();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12;
+                return `${hours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+            };
+
+            // Check for DST change
+            const hasDSTChange = startDateTime.getTimezoneOffset() !== endDateTime.getTimezoneOffset();
+
+            return {
+                ...occ,
+                formatted_start: `${startDateTime.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })} (${formatTime(startDateTime)})`,
+                formatted_end: `${endDateTime.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })} (${formatTime(endDateTime)})`,
+                duration: durationStr || '0 hours',
+                timezone: timeSettings.timezone_abbrev,
+                dst_message: hasDSTChange ? "Elapsed time may be different than expected due to Daylight Savings Time." : ""
+            };
+          }
+
+          // For initial booking requests or if not an approval message, use getFormattedTimes
+          const formattedTimes = getFormattedTimes(
+            startDate,
+            startTime,
+            endDate,
+            endTime,
+            timeSettings.timezone
+          );
+
+          // Check for DST change
+          const hasDSTChange = checkDSTChange(
+            startDate,
+            startTime,
+            endDate,
+            endTime,
+            timeSettings.timezone
+          );
+
+          if (is_DEBUG) {
+            console.log('MBA9876i2ghv93 Final formatted times:', {
+              formattedTimes,
+              hasDSTChange,
+              messageType: item.type_of_message,
+              timezone: timeSettings.timezone_abbrev,
+              times: {
+                start: startTime,
+                end: endTime
+              }
+            });
+          }
+
+          return {
+            ...occ,
+            formatted_start: formattedTimes.formatted_start,
+            formatted_end: formattedTimes.formatted_end,
+            duration: formattedTimes.duration,
+            timezone: timeSettings.timezone_abbrev,
+            dst_message: hasDSTChange ? "Elapsed time may be different than expected due to Daylight Savings Time." : ""
+          };
+        } catch (error) {
+          console.error('MBA9876i2ghv93 Error formatting occurrence:', error, {
+            occurrence: occ,
+            timezone: timeSettings.timezone,
+            messageType: item.type_of_message
+          });
+          return {
+            ...occ,
+            formatted_start: 'Error formatting date',
+            formatted_end: 'Error formatting date',
+            duration: 'Unknown',
+            timezone: timeSettings.timezone_abbrev,
+            dst_message: ''
+          };
+        }
+      });
+
+      if (is_DEBUG) {
+        console.log('MBA9876i2ghv93 Final formatted occurrences:', {
+          occurrences: formattedOccurrences,
+          messageType: item.type_of_message
         });
       }
 
@@ -1022,7 +1199,7 @@ const MessageHistory = ({ navigation, route }) => {
           data={{
             service_type: item.metadata.service_type,
             total_client_cost: totalClientCost,
-            occurrences: item.metadata.occurrences || [],
+            occurrences: formattedOccurrences,
             booking_id: item.metadata.booking_id,
           }}
           isFromMe={isFromMe}
@@ -1055,7 +1232,7 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
       </View>
     );
-  }, [navigation, selectedConversationData]);
+  }, [navigation, selectedConversationData, timeSettings]);
 
   const WebInput = () => {
     const [message, setMessage] = useState('');

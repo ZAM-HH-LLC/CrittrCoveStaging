@@ -954,39 +954,17 @@ class UpdateBookingOccurrencesView(APIView):
             # Process each occurrence from the request
             for occurrence_data in request.data.get('occurrences', []):
                 try:
-                    # Parse the date and time strings
+                    # Times are already in UTC from frontend, no conversion needed
                     start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
                     end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date()
-                    
-                    # Try to parse time in both 12-hour and 24-hour formats
-                    try:
-                        # First try 12-hour format (e.g., "11:30 AM")
-                        start_time = datetime.strptime(occurrence_data['start_time'], '%I:%M %p').time()
-                        end_time = datetime.strptime(occurrence_data['end_time'], '%I:%M %p').time()
-                    except ValueError:
-                        # If that fails, try 24-hour format (e.g., "13:30")
-                        start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
-                        end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
-
-                    # Get user's timezone
-                    user_settings = UserSettings.objects.filter(user=booking.client.user).first()
-                    user_timezone = user_settings.timezone if user_settings else 'UTC'
-
-                    # Create datetime objects in user's timezone
-                    user_tz = pytz.timezone(user_timezone)
-                    start_dt = user_tz.localize(datetime.combine(start_date, start_time))
-                    end_dt = user_tz.localize(datetime.combine(end_date, end_time))
-
-                    # Convert to UTC
-                    start_dt_utc = start_dt.astimezone(pytz.UTC)
-                    end_dt_utc = end_dt.astimezone(pytz.UTC)
+                    start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
+                    end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
 
                     # Find existing occurrence in draft data or create new one
                     occurrence_id = occurrence_data.get('occurrence_id')
                     
                     if not occurrence_id:
                         # Generate new unique ID for new occurrence
-                        # Use timestamp + random number to ensure uniqueness
                         occurrence_id = f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"
                         logger.info(f"MBA1644 - Generated new occurrence ID: {occurrence_id}")
 
@@ -1011,10 +989,10 @@ class UpdateBookingOccurrencesView(APIView):
                             self.end_time = end_time
 
                     temp_occurrence = TempOccurrence(
-                        start_date=start_dt_utc.date(),
-                        end_date=end_dt_utc.date(),
-                        start_time=start_dt_utc.time(),
-                        end_time=end_dt_utc.time()
+                        start_date=start_date,
+                        end_date=end_date,
+                        start_time=start_time,
+                        end_time=end_time
                     )
 
                     # Calculate rates using the temporary service and occurrence
@@ -1022,36 +1000,18 @@ class UpdateBookingOccurrencesView(APIView):
                     if not rate_data:
                         raise Exception("Failed to calculate rates")
 
-                    # Get formatted times using the temp occurrence
-                    formatted_times = get_formatted_times(
-                        occurrence=temp_occurrence,
-                        user_id=booking.client.user.id
-                    )
-
-                    logger.info(f"MBA162e32v44 - occurrence_id: {occurrence_id}")
-
                     # Create occurrence data
                     processed_occurrence = OrderedDict([
                         ('occurrence_id', occurrence_id),
                         ('start_date', start_date.isoformat()),
                         ('end_date', end_date.isoformat()),
-                        ('start_time', occurrence_data['start_time']),
-                        ('end_time', occurrence_data['end_time']),
+                        ('start_time', start_time.strftime('%H:%M')),  # UTC time
+                        ('end_time', end_time.strftime('%H:%M')),      # UTC time
                         ('calculated_cost', rate_data['calculated_cost']),
                         ('base_total', rate_data['base_total']),
                         ('multiple', rate_data['multiple']),
-                        ('rates', rate_data['rates']),
-                        ('formatted_start', formatted_times['formatted_start']),
-                        ('formatted_end', formatted_times['formatted_end']),
-                        ('duration', formatted_times['duration']),
-                        ('timezone', formatted_times['timezone'])
+                        ('rates', rate_data['rates'])
                     ])
-
-                    # Check for DST change by comparing UTC offsets
-                    if start_dt.utcoffset() != end_dt.utcoffset():
-                        processed_occurrence['dst_message'] = "Elapsed time may be different than expected due to Daylight Savings Time."
-                    else:
-                        processed_occurrence['dst_message'] = ""
 
                     processed_occurrences.append(processed_occurrence)
                 except Exception as e:

@@ -16,6 +16,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { handleBack, navigateToFrom } from '../components/Navigation';
 import SnackBar from '../components/SnackBar';
+import { convertToUTC, getFormattedTimes, checkDSTChange, convertFromUTC, convertDateTimeFromUTC, formatOccurrenceFromUTC } from '../utils/time_utils';
 
 const LAST_VIEWED_BOOKING_ID = 'last_viewed_booking_id';
 
@@ -131,7 +132,7 @@ const RequestChangesModal = ({ visible, onClose, onSubmit, loading }) => {
 const BookingDetails = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { is_DEBUG } = useContext(AuthContext);
+  const { is_DEBUG, timeSettings } = useContext(AuthContext);
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -221,6 +222,107 @@ const BookingDetails = () => {
           { headers: { Authorization: `Bearer ${token}` }}
         );
 
+        // Format the occurrences with proper timezone handling
+        const formattedOccurrences = response.data.occurrences.map(occ => {
+          try {
+            if (is_DEBUG) {
+              console.log('MBA134njo0vh03 Processing occurrence from backend:', {
+                occurrence: occ,
+                timezone: timeSettings.timezone,
+                utcTimes: {
+                  start: `${occ.start_date} ${occ.start_time}`,
+                  end: `${occ.end_date} ${occ.end_time}`
+                }
+              });
+            }
+
+            // Convert UTC to local date and time
+            const localStart = convertDateTimeFromUTC(occ.start_date, occ.start_time, timeSettings.timezone);
+            const localEnd = convertDateTimeFromUTC(occ.end_date, occ.end_time, timeSettings.timezone);
+
+            if (is_DEBUG) {
+              console.log('MBA134njo0vh03 After convertDateTimeFromUTC:', {
+                original: {
+                  start: `${occ.start_date} ${occ.start_time}`,
+                  end: `${occ.end_date} ${occ.end_time}`
+                },
+                converted: {
+                  start: localStart,
+                  end: localEnd
+                },
+                timezone: timeSettings.timezone
+              });
+            }
+
+            // Get formatted times using our utility function
+            const formattedTimes = getFormattedTimes(
+              localStart.date,
+              localStart.time,
+              localEnd.date,
+              localEnd.time,
+              timeSettings.timezone
+            );
+
+            // Check for DST change using our utility function
+            const hasDSTChange = checkDSTChange(
+              localStart.date,
+              localStart.time,
+              localEnd.date,
+              localEnd.time,
+              timeSettings.timezone
+            );
+
+            if (is_DEBUG) {
+              console.log('MBA134njo0vh03 After formatting:', {
+                formattedTimes,
+                hasDSTChange,
+                timezone: timeSettings.timezone,
+                originalTimes: {
+                  start: `${occ.start_date} ${occ.start_time}`,
+                  end: `${occ.end_date} ${occ.end_time}`
+                },
+                localTimes: {
+                  start: `${localStart.date} ${localStart.time}`,
+                  end: `${localEnd.date} ${localEnd.time}`
+                }
+              });
+            }
+
+            const result = {
+              ...occ,
+              formatted_start: formattedTimes.formatted_start,
+              formatted_end: formattedTimes.formatted_end,
+              duration: formattedTimes.duration,
+              timezone: timeSettings.timezone_abbrev,
+              dst_message: hasDSTChange ? "Elapsed time may be different than expected due to Daylight Savings Time." : ""
+            };
+
+            if (is_DEBUG) {
+              console.log('MBA134njo0vh03 Final formatted occurrence:', result);
+            }
+
+            return result;
+
+          } catch (error) {
+            console.error('MBA134njo0vh03 Error formatting occurrence:', error, {
+              occurrence: occ,
+              timezone: timeSettings.timezone
+            });
+            return {
+              ...occ,
+              formatted_start: 'Error formatting date',
+              formatted_end: 'Error formatting date',
+              duration: 'Unknown',
+              timezone: timeSettings.timezone_abbrev,
+              dst_message: ''
+            };
+          }
+        });
+
+        if (is_DEBUG) {
+          console.log('MBA134njo0vh03 All formatted occurrences:', formattedOccurrences);
+        }
+
         // Transform API response to match the expected format
         const transformedBooking = {
           ...response.data,
@@ -231,11 +333,15 @@ const BookingDetails = () => {
           animalType: response.data.service_details.animal_type,
           numberOfPets: response.data.service_details.num_pets,
           costs: response.data.cost_summary,
-          status: response.data.status
+          status: response.data.status,
+          occurrences: formattedOccurrences
         };
 
         if (is_DEBUG) {
-          console.log('MBA77123 BookingDetails: Fetched and transformed booking data:', transformedBooking);
+          console.log('MBA77123 BookingDetails: Fetched and transformed booking data:', {
+            original: response.data,
+            transformed: transformedBooking
+          });
         }
 
         setBooking(transformedBooking);
@@ -252,7 +358,7 @@ const BookingDetails = () => {
     };
 
     fetchBooking();
-  }, [route.params?.bookingId, navigation]);
+  }, [route.params?.bookingId, navigation, timeSettings]);
 
   // Add helper function to safely display data
   const getDisplayValue = (value, placeholder = 'TBD') => {
@@ -729,27 +835,14 @@ const BookingDetails = () => {
       }
 
       const token = await getStorage('userToken');
+      const userTimezone = await getStorage('userTimezone');
+      
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      // Convert 12-hour time to 24-hour time for comparison
-      const convertTo24Hour = (time12h) => {
-        const [time, modifier] = time12h.split(' ');
-        let [hours, minutes] = time.split(':');
-        hours = parseInt(hours, 10);
-        
-        if (modifier === 'PM' && hours < 12) {
-          hours += 12;
-        } else if (modifier === 'AM' && hours === 12) {
-          hours = 0;
-        }
-        
-        return `${hours.toString().padStart(2, '0')}:${minutes}`;
-      };
-
       // Find the occurrence index by matching dates and times
-      const occurrenceIndex = booking.occurrences.findIndex((occ, index) => {
+      const occurrenceIndex = booking.occurrences.findIndex((occ) => {
         // First try to match by occurrence_id
         if (updatedOccurrence.occurrence_id && occ.occurrence_id === updatedOccurrence.occurrence_id) {
           if (is_DEBUG) {
@@ -758,12 +851,21 @@ const BookingDetails = () => {
           return true;
         }
 
-        // Fall back to date/time matching if no ID match
-        const updatedStartTime = convertTo24Hour(updatedOccurrence.startTime);
-        const updatedEndTime = convertTo24Hour(updatedOccurrence.endTime);
+        // Convert the updated times to UTC for comparison
+        const updatedStartTimeUTC = convertToUTC(
+          updatedOccurrence.startDate,
+          updatedOccurrence.startTime,
+          userTimezone
+        );
+
+        const updatedEndTimeUTC = convertToUTC(
+          updatedOccurrence.endDate,
+          updatedOccurrence.endTime,
+          userTimezone
+        );
 
         if (is_DEBUG) {
-          console.log('MBA9740174 Comparing occurrence at index:', index, {
+          console.log('MBA9740174 Comparing occurrence:', {
             original: {
               start_date: occ.start_date,
               start_time: occ.start_time,
@@ -772,49 +874,40 @@ const BookingDetails = () => {
             },
             updated: {
               start_date: updatedOccurrence.startDate,
-              start_time: updatedStartTime,
+              start_time: updatedStartTimeUTC,
               end_date: updatedOccurrence.endDate,
-              end_time: updatedEndTime
-            },
-            matches: {
-              start_date: occ.start_date === updatedOccurrence.startDate,
-              start_time: occ.start_time === updatedStartTime,
-              end_date: occ.end_date === updatedOccurrence.endDate,
-              end_time: occ.end_time === updatedEndTime
+              end_time: updatedEndTimeUTC
             }
           });
         }
 
         return occ.start_date === updatedOccurrence.startDate &&
-               occ.start_time === updatedStartTime &&
+               occ.start_time === updatedStartTimeUTC &&
                occ.end_date === updatedOccurrence.endDate &&
-               occ.end_time === updatedEndTime;
+               occ.end_time === updatedEndTimeUTC;
       });
 
       if (is_DEBUG) {
         console.log('MBA9740174 Found occurrence at index:', occurrenceIndex);
-        if (occurrenceIndex === -1) {
-          console.log('MBA9740174 WARNING: No matching occurrence found. Trying to match by start date/time only...');
-          
-          // Try to find by start date/time only
-          const startTimeOnly = booking.occurrences.findIndex((occ, index) => {
-            const updatedStartTime = convertTo24Hour(updatedOccurrence.startTime);
-            return occ.start_date === updatedOccurrence.startDate && 
-                   occ.start_time === updatedStartTime;
-          });
-          
-          console.log('MBA9740174 Start date/time match found at index:', startTimeOnly);
-        }
       }
 
       // If no match found by exact comparison, try to find by start date/time only
       let finalIndex = occurrenceIndex;
       if (finalIndex === -1) {
+        const updatedStartTimeUTC = convertToUTC(
+          updatedOccurrence.startDate,
+          updatedOccurrence.startTime,
+          userTimezone
+        );
+        
         finalIndex = booking.occurrences.findIndex((occ) => {
-          const updatedStartTime = convertTo24Hour(updatedOccurrence.startTime);
           return occ.start_date === updatedOccurrence.startDate && 
-                 occ.start_time === updatedStartTime;
+                 occ.start_time === updatedStartTimeUTC;
         });
+
+        if (is_DEBUG) {
+          console.log('MBA9740174 Fallback search by start time only. Found at index:', finalIndex);
+        }
       }
 
       if (finalIndex === -1) {
@@ -826,8 +919,16 @@ const BookingDetails = () => {
         occurrence_id: booking.occurrences[finalIndex]?.occurrence_id,
         start_date: updatedOccurrence.startDate,
         end_date: updatedOccurrence.endDate,
-        start_time: convertTo24Hour(updatedOccurrence.startTime),
-        end_time: convertTo24Hour(updatedOccurrence.endTime),
+        start_time: convertToUTC(
+          updatedOccurrence.startDate,
+          updatedOccurrence.startTime,
+          userTimezone
+        ),
+        end_time: convertToUTC(
+          updatedOccurrence.endDate,
+          updatedOccurrence.endTime,
+          userTimezone
+        ),
         rates: {
           base_rate: updatedOccurrence.rates.baseRate,
           additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
@@ -872,15 +973,7 @@ const BookingDetails = () => {
       if (is_DEBUG) {
         console.log('MBA9740174 Final request data:', {
           booking_id: booking.booking_id,
-          occurrences: existingOccurrences.map((occ, index) => ({
-            index,
-            occurrence_id: occ.occurrence_id,
-            start_date: occ.start_date,
-            end_date: occ.end_date,
-            is_updated: occ.is_updated,
-            start_time: occ.start_time,
-            end_time: occ.end_time
-          }))
+          occurrences: existingOccurrences
         });
       }
 
@@ -909,37 +1002,54 @@ const BookingDetails = () => {
       if (data.draft_data) {
         if (is_DEBUG) {
           console.log('MBA9740174 Updating local state with draft data:', {
-            oldOccurrences: booking.occurrences.map(occ => ({
-              occurrence_id: occ.occurrence_id,
-              start_date: occ.start_date,
-              end_date: occ.end_date,
-              start_time: occ.start_time,
-              end_time: occ.end_time
-            })),
-            newOccurrences: data.draft_data.occurrences.map(occ => ({
-              occurrence_id: occ.occurrence_id,
-              start_date: occ.start_date,
-              end_date: occ.end_date,
-              start_time: occ.start_time,
-              end_time: occ.end_time
-            }))
+            oldOccurrences: booking.occurrences,
+            newOccurrences: data.draft_data.occurrences
           });
         }
+
+        // Format the occurrences with proper timezone handling
+        const formattedOccurrences = data.draft_data.occurrences.map(occ => {
+          // Get formatted times
+          const formattedTimes = getFormattedTimes(
+            occ.start_date,
+            occ.start_time,
+            occ.end_date,
+            occ.end_time,
+            timeSettings.timezone_abbrev
+          );
+
+          // Check for DST change
+          const hasDSTChange = checkDSTChange(
+            occ.start_date,
+            occ.start_time,
+            occ.end_date,
+            occ.end_time,
+            timeSettings.timezone_abbrev
+          );
+
+          return {
+            ...occ,
+            formatted_start: formattedTimes.formatted_start,
+            formatted_end: formattedTimes.formatted_end,
+            duration: formattedTimes.duration,
+            timezone: formattedTimes.timezone,
+            dst_message: hasDSTChange ? "Elapsed time may be different than expected due to Daylight Savings Time." : ""
+          };
+        });
 
         setBooking(prev => ({
           ...prev,
           ...data.draft_data,
+          occurrences: formattedOccurrences,
           status: data.draft_data.status
         }));
 
-        // Show success message
         setSnackBar({
           visible: true,
           message: 'Occurrence updated successfully',
           type: 'success'
         });
 
-        // Close the modal
         setShowAddOccurrenceModal(false);
         return true;
       }
@@ -963,30 +1073,77 @@ const BookingDetails = () => {
   // It calls the update_occurrences endpoint to add the new occurrence to the booking
   const handleAddOccurrence = async (newOccurrence) => {
     if (is_DEBUG) {
-      console.log('MBA5678 Adding new occurrence:', newOccurrence);
+      console.log('MBA134njo0vh03 Adding new occurrence:', newOccurrence);
     }
 
     try {
       let token = await getStorage('userToken');
+      const userTimezone = await getStorage('userTimezone');
 
       // Format the new occurrence data
       let newOccurrenceData;
       
       if (newOccurrence.startDateTime && newOccurrence.endDateTime) {
         // Client-initiated format with DateTime objects
+        const startDate = format(newOccurrence.startDateTime, 'yyyy-MM-dd');
+        const startTime = format(newOccurrence.startDateTime, 'HH:mm');
+        const endDate = format(newOccurrence.endDateTime, 'yyyy-MM-dd');
+        const endTime = format(newOccurrence.endDateTime, 'HH:mm');
+
+        // Convert to UTC using existing function
+        const startUTC = convertToUTC(startDate, startTime, userTimezone);
+        const endUTC = convertToUTC(endDate, endTime, userTimezone);
+
+        if (is_DEBUG) {
+          console.log('MBA134njo0vh03 Converted client times to UTC:', {
+            local: {
+              start: `${startDate} ${startTime}`,
+              end: `${endDate} ${endTime}`
+            },
+            utc: {
+              start: startUTC,
+              end: endUTC
+            }
+          });
+        }
+
         newOccurrenceData = {
-          start_date: format(newOccurrence.startDateTime, 'yyyy-MM-dd'),
-          end_date: format(newOccurrence.endDateTime, 'yyyy-MM-dd'),
-          start_time: format(newOccurrence.startDateTime, 'HH:mm'),
-          end_time: format(newOccurrence.endDateTime, 'HH:mm')
+          start_date: startUTC.date,
+          end_date: endUTC.date,
+          start_time: startUTC.time,
+          end_time: endUTC.time
         };
       } else {
         // Professional-initiated format with separate date and time
+        const startUTC = convertToUTC(
+          newOccurrence.startDate,
+          newOccurrence.startTime,
+          userTimezone
+        );
+        const endUTC = convertToUTC(
+          newOccurrence.endDate,
+          newOccurrence.endTime,
+          userTimezone
+        );
+
+        if (is_DEBUG) {
+          console.log('MBA134njo0vh03 Converted professional times to UTC:', {
+            local: {
+              start: `${newOccurrence.startDate} ${newOccurrence.startTime}`,
+              end: `${newOccurrence.endDate} ${newOccurrence.endTime}`
+            },
+            utc: {
+              start: startUTC,
+              end: endUTC
+            }
+          });
+        }
+
         newOccurrenceData = {
-          start_date: newOccurrence.startDate,
-          end_date: newOccurrence.endDate,
-          start_time: newOccurrence.startTime,
-          end_time: newOccurrence.endTime
+          start_date: startUTC.date,
+          end_date: endUTC.date,
+          start_time: startUTC.time,
+          end_time: endUTC.time
         };
       }
 
@@ -1020,10 +1177,10 @@ const BookingDetails = () => {
       const allOccurrences = [...existingOccurrences, newOccurrenceData];
 
       if (is_DEBUG) {
-        console.log('MBA5678 Sending all occurrences:', allOccurrences);
+        console.log('MBA134njo0vh03 Sending all occurrences:', allOccurrences);
       }
 
-      // Make the API call with all occurrences to add the new occurrence
+      // Make the API call
       const response = await fetch(`${API_BASE_URL}/api/booking_drafts/v1/${booking.booking_id}/update_occurrences/`, {
         method: 'POST',
         headers: {
@@ -1047,19 +1204,27 @@ const BookingDetails = () => {
 
       // Update the local state with the response data
       if (data.draft_data.occurrences && data.draft_data.occurrences.length > 0) {
+        // Format the occurrences using our new helper function
+        const formattedOccurrences = data.draft_data.occurrences.map(occ => 
+          formatOccurrenceFromUTC(occ, timeSettings.timezone)
+        );
+
         setBooking(prev => ({
           ...prev,
-          occurrences: data.draft_data.occurrences,
+          occurrences: formattedOccurrences,
           cost_summary: data.draft_data.cost_summary
         }));
 
         if (is_DEBUG) {
-          console.log('MBA5678 Adding Occurrence was Successful', data);
+          console.log('MBA5678 Adding Occurrence was Successful', {
+            original: data.draft_data.occurrences,
+            formatted: formattedOccurrences
+          });
         }
         
         return {
           status: 'success',
-          data: data.occurrences,
+          data: formattedOccurrences,
           message: 'New occurrence added successfully'
         };
       }
@@ -1135,23 +1300,48 @@ const BookingDetails = () => {
 
     // Parse dates and times correctly
     const parseDateTime = (dateStr, timeStr) => {
-        let time = timeStr;
-        if (!timeStr.includes('AM') && !timeStr.includes('PM')) {
-            const [hours, minutes] = timeStr.split(':');
-            const hour = parseInt(hours, 10);
-            const period = hour >= 12 ? 'PM' : 'AM';
-            const hour12 = hour % 12 || 12;
-            time = `${hour12.toString().padStart(2, '0')}:${minutes} ${period}`;
-        }
-
         if (is_DEBUG) {
-            console.log('MBA9740174 parseDateTime:', { dateStr, timeStr, parsedTime: time });
+            console.log('MBA9740174 parseDateTime input:', { dateStr, timeStr });
         }
 
-        return {
-            date: dateStr,
-            time: time
-        };
+        try {
+            // Create a UTC date from the date and time strings
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+
+            if (is_DEBUG) {
+                console.log('MBA9740174 UTC date created:', utcDate.toISOString());
+            }
+
+            // Convert to local date
+            const localDate = new Date(utcDate);
+
+            // Format the time in 12-hour format
+            let localHours = localDate.getHours();
+            const period = localHours >= 12 ? 'PM' : 'AM';
+            localHours = localHours % 12 || 12;
+            const formattedTime = `${localHours.toString().padStart(2, '0')}:${localDate.getMinutes().toString().padStart(2, '0')} ${period}`;
+
+            if (is_DEBUG) {
+                console.log('MBA9740174 Converted to local:', {
+                    date: dateStr,
+                    time: formattedTime,
+                    originalTime: timeStr
+                });
+            }
+
+            return {
+                date: dateStr,
+                time: formattedTime
+            };
+        } catch (error) {
+            console.error('MBA9740174 Error in parseDateTime:', error);
+            return {
+                date: dateStr,
+                time: timeStr
+            };
+        }
     };
 
     const startDateTime = parseDateTime(occurrence.start_date, occurrence.start_time);
@@ -1248,8 +1438,25 @@ const BookingDetails = () => {
 
   const formatOccurrenceDate = (dateStr) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr.split('(')[0].trim());
-    return format(date, 'MMM dd');
+    try {
+      // First try to parse as formatted date (MMM dd, yyyy)
+      const formattedMatch = dateStr.match(/([A-Za-z]{3})\s+(\d{2}),\s+(\d{4})/);
+      if (formattedMatch) {
+        const date = new Date(dateStr.split('(')[0].trim());
+        return format(date, 'MMM dd');
+      }
+      
+      // If that fails, try to parse as raw date (YYYY-MM-DD)
+      const rawDate = new Date(dateStr);
+      if (!isNaN(rawDate.getTime())) {
+        return format(rawDate, 'MMM dd');
+      }
+      
+      return dateStr; // Return original string if parsing fails
+    } catch (error) {
+      console.error('Error formatting occurrence date:', error);
+      return dateStr;
+    }
   };
 
   const renderCostBreakdown = () => (
