@@ -1,4 +1,5 @@
-import { format, parse, parseISO } from 'date-fns';
+import { format, parse } from 'date-fns';
+import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 /**
  * Converts 12-hour time format to 24-hour format
@@ -46,44 +47,58 @@ export const convertToUTC = (date, time, timezone) => {
     try {
         console.log('MBA134njo0vh03 Converting to UTC - Input:', { date, time, timezone });
         
-        // Convert time to 24-hour format if needed
-        const time24 = convertTo24Hour(time);
+        // Check if time is already in 24-hour format and convert if necessary
+        let time24 = time;
+        if (!/:/.test(time)) {
+            time24 = convertTo24Hour(time);
+        }
         console.log('MBA134njo0vh03 24-hour time:', time24);
         
         // Parse date and time
         const [year, month, day] = date.split('-').map(Number);
         const [hours, minutes] = time24.split(':').map(Number);
         
-        // Create local date object
-        const localDate = new Date(year, month - 1, day, hours, minutes);
-        console.log('MBA134njo0vh03 Local date object:', localDate.toLocaleString());
+        // Create the date string in ISO format for the local time
+        const localDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
         
-        // Get UTC hours and minutes
-        const utcHours = localDate.getUTCHours();
-        const utcMinutes = localDate.getUTCMinutes();
-        const utcDate = localDate.getUTCDate();
-        const utcMonth = localDate.getUTCMonth() + 1;
-        const utcYear = localDate.getUTCFullYear();
+        // Use formatInTimeZone to get the UTC time
+        // We use 'UTC' as the target timezone to get the UTC equivalent
+        const utcDateStr = formatInTimeZone(localDateStr, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: 'UTC' });
+        const utcDate = new Date(utcDateStr);
         
-        // Format UTC time
-        const utcTimeStr = `${utcHours.toString().padStart(2, '0')}:${utcMinutes.toString().padStart(2, '0')}`;
-        const utcDateStr = `${utcYear}-${utcMonth.toString().padStart(2, '0')}-${utcDate.toString().padStart(2, '0')}`;
+        console.log('MBA134njo0vh03 Conversion details:', {
+            input: {
+                date,
+                time,
+                timezone,
+                time24,
+                localDateStr
+            },
+            conversion: {
+                utcDateStr,
+                utcDate: utcDate.toISOString()
+            }
+        });
         
-        console.log('MBA134njo0vh03 Converted to UTC:', {
-            localDateTime: `${date} ${time24}`,
-            utcDateTime: `${utcDateStr} ${utcTimeStr}`
+        // Format UTC time using formatInTimeZone to ensure we get UTC time, not local time
+        const utcTimeStr = formatInTimeZone(utcDate, 'UTC', 'HH:mm');
+        const utcDateStr2 = formatInTimeZone(utcDate, 'UTC', 'yyyy-MM-dd');
+        
+        console.log('MBA134njo0vh03 Final UTC output:', {
+            time: utcTimeStr,
+            date: utcDateStr2,
+            originalUTC: utcDate.toISOString()
         });
         
         return {
             time: utcTimeStr,
-            date: utcDateStr
+            date: utcDateStr2
         };
     } catch (error) {
         console.error('MBA134njo0vh03 Error in convertToUTC:', error);
         throw error;
     }
 };
-
 
 /**
  * Converts UTC date and time to local date and time
@@ -98,26 +113,12 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
         // Create UTC date object
         const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
         
-        // Create a date object in the local timezone - this automatically converts to local time
-        const localDate = new Date(utcDate);
+        // Convert UTC to zoned time
+        const zonedDate = toZonedTime(utcDate, timezone);
 
-        // Get the timezone offset for this specific date
-        const offsetMinutes = localDate.getTimezoneOffset();
-        const offsetHours = offsetMinutes / 60;
-
-        // Determine if the date is in DST for the given timezone
-        const isDST = offsetMinutes < (timezone.includes('Pacific') ? 8 * 60 : 7 * 60);
-
-        // Adjust the time based on the timezone
-        let adjustedHours = localDate.getHours();
-        if (timezone.includes('Pacific')) {
-            // Pacific time is 1 hour behind Mountain time
-            adjustedHours = (adjustedHours + 23) % 24; // Add 23 hours (equivalent to subtracting 1 hour)
-        }
-
-        // Format local date without converting back to UTC
-        const localDateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
-        const localTimeStr = `${String(adjustedHours).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+        // Format local date and time
+        const localDateStr = formatInTimeZone(zonedDate, timezone, 'yyyy-MM-dd');
+        const localTimeStr = formatInTimeZone(zonedDate, timezone, 'HH:mm');
 
         console.log('MBA134njo0vh03 Date conversion details:', {
             original: {
@@ -125,14 +126,10 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
                 utcDate: utcDate.toISOString()
             },
             conversion: {
-                offsetHours,
-                offsetMinutes,
-                isDST,
                 timezone,
-                localDateString: localDate.toString(),
+                zonedDate: zonedDate.toString(),
                 localDateFormatted: localDateStr,
-                localTimeFormatted: localTimeStr,
-                adjustedHours
+                localTimeFormatted: localTimeStr
             },
             result: {
                 date: localDateStr,
@@ -155,15 +152,54 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
  */
 export const getFormattedTimes = (startDate, startTime, endDate, endTime, timezone) => {
     try {
+        console.log('MBA134njo0vh032 getFormattedTimes input:', {
+            startDate,
+            startTime,
+            endDate,
+            endTime,
+            timezone
+        });
+
         // Parse the date and time strings
         const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
         const [startHours, startMinutes] = startTime.split(':').map(Number);
         const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
         const [endHours, endMinutes] = endTime.split(':').map(Number);
 
-        // Create Date objects with the local times
-        const startDateTime = new Date(startYear, startMonth - 1, startDay, startHours, startMinutes);
-        const endDateTime = new Date(endYear, endMonth - 1, endDay, endHours, endMinutes);
+        console.log('MBA134njo0vh032 Parsed components:', {
+            start: {
+                year: startYear,
+                month: startMonth,
+                day: startDay,
+                hours: startHours,
+                minutes: startMinutes
+            },
+            end: {
+                year: endYear,
+                month: endMonth,
+                day: endDay,
+                hours: endHours,
+                minutes: endMinutes
+            }
+        });
+
+        // Create ISO date strings for the local times
+        const startDateStr = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:00`;
+        const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:00`;
+
+        console.log('MBA134njo0vh032 Created date strings:', {
+            startDateStr,
+            endDateStr
+        });
+
+        // Create Date objects
+        const startDateTime = new Date(startDateStr);
+        const endDateTime = new Date(endDateStr);
+
+        console.log('MBA134njo0vh032 Date objects:', {
+            startDateTime: startDateTime.toString(),
+            endDateTime: endDateTime.toString()
+        });
 
         // Calculate duration in milliseconds
         const durationMs = endDateTime - startDateTime;
@@ -184,25 +220,22 @@ export const getFormattedTimes = (startDate, startTime, endDate, endTime, timezo
             durationStr += `${hours} hour${hours > 1 ? 's' : ''}`;
         }
 
-        // Get timezone abbreviation
-        const tzAbbrev = timezone.split('/')[1] || timezone;
+        // Format the dates directly using formatInTimeZone
+        const formatted_start = formatInTimeZone(startDateTime, timezone, "MMM dd, yyyy (h:mm a)");
+        const formatted_end = formatInTimeZone(endDateTime, timezone, "MMM dd, yyyy (h:mm a)");
 
-        // Format the dates with DST-aware time
-        const formatDateTime = (date) => {
-            const month = date.toLocaleString('en-US', { month: 'short' });
-            const day = date.getDate().toString().padStart(2, '0');
-            const year = date.getFullYear();
-            const hours = date.getHours() % 12 || 12;
-            const minutes = date.getMinutes().toString().padStart(2, '0');
-            const period = date.getHours() >= 12 ? 'PM' : 'AM';
-            return `${month} ${day}, ${year} (${hours}:${minutes} ${period})`;
-        };
+        console.log('MBA134njo0vh032 Final formatted output:', {
+            formatted_start,
+            formatted_end,
+            duration: durationStr,
+            timezone: timezone.split('/')[1] || timezone
+        });
 
         return {
-            formatted_start: formatDateTime(startDateTime),
-            formatted_end: formatDateTime(endDateTime),
+            formatted_start,
+            formatted_end,
             duration: durationStr || '0 hours',
-            timezone: tzAbbrev
+            timezone: timezone.split('/')[1] || timezone
         };
     } catch (error) {
         console.error('Error in getFormattedTimes:', error);
@@ -218,13 +251,21 @@ export const checkDSTChange = (startDate, startTime, endDate, endTime, timezone)
         // Parse dates and times
         const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
         const [startHours, startMinutes] = convertTo24Hour(startTime).split(':').map(Number);
-        const startDateTime = new Date(startYear, startMonth - 1, startDay, startHours, startMinutes);
-        
         const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
         const [endHours, endMinutes] = convertTo24Hour(endTime).split(':').map(Number);
-        const endDateTime = new Date(endYear, endMonth - 1, endDay, endHours, endMinutes);
+
+        // Create local dates and convert to zoned time
+        const startLocalDate = new Date(startYear, startMonth - 1, startDay, startHours, startMinutes);
+        const endLocalDate = new Date(endYear, endMonth - 1, endDay, endHours, endMinutes);
         
-        return startDateTime.getTimezoneOffset() !== endDateTime.getTimezoneOffset();
+        const startZonedDate = fromZonedTime(toZonedTime(startLocalDate, timezone));
+        const endZonedDate = fromZonedTime(toZonedTime(endLocalDate, timezone));
+
+        // Convert back to local and check if offsets are different
+        const startLocal = toZonedTime(startZonedDate, timezone);
+        const endLocal = toZonedTime(endZonedDate, timezone);
+        
+        return startLocal.getTimezoneOffset() !== endLocal.getTimezoneOffset();
     } catch (error) {
         console.error('Error in checkDSTChange:', error);
         throw error;
@@ -258,6 +299,10 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
       fullTimezone
     );
 
+    console.log('MBA134njo0vh03 Local start:', localStart);
+    console.log('MBA134njo0vh03 Local end:', localEnd);
+    console.log('MBA134njo0vh03 Full timezone:', fullTimezone);
+
     // Get formatted times
     const formattedTimes = getFormattedTimes(
       localStart.date,
@@ -266,6 +311,8 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
       localEnd.time,
       fullTimezone
     );
+
+    console.log('MBA134njo0vh03 Formatted times from getFormattedTimes:', formattedTimes);
 
     // Check for DST change
     const hasDSTChange = checkDSTChange(

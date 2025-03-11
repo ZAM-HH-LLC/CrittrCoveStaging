@@ -1115,7 +1115,7 @@ const BookingDetails = () => {
 
       const data = await response.json();
       if (is_DEBUG) {
-        console.log('MBA5678 Add event response:', data);
+        console.log('MBA134njo0vh03 Add event response:', data);
       }
 
       // Update the local state with the response data
@@ -1132,7 +1132,7 @@ const BookingDetails = () => {
         }));
 
         if (is_DEBUG) {
-          console.log('MBA5678 Adding Occurrence was Successful', {
+          console.log('MBA134njo0vh03 Adding Occurrence was Successful', {
             original: data.draft_data.occurrences,
             formatted: formattedOccurrences
           });
@@ -1151,7 +1151,7 @@ const BookingDetails = () => {
       };
 
     } catch (error) {
-      console.error('MBA5678 Error adding occurrence:', error);
+      console.error('MBA134njo0vh03 Error adding occurrence:', error);
       return {
         status: 'error',
         message: error.message || 'Failed to add event. Please try again.'
