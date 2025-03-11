@@ -84,29 +84,6 @@ export const convertToUTC = (date, time, timezone) => {
     }
 };
 
-/**
- * Converts UTC time to local timezone
- */
-export const convertFromUTC = (date, utcTime, timezone) => {
-    try {
-        // Parse UTC time
-        const [utcHours, utcMinutes] = utcTime.split(':').map(Number);
-        const [year, month, day] = date.split('-').map(Number);
-        
-        // Create Date object with UTC time
-        const utcDate = new Date(Date.UTC(year, month - 1, day, utcHours, utcMinutes));
-        
-        // Get local hours and minutes
-        const localHours = utcDate.getHours();
-        const localMinutes = utcDate.getMinutes();
-        
-        // Format local time
-        return `${localHours.toString().padStart(2, '0')}:${localMinutes.toString().padStart(2, '0')}`;
-    } catch (error) {
-        console.error('Error in convertFromUTC:', error);
-        throw error;
-    }
-};
 
 /**
  * Converts UTC date and time to local date and time
@@ -128,9 +105,19 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
         const offsetMinutes = localDate.getTimezoneOffset();
         const offsetHours = offsetMinutes / 60;
 
+        // Determine if the date is in DST for the given timezone
+        const isDST = offsetMinutes < (timezone.includes('Pacific') ? 8 * 60 : 7 * 60);
+
+        // Adjust the time based on the timezone
+        let adjustedHours = localDate.getHours();
+        if (timezone.includes('Pacific')) {
+            // Pacific time is 1 hour behind Mountain time
+            adjustedHours = (adjustedHours + 23) % 24; // Add 23 hours (equivalent to subtracting 1 hour)
+        }
+
         // Format local date without converting back to UTC
         const localDateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
-        const localTimeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+        const localTimeStr = `${String(adjustedHours).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
 
         console.log('MBA134njo0vh03 Date conversion details:', {
             original: {
@@ -140,10 +127,12 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
             conversion: {
                 offsetHours,
                 offsetMinutes,
-                isDST: offsetMinutes < (7 * 60), // true if in DST (offset less than 7 hours)
+                isDST,
+                timezone,
                 localDateString: localDate.toString(),
                 localDateFormatted: localDateStr,
-                localTimeFormatted: localTimeStr
+                localTimeFormatted: localTimeStr,
+                adjustedHours
             },
             result: {
                 date: localDateStr,
@@ -287,7 +276,7 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
       fullTimezone
     );
 
-    // Use abbreviated timezone for display
+    // Use the provided timezone abbreviation directly
     const tzAbbrev = userTimezone.includes('/') ? userTimezone.split('/')[1] : userTimezone;
 
     return {
