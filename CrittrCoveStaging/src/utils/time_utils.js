@@ -266,6 +266,11 @@ export const checkDSTChange = (startDate, startTime, endDate, endTime, timezone)
  */
 export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
   try {
+    console.log('MBA134njo0vh03 Formatting occurrence from UTC:', {
+      occurrence,
+      userTimezone
+    });
+
     // Convert UTC times to local
     const localStart = convertDateTimeFromUTC(
       occurrence.start_date,

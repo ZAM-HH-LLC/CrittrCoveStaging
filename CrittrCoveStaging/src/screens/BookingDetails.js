@@ -1206,7 +1206,7 @@ const BookingDetails = () => {
       if (data.draft_data.occurrences && data.draft_data.occurrences.length > 0) {
         // Format the occurrences using our new helper function
         const formattedOccurrences = data.draft_data.occurrences.map(occ => 
-          formatOccurrenceFromUTC(occ, timeSettings.timezone)
+          formatOccurrenceFromUTC(occ, timeSettings.timezone_abbrev)
         );
 
         setBooking(prev => ({
