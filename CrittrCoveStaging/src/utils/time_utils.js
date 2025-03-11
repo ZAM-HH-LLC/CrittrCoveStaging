@@ -121,18 +121,16 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
         // Create UTC date object
         const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
         
-        // Get the timezone offset in hours
+        // Create a date object in the local timezone - this automatically converts to local time
         const localDate = new Date(utcDate);
-        const offsetHours = localDate.getTimezoneOffset() / 60;
 
-        // Check if we need to adjust the date
-        // If UTC time - offset hours is negative, we need to go back a day
-        const localHours = hours - offsetHours;
-        const dateAdjustment = localHours < 0 ? -1 : 0;
+        // Get the timezone offset for this specific date
+        const offsetMinutes = localDate.getTimezoneOffset();
+        const offsetHours = offsetMinutes / 60;
 
-        // Create new date with adjustment
-        const adjustedDate = new Date(Date.UTC(year, month - 1, day + dateAdjustment, hours, minutes));
-        const finalLocalDate = new Date(adjustedDate);
+        // Format local date without converting back to UTC
+        const localDateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+        const localTimeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
 
         console.log('MBA134njo0vh03 Date conversion details:', {
             original: {
@@ -141,20 +139,17 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
             },
             conversion: {
                 offsetHours,
-                localHours,
-                dateAdjustment
+                offsetMinutes,
+                isDST: offsetMinutes < (7 * 60), // true if in DST (offset less than 7 hours)
+                localDateString: localDate.toString(),
+                localDateFormatted: localDateStr,
+                localTimeFormatted: localTimeStr
             },
             result: {
-                date: finalLocalDate.toISOString().split('T')[0],
-                time: `${finalLocalDate.getHours().toString().padStart(2, '0')}:${finalLocalDate.getMinutes().toString().padStart(2, '0')}`
+                date: localDateStr,
+                time: localTimeStr
             }
         });
-
-        // Format the date and time
-        const localDateStr = finalLocalDate.toISOString().split('T')[0];
-        console.log('MBA134njo0vh03 Local date string:', localDateStr);
-        const localTimeStr = `${finalLocalDate.getHours().toString().padStart(2, '0')}:${finalLocalDate.getMinutes().toString().padStart(2, '0')}`;
-        console.log('MBA134njo0vh03 Local time string:', localTimeStr);
 
         return {
             date: localDateStr,
@@ -178,24 +173,8 @@ export const getFormattedTimes = (startDate, startTime, endDate, endTime, timezo
         const [endHours, endMinutes] = endTime.split(':').map(Number);
 
         // Create Date objects with the local times
-        const userTz = timezone ? timezone : 'UTC';
-        const tzOffset = new Date().getTimezoneOffset();
-
-        // Create start date in user's timezone
         const startDateTime = new Date(startYear, startMonth - 1, startDay, startHours, startMinutes);
-        const startOffset = startDateTime.getTimezoneOffset();
-        if (startOffset !== tzOffset) {
-            // Adjust for DST if needed
-            startDateTime.setMinutes(startDateTime.getMinutes() + (tzOffset - startOffset));
-        }
-
-        // Create end date in user's timezone
         const endDateTime = new Date(endYear, endMonth - 1, endDay, endHours, endMinutes);
-        const endOffset = endDateTime.getTimezoneOffset();
-        if (endOffset !== tzOffset) {
-            // Adjust for DST if needed
-            endDateTime.setMinutes(endDateTime.getMinutes() + (tzOffset - endOffset));
-        }
 
         // Calculate duration in milliseconds
         const durationMs = endDateTime - startDateTime;
@@ -268,22 +247,26 @@ export const checkDSTChange = (startDate, startTime, endDate, endTime, timezone)
  */
 export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
   try {
+    // Always use full timezone name for conversions
+    const fullTimezone = userTimezone.includes('/') ? userTimezone : 'US/Mountain';
+    
     console.log('MBA134njo0vh03 Formatting occurrence from UTC:', {
       occurrence,
-      userTimezone
+      userTimezone,
+      fullTimezone
     });
 
     // Convert UTC times to local
     const localStart = convertDateTimeFromUTC(
       occurrence.start_date,
       occurrence.start_time,
-      userTimezone
+      fullTimezone
     );
 
     const localEnd = convertDateTimeFromUTC(
       occurrence.end_date,
       occurrence.end_time,
-      userTimezone
+      fullTimezone
     );
 
     // Get formatted times
@@ -292,7 +275,7 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
       localStart.time,
       localEnd.date,
       localEnd.time,
-      userTimezone
+      fullTimezone
     );
 
     // Check for DST change
@@ -301,15 +284,18 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
       localStart.time,
       localEnd.date,
       localEnd.time,
-      userTimezone
+      fullTimezone
     );
+
+    // Use abbreviated timezone for display
+    const tzAbbrev = userTimezone.includes('/') ? userTimezone.split('/')[1] : userTimezone;
 
     return {
       ...occurrence,
       formatted_start: formattedTimes.formatted_start,
       formatted_end: formattedTimes.formatted_end,
       duration: formattedTimes.duration,
-      timezone: formattedTimes.timezone,
+      timezone: tzAbbrev,
       dst_message: hasDSTChange ? 
         "Elapsed time may be different than expected due to Daylight Savings Time." : 
         ""
@@ -318,10 +304,10 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
     console.error('Error in formatOccurrenceFromUTC:', error);
     return {
       ...occurrence,
-      formatted_start: occurrence.start_date,  // Use raw dates instead of error message
-      formatted_end: occurrence.end_date,      // Use raw dates instead of error message
+      formatted_start: occurrence.start_date,
+      formatted_end: occurrence.end_date,
       duration: 'Unknown',
-      timezone: userTimezone,
+      timezone: userTimezone.includes('/') ? userTimezone.split('/')[1] : userTimezone,
       dst_message: ''
     };
   }
