@@ -1115,96 +1115,50 @@ class UpdateBookingView(APIView):
                 for occurrence_data in draft_data.get('occurrences', []):
                     occurrence_id = occurrence_data.get('occurrence_id')
                     
-                    # Parse times and convert to UTC
-                    user_settings = get_user_time_settings(booking.client.user.id)
-                    user_timezone = user_settings['timezone']
+                    logger.info(f"MBA7654 Processing occurrence data: {occurrence_data}")
                     
-                    # Parse the date and time strings
-                    start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
-                    end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date()
-                    
-                    # Try to parse time in both 12-hour and 24-hour formats
                     try:
-                        # First try 12-hour format (e.g., "11:30 AM")
-                        start_time = datetime.strptime(occurrence_data['start_time'], '%I:%M %p').time()
-                        end_time = datetime.strptime(occurrence_data['end_time'], '%I:%M %p').time()
-                    except ValueError:
-                        # If that fails, try 24-hour format (e.g., "13:30")
+                        # Parse times directly from draft data (already in UTC and military time)
+                        # Store exactly as received - no timezone conversion needed
+                        start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
+                        end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date()
                         start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
                         end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
 
-                    # Create datetime objects in user's timezone
-                    user_tz = pytz.timezone(user_timezone)
-                    start_dt = user_tz.localize(datetime.combine(start_date, start_time))
-                    end_dt = user_tz.localize(datetime.combine(end_date, end_time))
-                    
-                    # Convert to UTC
-                    start_dt_utc = start_dt.astimezone(pytz.UTC)
-                    end_dt_utc = end_dt.astimezone(pytz.UTC)
+                        logger.info(f"MBA7654 Using exact draft times - Start: {start_date} {start_time}, End: {end_date} {end_time}")
 
-                    # Get or create occurrence
-                    if isinstance(occurrence_id, str) and occurrence_id.startswith('draft_'):
-                        # Create new occurrence
-                        occurrence = BookingOccurrence.objects.create(
-                            booking=booking,
-                            start_date=start_dt_utc.date(),
-                            end_date=end_dt_utc.date(),
-                            start_time=start_dt_utc.time(),
-                            end_time=end_dt_utc.time(),
-                            created_by='PROFESSIONAL',
-                            last_modified_by='PROFESSIONAL',
-                            status='PENDING'
-                        )
-                    else:
-                        # Update existing occurrence
-                        occurrence = get_object_or_404(
-                            BookingOccurrence,
-                            occurrence_id=occurrence_id,
-                            booking=booking
-                        )
-                        occurrence.start_date = start_dt_utc.date()
-                        occurrence.end_date = end_dt_utc.date()
-                        occurrence.start_time = start_dt_utc.time()
-                        occurrence.end_time = end_dt_utc.time()
-                        occurrence.last_modified_by = 'PROFESSIONAL'
-                        occurrence.save()
-
-                    # Update or create booking details
-                    booking_details, created = BookingDetails.objects.get_or_create(
-                        booking_occurrence=occurrence,
-                        defaults={
-                            'num_pets': len(draft_data.get('pets', [])),
-                            'base_rate': Decimal(str(occurrence_data['rates']['base_rate']).replace('$', '')),
-                            'additional_pet_rate': Decimal(str(occurrence_data['rates']['additional_animal_rate'])),
-                            'applies_after': int(occurrence_data['rates']['applies_after']),
-                            'holiday_rate': Decimal(str(occurrence_data['rates']['holiday_rate']).replace('$', '')),
-                            'unit_of_time': occurrence_data['rates']['unit_of_time']
-                        }
-                    )
-                    
-                    if not created:
-                        booking_details.num_pets = len(draft_data.get('pets', []))
-                        booking_details.base_rate = Decimal(str(occurrence_data['rates']['base_rate']).replace('$', ''))
-                        booking_details.additional_pet_rate = Decimal(str(occurrence_data['rates']['additional_animal_rate']))
-                        booking_details.applies_after = int(occurrence_data['rates']['applies_after'])
-                        booking_details.holiday_rate = Decimal(str(occurrence_data['rates']['holiday_rate']).replace('$', ''))
-                        booking_details.unit_of_time = occurrence_data['rates']['unit_of_time']
-                        booking_details.save()
-
-                    # Update or create occurrence rates
-                    BookingOccurrenceRate.objects.filter(occurrence=occurrence).delete()
-                    rates_list = []
-                    for rate in occurrence_data['rates'].get('additional_rates', []):
-                        rates_list.append({
-                            'title': rate['title'],
-                            'description': rate.get('description', ''),
-                            'amount': f"${rate['amount'].replace('$', '')}"
-                        })
-                    if rates_list:
-                        BookingOccurrenceRate.objects.create(
-                            occurrence=occurrence,
-                            rates=rates_list
-                        )
+                        # Get or create occurrence
+                        if isinstance(occurrence_id, str) and occurrence_id.startswith('draft_'):
+                            # Create new occurrence - store exactly as is since times are already UTC
+                            occurrence = BookingOccurrence.objects.create(
+                                booking=booking,
+                                start_date=start_date,
+                                end_date=end_date,
+                                start_time=start_time,
+                                end_time=end_time,
+                                created_by='PROFESSIONAL',
+                                last_modified_by='PROFESSIONAL',
+                                status='PENDING'
+                            )
+                            logger.info(f"MBA7654 Created new occurrence with exact draft times - Start: {occurrence.start_date} {occurrence.start_time}, End: {occurrence.end_date} {occurrence.end_time}")
+                        else:
+                            # Update existing occurrence - store exactly as is since times are already UTC
+                            occurrence = get_object_or_404(
+                                BookingOccurrence,
+                                occurrence_id=occurrence_id,
+                                booking=booking
+                            )
+                            occurrence.start_date = start_date
+                            occurrence.end_date = end_date
+                            occurrence.start_time = start_time
+                            occurrence.end_time = end_time
+                            occurrence.last_modified_by = 'PROFESSIONAL'
+                            occurrence.save()
+                            logger.info(f"MBA7654 Updated existing occurrence with exact draft times - Start: {occurrence.start_date} {occurrence.start_time}, End: {occurrence.end_date} {occurrence.end_time}")
+                    except Exception as e:
+                        logger.error(f"MBA7654 Error processing occurrence: {str(e)}")
+                        logger.error(f"MBA7654 Full traceback: {traceback.format_exc()}")
+                        raise
 
             else:
                 # Get cost summary from BookingSummary table
@@ -1224,38 +1178,6 @@ class UpdateBookingView(APIView):
                     booking_details = BookingDetails.objects.filter(booking_occurrence=occurrence).first()
                     occurrence_rates = BookingOccurrenceRate.objects.filter(occurrence=occurrence).first()
                     
-                    # Get user's timezone settings
-                    user_settings = get_user_time_settings(booking.client.user.id)
-                    user_timezone = user_settings['timezone']
-                    user_tz = pytz.timezone(user_timezone)
-                    
-                    # Convert timezone name to standard abbreviation
-                    timezone_abbr = user_tz.tzname(datetime.now())
-                    
-                    # Create datetime objects in UTC
-                    start_dt = datetime.combine(occurrence.start_date, occurrence.start_time)
-                    end_dt = datetime.combine(occurrence.end_date, occurrence.end_time)
-                    
-                    # Convert to user's timezone for formatting
-                    start_dt_local = pytz.utc.localize(start_dt).astimezone(user_tz)
-                    end_dt_local = pytz.utc.localize(end_dt).astimezone(user_tz)
-                    
-                    # Calculate duration
-                    duration_delta = end_dt - start_dt
-                    days = duration_delta.days
-                    hours = duration_delta.seconds // 3600
-                    duration_str = ""
-                    if days > 0:
-                        duration_str += f"{days} day{'s' if days != 1 else ''}"
-                        if hours > 0:
-                            duration_str += f", {hours} hour{'s' if hours != 1 else ''}"
-                    else:
-                        if hours > 0:
-                            duration_str = f"{hours} hour{'s' if hours != 1 else ''}"
-                        else:
-                            minutes = (duration_delta.seconds % 3600) // 60
-                            duration_str = f"{minutes} minute{'s' if minutes != 1 else ''}"
-                    
                     # Build the occurrence data structure
                     occurrence_data = {
                         'occurrence_id': occurrence.occurrence_id,
@@ -1263,10 +1185,6 @@ class UpdateBookingView(APIView):
                         'end_date': occurrence.end_date.strftime('%Y-%m-%d'),
                         'start_time': occurrence.start_time.strftime('%H:%M'),
                         'end_time': occurrence.end_time.strftime('%H:%M'),
-                        'formatted_start': start_dt_local.strftime('%b %d, %Y (%I:%M %p)'),
-                        'formatted_end': end_dt_local.strftime('%b %d, %Y (%I:%M %p)'),
-                        'duration': duration_str,
-                        'timezone': timezone_abbr,
                         'rates': {
                             'base_rate': str(booking_details.base_rate) if booking_details else '0',
                             'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0',

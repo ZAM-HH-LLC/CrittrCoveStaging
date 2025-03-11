@@ -351,12 +351,6 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (response.status !== 200) {
-        console.log('Retrying refresh token');
-        const newToken = await refreshUserToken(refreshToken);
-        if (newToken) {
-          console.log('Got token:', newToken);
-          return await validateToken(newToken);
-        }
         console.log('Token validation error:', response.status);
         return false;
       }
@@ -492,8 +486,10 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (!isValid && refreshToken) {
+        console.log('MBA12kkn9234567890 Retrying refresh token');
         const newToken = await refreshUserToken(refreshToken);
         if (newToken) {
+          console.log('MBA12kkn9234567890 Got token:', newToken);
           currentToken = newToken;
           isValid = true;
         }
