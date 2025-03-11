@@ -152,7 +152,9 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
 
         // Format the date and time
         const localDateStr = finalLocalDate.toISOString().split('T')[0];
+        console.log('MBA134njo0vh03 Local date string:', localDateStr);
         const localTimeStr = `${finalLocalDate.getHours().toString().padStart(2, '0')}:${finalLocalDate.getMinutes().toString().padStart(2, '0')}`;
+        console.log('MBA134njo0vh03 Local time string:', localTimeStr);
 
         return {
             date: localDateStr,

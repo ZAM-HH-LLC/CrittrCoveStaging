@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { navigateToFrom } from '../components/Navigation';
 import BookingMessageCard from '../components/BookingMessageCard';
-import { getFormattedTimes, checkDSTChange, convertFromUTC, formatOccurrenceFromUTC } from '../utils/time_utils';
+import { formatOccurrenceFromUTC } from '../utils/time_utils';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth) => StyleSheet.create({
@@ -1048,7 +1048,7 @@ const MessageHistory = ({ navigation, route }) => {
             });
           }
 
-          return formatOccurrenceFromUTC(occ, timeSettings.timezone_abbrev);
+          return formatOccurrenceFromUTC(occ, timeSettings.timezone);
         } catch (error) {
           console.error('MBA9876i2ghv93 Error formatting occurrence:', error, {
             occurrence: occ,
@@ -1060,7 +1060,7 @@ const MessageHistory = ({ navigation, route }) => {
             formatted_start: 'Error formatting date',
             formatted_end: 'Error formatting date',
             duration: 'Unknown',
-            timezone: timeSettings.timezone_abbrev,
+            timezone: timeSettings.timezone,
             dst_message: ''
           };
         }

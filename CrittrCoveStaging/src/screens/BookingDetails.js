@@ -16,7 +16,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { handleBack, navigateToFrom } from '../components/Navigation';
 import SnackBar from '../components/SnackBar';
-import { convertToUTC, getFormattedTimes, checkDSTChange, convertFromUTC, convertDateTimeFromUTC, formatOccurrenceFromUTC } from '../utils/time_utils';
+import { convertToUTC, formatOccurrenceFromUTC } from '../utils/time_utils';
 
 const LAST_VIEWED_BOOKING_ID = 'last_viewed_booking_id';
 
@@ -236,72 +236,13 @@ const BookingDetails = () => {
               });
             }
 
-            // Convert UTC to local date and time
-            const localStart = convertDateTimeFromUTC(occ.start_date, occ.start_time, timeSettings.timezone);
-            const localEnd = convertDateTimeFromUTC(occ.end_date, occ.end_time, timeSettings.timezone);
+            const formattedOccurrence = formatOccurrenceFromUTC(occ, timeSettings.timezone);
 
             if (is_DEBUG) {
-              console.log('MBA134njo0vh03 After convertDateTimeFromUTC:', {
-                original: {
-                  start: `${occ.start_date} ${occ.start_time}`,
-                  end: `${occ.end_date} ${occ.end_time}`
-                },
-                converted: {
-                  start: localStart,
-                  end: localEnd
-                },
-                timezone: timeSettings.timezone
-              });
+              console.log('MBA134njo0vh03 Final formatted occurrence:', formattedOccurrence);
             }
 
-            // Get formatted times using our utility function
-            const formattedTimes = getFormattedTimes(
-              localStart.date,
-              localStart.time,
-              localEnd.date,
-              localEnd.time,
-              timeSettings.timezone
-            );
-
-            // Check for DST change using our utility function
-            const hasDSTChange = checkDSTChange(
-              localStart.date,
-              localStart.time,
-              localEnd.date,
-              localEnd.time,
-              timeSettings.timezone
-            );
-
-            if (is_DEBUG) {
-              console.log('MBA134njo0vh03 After formatting:', {
-                formattedTimes,
-                hasDSTChange,
-                timezone: timeSettings.timezone,
-                originalTimes: {
-                  start: `${occ.start_date} ${occ.start_time}`,
-                  end: `${occ.end_date} ${occ.end_time}`
-                },
-                localTimes: {
-                  start: `${localStart.date} ${localStart.time}`,
-                  end: `${localEnd.date} ${localEnd.time}`
-                }
-              });
-            }
-
-            const result = {
-              ...occ,
-              formatted_start: formattedTimes.formatted_start,
-              formatted_end: formattedTimes.formatted_end,
-              duration: formattedTimes.duration,
-              timezone: timeSettings.timezone_abbrev,
-              dst_message: hasDSTChange ? "Elapsed time may be different than expected due to Daylight Savings Time." : ""
-            };
-
-            if (is_DEBUG) {
-              console.log('MBA134njo0vh03 Final formatted occurrence:', result);
-            }
-
-            return result;
+            return formattedOccurrence;
 
           } catch (error) {
             console.error('MBA134njo0vh03 Error formatting occurrence:', error, {
@@ -1008,34 +949,9 @@ const BookingDetails = () => {
         }
 
         // Format the occurrences with proper timezone handling
-        const formattedOccurrences = data.draft_data.occurrences.map(occ => {
-          // Get formatted times
-          const formattedTimes = getFormattedTimes(
-            occ.start_date,
-            occ.start_time,
-            occ.end_date,
-            occ.end_time,
-            timeSettings.timezone_abbrev
-          );
-
-          // Check for DST change
-          const hasDSTChange = checkDSTChange(
-            occ.start_date,
-            occ.start_time,
-            occ.end_date,
-            occ.end_time,
-            timeSettings.timezone_abbrev
-          );
-
-          return {
-            ...occ,
-            formatted_start: formattedTimes.formatted_start,
-            formatted_end: formattedTimes.formatted_end,
-            duration: formattedTimes.duration,
-            timezone: formattedTimes.timezone,
-            dst_message: hasDSTChange ? "Elapsed time may be different than expected due to Daylight Savings Time." : ""
-          };
-        });
+        const formattedOccurrences = data.draft_data.occurrences.map(occ => 
+          formatOccurrenceFromUTC(occ, timeSettings.timezone)
+        );
 
         setBooking(prev => ({
           ...prev,
@@ -1206,7 +1122,7 @@ const BookingDetails = () => {
       if (data.draft_data.occurrences && data.draft_data.occurrences.length > 0) {
         // Format the occurrences using our new helper function
         const formattedOccurrences = data.draft_data.occurrences.map(occ => 
-          formatOccurrenceFromUTC(occ, timeSettings.timezone_abbrev)
+          formatOccurrenceFromUTC(occ, timeSettings.timezone)
         );
 
         setBooking(prev => ({
