@@ -776,7 +776,7 @@ const BookingDetails = () => {
       }
 
       const token = await getStorage('userToken');
-      const userTimezone = await getStorage('userTimezone');
+      const userTimezone = timeSettings.timezone;
       
       if (!token) {
         throw new Error('No authentication token found');
@@ -994,7 +994,7 @@ const BookingDetails = () => {
 
     try {
       let token = await getStorage('userToken');
-      const userTimezone = await getStorage('userTimezone');
+      const userTimezone = timeSettings.timezone;
 
       // Format the new occurrence data
       let newOccurrenceData;
