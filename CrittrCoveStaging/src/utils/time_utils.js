@@ -113,12 +113,11 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
         // Create UTC date object
         const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
         
-        // Convert UTC to zoned time
-        const zonedDate = toZonedTime(utcDate, timezone);
+        console.log('MBA134njo0vh03 UTC Date created:', utcDate.toISOString());
 
-        // Format local date and time
-        const localDateStr = formatInTimeZone(zonedDate, timezone, 'yyyy-MM-dd');
-        const localTimeStr = formatInTimeZone(zonedDate, timezone, 'HH:mm');
+        // Format directly to the target timezone using formatInTimeZone
+        const localDateStr = formatInTimeZone(utcDate, timezone, 'yyyy-MM-dd');
+        const localTimeStr = formatInTimeZone(utcDate, timezone, 'HH:mm');
 
         console.log('MBA134njo0vh03 Date conversion details:', {
             original: {
@@ -127,9 +126,8 @@ export const convertDateTimeFromUTC = (date, time, timezone) => {
             },
             conversion: {
                 timezone,
-                zonedDate: zonedDate.toString(),
-                localDateFormatted: localDateStr,
-                localTimeFormatted: localTimeStr
+                localDateStr,
+                localTimeStr
             },
             result: {
                 date: localDateStr,
@@ -183,23 +181,28 @@ export const getFormattedTimes = (startDate, startTime, endDate, endTime, timezo
             }
         });
 
-        // Create ISO date strings for the local times
+        // Create ISO date strings for the local times in the specified timezone
         const startDateStr = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:00`;
         const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:00`;
 
         console.log('MBA134njo0vh032 Created date strings:', {
             startDateStr,
-            endDateStr
+            endDateStr,
+            timezone
         });
 
-        // Create Date objects
+        // Format the dates directly using formatInTimeZone with the input timezone
+        const formatted_start = formatInTimeZone(startDateStr, timezone, "MMM dd, yyyy (h:mm a)");
+        const formatted_end = formatInTimeZone(endDateStr, timezone, "MMM dd, yyyy (h:mm a)");
+
+        console.log('MBA134njo0vh032 Formatted dates:', {
+            formatted_start,
+            formatted_end
+        });
+
+        // Create Date objects for duration calculation
         const startDateTime = new Date(startDateStr);
         const endDateTime = new Date(endDateStr);
-
-        console.log('MBA134njo0vh032 Date objects:', {
-            startDateTime: startDateTime.toString(),
-            endDateTime: endDateTime.toString()
-        });
 
         // Calculate duration in milliseconds
         const durationMs = endDateTime - startDateTime;
@@ -219,10 +222,6 @@ export const getFormattedTimes = (startDate, startTime, endDate, endTime, timezo
         } else if (hours > 0) {
             durationStr += `${hours} hour${hours > 1 ? 's' : ''}`;
         }
-
-        // Format the dates directly using formatInTimeZone
-        const formatted_start = formatInTimeZone(startDateTime, timezone, "MMM dd, yyyy (h:mm a)");
-        const formatted_end = formatInTimeZone(endDateTime, timezone, "MMM dd, yyyy (h:mm a)");
 
         console.log('MBA134njo0vh032 Final formatted output:', {
             formatted_start,

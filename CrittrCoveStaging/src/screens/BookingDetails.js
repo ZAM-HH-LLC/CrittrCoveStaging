@@ -24,31 +24,6 @@ const LAST_VIEWED_BOOKING_ID = 'last_viewed_booking_id';
 const SERVICE_OPTIONS = ['Dog Walking', 'Pet Sitting', 'House Sitting', 'Drop-In Visits'];
 // Replace with Animal types that the client owns
 const ANIMAL_OPTIONS = ['Dog', 'Cat', 'Bird', 'Small Animal'];
-// Replace with the pets that the client has in their "my pets" tab
-const PET_OPTIONS = [
-  { id: 'dog1', name: 'Max', type: 'Dog', breed: 'Golden Retriever' },
-  { id: 'cat1', name: 'Luna', type: 'Cat', breed: 'Siamese' },
-  // Add more default options or fetch from an API
-];
-
-const mockUpdateBookingPets = async (bookingId, pets) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  return { success: true };
-};
-
-const mockUpdateBookingService = async (bookingId, serviceDetails) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  return { success: true };
-};
-
-const formatDateWithoutTimezone = (dateString) => {
-  if (!dateString) return new Date();
-  // Split the date string to avoid timezone issues
-  const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
-  return new Date(year, month - 1, day); // month is 0-based in JS Date
-};
 
 const calculateTimeUnits = (startDate, endDate, startTime, endTime, timeUnit) => {
   const start = new Date(`${startDate}T${startTime}`);
@@ -429,17 +404,39 @@ const BookingDetails = () => {
 
           // Update local state with all the new data
           if (data.draft_data) {
+            if (is_DEBUG) {
+              console.log('MBA2573 Backend response:', data);
+            }
+
+            // Format occurrences with proper timezone handling
+            const formattedOccurrences = data.draft_data.occurrences.map(occ => {
+              try {
+                if (is_DEBUG) {
+                  console.log('MBA134njo0vh03 Processing occurrence from pets update:', {
+                    occurrence: occ,
+                    timezone: timeSettings.timezone
+                  });
+                }
+
+                return formatOccurrenceFromUTC(occ, timeSettings.timezone);
+              } catch (error) {
+                console.error('MBA134njo0vh03 Error formatting occurrence:', error);
+                return {
+                  ...occ,
+                  formatted_start: 'Error formatting date',
+                  formatted_end: 'Error formatting date',
+                  duration: 'Unknown',
+                  timezone: timeSettings.timezone_abbrev,
+                  dst_message: ''
+                };
+              }
+            });
+
             setBooking(prev => ({
               ...prev,
               status: data.draft_data.status,
               pets: data.draft_data.pets,
-              occurrences: data.draft_data.occurrences ? data.draft_data.occurrences.map(occ => ({
-                ...occ,
-                rates: {
-                  ...occ.rates,
-                  additional_animal_rate_applies: occ.rates.additional_animal_rate_applies
-                }
-              })) : [],
+              occurrences: formattedOccurrences,
               cost_summary: data.draft_data.cost_summary,
               can_edit: data.draft_data.can_edit
             }));
@@ -593,9 +590,34 @@ const BookingDetails = () => {
         if (result.draft_data) {
           if (is_DEBUG) console.log('MBA123a73hv - Received draft data:', result.draft_data);
           
+          // Format occurrences with proper timezone handling
+          const formattedOccurrences = result.draft_data.occurrences.map(occ => {
+            try {
+              if (is_DEBUG) {
+                console.log('MBA134njo0vh03 Processing occurrence from service update:', {
+                  occurrence: occ,
+                  timezone: timeSettings.timezone
+                });
+              }
+
+              return formatOccurrenceFromUTC(occ, timeSettings.timezone);
+            } catch (error) {
+              console.error('MBA134njo0vh03 Error formatting occurrence:', error);
+              return {
+                ...occ,
+                formatted_start: 'Error formatting date',
+                formatted_end: 'Error formatting date',
+                duration: 'Unknown',
+                timezone: timeSettings.timezone_abbrev,
+                dst_message: ''
+              };
+            }
+          });
+
           setBooking(prevBooking => ({
             ...prevBooking,
             ...result.draft_data,
+            occurrences: formattedOccurrences,
             service_details: {
               ...prevBooking.service_details,
               ...result.draft_data.service_details
@@ -1885,53 +1907,6 @@ const BookingDetails = () => {
             {!isLoadingServices && availableServices.length === 0 && (
               <Text style={styles.noContentText}>No services available</Text>
             )}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderAnimalTypeDropdown = () => (
-    <View style={styles.dropdownContainer}>
-      <TouchableOpacity
-        style={styles.dropdownInput}
-        onPress={() => setShowAnimalDropdown(!showAnimalDropdown)}
-      >
-        <Text>{editedBooking?.serviceDetails?.animalType || 'Select Animal Type'}</Text>
-        <MaterialCommunityIcons 
-          name={showAnimalDropdown ? "chevron-up" : "chevron-down"} 
-          size={24} 
-          color={theme.colors.text} 
-        />
-      </TouchableOpacity>
-
-      {showAnimalDropdown && (
-        <View style={styles.dropdownList}>
-          <ScrollView nestedScrollEnabled={true}>
-            {ANIMAL_OPTIONS.map((animal) => (
-              <TouchableOpacity
-                key={animal}
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setEditedBooking(prev => ({
-                    ...prev,
-                    serviceDetails: {
-                      ...(prev.serviceDetails || {}),
-                      animalType: animal
-                    }
-                  }));
-                  setShowAnimalDropdown(false);
-                  handleStatusUpdateAfterEdit();
-                }}
-              >
-                <Text style={[
-                  styles.dropdownText,
-                  editedBooking?.serviceDetails?.animalType === animal && styles.selectedOption
-                ]}>
-                  {animal}
-                </Text>
-              </TouchableOpacity>
-            ))}
           </ScrollView>
         </View>
       )}

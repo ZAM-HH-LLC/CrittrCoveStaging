@@ -17,7 +17,7 @@ from decimal import Decimal
 from collections import OrderedDict
 import json
 from rest_framework.renderers import JSONRenderer
-from datetime import datetime
+from datetime import datetime, date, time
 from interaction_logs.models import InteractionLog
 from engagement_logs.models import EngagementLog
 from error_logs.models import ErrorLog
@@ -516,55 +516,24 @@ class UpdateBookingPetsView(APIView):
             # Process each occurrence
             for occurrence_data in existing_occurrences:
                 try:
-                    # Parse the date and time strings
-                    start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
-                    end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date()
+                    # Parse dates if they're strings
+                    start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date() if isinstance(occurrence_data['start_date'], str) else occurrence_data['start_date']
+                    end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date() if isinstance(occurrence_data['end_date'], str) else occurrence_data['end_date']
                     
-                    # Try to parse time in both 12-hour and 24-hour formats
-                    try:
-                        # First try 12-hour format (e.g., "11:30 AM")
-                        start_time = datetime.strptime(occurrence_data['start_time'], '%I:%M %p').time()
-                        end_time = datetime.strptime(occurrence_data['end_time'], '%I:%M %p').time()
-                    except ValueError:
-                        # If that fails, try 24-hour format (e.g., "13:30")
-                        start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
-                        end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
-
-                    # Get user's timezone
-                    user_settings = UserSettings.objects.filter(user=booking.client.user).first()
-                    user_timezone = user_settings.timezone if user_settings else 'UTC'
-
-                    # Create datetime objects in user's timezone
-                    user_tz = pytz.timezone(user_timezone)
-                    start_dt = user_tz.localize(datetime.combine(start_date, start_time))
-                    end_dt = user_tz.localize(datetime.combine(end_date, end_time))
-
-                    # Convert to UTC
-                    start_dt_utc = start_dt.astimezone(pytz.UTC)
-                    end_dt_utc = end_dt.astimezone(pytz.UTC)
+                    # Parse times if they're strings (assuming 24-hour format from draft)
+                    start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time() if isinstance(occurrence_data['start_time'], str) else occurrence_data['start_time']
+                    end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time() if isinstance(occurrence_data['end_time'], str) else occurrence_data['end_time']
 
                     # Create temporary occurrence for rate calculation
                     temp_occurrence = TempOccurrence(
-                        start_date=start_dt_utc.date(),
-                        end_date=end_dt_utc.date(),
-                        start_time=start_dt_utc.time(),
-                        end_time=end_dt_utc.time()
+                        start_date=start_date,
+                        end_date=end_date,
+                        start_time=start_time,
+                        end_time=end_time
                     )
 
-                    # Create a temporary service with the rates from the occurrence
-                    temp_service = Service(
-                        service_id=service.service_id,
-                        service_name=service.service_name,
-                        professional=service.professional,
-                        base_rate=occurrence_data['rates'].get('base_rate', service.base_rate),
-                        additional_animal_rate=occurrence_data['rates'].get('additional_animal_rate', service.additional_animal_rate),
-                        applies_after=occurrence_data['rates'].get('applies_after', service.applies_after),
-                        holiday_rate=occurrence_data['rates'].get('holiday_rate', service.holiday_rate),
-                        unit_of_time=occurrence_data['rates'].get('unit_of_time', service.unit_of_time)
-                    )
-
-                    # Calculate rates using the temporary service and new number of pets
-                    rate_data = calculate_occurrence_rates(temp_occurrence, temp_service, num_pets)
+                    # Calculate rates using the new service
+                    rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
                     if not rate_data:
                         raise Exception(f"Failed to calculate rates for occurrence {occurrence_data['occurrence_id']}")
 
@@ -574,13 +543,13 @@ class UpdateBookingPetsView(APIView):
                         user_id=booking.client.user.id
                     )
 
-                    # Create occurrence data preserving dates and times but with updated rates
+                    # Create occurrence data preserving dates and times but with new rates
                     processed_occurrence = OrderedDict([
                         ('occurrence_id', occurrence_data['occurrence_id']),
-                        ('start_date', occurrence_data['start_date']),
-                        ('end_date', occurrence_data['end_date']),
-                        ('start_time', occurrence_data['start_time']),
-                        ('end_time', occurrence_data['end_time']),
+                        ('start_date', occurrence_data['start_date'].isoformat() if isinstance(occurrence_data['start_date'], date) else occurrence_data['start_date']),
+                        ('end_date', occurrence_data['end_date'].isoformat() if isinstance(occurrence_data['end_date'], date) else occurrence_data['end_date']),
+                        ('start_time', occurrence_data['start_time'].strftime('%H:%M') if isinstance(occurrence_data['start_time'], time) else occurrence_data['start_time']),
+                        ('end_time', occurrence_data['end_time'].strftime('%H:%M') if isinstance(occurrence_data['end_time'], time) else occurrence_data['end_time']),
                         ('calculated_cost', rate_data['calculated_cost']),
                         ('base_total', rate_data['base_total']),
                         ('multiple', rate_data['multiple']),
@@ -590,12 +559,6 @@ class UpdateBookingPetsView(APIView):
                         ('duration', formatted_times['duration']),
                         ('timezone', formatted_times['timezone'])
                     ])
-
-                    # Check for DST change
-                    if start_dt.utcoffset() != end_dt.utcoffset():
-                        processed_occurrence['dst_message'] = "Elapsed time may be different than expected due to Daylight Savings Time."
-                    else:
-                        processed_occurrence['dst_message'] = ""
 
                     processed_occurrences.append(processed_occurrence)
                     
@@ -747,10 +710,23 @@ class UpdateServiceTypeView(APIView):
             # Process occurrences
             processed_occurrences = []
             num_pets = len(pets_data)
+            existing_occurrences = []
             
-            # Get existing occurrences from draft
-            existing_occurrences = current_draft_data.get('occurrences', [])
-            logger.info(f"MBA9999 - Found {len(existing_occurrences)} existing occurrences in draft")
+            # Get existing occurrences from draft and booking
+            if 'occurrences' in current_draft_data:
+                existing_occurrences = current_draft_data['occurrences']
+            else:
+                booking_occurrences = booking.occurrences.filter(booking=booking_id)
+                for bo in booking_occurrences:
+                    existing_occurrences.append(OrderedDict([
+                        ('occurrence_id', bo.occurrence_id),
+                        ('start_date', bo.start_date),
+                        ('end_date', bo.end_date),
+                        ('start_time', bo.start_time),
+                        ('end_time', bo.end_time),
+                        ('status', bo.status)
+                    ]))
+            logger.info(f"MBA9999 - Found {len(existing_occurrences)} existing occurrences in draft and booking")
             
             # Create TempOccurrence class for rate calculations
             class TempOccurrence:
@@ -763,39 +739,20 @@ class UpdateServiceTypeView(APIView):
             # Process each occurrence
             for occurrence_data in existing_occurrences:
                 try:
-                    # Parse the date and time strings
-                    start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
-                    end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date()
+                    # Parse dates if they're strings
+                    start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date() if isinstance(occurrence_data['start_date'], str) else occurrence_data['start_date']
+                    end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date() if isinstance(occurrence_data['end_date'], str) else occurrence_data['end_date']
                     
-                    # Try to parse time in both 12-hour and 24-hour formats
-                    try:
-                        # First try 12-hour format (e.g., "11:30 AM")
-                        start_time = datetime.strptime(occurrence_data['start_time'], '%I:%M %p').time()
-                        end_time = datetime.strptime(occurrence_data['end_time'], '%I:%M %p').time()
-                    except ValueError:
-                        # If that fails, try 24-hour format (e.g., "13:30")
-                        start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
-                        end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
-
-                    # Get user's timezone
-                    user_settings = UserSettings.objects.filter(user=booking.client.user).first()
-                    user_timezone = user_settings.timezone if user_settings else 'UTC'
-
-                    # Create datetime objects in user's timezone
-                    user_tz = pytz.timezone(user_timezone)
-                    start_dt = user_tz.localize(datetime.combine(start_date, start_time))
-                    end_dt = user_tz.localize(datetime.combine(end_date, end_time))
-
-                    # Convert to UTC
-                    start_dt_utc = start_dt.astimezone(pytz.UTC)
-                    end_dt_utc = end_dt.astimezone(pytz.UTC)
+                    # Parse times if they're strings (assuming 24-hour format from draft)
+                    start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time() if isinstance(occurrence_data['start_time'], str) else occurrence_data['start_time']
+                    end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time() if isinstance(occurrence_data['end_time'], str) else occurrence_data['end_time']
 
                     # Create temporary occurrence for rate calculation
                     temp_occurrence = TempOccurrence(
-                        start_date=start_dt_utc.date(),
-                        end_date=end_dt_utc.date(),
-                        start_time=start_dt_utc.time(),
-                        end_time=end_dt_utc.time()
+                        start_date=start_date,
+                        end_date=end_date,
+                        start_time=start_time,
+                        end_time=end_time
                     )
 
                     # Calculate rates using the new service
@@ -812,10 +769,10 @@ class UpdateServiceTypeView(APIView):
                     # Create occurrence data preserving dates and times but with new rates
                     processed_occurrence = OrderedDict([
                         ('occurrence_id', occurrence_data['occurrence_id']),
-                        ('start_date', occurrence_data['start_date']),
-                        ('end_date', occurrence_data['end_date']),
-                        ('start_time', occurrence_data['start_time']),
-                        ('end_time', occurrence_data['end_time']),
+                        ('start_date', occurrence_data['start_date'].isoformat() if isinstance(occurrence_data['start_date'], date) else occurrence_data['start_date']),
+                        ('end_date', occurrence_data['end_date'].isoformat() if isinstance(occurrence_data['end_date'], date) else occurrence_data['end_date']),
+                        ('start_time', occurrence_data['start_time'].strftime('%H:%M') if isinstance(occurrence_data['start_time'], time) else occurrence_data['start_time']),
+                        ('end_time', occurrence_data['end_time'].strftime('%H:%M') if isinstance(occurrence_data['end_time'], time) else occurrence_data['end_time']),
                         ('calculated_cost', rate_data['calculated_cost']),
                         ('base_total', rate_data['base_total']),
                         ('multiple', rate_data['multiple']),
@@ -825,12 +782,6 @@ class UpdateServiceTypeView(APIView):
                         ('duration', formatted_times['duration']),
                         ('timezone', formatted_times['timezone'])
                     ])
-
-                    # Check for DST change
-                    if start_dt.utcoffset() != end_dt.utcoffset():
-                        processed_occurrence['dst_message'] = "Elapsed time may be different than expected due to Daylight Savings Time."
-                    else:
-                        processed_occurrence['dst_message'] = ""
 
                     processed_occurrences.append(processed_occurrence)
                     
@@ -842,7 +793,7 @@ class UpdateServiceTypeView(APIView):
                     )
 
             # Calculate cost summary
-            cost_summary = calculate_cost_summary(processed_occurrences) if processed_occurrences else None
+            cost_summary = calculate_cost_summary(processed_occurrences)
 
             # Create draft data
             draft_data = create_draft_data(
