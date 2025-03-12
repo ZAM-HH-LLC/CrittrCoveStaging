@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, SafeAreaView, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
@@ -265,7 +265,10 @@ export default function Navigation({ navigation }) {
         <Appbar.Header style={[styles.header, { backgroundColor: colors.primary }]}>
           <View style={[styles.titleContainer, {flex: isMobile || isSignedIn ? 1 : undefined}]}>
             <TouchableOpacity onPress={() => handleNavigation('Home')} style={{ width: 150 }}>
-              <Text style={[styles.title, { color: colors.whiteText, width: 110 }]}>CrittrCove</Text>
+              <Image 
+                source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')}
+                style={{ width: 150, height: 50, resizeMode: 'contain', marginLeft: 10 }}
+              />
             </TouchableOpacity>
           </View>
           {!isMobile && !isSignedIn ? (
