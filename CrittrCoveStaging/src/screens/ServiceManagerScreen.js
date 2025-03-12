@@ -10,24 +10,20 @@ import CrossPlatformView from '../components/CrossPlatformView';
 import BackHeader from '../components/BackHeader';
 import { handleBack } from '../components/Navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getProfessionalServices } from '../api/API';
 
 const ServiceManagerScreen = () => {
   const navigation = useNavigation();
   const [services, setServices] = useState([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     const fetchServices = async () => {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setServices(DEFAULT_SERVICES);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching services:', error);
-        setIsLoading(false);
-      }
+      const data = await getProfessionalServices();
+      console.log('MBA123: Fetched services:', data);
+      setServices(data);
+      setIsLoading(false);
     };
 
     fetchServices();

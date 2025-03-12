@@ -91,6 +91,42 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
     }
   };
 
+  const renderService = ({ item, index }) => {
+    if (!item || typeof item !== 'object') {
+      console.warn('Invalid item detected:', item);
+      return null;
+    }
+
+    const serviceData = {
+      serviceName: item.service_name,
+      description: item.description,
+      lengthOfService: item.unit_of_time,
+      rates: {
+        base_rate: item.base_rate,
+        additionalAnimalRate: item.additional_animal_rate,
+        holidayRate: item.holiday_rate
+      },
+      additionalRates: item.additional_rates.map(rate => ({
+        label: rate.title,
+        value: rate.rate,
+        description: rate.description
+      }))
+    };
+
+    return (
+      <ProfessionalServiceCard
+        key={`service-${index}`}
+        item={serviceData}
+        index={index}
+        onEdit={() => handleEditService(index)}
+        onDelete={() => handleDeleteService(index)}
+        isCollapsed={collapsedServices.includes(index)}
+        onToggleCollapse={() => toggleCollapse(index)}
+        isProfessionalTab={isProfessionalTab}
+      />
+    );
+  };
+
   // {console.log('Services:', services)}
 
   return (
@@ -157,28 +193,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         {(Array.isArray(services) && services.length > 0) ? (
           <FlatList
             data={services}
-            renderItem={({ item, index }) => {
-              // console.log('Before ProfessionalServiceCard render:', { item, index });
-              
-              if (!item || typeof item !== 'object') {
-                console.warn('Invalid item detected:', item);
-                return null;
-              }
-              
-              return (
-                <ProfessionalServiceCard
-                  key={`service-${index}`}
-                  item={item}
-                  {...item}
-                  service={item}
-                  onEdit={() => handleEditService(index)}
-                  onDelete={() => handleDeleteService(index)}
-                  isCollapsed={collapsedServices.includes(index)}
-                  onToggleCollapse={() => toggleCollapse(index)}
-                  isProfessionalTab={isProfessionalTab}
-                />
-              );
-            }}
+            renderItem={renderService}
             keyExtractor={(item, index) => `service-${index}`}
           />
         ) : (
