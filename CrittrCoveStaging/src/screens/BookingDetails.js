@@ -838,17 +838,17 @@ const BookingDetails = () => {
             },
             updated: {
               start_date: updatedOccurrence.startDate,
-              start_time: updatedStartTimeUTC,
+              start_time: updatedStartTimeUTC.time,
               end_date: updatedOccurrence.endDate,
-              end_time: updatedEndTimeUTC
+              end_time: updatedEndTimeUTC.time
             }
           });
         }
 
         return occ.start_date === updatedOccurrence.startDate &&
-               occ.start_time === updatedStartTimeUTC &&
+               occ.start_time === updatedStartTimeUTC.time &&
                occ.end_date === updatedOccurrence.endDate &&
-               occ.end_time === updatedEndTimeUTC;
+               occ.end_time === updatedEndTimeUTC.time;
       });
 
       if (is_DEBUG) {
@@ -866,7 +866,7 @@ const BookingDetails = () => {
         
         finalIndex = booking.occurrences.findIndex((occ) => {
           return occ.start_date === updatedOccurrence.startDate && 
-                 occ.start_time === updatedStartTimeUTC;
+                 occ.start_time === updatedStartTimeUTC.time;
         });
 
         if (is_DEBUG) {
@@ -878,21 +878,33 @@ const BookingDetails = () => {
         throw new Error('Could not find matching occurrence to update');
       }
 
+      // Convert times to UTC
+      const startUTC = convertToUTC(
+        updatedOccurrence.startDate,
+        updatedOccurrence.startTime,
+        userTimezone
+      );
+
+      const endUTC = convertToUTC(
+        updatedOccurrence.endDate,
+        updatedOccurrence.endTime,
+        userTimezone
+      );
+
+      if (is_DEBUG) {
+        console.log('MBA9740174 Converted times to UTC:', {
+          start: startUTC,
+          end: endUTC
+        });
+      }
+
       // Format the updated occurrence data
       const updatedOccurrenceData = {
         occurrence_id: booking.occurrences[finalIndex]?.occurrence_id,
-        start_date: updatedOccurrence.startDate,
-        end_date: updatedOccurrence.endDate,
-        start_time: convertToUTC(
-          updatedOccurrence.startDate,
-          updatedOccurrence.startTime,
-          userTimezone
-        ),
-        end_time: convertToUTC(
-          updatedOccurrence.endDate,
-          updatedOccurrence.endTime,
-          userTimezone
-        ),
+        start_date: startUTC.date,
+        end_date: endUTC.date,
+        start_time: startUTC.time,
+        end_time: endUTC.time,
         rates: {
           base_rate: updatedOccurrence.rates.baseRate,
           additional_animal_rate: updatedOccurrence.rates.additionalAnimalRate,
@@ -929,8 +941,7 @@ const BookingDetails = () => {
           end_date: occ.end_date,
           start_time: occ.start_time,
           end_time: occ.end_time,
-          rates: occ.rates,
-          is_updated: false
+          rates: occ.rates
         };
       });
 
