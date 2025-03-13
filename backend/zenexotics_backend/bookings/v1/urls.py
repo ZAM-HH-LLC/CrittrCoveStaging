@@ -10,4 +10,5 @@ urlpatterns = [
     path('<str:booking_id>/service_rates/', views.GetServiceRatesView.as_view(), name='service_rates'),
     path('<str:booking_id>/calculate_occurrence_cost/', views.CalculateOccurrenceCostView.as_view(), name='calculate_occurrence_cost'),
     path('<int:booking_id>/update/', views.UpdateBookingView.as_view(), name='booking-update'),
+    path('<int:booking_id>/approve/', views.ApproveBookingView.as_view(), name='booking-approve'),
 ]

@@ -17,6 +17,7 @@ import { API_BASE_URL } from '../config/config';
 import { handleBack, navigateToFrom } from '../components/Navigation';
 import SnackBar from '../components/SnackBar';
 import { convertToUTC, formatOccurrenceFromUTC } from '../utils/time_utils';
+import { approveBooking } from '../api/API';
 
 const LAST_VIEWED_BOOKING_ID = 'last_viewed_booking_id';
 
@@ -1747,6 +1748,47 @@ const BookingDetails = () => {
         setSnackBar({
           visible: true,
           message: 'Failed to deny booking. Please try again.',
+          type: 'error'
+        });
+      } finally {
+        setConfirmationModal(prev => ({ 
+          ...prev, 
+          isLoading: false,
+          visible: false
+        }));
+      }
+    } else if (action === 'Approve') {
+      try {
+        setConfirmationModal(prev => ({ ...prev, isLoading: true }));
+        
+        if (is_DEBUG) {
+          console.log('MBA12345 Approving booking:', booking.booking_id);
+        }
+
+        const response = await approveBooking(booking.booking_id);
+
+        if (is_DEBUG) {
+          console.log('MBA12345 Approve response:', response);
+        }
+
+        // Update the local booking status
+        setBooking(prev => ({
+          ...prev,
+          status: response.status
+        }));
+
+        // Show success message
+        setSnackBar({
+          visible: true,
+          message: response.message || 'Booking approved successfully',
+          type: 'success'
+        });
+
+      } catch (error) {
+        console.error('Error approving booking:', error);
+        setSnackBar({
+          visible: true,
+          message: error.response?.data?.error || 'Failed to approve booking. Please try again.',
           type: 'error'
         });
       } finally {

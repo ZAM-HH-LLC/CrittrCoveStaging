@@ -1312,3 +1312,69 @@ class UpdateBookingView(APIView):
                 {"error": f"An error occurred while updating the booking: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class ApproveBookingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, booking_id):
+        try:
+            # Get the booking and verify client access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            client = get_object_or_404(Client, user=request.user)
+
+            # Verify this is the client's booking
+            if booking.client != client:
+                return Response(
+                    {"error": "Not authorized to approve this booking"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Verify booking is in correct state
+            valid_states = [
+                BookingStates.PENDING_CLIENT_APPROVAL,
+                BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL
+            ]
+            if booking.status not in valid_states:
+                return Response(
+                    {"error": f"Cannot approve booking in {BookingStates.get_display_state(booking.status)} state"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Update booking status to CONFIRMED
+            booking.status = BookingStates.CONFIRMED
+            booking.save()
+
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_APPROVED',
+                target_type='BOOKING',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'previous_status': valid_states[0] if booking.status == valid_states[0] else valid_states[1],
+                    'new_status': BookingStates.CONFIRMED
+                }
+            )
+
+            return Response({
+                'status': BookingStates.get_display_state(booking.status),
+                'message': 'Booking approved successfully'
+            })
+
+        except Exception as e:
+            logger.error(f"Error approving booking: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Log the error
+            ErrorLog.objects.create(
+                user=request.user,
+                error_message=str(e),
+                endpoint=f'/api/bookings/v1/{booking_id}/approve/',
+                metadata={'booking_id': booking_id}
+            )
+            
+            return Response(
+                {"error": "Failed to approve booking"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

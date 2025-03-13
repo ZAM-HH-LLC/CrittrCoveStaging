@@ -21,12 +21,16 @@ export const getProfessionalServices = async () => {
 export const approveBooking = async (bookingId) => {
   try {
     const token = await getStorage('userToken');
-    const response = await axios.post(`${API_BASE_URL}/api/bookings/v1/${bookingId}/approve/`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
+    const response = await axios.post(
+      `${API_BASE_URL}/api/bookings/v1/${bookingId}/approve/`,
+      {},  // Empty body since we don't need to send any data
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       }
-    });
+    );
     return response.data;
   } catch (error) {
     console.error('Error approving booking:', error);

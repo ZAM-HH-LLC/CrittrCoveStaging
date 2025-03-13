@@ -2,13 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
+import { approveBooking } from '../api/API';
 
 const BookingMessageCard = ({ 
   type,  // 'request' or 'approval'
   data,
   isFromMe,
   onPress,
-  isProfessional
+  isProfessional,
+  onApproveSuccess,
+  onApproveError
 }) => {
   const getIcon = () => {
     switch (type) {
@@ -50,6 +53,23 @@ const BookingMessageCard = ({
       styles.header,
       type === 'approval' ? styles.approvalHeader : styles.requestHeader
     ];
+  };
+
+  const handleApprove = async () => {
+    try {
+      const response = await approveBooking(data.booking_id);
+      
+      // Call the success callback if provided
+      if (onApproveSuccess) {
+        onApproveSuccess(response);
+      }
+    } catch (error) {
+      console.error('Error approving booking from message card:', error);
+      // Call the error callback if provided
+      if (onApproveError) {
+        onApproveError(error.response?.data?.error || 'Failed to approve booking');
+      }
+    }
   };
 
   return (
@@ -124,7 +144,7 @@ const BookingMessageCard = ({
           {type === 'approval' && !isProfessional && (
             <TouchableOpacity 
               style={styles.approveButton}
-              onPress={onPress}
+              onPress={handleApprove}
             >
               <Text style={styles.approveButtonText}>Approve</Text>
             </TouchableOpacity>
