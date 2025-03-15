@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'; // Import the icon 
 import { theme } from '../styles/theme';
 import { AuthContext, getStorage } from '../context/AuthContext';
 import RequestBookingModal from '../components/RequestBookingModal';
+import BookingStepModal from '../components/BookingStepModal';
 import { createBooking, BOOKING_STATES, mockConversations, mockMessages, CURRENT_USER_ID } from '../data/mockData';
 import { format } from 'date-fns';
 import { useNavigation } from '@react-navigation/native';
@@ -575,6 +576,8 @@ const MessageHistory = ({ navigation, route }) => {
   const hasLoadedInitialDataRef = useRef(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const initialLoadRef = useRef(true);
+  const [showBookingStepModal, setShowBookingStepModal] = useState(false);
+  const [currentBookingId, setCurrentBookingId] = useState(null);
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -940,9 +943,11 @@ const MessageHistory = ({ navigation, route }) => {
       console.log('MBA98765 Is Professional?', isProfessional);
     }
 
+    setShowDropdown(false); // Close dropdown first to prevent any UI issues
+
     if (isProfessional) {
       if (is_DEBUG) {
-        console.log('MBA98765 User is professional - creating booking and navigating to details');
+        console.log('MBA98765 User is professional - creating booking and showing step modal');
       }
       try {
         const token = await getStorage('userToken');
@@ -964,11 +969,11 @@ const MessageHistory = ({ navigation, route }) => {
         }
 
         if (response.data.booking_id) {
-          navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
-            bookingId: response.data.booking_id,
-            initialData: null,
-            isProfessional: selectedConversationData.is_professional
-          });
+          setCurrentBookingId(response.data.booking_id);
+          // Ensure we set the modal to visible after setting the booking ID
+          setTimeout(() => {
+            setShowBookingStepModal(true);
+          }, 0);
         }
       } catch (error) {
         console.error('Error creating booking:', error);
@@ -978,8 +983,6 @@ const MessageHistory = ({ navigation, route }) => {
       console.log('MBA98765 User is client - showing request modal');
       setShowRequestModal(true);
     }
-    
-    setShowDropdown(false);
   };
 
   // Update loadMoreMessages to check current state before loading
@@ -1598,6 +1601,23 @@ const MessageHistory = ({ navigation, route }) => {
         onClose={() => setShowRequestModal(false)}
         onSubmit={handleBookingRequest}
         conversationId={selectedConversation}
+      />
+
+      <BookingStepModal
+        visible={showBookingStepModal}
+        onClose={() => {
+          setShowBookingStepModal(false);
+          setCurrentBookingId(null);
+        }}
+        bookingId={currentBookingId}
+        onComplete={(bookingData) => {
+          if (is_DEBUG) {
+            console.log('MBA98765 Booking completed:', bookingData);
+          }
+          // Just close the modal and clean up, no navigation
+          setShowBookingStepModal(false);
+          setCurrentBookingId(null);
+        }}
       />
     </SafeAreaView>
   );
