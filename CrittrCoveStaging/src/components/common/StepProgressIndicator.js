@@ -30,72 +30,57 @@ const StepProgressIndicator = props => {
   if (is_DEBUG) {
     console.log("MBA1234 - Screen width:", screenWidth);
     console.log("MBA1234 - Is desktop:", isDesktop);
+    console.log("MBA1234 - Steps:", steps);
+    console.log("MBA1234 - Current step:", currentStep);
   }
 
-  /**
-   * Renders a single step in the progress indicator
-   * @param {string} stepName - The name of the step
-   * @param {number} index - The index of the step
-   * @returns {React.ReactElement} The rendered step
-   */
+  // Helper function to determine what type of line to render between steps
+  const renderLine = (stepIndex) => {
+    if (stepIndex < currentStep) {
+      // Line between completed steps
+      return (
+        <View style={[styles.line, styles.completedLine]} />
+      );
+    } else if (stepIndex === currentStep) {
+      // Line after the active step - show progress indicator
+      return (
+        <View style={styles.progressLine}>
+          <View style={styles.progressFilled} />
+          <View style={styles.progressEmpty} />
+        </View>
+      );
+    } else {
+      // Line between future steps
+      return (
+        <View style={styles.line} />
+      );
+    }
+  };
+
+  // Render a single step
   const renderStep = (stepName, index) => {
     const isActive = index === currentStep;
     const isCompleted = index < currentStep;
-    
-    // Only show step name if it's the active step (on mobile) or if we're in desktop view
-    const shouldShowStepName = isActive || isDesktop;
 
     return (
-      <View 
-        key={index} 
-        style={[
-          styles.stepRow,
-          isDesktop && styles.desktopStepRow
-        ]}
-      >
-        <View style={styles.stepNumberAndName}>
-          <View style={[
-            styles.stepCircle,
-            isActive && styles.activeStepCircle,
-            isCompleted && styles.completedStepCircle
-          ]}>
-            <Text style={[
-              styles.stepNumber,
-              isActive && styles.activeStepNumber,
-              isCompleted && styles.completedStepNumber,
-            ]}>
-              {index + 1}
-            </Text>
-          </View>
-
-          {shouldShowStepName && (
-            <Text style={[
-              styles.stepName,
-              isActive && styles.activeStepName,
-              isDesktop ? styles.desktopStepName : styles.mobileStepName
-            ]}>
-              {stepName}
-            </Text>
-          )}
+      <View key={`step-${index}`} style={styles.step}>
+        <View style={[
+          styles.stepCircle,
+          isActive && styles.activeStepCircle,
+          isCompleted && styles.completedStepCircle
+        ]}>
+          <Text style={[
+            styles.stepNumber,
+            isActive && styles.activeStepNumber,
+            isCompleted && styles.completedStepNumber,
+          ]}>{index + 1}</Text>
         </View>
-
-        {index < steps.length - 1 && (
-          <View style={[
-            styles.stepProgressContainer,
-            isDesktop && styles.desktopProgressContainer
-          ]}>
-            {isActive ? (
-              <View style={styles.progressIndicator}>
-                <View style={styles.progressLine} />
-                <View style={styles.remainingLine} />
-              </View>
-            ) : (
-              <View style={[
-                styles.stepLine,
-                isCompleted && styles.completedStepLine
-              ]} />
-            )}
-          </View>
+        
+        {(isActive || isDesktop) && (
+          <Text style={[
+            styles.stepName,
+            isActive && styles.activeStepName,
+          ]}>{stepName}</Text>
         )}
       </View>
     );
@@ -103,24 +88,14 @@ const StepProgressIndicator = props => {
 
   return (
     <View style={[styles.wrapper, style]}>
-      {isDesktop ? (
-        <View style={[
-          styles.container,
-          styles.desktopContainer
-        ]}>
-          {steps.map((step, index) => renderStep(step, index))}
-        </View>
-      ) : (
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.mobileScrollContainer}
-        >
-          <View style={styles.container}>
-            {steps.map((step, index) => renderStep(step, index))}
-          </View>
-        </ScrollView>
-      )}
+      <View style={styles.container}>
+        {steps.map((step, index) => (
+          <React.Fragment key={`step-fragment-${index}`}>
+            {renderStep(step, index)}
+            {index < steps.length - 1 && renderLine(index)}
+          </React.Fragment>
+        ))}
+      </View>
     </View>
   );
 };
@@ -128,53 +103,32 @@ const StepProgressIndicator = props => {
 const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: theme.colors.background,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingVertical: 12,
     width: '100%',
+    zIndex: 1,
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  mobileScrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    minWidth: '100%',
-  },
-  desktopContainer: {
-    maxWidth: 800,
-    marginHorizontal: 'auto',
-    justifyContent: 'space-between',
     width: '100%',
+    paddingHorizontal: 16,
+    justifyContent: 'space-between',
   },
-  stepRow: {
+  step: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    minWidth: 40,
-  },
-  desktopStepRow: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    gap: 16,
-  },
-  stepNumberAndName: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 0,
+    zIndex: 2,
   },
   stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    flexShrink: 0,
+    borderColor: theme.colors.modernBorder,
+    zIndex: 3,
   },
   activeStepCircle: {
     backgroundColor: theme.colors.mainColors.main,
@@ -202,53 +156,41 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     opacity: 0.7,
     marginLeft: 8,
-    flexShrink: 1,
-  },
-  mobileStepName: {
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    maxWidth: 120,
-  },
-  desktopStepName: {
     whiteSpace: 'nowrap',
   },
   activeStepName: {
     color: theme.colors.mainColors.main,
     opacity: 1,
   },
-  stepProgressContainer: {
-    flex: 0,
-    minWidth: 40,
-    maxWidth: 60,
-    paddingHorizontal: 8,
-  },
-  desktopProgressContainer: {
-    width: 60,
-  },
-  progressIndicator: {
-    flexDirection: 'row',
+  line: {
     height: 2,
-    width: '100%',
+    backgroundColor: theme.colors.border,
+    opacity: 0.2,
+    flex: 1,
+    marginHorizontal: 4,
+    zIndex: 1,
+  },
+  completedLine: {
+    backgroundColor: theme.colors.mainColors.main,
+    opacity: 1,
   },
   progressLine: {
     flex: 1,
-    backgroundColor: theme.colors.mainColors.main,
+    flexDirection: 'row',
+    height: 2,
+    marginHorizontal: 4,
+    zIndex: 1,
   },
-  remainingLine: {
+  progressFilled: {
+    flex: 1,
+    backgroundColor: theme.colors.mainColors.main,
+    height: 2,
+  },
+  progressEmpty: {
     flex: 1,
     backgroundColor: theme.colors.border,
     opacity: 0.2,
-  },
-  stepLine: {
-    height: 1,
-    width: '100%',
-    backgroundColor: theme.colors.border,
-    opacity: 0.2,
-  },
-  completedStepLine: {
-    backgroundColor: theme.colors.mainColors.main,
-    opacity: 1,
+    height: 2,
   },
 });
 

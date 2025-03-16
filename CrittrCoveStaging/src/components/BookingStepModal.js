@@ -146,10 +146,12 @@ const BookingStepModal = ({
     >
       <View style={styles.modalOverlay}>
         <SafeAreaView style={styles.modalContent}>
-          <StepProgressIndicator
-            steps={Object.values(STEPS).map(step => step.name)}
-            currentStep={currentStep}
-          />
+          <View style={styles.stepIndicatorContainer}>
+            <StepProgressIndicator
+              steps={Object.values(STEPS).map(step => step.name)}
+              currentStep={currentStep}
+            />
+          </View>
           <View style={styles.content}>
             {renderCurrentStep()}
           </View>
@@ -202,6 +204,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  stepIndicatorContainer: {
+    width: '100%',
+    paddingVertical: 12,
+    backgroundColor: theme.colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.modernBorder,
   },
   content: {
     flex: 1,
