@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
 import ServiceAndPetsCard from './bookingComponents/ServiceAndPetsCard';
+import DateSelectionCard from './bookingComponents/DateSelectionCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
 
 const STEPS = {
@@ -49,8 +50,12 @@ const BookingStepModal = ({
     service: initialData.service || null,
     pets: initialData.pets || [],
     dates: initialData.dates || [],
+    bookingType: initialData.bookingType || 'one-time',
+    dateRangeType: initialData.dateRangeType || 'date-range',
     times: initialData.times || {},
     rates: initialData.rates || {},
+    dateSelectionData: null,
+    dateRange: null,
   });
   const [error, setError] = useState(null);
 
@@ -87,10 +92,67 @@ const BookingStepModal = ({
     });
   };
 
+  const handleDateSelect = (dateData) => {
+    if (is_DEBUG) {
+      console.log('MBA12345 Selected dates:', dateData);
+    }
+    setBookingData(prev => {
+      // Preserve date range when switching to multiple-days
+      let newDateRange = prev.dateRange;
+      
+      // Update date range based on the selection type
+      if (dateData.rangeType === 'date-range' && dateData.startDate && dateData.endDate) {
+        newDateRange = {
+          startDate: dateData.startDate,
+          endDate: dateData.endDate
+        };
+      } else if (dateData.rangeType === 'multiple-days') {
+        // Keep the existing date range when in multiple-days mode
+        newDateRange = prev.dateRange;
+      } else if (!dateData.dates || dateData.dates.length === 0) {
+        // Clear date range if all dates are cleared
+        newDateRange = null;
+      }
+
+      return {
+        ...prev,
+        dates: dateData.dates || [],
+        dateSelectionData: dateData,
+        dateRange: newDateRange,
+        dateRangeType: dateData.rangeType || prev.dateRangeType
+      };
+    });
+  };
+
+  const handleBookingTypeChange = (bookingType) => {
+    if (is_DEBUG) {
+      console.log('MBA12345 Booking type changed:', bookingType);
+    }
+    setBookingData(prev => ({
+      ...prev,
+      bookingType,
+      // Clear dates when changing booking type
+      dates: []
+    }));
+  };
+
+  const handleDateRangeTypeChange = (dateRangeType) => {
+    if (is_DEBUG) {
+      console.log('MBA12345 Date range type changed:', dateRangeType);
+    }
+    setBookingData(prev => ({
+      ...prev,
+      dateRangeType
+    }));
+  };
+
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case STEPS.SERVICES_AND_PETS.id:
         return bookingData.service && bookingData.pets.length > 0;
+      case STEPS.DATE_SELECTION.id:
+        // Check if dateSelectionData exists and is valid
+        return bookingData.dateSelectionData && bookingData.dateSelectionData.isValid;
       // Add validation for other steps as they are implemented
       default:
         return false;
@@ -129,6 +191,16 @@ const BookingStepModal = ({
             onPetSelect={handlePetSelect}
             selectedService={bookingData.service}
             selectedPets={bookingData.pets}
+          />
+        );
+      case STEPS.DATE_SELECTION.id:
+        return (
+          <DateSelectionCard
+            selectedDates={bookingData.dates}
+            onDateSelect={handleDateSelect}
+            bookingType={bookingData.bookingType}
+            dateRangeType={bookingData.dateRangeType}
+            initialDateRange={bookingData.dateRange}
           />
         );
       // Add other step components as they are implemented
