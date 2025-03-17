@@ -151,10 +151,25 @@ const BookingStepModal = ({
     if (is_DEBUG) {
       console.log('MBA12345 Selected times:', timeData);
     }
-    setBookingData(prev => ({
-      ...prev,
-      times: timeData
-    }));
+    setBookingData(prev => {
+      // Create a new times object that preserves any existing values
+      const updatedTimes = {
+        ...prev.times,
+        startTime: timeData.startTime || prev.times.startTime,
+        endTime: timeData.endTime || prev.times.endTime,
+        isOvernightForced: timeData.isOvernightForced
+      };
+
+      if (is_DEBUG) {
+        console.log('MBA12345 Previous times:', prev.times);
+        console.log('MBA12345 Updated times:', updatedTimes);
+      }
+
+      return {
+        ...prev,
+        times: updatedTimes
+      };
+    });
   };
 
   const canProceedToNextStep = () => {

@@ -27,6 +27,7 @@ const TimeSlider = ({
   const isDragging = useRef(false);
   const timelineRef = useRef(null);
   const [trackWidth, setTrackWidth] = useState(sliderWidth);
+  const initialTimes = useRef({ startTime, endTime });
 
   // Measure timeline width to match slider track
   useEffect(() => {
@@ -81,23 +82,33 @@ const TimeSlider = ({
 
   // Update thumb positions when times change
   useEffect(() => {
-    if (!trackWidth || isDragging.current) return;
-
-    const startPos = timeToPosition(startTime.hours, startTime.minutes);
-    const endPos = timeToPosition(endTime.hours, endTime.minutes);
-
-    if (!isNaN(startPos)) {
-      startThumbX.setValue(startPos);
-      if (is_DEBUG) console.log('MBA54321 Setting start thumb to:', startPos);
+    if (isDragging.current) return;
+    
+    const startPosition = timeToPosition(startTime.hours, startTime.minutes);
+    const endPosition = timeToPosition(endTime.hours, endTime.minutes);
+    
+    // Only update if the position has changed significantly (more than 0.1 pixels)
+    // and if we're not dragging
+    if (!isDragging.current) {
+      // For start thumb, only update if it's significantly different
+      const startDiff = Math.abs(startThumbX._value - startPosition);
+      if (startDiff > 0.1 && startDiff > 5) {  // Added threshold of 5 pixels
+        if (is_DEBUG) console.log('MBA54321 Setting start thumb to:', startPosition);
+        startThumbX.setValue(startPosition);
+      }
+      
+      // For end thumb, only update if it's significantly different
+      const endDiff = Math.abs(endThumbX._value - endPosition);
+      if (endDiff > 0.1 && endDiff > 5) {  // Added threshold of 5 pixels
+        if (is_DEBUG) console.log('MBA54321 Setting end thumb to:', endPosition);
+        endThumbX.setValue(endPosition);
+      }
     }
-    if (!isNaN(endPos)) {
-      endThumbX.setValue(endPos);
-      if (is_DEBUG) console.log('MBA54321 Setting end thumb to:', endPos);
-    }
-  }, [trackWidth, startTime, endTime]);
+  }, [startTime, endTime]);
 
   const createPanResponder = (isStart) => {
     let lastValidPosition = 0;
+    let lastValidTime = null;
 
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -107,6 +118,7 @@ const TimeSlider = ({
         isDragging.current = true;
         const thumbX = isStart ? startThumbX : endThumbX;
         lastValidPosition = thumbX._value;
+        lastValidTime = isStart ? startTime : endTime;
         thumbX.setOffset(lastValidPosition);
         thumbX.setValue(0);
         if (is_DEBUG) console.log('MBA54321 Started dragging:', isStart ? 'start' : 'end', 'at:', lastValidPosition);
@@ -138,14 +150,16 @@ const TimeSlider = ({
             // Calculate and update time
             const { hours, minutes } = positionToTime(newX);
             if (!isNaN(hours) && !isNaN(minutes)) {
-              onTimeChange(isStart, hours, minutes);
-              if (is_DEBUG) console.log('MBA54321 Dragging:', isStart ? 'start' : 'end', { newX, hours, minutes });
+              if (hours !== lastValidTime?.hours || minutes !== lastValidTime?.minutes) {
+                lastValidTime = { hours, minutes };
+                onTimeChange(isStart, hours, minutes);
+                if (is_DEBUG) console.log('MBA54321 Dragging:', isStart ? 'start' : 'end', { newX, hours, minutes });
+              }
             }
           }
         }
       ),
       onPanResponderRelease: () => {
-        isDragging.current = false;
         const thumbX = isStart ? startThumbX : endThumbX;
         
         // Ensure we keep the last valid position
@@ -157,14 +171,23 @@ const TimeSlider = ({
 
         const { hours, minutes } = positionToTime(finalPosition);
         if (!isNaN(hours) && !isNaN(minutes)) {
-          onTimeChange(isStart, hours, minutes, true);
-          if (is_DEBUG) console.log('MBA54321 Released:', isStart ? 'start' : 'end', { position: finalPosition, hours, minutes });
+          if (hours !== lastValidTime?.hours || minutes !== lastValidTime?.minutes) {
+            onTimeChange(isStart, hours, minutes, true);
+            if (is_DEBUG) console.log('MBA54321 Released:', isStart ? 'start' : 'end', { position: finalPosition, hours, minutes });
+          }
         }
+        
+        // Set isDragging to false after a short delay to prevent immediate position updates
+        setTimeout(() => {
+          isDragging.current = false;
+        }, 50);
       },
       onPanResponderTerminate: () => {
-        isDragging.current = false;
         const thumbX = isStart ? startThumbX : endThumbX;
         thumbX.flattenOffset();
+        setTimeout(() => {
+          isDragging.current = false;
+        }, 50);
       },
     });
   };
