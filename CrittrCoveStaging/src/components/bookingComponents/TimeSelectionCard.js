@@ -188,7 +188,8 @@ const styles = StyleSheet.create({
   },
   customizeButtonContainer: {
     marginBottom: 24,
-    zIndex: 2,
+    position: 'relative',
+    zIndex: 1,
   },
   customizeButton: {
     flexDirection: 'row',
@@ -200,6 +201,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.mainColors.main,
+    position: 'relative',
+    zIndex: 1,
   },
   customizeButtonText: {
     color: theme.colors.mainColors.main,
@@ -209,24 +212,25 @@ const styles = StyleSheet.create({
   },
   presetsContainer: {
     gap: 12,
-    zIndex: 2,
+    position: 'relative',
+    zIndex: 1,
   },
   presetsTitle: {
-    fontSize: theme.fontSizes.large,
+    fontSize: theme.fontSizes.medium,
     fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
-    marginBottom: 16,
   },
   presetButtons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
     alignSelf: 'flex-start',
+    position: 'relative',
+    zIndex: 1,
   },
   presetButton: {
-    width: 200,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     borderRadius: 8,
     backgroundColor: '#F5F5F5',
     borderWidth: 1,
@@ -234,13 +238,14 @@ const styles = StyleSheet.create({
   },
   presetButtonText: {
     color: theme.colors.text,
-    fontSize: theme.fontSizes.medium,
+    fontSize: theme.fontSizes.smallMedium,
     fontFamily: theme.fonts.regular.fontFamily,
     textAlign: 'center',
   },
   individualTimeRangesContainer: {
     maxHeight: 400,
     position: 'relative',
+    zIndex: 1100,
   },
   timeRangeContainer: {
     marginBottom: 8,

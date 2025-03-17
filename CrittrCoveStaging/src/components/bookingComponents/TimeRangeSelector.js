@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 100,
   },
   timeRangeHeader: {
     flexDirection: 'row',
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
     position: 'relative',
-    zIndex: 10000,
+    zIndex: 100,
   },
   timeRangeLabel: {
     fontSize: theme.fontSizes.large,
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   sliderContainer: {
-    marginBottom: 16,
+    marginBottom: 8,
     width: '100%',
     position: 'relative',
     zIndex: 1,
@@ -396,19 +396,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    marginBottom: 18,
+    marginBottom: 24,
     position: 'relative',
-    zIndex: 10000,
+    zIndex: 100,
   },
   timeInputWrapper: {
     position: 'relative',
-    zIndex: 10000,
+    zIndex: 100,
   },
   timeInputContainer: {
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.mainColors.main,
     paddingBottom: 4,
-    zIndex: 10000,
+    zIndex: 100,
   },
   timeLabel: {
     fontSize: theme.fontSizes.large,
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    zIndex: 10000,
+    zIndex: 100,
     width: 200,
     padding: 8,
   },
@@ -440,19 +440,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
-    zIndex: 10000,
+    zIndex: 100,
   },
   timePickerColumn: {
     flex: 1,
     maxHeight: 200,
     paddingRight: 4,
-    zIndex: 10000,
+    zIndex: 100,
   },
   timeOption: {
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 4,
-    zIndex: 10000,
+    zIndex: 100,
   },
   timeOptionSelected: {
     backgroundColor: theme.colors.mainColors.main + '20',
