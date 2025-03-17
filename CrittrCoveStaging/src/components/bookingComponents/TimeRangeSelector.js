@@ -173,17 +173,6 @@ const TimeRangeSelector = ({
     onTimeSelect(newTimes);
   };
 
-  const formatTimeRange = () => {
-    if (!dateRange) return title;
-    const { startDate, endDate } = dateRange;
-    if (!startDate || !endDate) return title;
-    
-    const options = { month: 'short', day: 'numeric' };
-    const start = new Date(startDate).toLocaleDateString('en-US', options);
-    const end = new Date(endDate).toLocaleDateString('en-US', options);
-    return start === end ? `${title} - ${start}` : `${title} - ${start} to ${end}`;
-  };
-
   const handleTimePress = (type) => {
     setActiveTimeType(type);
     setShowTimePicker(true);
@@ -315,7 +304,7 @@ const TimeRangeSelector = ({
     <View style={styles.container}>
       <View style={styles.timeRangeHeader}>
         <Text style={[styles.timeRangeLabel, styles.mobileText]}>
-          {formatTimeRange()}
+          {title}
         </Text>
         {showOvernightToggle && (
           <TouchableOpacity 
@@ -339,8 +328,9 @@ const TimeRangeSelector = ({
             is_DEBUG={is_DEBUG}
           />
         )}
+      </View>
 
-        <View style={styles.timeLabelsContainer}>
+      <View style={styles.timeLabelsContainer}>
           <View style={styles.timeInputWrapper}>
             <TouchableOpacity 
               style={styles.timeInputContainer}
@@ -364,7 +354,6 @@ const TimeRangeSelector = ({
             {showTimePicker && activeTimeType === 'end' && renderTimePicker(true)}
           </View>
         </View>
-      </View>
     </View>
   );
 };
@@ -372,12 +361,16 @@ const TimeRangeSelector = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
+    zIndex: 1,
   },
   timeRangeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 8,
+    position: 'relative',
+    zIndex: 10000,
   },
   timeRangeLabel: {
     fontSize: theme.fontSizes.large,
@@ -394,24 +387,28 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   sliderContainer: {
-    marginBottom: 32,
+    marginBottom: 16,
     width: '100%',
     position: 'relative',
+    zIndex: 1,
   },
   timeLabelsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    marginTop: 16,
+    marginBottom: 18,
+    position: 'relative',
+    zIndex: 10000,
   },
   timeInputWrapper: {
     position: 'relative',
-    zIndex: 3,
+    zIndex: 10000,
   },
   timeInputContainer: {
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.mainColors.main,
     paddingBottom: 4,
+    zIndex: 10000,
   },
   timeLabel: {
     fontSize: theme.fontSizes.large,
@@ -431,7 +428,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    zIndex: 3,
+    zIndex: 10000,
     width: 200,
     padding: 8,
   },
@@ -443,16 +440,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
+    zIndex: 10000,
   },
   timePickerColumn: {
     flex: 1,
     maxHeight: 200,
     paddingRight: 4,
+    zIndex: 10000,
   },
   timeOption: {
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 4,
+    zIndex: 10000,
   },
   timeOptionSelected: {
     backgroundColor: theme.colors.mainColors.main + '20',

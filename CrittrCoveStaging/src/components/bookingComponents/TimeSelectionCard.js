@@ -1,19 +1,39 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useContext } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import TimeRangeSelector from './TimeRangeSelector';
+import { AuthContext } from '../../context/AuthContext';
 
 const TimeSelectionCard = ({ 
   onTimeSelect,
   initialTimes = {},
   dateRange = null,
 }) => {
+  const { is_DEBUG } = useContext(AuthContext);
   const [showIndividualDays, setShowIndividualDays] = useState(false);
+  const [individualTimeRanges, setIndividualTimeRanges] = useState({});
 
-  const handleTimeSelect = (timeData) => {
+  const handleTimeSelect = (timeData, dateKey = 'default') => {
+    if (is_DEBUG) {
+      console.log('MBA54321 handleTimeSelect:', { timeData, dateKey });
+    }
+
     if (onTimeSelect) {
-      onTimeSelect(timeData);
+      if (showIndividualDays) {
+        // Update individual time ranges
+        const newTimeRanges = {
+          ...individualTimeRanges,
+          [dateKey]: timeData
+        };
+        setIndividualTimeRanges(newTimeRanges);
+        
+        // Send all time ranges to parent
+        onTimeSelect(newTimeRanges);
+      } else {
+        // Send single time range for default mode
+        onTimeSelect(timeData);
+      }
     }
   };
 
@@ -22,22 +42,22 @@ const TimeSelectionCard = ({
     switch (preset) {
       case 'morning':
         newTimes = {
-          startTime: { hour: 9, minutes: 0 },
-          endTime: { hour: 12, minutes: 0 },
+          startTime: { hours: 9, minutes: 0 },
+          endTime: { hours: 12, minutes: 0 },
           isOvernightForced: false
         };
         break;
       case 'afternoon':
         newTimes = {
-          startTime: { hour: 13, minutes: 0 },
-          endTime: { hour: 17, minutes: 0 },
+          startTime: { hours: 13, minutes: 0 },
+          endTime: { hours: 17, minutes: 0 },
           isOvernightForced: false
         };
         break;
       case 'fullDay':
         newTimes = {
-          startTime: { hour: 9, minutes: 0 },
-          endTime: { hour: 17, minutes: 0 },
+          startTime: { hours: 9, minutes: 0 },
+          endTime: { hours: 17, minutes: 0 },
           isOvernightForced: false
         };
         break;
@@ -47,16 +67,68 @@ const TimeSelectionCard = ({
     handleTimeSelect(newTimes);
   };
 
+  const formatDateRange = (startDate, endDate) => {
+    if (!startDate || !endDate) return '';
+    const options = { month: 'short', day: 'numeric' };
+    const start = new Date(startDate).toLocaleDateString('en-US', options);
+    const end = new Date(endDate).toLocaleDateString('en-US', options);
+    return start === end ? start : `${start} to ${end}`;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return '';
+    const options = { month: 'short', day: 'numeric' };
+    return new Date(date).toLocaleDateString('en-US', options);
+  };
+
+  const renderIndividualTimeRanges = () => {
+    if (!dateRange) return null;
+
+    const { startDate, endDate } = dateRange;
+    if (!startDate || !endDate) return null;
+
+    const timeRanges = [];
+    
+    const currentDate = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    let zIndexCounter = 1000; // Start with a high base z-index
+    
+    while (currentDate <= endDateObj) {
+      const dateKey = currentDate.toISOString().split('T')[0];
+      timeRanges.push(
+        <View key={dateKey} style={[styles.timeRangeContainer, { zIndex: zIndexCounter }]}>
+          <TimeRangeSelector
+            title={`${formatDate(dateKey)}`}
+            onTimeSelect={(timeData) => handleTimeSelect(timeData, dateKey)}
+            initialTimes={individualTimeRanges[dateKey] || initialTimes}
+            showOvernightToggle={true}
+            dateRange={{ startDate: dateKey, endDate: dateKey }}
+          />
+        </View>
+      );
+      currentDate.setDate(currentDate.getDate() + 1);
+      zIndexCounter -= 10; // Decrease z-index for each subsequent card
+    }
+
+    return (
+      <ScrollView style={[styles.individualTimeRangesContainer, { zIndex: 1100 }]}>
+        {timeRanges}
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <TimeRangeSelector
-          title="Default Time Range"
-          onTimeSelect={handleTimeSelect}
-          initialTimes={initialTimes}
-          showOvernightToggle={true}
-          dateRange={dateRange}
-        />
+        {!showIndividualDays && (
+          <TimeRangeSelector
+            title={`Default Time Range`}
+            onTimeSelect={handleTimeSelect}
+            initialTimes={initialTimes}
+            showOvernightToggle={true}
+            dateRange={dateRange}
+          />
+        )}
 
         <View style={[styles.customizeButtonContainer, { zIndex: 1 }]}>
           <TouchableOpacity 
@@ -65,10 +137,12 @@ const TimeSelectionCard = ({
           >
             <MaterialIcons name="schedule" size={20} color={theme.colors.mainColors.main} />
             <Text style={[styles.customizeButtonText]}>
-              Customize Individual Day Schedules
+              {showIndividualDays ? 'Use Default Time Range' : 'Customize Individual Day Schedules'}
             </Text>
           </TouchableOpacity>
         </View>
+
+        {showIndividualDays && renderIndividualTimeRanges()}
 
         <View style={[styles.presetsContainer, { zIndex: 1 }]}>
           <Text style={[styles.presetsTitle]}>Quick Presets</Text>
@@ -102,16 +176,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    position: 'relative',
+    zIndex: 1,
   },
   card: {
     backgroundColor: theme.colors.background,
     borderRadius: 12,
     padding: 16,
+    position: 'relative',
+    zIndex: 1,
   },
   customizeButtonContainer: {
     marginBottom: 24,
-    zIndex: 1,
+    zIndex: 2,
   },
   customizeButton: {
     flexDirection: 'row',
@@ -132,7 +209,7 @@ const styles = StyleSheet.create({
   },
   presetsContainer: {
     gap: 12,
-    zIndex: 1,
+    zIndex: 2,
   },
   presetsTitle: {
     fontSize: theme.fontSizes.large,
@@ -160,6 +237,20 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.medium,
     fontFamily: theme.fonts.regular.fontFamily,
     textAlign: 'center',
+  },
+  individualTimeRangesContainer: {
+    maxHeight: 400,
+    position: 'relative',
+  },
+  timeRangeContainer: {
+    marginBottom: 8,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.modernBorder,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    position: 'relative',
   },
 });
 

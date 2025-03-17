@@ -197,18 +197,6 @@ const TimeSlider = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.timelineLabels} ref={timelineRef} onLayout={() => {
-        timelineRef.current?.measure((x, y, width) => {
-          const newWidth = Math.max(width - THUMB_SIZE, 0);
-          setTrackWidth(newWidth);
-        });
-      }}>
-        <Text style={styles.timelineLabel}>12 AM</Text>
-        <Text style={[styles.timelineLabel, { marginRight: 15 }]}>6 AM</Text>
-        <Text style={styles.timelineLabel}>12 PM</Text>
-        <Text style={[styles.timelineLabel, { marginLeft: 15 }]}>6 PM</Text>
-        <Text style={styles.timelineLabel}>12 AM</Text>
-      </View>
 
       <View style={[styles.sliderTrack, { width: trackWidth }]}>
         <Animated.View
@@ -243,6 +231,18 @@ const TimeSlider = ({
           <View style={[styles.thumb, styles.touchableThumb]} />
         </Animated.View>
       </View>
+      <View style={styles.timelineLabels} ref={timelineRef} onLayout={() => {
+        timelineRef.current?.measure((x, y, width) => {
+          const newWidth = Math.max(width - THUMB_SIZE, 0);
+          setTrackWidth(newWidth);
+        });
+      }}>
+        <Text style={styles.timelineLabel}>12 AM</Text>
+        <Text style={[styles.timelineLabel, { marginRight: 15 }]}>6 AM</Text>
+        <Text style={styles.timelineLabel}>12 PM</Text>
+        <Text style={[styles.timelineLabel, { marginLeft: 15 }]}>6 PM</Text>
+        <Text style={styles.timelineLabel}>12 AM</Text>
+      </View>
     </View>
   );
 };
@@ -250,17 +250,21 @@ const TimeSlider = ({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
+    position: 'relative',
+    zIndex: 1,
   },
   timelineLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
     paddingHorizontal: THUMB_SIZE / 2,
+    position: 'relative',
+    zIndex: 1,
   },
   timelineLabel: {
     fontSize: theme.fontSizes.small,
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
+    zIndex: 1,
   },
   sliderTrack: {
     height: TRACK_HEIGHT,
@@ -268,12 +272,15 @@ const styles = StyleSheet.create({
     borderRadius: TRACK_HEIGHT / 2,
     marginVertical: THUMB_SIZE / 2,
     marginHorizontal: THUMB_SIZE / 2,
+    position: 'relative',
+    zIndex: 1,
   },
   selectedTrack: {
     position: 'absolute',
     height: TRACK_HEIGHT,
     backgroundColor: theme.colors.mainColors.main,
     borderRadius: TRACK_HEIGHT / 2,
+    zIndex: 1,
   },
   thumbTouchArea: {
     position: 'absolute',
