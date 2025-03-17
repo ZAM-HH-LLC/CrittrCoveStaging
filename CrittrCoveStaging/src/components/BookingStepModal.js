@@ -15,6 +15,7 @@ import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
 import ServiceAndPetsCard from './bookingComponents/ServiceAndPetsCard';
 import DateSelectionCard from './bookingComponents/DateSelectionCard';
+import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
 
 const STEPS = {
@@ -146,6 +147,16 @@ const BookingStepModal = ({
     }));
   };
 
+  const handleTimeSelect = (timeData) => {
+    if (is_DEBUG) {
+      console.log('MBA12345 Selected times:', timeData);
+    }
+    setBookingData(prev => ({
+      ...prev,
+      times: timeData
+    }));
+  };
+
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case STEPS.SERVICES_AND_PETS.id:
@@ -153,6 +164,8 @@ const BookingStepModal = ({
       case STEPS.DATE_SELECTION.id:
         // Check if dateSelectionData exists and is valid
         return bookingData.dateSelectionData && bookingData.dateSelectionData.isValid;
+      case STEPS.TIME_SELECTION.id:
+        return bookingData.times && bookingData.times.startTime !== undefined && bookingData.times.endTime !== undefined;
       // Add validation for other steps as they are implemented
       default:
         return false;
@@ -201,6 +214,14 @@ const BookingStepModal = ({
             bookingType={bookingData.bookingType}
             dateRangeType={bookingData.dateRangeType}
             initialDateRange={bookingData.dateRange}
+          />
+        );
+      case STEPS.TIME_SELECTION.id:
+        return (
+          <TimeSelectionCard
+            onTimeSelect={handleTimeSelect}
+            initialTimes={bookingData.times}
+            dateRange={bookingData.dateRange}
           />
         );
       // Add other step components as they are implemented
