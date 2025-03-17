@@ -670,8 +670,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    maxWidth: 600,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
   },
   presetButton: {
     width: 200,
