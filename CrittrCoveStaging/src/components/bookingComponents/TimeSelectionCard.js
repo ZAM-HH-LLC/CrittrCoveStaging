@@ -144,29 +144,31 @@ const TimeSelectionCard = ({
 
         {showIndividualDays && renderIndividualTimeRanges()}
 
-        <View style={[styles.presetsContainer, { zIndex: 1 }]}>
-          <Text style={[styles.presetsTitle]}>Quick Presets</Text>
-          <View style={styles.presetButtons}>
-            <TouchableOpacity 
-              style={styles.presetButton}
-              onPress={() => handlePresetSelect('morning')}
-            >
-              <Text style={[styles.presetButtonText]}>Morning (9 AM - 12 PM)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.presetButton}
-              onPress={() => handlePresetSelect('afternoon')}
-            >
-              <Text style={[styles.presetButtonText]}>Afternoon (1 PM - 5 PM)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.presetButton}
-              onPress={() => handlePresetSelect('fullDay')}
-            >
-              <Text style={[styles.presetButtonText]}>Full Day (9 AM - 5 PM)</Text>
-            </TouchableOpacity>
+        {!showIndividualDays && (
+          <View style={[styles.presetsContainer, { zIndex: 1 }]}>
+            <Text style={[styles.presetsTitle]}>Quick Presets</Text>
+            <View style={styles.presetButtons}>
+              <TouchableOpacity 
+                style={styles.presetButton}
+                onPress={() => handlePresetSelect('morning')}
+              >
+                <Text style={[styles.presetButtonText]}>Morning (9 AM - 12 PM)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.presetButton}
+                onPress={() => handlePresetSelect('afternoon')}
+              >
+                <Text style={[styles.presetButtonText]}>Afternoon (1 PM - 5 PM)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.presetButton}
+                onPress={() => handlePresetSelect('fullDay')}
+              >
+                <Text style={[styles.presetButtonText]}>Full Day (9 AM - 5 PM)</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
       </View>
     </View>
   );
