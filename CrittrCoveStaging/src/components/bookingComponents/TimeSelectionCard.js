@@ -13,6 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { AuthContext } from '../../context/AuthContext';
+import TimeSlider from './TimeSlider';
 
 const THUMB_SIZE = 20;
 const TRACK_HEIGHT = 4;
@@ -24,7 +25,8 @@ const TimeSelectionCard = ({
   dateRange = null,
 }) => {
   const { is_DEBUG, screenWidth } = useContext(AuthContext);
-  const sliderWidth = useMemo(() => Math.min(screenWidth - 80, 736), [screenWidth]);
+  const sliderContainerRef = useRef(null);
+  const [sliderWidth, setSliderWidth] = useState(0);
 
   const [timeValues, setTimeValues] = useState([9, 17]);
   const [timeMinutes, setTimeMinutes] = useState([0, 0]);
@@ -38,6 +40,8 @@ const TimeSelectionCard = ({
 
   // Add ref for click outside detection
   const timePickerRef = useRef(null);
+  const timePickerStartRef = useRef(null);
+  const timePickerEndRef = useRef(null);
 
   useEffect(() => {
     updateThumbPositions();
@@ -45,103 +49,155 @@ const TimeSelectionCard = ({
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showTimePicker) {
-        // Get the clicked element's position
-        const clickX = event.clientX;
-        const clickY = event.clientY;
+      if (!showTimePicker) return;
 
-        // Get the time picker elements
-        const startPicker = document.querySelector('[data-testid="time-picker-start"]');
-        const endPicker = document.querySelector('[data-testid="time-picker-end"]');
-        
-        // Check if click was inside either picker
-        const isInsidePicker = [startPicker, endPicker].some(picker => {
-          if (!picker) return false;
-          const rect = picker.getBoundingClientRect();
-          return clickX >= rect.left && clickX <= rect.right && 
-                 clickY >= rect.top && clickY <= rect.bottom;
-        });
+      // Get the clicked element
+      const target = event.target;
 
-        if (!isInsidePicker) {
-          requestAnimationFrame(() => {
-            setShowTimePicker(false);
-            setActiveTimeType(null);
-          });
-        }
+      // Function to check if an element is a child of a ref
+      const isChildOf = (element, ref) => {
+        if (!ref.current || !element) return false;
+        return ref.current.contains(element);
+      };
+
+      // Check if click was inside either time picker
+      const isInsideStart = isChildOf(target, timePickerStartRef);
+      const isInsideEnd = isChildOf(target, timePickerEndRef);
+
+      if (!isInsideStart && !isInsideEnd) {
+        setShowTimePicker(false);
+        setActiveTimeType(null);
       }
     };
 
-    window.addEventListener('mousedown', handleClickOutside, { capture: true });
-    return () => window.removeEventListener('mousedown', handleClickOutside, { capture: true });
+    if (Platform.OS === 'web') {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
   }, [showTimePicker]);
 
+  // Update slider width when container size changes
+  useEffect(() => {
+    if (!sliderContainerRef.current) return;
+
+    const updateSliderWidth = () => {
+      if (sliderContainerRef.current) {
+        const containerWidth = sliderContainerRef.current.offsetWidth;
+        // Account for thumb size in width calculation
+        setSliderWidth(Math.min(containerWidth - THUMB_SIZE, 736));
+      }
+    };
+
+    // Initial width calculation
+    updateSliderWidth();
+
+    // Add resize observer for dynamic updates
+    const resizeObserver = new ResizeObserver(updateSliderWidth);
+    resizeObserver.observe(sliderContainerRef.current);
+
+    return () => {
+      if (sliderContainerRef.current) {
+        resizeObserver.unobserve(sliderContainerRef.current);
+      }
+    };
+  }, []);
+
   const updateThumbPositions = () => {
+    if (!sliderWidth) return;
+    
     const startPos = ((timeValues[0] + timeMinutes[0] / 60) / 24) * sliderWidth;
     const endPos = ((timeValues[1] + timeMinutes[1] / 60) / 24) * sliderWidth;
-    startThumbX.setValue(startPos);
-    endThumbX.setValue(endPos);
+    
+    if (!isNaN(startPos)) {
+      startThumbX.setValue(startPos);
+      if (is_DEBUG) console.log('MBA54321 Setting start thumb to:', startPos);
+    }
+    if (!isNaN(endPos)) {
+      endThumbX.setValue(endPos);
+      if (is_DEBUG) console.log('MBA54321 Setting end thumb to:', endPos);
+    }
   };
 
   const createPanResponder = (isStart) => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        const thumbX = isStart ? startThumbX : endThumbX;
+        const currentValue = thumbX._value;
+        thumbX.setOffset(currentValue);
+        thumbX.setValue(0);
+        if (is_DEBUG) console.log('MBA54321 Started dragging:', isStart ? 'start' : 'end', 'at:', currentValue);
+      },
       onPanResponderMove: (_, gesture) => {
+        if (!sliderWidth) return;
+
         const thumbX = isStart ? startThumbX : endThumbX;
         const otherThumbX = isStart ? endThumbX : startThumbX;
         
-        let newX = gesture.moveX - 40;
+        // Calculate new position
+        let newX = thumbX._offset + gesture.dx;
         newX = Math.max(0, Math.min(newX, sliderWidth));
 
-        if (isStart && newX < otherThumbX.__getValue()) {
-          thumbX.setValue(newX);
-          updateTimeFromPosition(newX, true);
-        } else if (!isStart && newX > startThumbX.__getValue()) {
-          thumbX.setValue(newX);
-          updateTimeFromPosition(newX, false);
+        // Check constraints between thumbs
+        if (isStart) {
+          if (newX >= otherThumbX._value) return;
+        } else {
+          if (newX <= startThumbX._value) return;
+        }
+
+        // Update thumb position
+        thumbX.setValue(newX - thumbX._offset);
+
+        // Calculate time from position
+        const timeInHours = (newX / sliderWidth) * 24;
+        const hours = Math.floor(timeInHours);
+        const minutes = Math.round((timeInHours - hours) * 60 / MINUTES_STEP) * MINUTES_STEP;
+
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          if (isStart) {
+            setTimeValues(prev => [hours, prev[1]]);
+            setTimeMinutes(prev => [minutes, prev[1]]);
+          } else {
+            setTimeValues(prev => [prev[0], hours]);
+            setTimeMinutes(prev => [prev[0], minutes]);
+          }
+          if (is_DEBUG) console.log('MBA54321 Dragging:', isStart ? 'start' : 'end', { newX, hours, minutes });
         }
       },
       onPanResponderRelease: () => {
-        snapToNearestStep();
+        const thumbX = isStart ? startThumbX : endThumbX;
+        const finalValue = Math.max(0, Math.min(thumbX._offset + thumbX._value, sliderWidth));
+        
+        // Calculate final time
+        const timeInHours = (finalValue / sliderWidth) * 24;
+        const hours = Math.floor(timeInHours);
+        const minutes = Math.round((timeInHours - hours) * 60 / MINUTES_STEP) * MINUTES_STEP;
+
+        // Update the thumb position to the final value
+        thumbX.setOffset(0);
+        thumbX.setValue(finalValue);
+
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          if (isStart) {
+            setTimeValues(prev => [hours, prev[1]]);
+            setTimeMinutes(prev => [minutes, prev[1]]);
+            updateTimeSelection(hours, minutes, timeValues[1], timeMinutes[1]);
+          } else {
+            setTimeValues(prev => [prev[0], hours]);
+            setTimeMinutes(prev => [prev[0], minutes]);
+            updateTimeSelection(timeValues[0], timeMinutes[0], hours, minutes);
+          }
+          if (is_DEBUG) console.log('MBA54321 Released:', isStart ? 'start' : 'end', { position: finalValue, hours, minutes });
+        }
+      },
+      onPanResponderTerminate: () => {
+        const thumbX = isStart ? startThumbX : endThumbX;
+        const finalValue = Math.max(0, Math.min(thumbX._offset + thumbX._value, sliderWidth));
+        thumbX.setOffset(0);
+        thumbX.setValue(finalValue);
       },
     });
-  };
-
-  const updateTimeFromPosition = (position, isStart) => {
-    const totalHours = (position / sliderWidth) * 24;
-    const hours = Math.floor(totalHours);
-    const minutes = Math.round((totalHours - hours) * 60 / MINUTES_STEP) * MINUTES_STEP;
-    
-    if (isStart) {
-      setTimeValues(prev => [hours, prev[1]]);
-      setTimeMinutes(prev => [minutes, prev[1]]);
-    } else {
-      setTimeValues(prev => [prev[0], hours]);
-      setTimeMinutes(prev => [prev[0], minutes]);
-    }
-  };
-
-  const snapToNearestStep = () => {
-    const startValue = startThumbX.__getValue();
-    const endValue = endThumbX.__getValue();
-    
-    const snapStart = Math.round((startValue / sliderWidth) * 24 * 4) / 4;
-    const snapEnd = Math.round((endValue / sliderWidth) * 24 * 4) / 4;
-    
-    const startHours = Math.floor(snapStart);
-    const startMinutes = Math.round((snapStart - startHours) * 60);
-    const endHours = Math.floor(snapEnd);
-    const endMinutes = Math.round((snapEnd - endHours) * 60);
-    
-    setTimeValues([startHours, endHours]);
-    setTimeMinutes([startMinutes, endMinutes]);
-    updateTimeSelection(startHours, startMinutes, endHours, endMinutes);
-  };
-
-  const formatTime = (hour, minutes = 0) => {
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
   const updateTimeSelection = (startHour, startMinutes, endHour, endMinutes) => {
@@ -235,18 +291,10 @@ const TimeSelectionCard = ({
     setShowTimePicker(true);
   };
 
-  const generateTimeOptions = () => {
-    const options = [];
-    for (let hour = 0; hour < 24; hour++) {
-      for (let minute = 0; minute < 60; minute += MINUTES_STEP) {
-        options.push({
-          hour,
-          minute,
-          label: formatTime(hour, minute)
-        });
-      }
-    }
-    return options;
+  const formatTime = (hour, minutes = 0) => {
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
   const handleTimeSelect = (type, value) => {
@@ -350,11 +398,17 @@ const TimeSelectionCard = ({
 
   const renderTimePicker = (isEnd = false) => (
     <View 
+      ref={isEnd ? timePickerEndRef : timePickerStartRef}
       style={[styles.timePickerDropdown, isEnd && styles.timePickerDropdownEnd]} 
       data-testid={`time-picker-${isEnd ? 'end' : 'start'}`}
     >
       <View style={styles.timePickerContent}>
-        <ScrollView style={styles.timePickerColumn} showsVerticalScrollIndicator={true}>
+        <ScrollView 
+          style={styles.timePickerColumn} 
+          showsVerticalScrollIndicator={true}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+        >
           {generateHourOptions().map(({ label, value }) => (
             <TouchableOpacity
               key={`hour-${value}`}
@@ -368,7 +422,12 @@ const TimeSelectionCard = ({
             </TouchableOpacity>
           ))}
         </ScrollView>
-        <ScrollView style={styles.timePickerColumn} showsVerticalScrollIndicator={true}>
+        <ScrollView 
+          style={styles.timePickerColumn} 
+          showsVerticalScrollIndicator={true}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+        >
           {generateMinuteOptions().map(({ label, value }) => (
             <TouchableOpacity
               key={`minute-${value}`}
@@ -400,6 +459,22 @@ const TimeSelectionCard = ({
     </View>
   );
 
+  const handleTimeChange = (isStart, hours, minutes, isRelease = false) => {
+    if (isStart) {
+      setTimeValues(prev => [hours, prev[1]]);
+      setTimeMinutes(prev => [minutes, prev[1]]);
+      if (isRelease) {
+        updateTimeSelection(hours, minutes, timeValues[1], timeMinutes[1]);
+      }
+    } else {
+      setTimeValues(prev => [prev[0], hours]);
+      setTimeMinutes(prev => [prev[0], minutes]);
+      if (isRelease) {
+        updateTimeSelection(timeValues[0], timeMinutes[0], hours, minutes);
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -415,44 +490,16 @@ const TimeSelectionCard = ({
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.sliderContainer, { zIndex: 3 }]}>
-          <View style={styles.timelineLabels}>
-            <Text style={styles.timelineLabel}>12 AM</Text>
-            <Text style={styles.timelineLabel}>6 AM</Text>
-            <Text style={styles.timelineLabel}>12 PM</Text>
-            <Text style={styles.timelineLabel}>6 PM</Text>
-            <Text style={styles.timelineLabel}>12 AM</Text>
-          </View>
-          
-          <View style={[styles.sliderTrack, { width: sliderWidth }]}>
-            <Animated.View
-              style={[
-                styles.selectedTrack,
-                {
-                  left: startThumbX,
-                  right: Animated.subtract(sliderWidth, endThumbX),
-                },
-              ]}
+        <View style={[styles.sliderContainer, { zIndex: 3 }]} ref={sliderContainerRef}>
+          {sliderWidth > 0 && (
+            <TimeSlider
+              sliderWidth={sliderWidth}
+              startTime={{ hours: timeValues[0], minutes: timeMinutes[0] }}
+              endTime={{ hours: timeValues[1], minutes: timeMinutes[1] }}
+              onTimeChange={handleTimeChange}
+              is_DEBUG={is_DEBUG}
             />
-            <Animated.View
-              {...startPanResponder.panHandlers}
-              style={[
-                styles.thumb,
-                {
-                  transform: [{ translateX: startThumbX }],
-                },
-              ]}
-            />
-            <Animated.View
-              {...endPanResponder.panHandlers}
-              style={[
-                styles.thumb,
-                {
-                  transform: [{ translateX: endThumbX }],
-                },
-              ]}
-            />
-          </View>
+          )}
 
           <View style={styles.timeLabelsContainer}>
             <View style={styles.timeInputWrapper}>
@@ -553,6 +600,8 @@ const styles = StyleSheet.create({
   },
   sliderContainer: {
     marginBottom: 32,
+    width: '100%', // Ensure container takes full width
+    position: 'relative',
   },
   timelineLabels: {
     flexDirection: 'row',
@@ -584,6 +633,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.mainColors.main,
     top: -THUMB_SIZE / 2 + TRACK_HEIGHT / 2,
     marginLeft: -THUMB_SIZE / 2,
+    zIndex: 2,
   },
   customizeButtonContainer: {
     marginBottom: 24,
