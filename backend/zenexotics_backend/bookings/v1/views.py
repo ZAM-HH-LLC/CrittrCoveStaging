@@ -394,7 +394,8 @@ class AvailableServicesView(APIView):
                 'service_id': service.service_id,
                 'service_name': service.service_name,
                 'description': service.description,
-                'unit_of_time': service.unit_of_time
+                'unit_of_time': service.unit_of_time,
+                'is_overnight': service.is_overnight
             }
             for service in services
         ]

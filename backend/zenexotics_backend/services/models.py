@@ -30,6 +30,7 @@ class Service(models.Model):
         ('8 Hour', '8 Hour'),
         ('24 Hour', '24 Hour'),
         ('Per Day', 'Per Day'),
+        ('Per Night', 'Per Night'),
         ('Per Visit', 'Per Visit'),
         ('Week', 'Week')
     ]
@@ -45,6 +46,7 @@ class Service(models.Model):
     holiday_rate = models.DecimalField(max_digits=10, decimal_places=2)
     applies_after = models.IntegerField(default=1, help_text='Additional animal rate applies after this many animals')
     unit_of_time = models.CharField(max_length=50, choices=UNIT_OF_TIME_CHOICES)
+    is_overnight = models.BooleanField(default=False, help_text='Indicates if this service requires overnight stay')
     moderation_status = models.CharField(
         max_length=50, 
         choices=MODERATION_STATUS_CHOICES,
