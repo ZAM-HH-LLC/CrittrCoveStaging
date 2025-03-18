@@ -237,6 +237,7 @@ const BookingStepModal = ({
             onTimeSelect={handleTimeSelect}
             initialTimes={bookingData.times}
             dateRange={bookingData.dateRange}
+            selectedService={bookingData.service}
           />
         );
       // Add other step components as they are implemented

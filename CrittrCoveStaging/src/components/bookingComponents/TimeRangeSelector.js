@@ -7,6 +7,8 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { theme } from '../../styles/theme';
 import { AuthContext } from '../../context/AuthContext';
 import TimeSlider from './TimeSlider';
@@ -21,6 +23,7 @@ const TimeRangeSelector = ({
   initialTimes = {},
   showOvernightToggle = true,
   dateRange = null,
+  is_overnight = false,
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
   const sliderContainerRef = useRef(null);
@@ -185,6 +188,37 @@ const TimeRangeSelector = ({
     return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
+  const formatDate = (date) => {
+    if (!date) return '';
+    const options = { month: 'short', day: 'numeric', year: 'numeric' };
+    return new Date(date).toLocaleDateString('en-US', options);
+  };
+
+  const calculateDuration = () => {
+    if (is_overnight) {
+      // For overnight services, calculate number of nights
+      if (!dateRange?.startDate || !dateRange?.endDate) return '1 Night';
+      
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+      const nights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+      return `${nights} Night${nights > 1 ? 's' : ''}`;
+    }
+
+    // For day services, calculate hours and minutes
+    const { startTime, endTime } = times;
+    const startMinutes = startTime.hours * 60 + startTime.minutes;
+    const endMinutes = endTime.hours * 60 + endTime.minutes;
+    let duration = endMinutes - startMinutes;
+    
+    if (duration < 0) {
+      duration += 24 * 60; // Add 24 hours if end time is on next day
+    }
+    
+    const hours = Math.floor(duration / 60);
+    return `${hours} hour${hours > 1 ? 's' : ''}`;
+  };
+
   const generateHourOptions = () => {
     return Array.from({ length: 12 }, (_, i) => i + 1).map(hour => ({
       label: hour.toString().padStart(2, '0'),
@@ -237,11 +271,30 @@ const TimeRangeSelector = ({
     onTimeSelect(newTimes);
   };
 
-  const renderTimePicker = (isEnd = false) => (
+  const renderDurationBox = () => (
+    <View style={styles.durationBox}>
+      <View style={styles.durationContent}>
+        <View style={styles.durationLeft}>
+          <MaterialIcons name="access-time" size={20} color={theme.colors.mainColors.main} />
+          <Text style={styles.durationLabel}>Duration</Text>
+        </View>
+        <View style={styles.durationRight}>
+          <Text style={styles.durationValue}>{calculateDuration()}</Text>
+          {is_overnight && (
+            <FontAwesome name="moon-o" size={20} color={theme.colors.text} />
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderTimePickerDropdown = (type) => (
     <View 
-      ref={isEnd ? timePickerEndRef : timePickerStartRef}
-      style={[styles.timePickerDropdown, isEnd && styles.timePickerDropdownEnd]} 
-      data-testid={`time-picker-${isEnd ? 'end' : 'start'}`}
+      ref={type === 'start' ? timePickerStartRef : timePickerEndRef}
+      style={[
+        styles.timePickerDropdown,
+        type === 'end' && styles.timePickerDropdownEnd
+      ]} 
     >
       <View style={styles.timePickerContent}>
         <ScrollView 
@@ -255,7 +308,7 @@ const TimeRangeSelector = ({
               key={`hour-${value}`}
               style={[
                 styles.timeOption,
-                value === (isEnd ? times.endTime.hours : times.startTime.hours % 12 || 12) && styles.timeOptionSelected
+                value === (type === 'end' ? times.endTime.hours : times.startTime.hours % 12 || 12) && styles.timeOptionSelected
               ]}
               onPress={() => handleTimeSelect('hour', value)}
             >
@@ -274,7 +327,7 @@ const TimeRangeSelector = ({
               key={`minute-${value}`}
               style={[
                 styles.timeOption,
-                value === (isEnd ? times.endTime.minutes : times.startTime.minutes) && styles.timeOptionSelected
+                value === (type === 'end' ? times.endTime.minutes : times.startTime.minutes) && styles.timeOptionSelected
               ]}
               onPress={() => handleTimeSelect('minute', value)}
             >
@@ -288,7 +341,7 @@ const TimeRangeSelector = ({
               key={`period-${period}`}
               style={[
                 styles.timeOption,
-                (isEnd ? times.endTime.hours >= 12 : times.startTime.hours >= 12 ? 'PM' : 'AM') === period && styles.timeOptionSelected
+                (type === 'end' ? times.endTime.hours >= 12 : times.startTime.hours >= 12 ? 'PM' : 'AM') === period && styles.timeOptionSelected
               ]}
               onPress={() => handleTimeSelect('period', period)}
             >
@@ -300,25 +353,76 @@ const TimeRangeSelector = ({
     </View>
   );
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.timeRangeHeader}>
-        <Text style={[styles.timeRangeLabel, styles.mobileText]}>
-          {title}
-        </Text>
-        {showOvernightToggle && (
-          <TouchableOpacity 
-            style={styles.overnightButton} 
-            onPress={handleOvernightToggle}
-          >
-            <Text style={[styles.overnightLink, styles.mobileText]}>
-              {times.isOvernightForced ? 'Prevent Overnight' : 'Force Overnight'}
+  const renderTimeButton = (type) => (
+    <View style={[styles.timeSelectContainer, { marginTop: type === 'start' ? 12 : 0 }]}>
+      <View style={styles.dateTimeWrapper}>
+        <View style={styles.dateHeaderContainer}>
+          <View style={styles.dateContainer}>
+            <MaterialIcons name="calendar-today" size={20} color={theme.colors.mainColors.main} />
+            <Text style={styles.dateText}>
+              {formatDate(type === 'start' ? dateRange?.startDate : dateRange?.endDate)}
             </Text>
+          </View>
+          <Text style={styles.dateLabel}>
+            {type === 'start' ? 'Start Date:' : 'End Date:'}
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.timeSelectButton}
+          onPress={() => handleTimePress(type)}
+        >
+          <View style={styles.timeContent}>
+            <View style={styles.timeDisplay}>
+              <MaterialIcons name="access-time" size={20} color={theme.colors.mainColors.main} />
+              <Text style={styles.timeText}>
+                {formatTime(type === 'start' ? times.startTime.hours : times.endTime.hours, 
+                         type === 'start' ? times.startTime.minutes : times.endTime.minutes)}
+              </Text>
+            </View>
+            <MaterialIcons name="keyboard-arrow-down" size={24} color={theme.colors.text} />
+          </View>
+        </TouchableOpacity>
+        {showTimePicker && activeTimeType === type && renderTimePickerDropdown(type)}
+      </View>
+    </View>
+  );
+
+  const renderOvernightUI = () => (
+    <View style={styles.overnightContainer}>
+      {renderTimeButton('start')}
+      {renderTimeButton('end')}
+      {renderDurationBox()}
+    </View>
+  );
+
+  const renderDayTimeUI = () => (
+    <View style={styles.dayTimeContainer}>
+      <View style={styles.timeHeader}>
+        <Text style={styles.timeRangeLabel}>{title}</Text>
+        <View style={styles.timeButtons}>
+          <TouchableOpacity 
+            style={[styles.timeButton, { marginLeft: 10 }]}
+            onPress={() => handleTimePress('start')}
+          >
+            <Text style={styles.timeText}>
+              {formatTime(times.startTime.hours, times.startTime.minutes)}
+        </Text>
+            {/* <MaterialIcons name="edit" size={20} color={theme.colors.mainColors.main} /> */}
           </TouchableOpacity>
-        )}
+          <Text style={styles.timeSeparator}>-</Text>
+          <TouchableOpacity 
+            style={styles.timeButton}
+            onPress={() => handleTimePress('end')}
+          >
+            <Text style={styles.timeText}>
+              {formatTime(times.endTime.hours, times.endTime.minutes)}
+            </Text>
+            <MaterialIcons name="edit" size={20} color={theme.colors.mainColors.main} />
+          </TouchableOpacity>
+        </View>
       </View>
       
-      <View style={[styles.sliderContainer, { zIndex: 3 }]} ref={sliderContainerRef}>
+      <View style={styles.sliderContainer} ref={sliderContainerRef}>
         {sliderWidth > 0 && (
           <TimeSlider
             sliderWidth={sliderWidth}
@@ -329,31 +433,12 @@ const TimeRangeSelector = ({
           />
         )}
       </View>
+          </View>
+  );
 
-      <View style={styles.timeLabelsContainer}>
-          <View style={styles.timeInputWrapper}>
-            <TouchableOpacity 
-              style={styles.timeInputContainer}
-              onPress={() => handleTimePress('start')}
-            >
-              <Text style={[styles.timeLabel, styles.mobileText]}>
-                {formatTime(times.startTime.hours, times.startTime.minutes)}
-              </Text>
-            </TouchableOpacity>
-            {showTimePicker && activeTimeType === 'start' && renderTimePicker(false)}
-          </View>
-          <View style={styles.timeInputWrapper}>
-            <TouchableOpacity 
-              style={styles.timeInputContainer}
-              onPress={() => handleTimePress('end')}
-            >
-              <Text style={[styles.timeLabel, styles.mobileText]}>
-                {formatTime(times.endTime.hours, times.endTime.minutes)}
-              </Text>
-            </TouchableOpacity>
-            {showTimePicker && activeTimeType === 'end' && renderTimePicker(true)}
-          </View>
-        </View>
+  return (
+    <View style={styles.container}>
+      {is_overnight ? renderOvernightUI() : renderDayTimeUI()}
     </View>
   );
 };
@@ -364,61 +449,147 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 100,
   },
-  timeRangeHeader: {
+  overnightContainer: {
+    gap: 24,
+  },
+  dateTimeSection: {
+    gap: 8,
+  },
+  dateTimeLabel: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 8,
+  },
+  dateTimeContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    backgroundColor: theme.colors.surface,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.modernBorder,
     position: 'relative',
-    zIndex: 100,
+  },
+  dateText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  durationBox: {
+    backgroundColor: theme.colors.bgColorModern,
+    padding: 12,
+    borderRadius: 8,
+  },
+  durationContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  durationLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  durationRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  durationLabel: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  durationValue: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  dayTimeContainer: {
+    gap: 16,
+  },
+  timeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   timeRangeLabel: {
-    fontSize: theme.fontSizes.large,
-    fontFamily: theme.fonts.regular.fontFamily,
-    color: theme.colors.text,
-  },
-  overnightButton: {
-    paddingVertical: 8,
-    paddingLeft: 12,
-  },
-  overnightLink: {
-    color: theme.colors.mainColors.main,
     fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  timeButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.mainColors.main,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  timeSeparator: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   sliderContainer: {
-    marginBottom: 8,
+    marginBottom: 24,
     width: '100%',
     position: 'relative',
     zIndex: 1,
   },
-  timeLabelsContainer: {
+  timeSelectContainer: {
+  },
+  dateTimeWrapper: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 12,
+  },
+  dateHeaderContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    marginBottom: 24,
-    position: 'relative',
-    zIndex: 100,
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  timeInputWrapper: {
-    position: 'relative',
-    zIndex: 100,
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  timeInputContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.mainColors.main,
-    paddingBottom: 4,
-    zIndex: 100,
-  },
-  timeLabel: {
-    fontSize: theme.fontSizes.large,
-    color: theme.colors.text,
+  dateLabel: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.mainColors.main,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  timeSelectButton: {
+    backgroundColor: theme.colors.bgColorModern, //rgb(204, 203, 203)
+    padding: 12,
+    borderRadius: 8,
+  },
+  timeContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  timeDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   timePickerDropdown: {
     position: 'absolute',
     top: '100%',
     left: 0,
+    right: 0,
     backgroundColor: theme.colors.background,
     borderRadius: 8,
     borderWidth: 1,
@@ -428,9 +599,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    zIndex: 100,
-    width: 200,
-    padding: 8,
+    marginTop: 4,
+    zIndex: 1000,
   },
   timePickerDropdownEnd: {
     left: 'auto',

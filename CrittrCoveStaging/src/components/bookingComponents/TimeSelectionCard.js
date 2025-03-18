@@ -9,6 +9,7 @@ const TimeSelectionCard = ({
   onTimeSelect,
   initialTimes = {},
   dateRange = null,
+  selectedService = null,
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
   const [showIndividualDays, setShowIndividualDays] = useState(false);
@@ -101,8 +102,9 @@ const TimeSelectionCard = ({
             title={`${formatDate(dateKey)}`}
             onTimeSelect={(timeData) => handleTimeSelect(timeData, dateKey)}
             initialTimes={individualTimeRanges[dateKey] || initialTimes}
-            showOvernightToggle={true}
+            showOvernightToggle={!selectedService?.is_overnight}
             dateRange={{ startDate: dateKey, endDate: dateKey }}
+            is_overnight={selectedService?.is_overnight || false}
           />
         </View>
       );
@@ -125,26 +127,29 @@ const TimeSelectionCard = ({
             title={`Default Time Range`}
             onTimeSelect={handleTimeSelect}
             initialTimes={initialTimes}
-            showOvernightToggle={true}
+            showOvernightToggle={!selectedService?.is_overnight}
             dateRange={dateRange}
+            is_overnight={selectedService?.is_overnight || false}
           />
         )}
 
-        <View style={[styles.customizeButtonContainer, { zIndex: 1 }]}>
-          <TouchableOpacity 
-            style={styles.customizeButton}
-            onPress={() => setShowIndividualDays(!showIndividualDays)}
-          >
-            <MaterialIcons name="schedule" size={20} color={theme.colors.mainColors.main} />
-            <Text style={[styles.customizeButtonText]}>
-              {showIndividualDays ? 'Use Default Time Range' : 'Customize Individual Day Schedules'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {!selectedService?.is_overnight && (
+          <View style={[styles.customizeButtonContainer, { zIndex: 1 }]}>
+            <TouchableOpacity 
+              style={styles.customizeButton}
+              onPress={() => setShowIndividualDays(!showIndividualDays)}
+            >
+              <MaterialIcons name="schedule" size={20} color={theme.colors.mainColors.main} />
+              <Text style={[styles.customizeButtonText]}>
+                {showIndividualDays ? 'Use Default Time Range' : 'Customize Individual Day Schedules'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {showIndividualDays && renderIndividualTimeRanges()}
 
-        {!showIndividualDays && (
+        {!showIndividualDays && !selectedService?.is_overnight && (
           <View style={[styles.presetsContainer, { zIndex: 1 }]}>
             <Text style={[styles.presetsTitle]}>Quick Presets</Text>
             <View style={styles.presetButtons}>
@@ -152,19 +157,19 @@ const TimeSelectionCard = ({
                 style={styles.presetButton}
                 onPress={() => handlePresetSelect('morning')}
               >
-                <Text style={[styles.presetButtonText]}>Morning (9 AM - 12 PM)</Text>
+                <Text style={[styles.presetButtonText]}>9 AM - 12 PM</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.presetButton}
                 onPress={() => handlePresetSelect('afternoon')}
               >
-                <Text style={[styles.presetButtonText]}>Afternoon (1 PM - 5 PM)</Text>
+                <Text style={[styles.presetButtonText]}>1 PM - 5 PM</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.presetButton}
                 onPress={() => handlePresetSelect('fullDay')}
               >
-                <Text style={[styles.presetButtonText]}>Full Day (9 AM - 5 PM)</Text>
+                <Text style={[styles.presetButtonText]}>9 AM - 5 PM</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -184,7 +189,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.background,
     borderRadius: 12,
-    padding: 16,
+    // padding: 16,
     position: 'relative',
     zIndex: 1,
   },

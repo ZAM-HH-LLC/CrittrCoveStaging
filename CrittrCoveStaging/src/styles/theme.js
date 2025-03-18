@@ -44,6 +44,7 @@ export const theme = {
     error: '#B00020', // #B00020
     surface: '#f6f6f6', // #f6f6f6
     border: '#6A6C51', // #6A6C51
+    bgColorModern: 'rgb(239, 239, 239)',
     modernBorder: '#E0E0E0', // #E0E0E0
     inputBackground: '#f6f6f6', // #f6f6f6
     receivedMessage: '#e7eae6', // #e7eae6
