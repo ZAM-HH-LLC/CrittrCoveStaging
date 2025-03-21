@@ -32,6 +32,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const [firstName, setFirstName] = useState('');
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [timeSettings, setTimeSettings] = useState({
     timezone: 'UTC',
     timezone_abbrev: 'UTC',
@@ -610,27 +611,26 @@ export const AuthProvider = ({ children }) => {
   }, [isSignedIn, is_prototype]);
 
   return (
-    <AuthContext.Provider value={{ 
-      isSignedIn, 
-      setIsSignedIn,
-      userRole,
-      setUserRole,
-      isApprovedProfessional, 
-      setIsApprovedProfessional,
-      loading,
-      signIn,
-      signOut,
-      switchRole,
-      screenWidth,
-      checkAuthStatus,
-      firstName,
-      is_prototype,
-      setIsPrototype,
-      is_DEBUG,
-      setIsDebug,
-      timeSettings,
-      fetchTimeSettings
-    }}>
+    <AuthContext.Provider
+      value={{
+        isSignedIn,
+        userRole,
+        isApprovedProfessional,
+        loading,
+        screenWidth,
+        firstName,
+        is_prototype,
+        is_DEBUG,
+        timeSettings,
+        isCollapsed,
+        setIsCollapsed,
+        signIn,
+        signOut,
+        switchRole,
+        setIsDebug,
+        setIsPrototype,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

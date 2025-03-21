@@ -1,10 +1,10 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, SafeAreaView, Image } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Appbar, Menu, useTheme } from 'react-native-paper';
+import { Appbar, Menu, useTheme, Avatar } from 'react-native-paper';
 
 let previousRoute, currentRoute;
 
@@ -106,11 +106,15 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
 export default function Navigation({ navigation }) {
   const [visible, setVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { colors } = useTheme();
-  const { isSignedIn, is_DEBUG, userRole } = useContext(AuthContext);
+  const { isSignedIn, is_DEBUG, userRole, isCollapsed, setIsCollapsed } = useContext(AuthContext);
+  const [currentRoute, setCurrentRoute] = useState('');
+  const [notificationCount, setNotificationCount] = useState(3); // We can make this dynamic later
 
   const openMenu = () => setVisible(true);
   const closeMenu = () => setVisible(false);
+  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -124,31 +128,49 @@ export default function Navigation({ navigation }) {
     };
   }, []);
 
+  useEffect(() => {
+    const updateCurrentRoute = async () => {
+      if (Platform.OS === 'web') {
+        const route = sessionStorage.getItem('currentRoute');
+        if (is_DEBUG) console.log('MBA98386196v Current Route Updated:', route);
+        setCurrentRoute(route || '');
+      } else {
+        const route = await AsyncStorage.getItem('currentRoute');
+        if (is_DEBUG) console.log('MBA98386196v Current Route Updated:', route);
+        setCurrentRoute(route || '');
+      }
+    };
+
+    updateCurrentRoute();
+    // Add navigation state listener
+    const unsubscribe = navigation.addListener('state', updateCurrentRoute);
+    return unsubscribe;
+  }, [navigation, is_DEBUG]);
+
   const professionalsTitle = Platform.OS === 'web' ? 'Search Pros' : 'Professionals';
 
   const handleNavigation = async (screenName) => {
     closeMenu();
     if (is_DEBUG) {
-      console.log('Screen name:', screenName);
+      console.log('MBA98386196v Navigating to:', screenName);
+      console.log('MBA98386196v Current route before:', currentRoute);
     }
+    
     try {
-      let currentRoute = '';
       if (Platform.OS === 'web') {
-        // Web: Use sessionStorage
-        currentRoute = sessionStorage.getItem('currentRoute');
-        if (currentRoute) {
-          sessionStorage.setItem('previousRoute', currentRoute);
-        }
+        sessionStorage.setItem('previousRoute', currentRoute);
         sessionStorage.setItem('currentRoute', screenName);
       } else {
-        // Mobile: Use AsyncStorage
-        currentRoute = await AsyncStorage.getItem('currentRoute');
-        if (currentRoute) {
-          await AsyncStorage.setItem('previousRoute', currentRoute);
-        }
+        await AsyncStorage.setItem('previousRoute', currentRoute);
         await AsyncStorage.setItem('currentRoute', screenName);
       }
+      
+      setCurrentRoute(screenName);
       navigateToFrom(navigation, screenName, currentRoute);
+      
+      if (is_DEBUG) {
+        console.log('MBA98386196v Current route after:', screenName);
+      }
     } catch (error) {
       console.error('Error handling navigation:', error);
       navigateToFrom(navigation, screenName, currentRoute);
@@ -204,10 +226,12 @@ export default function Navigation({ navigation }) {
       ];
     } else if (userRole === 'professional') {
       return [
-        { title: 'Pro Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
-        { title: 'MyBookings', icon: 'account-group', route: 'MyBookings' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
+        { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
+        { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Availability', icon: 'clock-outline', route: 'AvailabilitySettings' },
+        { title: 'Settings', icon: 'cog', route: 'Settings' },
         { title: 'More', icon: 'dots-horizontal', route: 'More' },
       ];
     } else {
@@ -246,6 +270,83 @@ export default function Navigation({ navigation }) {
     );
   };
 
+  const renderDesktopSidebar = () => {
+    const menuItems = renderMenuItems();
+    const sidebarWidth = isCollapsed ? 70 : 250;
+
+    if (is_DEBUG) {
+      console.log('MBA98386196v Current Route in Sidebar:', currentRoute);
+    }
+
+    return (
+      <View style={[styles.sidebarContainer, { width: sidebarWidth }]}>
+        <View style={styles.sidebarLogoContainer}>
+          <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.logoButton}>
+            <Image 
+              source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')}
+              style={[styles.sidebarLogo, { width: isCollapsed ? 40 : 150, tintColor: theme.colors.primary }]}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity 
+          style={styles.collapseButton}
+          onPress={() => setIsCollapsed(!isCollapsed)}
+        >
+          <MaterialCommunityIcons 
+            name={isCollapsed ? 'chevron-right' : 'chevron-left'} 
+            size={24} 
+            color={theme.colors.primary}
+          />
+        </TouchableOpacity>
+        <View style={styles.menuItems}>
+          {menuItems.map((item, index) => {
+            const isActive = currentRoute === item.route || 
+                           (item.route === 'More' && item.title === 'Settings' && currentRoute === 'More');
+
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.sidebarItem,
+                  isActive && styles.activeItem
+                ]}
+                onPress={() => handleNavigation(item.route)}
+              >
+                <MaterialCommunityIcons 
+                  name={item.icon} 
+                  size={24} 
+                  color={isActive ? theme.colors.primary : "#4B5563"}
+                />
+                {!isCollapsed && (
+                  <Text style={[
+                    styles.sidebarItemText, 
+                    { color: isActive ? theme.colors.primary : "#4B5563" }
+                  ]}>
+                    {item.title}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <TouchableOpacity
+          style={[styles.logoutButton, { width: sidebarWidth }]}
+          onPress={() => handleNavigation('SignOut')}
+        >
+          <MaterialCommunityIcons 
+            name="logout" 
+            size={24} 
+            color="#F26969"
+          />
+          {!isCollapsed && (
+            <Text style={styles.logoutText}>Logout</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderWebNavItems = () => {
     const menuItems = renderMenuItems();
     return menuItems.map((item, index) => (
@@ -259,56 +360,65 @@ export default function Navigation({ navigation }) {
     ));
   };
 
-  return (
-    <>
-      {Platform.OS === 'web' ? (
-        <Appbar.Header style={[styles.header, { backgroundColor: colors.primary }]}>
-          <View style={[styles.titleContainer, {flex: isMobile || isSignedIn ? 1 : undefined}]}>
-            <TouchableOpacity onPress={() => handleNavigation('Home')} style={{ width: 150 }}>
-              <Image 
-                source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')}
-                style={{ width: 150, height: 50, resizeMode: 'contain', marginLeft: 10 }}
+  const renderMobileHeader = () => {
+    return (
+      <View style={[styles.mobileHeader, { backgroundColor: colors.primary }]}>
+        <View style={styles.mobileHeaderContent}>
+          <TouchableOpacity onPress={() => handleNavigation('Home')}>
+            <Image 
+              source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')} 
+              style={styles.mobileLogo} 
+            />
+          </TouchableOpacity>
+          <View style={styles.mobileRightContent}>
+            <TouchableOpacity onPress={() => handleNavigation('Notifications')} style={styles.iconButton}>
+              <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.whiteText} />
+              {notificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationText}>{notificationCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={toggleMenu} style={styles.profileContainer}>
+              <Avatar.Image 
+                size={40} 
+                source={require('../../assets/default-profile.png')} 
               />
             </TouchableOpacity>
           </View>
-          {!isMobile && !isSignedIn ? (
-            <View style={styles.titleContainer2}>
-              <TouchableOpacity onPress={() => handleNavigation('BecomeProfessional')} style={styles.navLinkContainer}>
-                <MaterialCommunityIcons name="account-heart" size={20} color={theme.colors.whiteText} />
-                <Text style={[styles.title, { color: theme.colors.whiteText, width: 110, fontWeight: '100', marginLeft: 4, fontSize: 16 }]}>Become a Pro</Text>
+        </View>
+        {isMenuOpen && (
+          <View style={styles.mobileMenu}>
+            {renderMenuItems().map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.mobileMenuItem}
+                onPress={() => {
+                  handleNavigation(item.route);
+                  setIsMenuOpen(false);
+                }}
+              >
+                <MaterialCommunityIcons name={item.icon} size={24} color={theme.colors.text} />
+                <Text style={styles.mobileMenuItemText}>{item.title}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleNavigation('SearchProfessionalsListing')} style={styles.navLinkContainer}>
-                <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.whiteText} />
-                <Text style={[styles.title, { color: theme.colors.whiteText, width: 110, fontWeight: '100', marginLeft: 4, fontSize: 16 }]}>Search Pros</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-          {isMobile ? (
-            <Menu
-              visible={visible}
-              onDismiss={closeMenu}
-              anchor={
-                <Appbar.Action
-                  icon={() => <MaterialCommunityIcons name="menu" size={24} color={colors.whiteText} />}
-                  onPress={openMenu}
-                />
-              }
-            >
-              {renderMenuItems().map((item, index) => (
-                <Menu.Item 
-                  key={index} 
-                  onPress={() => handleNavigation(item.route)} 
-                  title={item.title}
-                  titleStyle={{ fontFamily: theme.fonts.regular.fontFamily, fontWeight: '600' }}
-                />
-              ))}
-            </Menu>
-          ) : (
-            <View style={styles.desktopNav}>
-              {renderWebNavItems()}
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <>
+      {Platform.OS === 'web' ? (
+        <>
+          {!isMobile && isSignedIn && userRole === 'professional' && (
+            <View style={styles.navContainer}>
+              {renderDesktopSidebar()}
             </View>
           )}
-        </Appbar.Header>
+          {(isMobile || !isSignedIn || userRole !== 'professional') && renderMobileHeader()}
+        </>
       ) : (
         <View style={styles.container}>
           {renderMobileNavBar()}
@@ -401,5 +511,200 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 6,
+  },
+  sidebarContainer: {
+    height: '100%',
+    minHeight: '100vh',
+    backgroundColor: theme.colors.surface,
+    borderRightWidth: 1,
+    borderRightColor: theme.colors.border,
+    position: 'fixed',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 1000,
+    display: 'flex',
+    flexDirection: 'column',
+    transition: 'width 0.3s ease',
+  },
+  sidebarLogoContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+  },
+  logoButton: {
+    alignItems: 'center',
+  },
+  sidebarLogo: {
+    height: 50,
+    resizeMode: 'contain',
+  },
+  collapseButton: {
+    position: 'absolute',
+    right: -16,
+    top: '50%',
+    transform: [{ translateY: -20 }],
+    width: 32,
+    height: 40,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1001,
+  },
+  menuItems: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: theme.colors.surface,
+  },
+  sidebarItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+  },
+  sidebarItemText: {
+    marginLeft: 12,
+    fontSize: theme.fontSizes.medium,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '500',
+  },
+  logoutButton: {
+    width: '100%',
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    borderRightWidth: 1,
+    borderRightColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  logoutText: {
+    marginLeft: 12,
+    fontSize: theme.fontSizes.medium,
+    color: '#F26969',
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '500',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginRight: 16,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: theme.colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationCount: {
+    color: theme.colors.whiteText,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  profileButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  menuContent: {
+    marginTop: 45,
+  },
+  mobileHeader: {
+    width: '100%',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    position: 'relative',
+  },
+  mobileHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  mobileLogo: {
+    width: 150,
+    height: 40,
+    resizeMode: 'contain',
+    tintColor: theme.colors.whiteText,
+  },
+  mobileRightContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+  },
+  mobileMenu: {
+    position: 'absolute',
+    top: '100%',
+    right: 20,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
+    minWidth: 200,
+  },
+  mobileMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+  },
+  mobileMenuItemText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  profileContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  iconButton: {
+    padding: 8,
+    position: 'relative',
+  },
+  notificationText: {
+    color: theme.colors.whiteText,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  navContainer: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    zIndex: 1000,
+    backgroundColor: theme.colors.surface,
+    borderRightWidth: 1,
+    borderRightColor: theme.colors.border,
+  },
+  activeItem: {
+    backgroundColor: '#F0F9E5',
   },
 });

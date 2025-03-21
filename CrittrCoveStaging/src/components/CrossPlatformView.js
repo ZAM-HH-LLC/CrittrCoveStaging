@@ -33,28 +33,28 @@ const CrossPlatformView = ({
 
     return (
       <div style={{ 
-        backgroundColor, 
+        backgroundColor,
         width: '100%',
-        maxWidth: '100vw',
-        overflowX: 'hidden'
+        maxWidth: '100%',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        ...style,
       }}>
         {fullWidthHeader && (
           <div style={{ 
             width: '100%', 
             backgroundColor,
-            maxWidth: '100vw',
-            overflowX: 'hidden'
           }}>
             {headerContent}
           </div>
         )}
         <div style={{
           ...styles.webContainer,
-          ...style,
           maxWidth: contentWidth,
-          margin: '0 auto',
           width: '100%',
-          overflowX: 'hidden'
+          flex: 1,
+          overflow: 'hidden',
         }}>
           {mainContent}
         </div>
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     minHeight: '85vh',
     width: '100%',
     maxWidth: '100%',
-    overflowX: 'hidden',
+    overflow: 'hidden',
   },
 });
 
