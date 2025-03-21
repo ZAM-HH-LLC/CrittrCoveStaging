@@ -2,7 +2,6 @@ import React, { useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { SCREEN_WIDTH } from '../context/AuthContext';
 import { AuthContext } from '../context/AuthContext';
 
 const ProfessionalServiceCard = ({ 
@@ -17,103 +16,135 @@ const ProfessionalServiceCard = ({
 
   return (
     <View style={styles.serviceCard}>
-      <View style={styles.topRow}>
+      <View style={styles.cardHeader}>
         <Text style={styles.serviceName}>{item.serviceName}</Text>
-        <View style={styles.topRowIcons}>
-          <TouchableOpacity onPress={() => onDelete(index)} style={styles.iconButton}>
-            <MaterialCommunityIcons name="trash-can" size={24} color={theme.colors.error} />
-          </TouchableOpacity>
+        <View style={styles.actionButtons}>
           <TouchableOpacity onPress={() => onEdit(index)} style={styles.iconButton}>
-            <MaterialCommunityIcons name="pencil" size={24} color={theme.colors.primary} />
+            <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onDelete(index)} style={styles.iconButton}>
+            <MaterialCommunityIcons name="trash-can" size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
-      
-      {isCollapsed ? (
-        <View style={styles.collapsedContent}>
-          <Text style={styles.rateText}>Base Rate: ${item.rates.base_rate || 'N/A'}</Text>
-        </View>
-      ) : (
-        <View style={styles.contentRow}>
-          <Text style={[styles.rateText, { 
-            fontSize: screenWidth <= 600 ? theme.fontSizes.small : theme.fontSizes.medium 
-          }]}>Base Rate: ${item.rates.base_rate || 'N/A'}</Text>
-          <Text style={[styles.rateText, { 
-            fontSize: screenWidth <= 600 ? theme.fontSizes.small : theme.fontSizes.medium 
-          }]}>Additional Animal: ${item.rates.additionalAnimalRate || 'N/A'}</Text>
-          <Text style={[styles.rateText, { 
-            fontSize: screenWidth <= 600 ? theme.fontSizes.small : theme.fontSizes.medium 
-          }]}>Holiday Rate: ${item.rates.holidayRate || 'N/A'}</Text>
-          {item.additionalRates && item.additionalRates.map((rate, idx) => (
-            <Text key={idx} style={[styles.rateText, { 
-              fontSize: screenWidth <= 600 ? theme.fontSizes.small : theme.fontSizes.medium 
-            }]}>
-              {rate.label}: ${rate.value} {rate.description ? `(${rate.description})` : ''}
-            </Text>
-          ))}
-          <Text style={[styles.rateText, { 
-            fontSize: screenWidth <= 600 ? theme.fontSizes.small : theme.fontSizes.medium 
-          }]}>Duration: {item.lengthOfService || 'N/A'}</Text>
-        </View>
-      )}
+
+      <View style={styles.rateContainer}>
+        <Text style={styles.baseRateText}>Base Rate: ${item.rates.base_rate || 'N/A'}/{item.lengthOfService || 'visit'}</Text>
+      </View>
 
       <TouchableOpacity 
-        onPress={() => onToggleCollapse(index)} 
-        style={styles.collapseButton}
+        onPress={() => onToggleCollapse(index)}
+        style={styles.additionalRatesContainer}
       >
+        <Text style={styles.viewRatesText}>View Additional Rates</Text>
         <MaterialCommunityIcons 
           name={isCollapsed ? "chevron-down" : "chevron-up"} 
-          size={24} 
-          color={theme.colors.primary} 
+          size={20} 
+          color={theme.colors.textSecondary} 
         />
       </TouchableOpacity>
+
+      {!isCollapsed && (
+        <View style={styles.expandedRates}>
+          {item.rates.additionalAnimalRate && (
+            <View style={styles.rateRow}>
+              <Text style={styles.rateLabel}>Additional Animal</Text>
+              <Text style={styles.rateValue}>${item.rates.additionalAnimalRate}</Text>
+            </View>
+          )}
+          {item.rates.holidayRate && (
+            <View style={styles.rateRow}>
+              <Text style={styles.rateLabel}>Holiday Rate</Text>
+              <Text style={styles.rateValue}>${item.rates.holidayRate}</Text>
+            </View>
+          )}
+          {item.additionalRates && item.additionalRates.map((rate, idx) => (
+            <View key={idx} style={styles.rateRow}>
+              <Text style={styles.rateLabel}>{rate.label}</Text>
+              <Text style={styles.rateValue}>${rate.value}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   serviceCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginVertical: 8,
-    padding: 12,
-    position: 'relative',
+    backgroundColor: theme.colors.surfaceContrast,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  topRow: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
   serviceName: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.primary,
-    fontWeight: 'bold',
+    fontSize: theme.fontSizes.large,
+    fontWeight: '600',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.header.fontFamily,
   },
-  topRowIcons: {
+  actionButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
   },
   iconButton: {
-    padding: 4,
+    padding: 8,
   },
-  contentRow: {
-    gap: 4,
+  rateContainer: {
+    marginBottom: 12,
   },
-  collapsedContent: {
-    marginTop: 4,
-  },
-  rateText: {
+  baseRateText: {
+    fontSize: theme.fontSizes.medium,
     color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
-  collapseButton: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    padding: 4,
+  additionalRatesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  viewRatesText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  expandedRates: {
+    marginTop: 12,
+    gap: 8,
+  },
+  rateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  rateLabel: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  rateValue: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 

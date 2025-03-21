@@ -42,7 +42,8 @@ export const theme = {
     placeHolderText: '#A9A9A9', // #A9A9A9
     accent: '#03dac4', // #03dac4
     error: '#B00020', // #B00020
-    surface: '#f6f6f6', // #f6f6f6
+    surface: '#F9FAFB', // #F9FAFB
+    surfaceContrast: '#FFFFFF', // #FFFFFF
     border: '#6A6C51', // #6A6C51
     bgColorModern: 'rgb(239, 239, 239)',
     modernBorder: '#E0E0E0', // #E0E0E0

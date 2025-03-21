@@ -7,7 +7,7 @@ import ProfessionalServiceCard from './ProfessionalServiceCard';
 import ConfirmationModal from './ConfirmationModal';
 import { Portal } from 'react-native-paper';
 
-const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfessionalTab = false }) => {
+const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfessionalTab = false, isMobile = false }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [collapsedServices, setCollapsedServices] = useState([]);
@@ -114,16 +114,18 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
     };
 
     return (
-      <ProfessionalServiceCard
-        key={`service-${index}`}
-        item={serviceData}
-        index={index}
-        onEdit={() => handleEditService(index)}
-        onDelete={() => handleDeleteService(index)}
-        isCollapsed={collapsedServices.includes(index)}
-        onToggleCollapse={() => toggleCollapse(index)}
-        isProfessionalTab={isProfessionalTab}
-      />
+      <View style={styles.serviceCardWrapper}>
+        <ProfessionalServiceCard
+          key={`service-${index}`}
+          item={serviceData}
+          index={index}
+          onEdit={() => handleEditService(index)}
+          onDelete={() => handleDeleteService(index)}
+          isCollapsed={collapsedServices.includes(index)}
+          onToggleCollapse={() => toggleCollapse(index)}
+          isProfessionalTab={isProfessionalTab}
+        />
+      </View>
     );
   };
 
@@ -131,14 +133,23 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
 
   return (
     <View style={styles.container}>
-      <View style={[styles.serviceListContainer, { paddingHorizontal: isProfessionalTab ? 0 : 20 }]}>
-        <View style={styles.headerButtons}>
-          <Text style={styles.sectionTitle}>Services</Text>
+      <View style={[
+        styles.serviceListContainer,
+        {
+          maxWidth: 1200,
+          marginHorizontal: 'auto',
+          width: '100%',
+          paddingHorizontal: isMobile ? 20 : 24,
+          paddingTop: isMobile ? 0 : 44,
+        }
+      ]}>
+        <View style={styles.headerContainer}>
+          <Text style={styles.sectionTitle}>Service Manager</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity 
               ref={collapseButtonRef}
               onPress={toggleCollapseAll} 
-              style={styles.headerButton}
+              style={styles.collapseButton}
               onMouseEnter={() => {
                 try {
                   showTooltip(
@@ -158,13 +169,13 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
               <MaterialCommunityIcons 
                 name={allCollapsed ? "chevron-down" : "chevron-up"} 
                 size={24} 
-                color={theme.colors.primary} 
+                color={theme.colors.text} 
               />
             </TouchableOpacity>
             
             <TouchableOpacity
               ref={buttonRef}
-              style={styles.headerButton}
+              style={styles.addServiceButton}
               onMouseEnter={() => {
                 try {
                   showTooltip(buttonRef, 'Add Service', setTooltipPosition);
@@ -183,19 +194,18 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
             >
               <MaterialCommunityIcons 
                 name="plus" 
-                size={24} 
-                color={theme.colors.primary} 
+                size={20} 
+                color={theme.colors.surface} 
               />
+              <Text style={styles.addServiceText}>Add New Service</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {(Array.isArray(services) && services.length > 0) ? (
-          <FlatList
-            data={services}
-            renderItem={renderService}
-            keyExtractor={(item, index) => `service-${index}`}
-          />
+          <View style={styles.servicesGrid}>
+            {services.map((item, index) => renderService({ item, index }))}
+          </View>
         ) : (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No services yet</Text>
@@ -271,15 +281,29 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 9998,
     elevation: 9998,
+    backgroundColor: theme.colors.surface,
   },
   serviceListContainer: {
     flex: 1,
     paddingVertical: 0,
   },
-  headerButtons: {
+  servicesGrid: {
+    display: 'flex',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    paddingBottom: 24,
+  },
+  serviceCardWrapper: {
+    flex: 1,
+    minWidth: 300,
+    maxWidth: 375,
+  },
+  headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 24,
     position: 'relative',
     zIndex: 9999,
     elevation: 9999,
@@ -287,42 +311,60 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 9999,
-    elevation: 9999,
+    gap: 12,
   },
-  headerButton: {
-    marginLeft: 20,
+  collapseButton: {
     padding: 8,
-    position: 'relative',
-    zIndex: 9999,
-    elevation: 9999,
-  },
-  buttonTooltip: {
-    position: 'absolute',
-    bottom: '100%',
-    left: '50%',
-    transform: [{ translateX: -35 }],
+    borderRadius: 8,
     backgroundColor: theme.colors.surface,
-    padding: 8,
-    borderRadius: 4,
-    fontSize: theme.fontSizes.small,
-    color: theme.colors.text,
-    width: 70,
-    textAlign: 'center',
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: -1,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 10000,
-    elevation: 10000,
   },
   sectionTitle: {
     fontSize: theme.fontSizes.large,
     fontWeight: 'bold',
-    color: theme.colors.primary,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
+  addServiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 50,
+  },
+  addServiceText: {
+    color: theme.colors.surface,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    marginBottom: 24,
+  },
+  emptyText: {
+    fontSize: theme.fontSizes.mediumLarge,
+    color: theme.colors.text,
+    marginBottom: 20,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  addButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 50,
+  },
+  addButtonText: {
+    color: theme.colors.surface,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   portalTooltip: {
     backgroundColor: theme.colors.surface,
@@ -342,28 +384,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.small,
     color: theme.colors.text,
     textAlign: 'center',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: theme.fontSizes.mediumLarge,
-    color: theme.colors.text,
-    marginBottom: 20,
-  },
-  addButton: {
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: theme.colors.surface,
-    fontSize: theme.fontSizes.medium,
-    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 
