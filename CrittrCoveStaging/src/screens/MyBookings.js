@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Platform, Dimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import CrossPlatformView from '../components/CrossPlatformView';
 import BackHeader from '../components/BackHeader';
 import BookingCard from '../components/BookingCard';
-import { mockProfessionalBookings, mockClientBookings } from '../data/mockData';
 import { AuthContext } from '../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -15,12 +13,24 @@ import { API_BASE_URL } from '../config/config';
 
 const MyBookings = () => {
   const navigation = useNavigation();
-  const { isApprovedProfessional, userRole, is_DEBUG } = useContext(AuthContext);
+  const { isApprovedProfessional, userRole, is_DEBUG, isCollapsed } = useContext(AuthContext);
+  const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
   const [activeTab, setActiveTab] = useState(userRole === 'professional' ? 'professional' : 'client');
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setIsMobile(Dimensions.get('window').width < 900);
+    };
+
+    const subscription = Dimensions.addEventListener('change', updateLayout);
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
 
   // Handle role changes
   useEffect(() => {
@@ -195,106 +205,158 @@ const MyBookings = () => {
   );
 
   return (
-    <CrossPlatformView fullWidthHeader={true}>
-      <BackHeader
-        title="My Bookings"
-        onBackPress={() => handleBack(navigation)} // Use default 'More' route
-      />
-      
-      <View style={styles.container}>
-      {isApprovedProfessional && (
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-              style={[styles.tab, activeTab === 'professional' && styles.activeTab]}
-            onPress={() => setActiveTab('professional')}
-          >
-              <Text style={[styles.tabText, activeTab === 'professional' && styles.activeTabText]}>
-                Professional Bookings
-              </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-              style={[styles.tab, activeTab === 'client' && styles.activeTab]}
-            onPress={() => setActiveTab('client')}
-          >
-              <Text style={[styles.tabText, activeTab === 'client' && styles.activeTabText]}>
-                Client Bookings
-              </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={styles.searchContainer}>
-          <MaterialCommunityIcons name="magnify" size={24} color={theme.colors.placeholder} />
-        <TextInput
-          style={styles.searchInput}
-            placeholder="Search by Booking ID or Name"
-          value={searchQuery}
-          onChangeText={handleSearch}
+    <View style={[
+      styles.container,
+      { marginLeft: isMobile ? 0 : (isCollapsed ? 70 : 250) }
+    ]}>
+      {isMobile && (
+        <BackHeader
+          title="My Bookings"
+          onBackPress={() => handleBack(navigation)}
         />
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-        ) : bookings.length > 0 ? (
-        <FlatList
-          data={bookings}
-          renderItem={renderBookingCard}
-          keyExtractor={item => (item.booking_id || item.id || Math.random().toString()).toString()}
-          contentContainerStyle={styles.listContainer}
-        />
-        ) : (
-          <EmptyStateMessage />
       )}
+      <View style={[styles.content, { marginTop: isMobile ? 20 : 0 }]}>
+        <View style={styles.mainContent}>
+          <View style={styles.headerSection}>
+            <Text style={styles.title}>My Bookings</Text>
+            {isApprovedProfessional && (
+              <View style={styles.tabContainer}>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'professional' && styles.activeTab]}
+                  onPress={() => setActiveTab('professional')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'professional' && styles.activeTabText]}>
+                    Your Bookings
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'client' && styles.activeTab]}
+                  onPress={() => setActiveTab('client')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'client' && styles.activeTabText]}>
+                    Client Bookings
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          <View style={styles.bookingsContent}>
+            <View style={styles.searchContainer}>
+              <MaterialCommunityIcons name="magnify" size={24} color={theme.colors.placeholder} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by pet name, owner, or date"
+                value={searchQuery}
+                onChangeText={handleSearch}
+              />
+            </View>
+
+            <View style={styles.filterContainer}>
+              <TouchableOpacity 
+                style={[styles.filterButton, styles.activeFilterButton]}
+              >
+                <Text style={[styles.filterText, styles.activeFilterText]}>Pending</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.filterButton}>
+                <Text style={styles.filterText}>Confirmed</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.filterButton}>
+                <Text style={styles.filterText}>In Progress</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.filterButton}>
+                <Text style={styles.filterText}>Completed</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+              </View>
+            ) : bookings.length > 0 ? (
+              <FlatList
+                data={bookings}
+                renderItem={renderBookingCard}
+                keyExtractor={item => (item.booking_id || item.id || Math.random().toString()).toString()}
+                contentContainerStyle={styles.listContainer}
+              />
+            ) : (
+              <EmptyStateMessage />
+            )}
+          </View>
+        </View>
       </View>
-    </CrossPlatformView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height: '100vh',
+    backgroundColor: theme.colors.surface,
+    position: 'fixed',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    overflow: 'hidden',
+    transition: 'margin-left 0.3s ease',
+  },
+  content: {
+    flex: 1,
+    height: '100%',
+    overflow: 'auto',
+    // padding: 16,
+  },
+  mainContent: {
+    flex: 1,
     width: '100%',
-    maxWidth: Platform.OS === 'web' ? 632 : 600, // 600 + padding for scrollbar
+    // maxWidth: 632,
     alignSelf: 'center',
-    padding: 16,
-    height: Platform.OS === 'web' ? 'calc(100vh - 124px)' : '100%',
-    maxHeight: Platform.OS === 'web' ? 'calc(100vh - 124px)' : '100%',
-    overflow: Platform.OS === 'web' ? 'auto' : 'scroll',
     backgroundColor: theme.colors.background,
+  },
+  headerSection: {
+    width: '100%',
+    backgroundColor: theme.colors.surfaceContrast,
+    padding: 24,
+  },
+  bookingsContent: {
+    padding: 24,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 24,
+    fontFamily: theme.fonts.header.fontFamily,
   },
   tabContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
+    gap: 32, // More space between tabs
   },
   tab: {
-    flex: 1,
-    padding: 12,
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
+    paddingBottom: 8, // Space for the underline
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   activeTab: {
-    backgroundColor: theme.colors.primary,
+    borderBottomColor: theme.colors.primary,
   },
   tabText: {
-    color: theme.colors.primary,
-    fontWeight: '500',
+    fontSize: 16,
+    color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   activeTabText: {
-    color: theme.colors.surface,
+    color: theme.colors.primary,
+    fontWeight: '500',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
-    padding: 8,
+    padding: 12,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -305,9 +367,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  filterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  filterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+  },
+  activeFilterButton: {
+    backgroundColor: theme.colors.mybookings.main,
+  },
+  filterText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  activeFilterText: {
+    color: theme.colors.mybookings.secondary,
+    fontWeight: '500',
+  },
   listContainer: {
     paddingBottom: 16,
-    paddingHorizontal: Platform.OS === 'web' ? 16 : 0, // Space for scrollbar
   },
   loadingContainer: {
     flex: 1,

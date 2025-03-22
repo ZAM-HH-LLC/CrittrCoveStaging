@@ -1,128 +1,164 @@
 // components/BookingCard.js
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { theme } from '../styles/theme';
 
-const BookingCard = ({ booking, type, onViewDetails, onCancel }) => {
-  const { id, status, date, time } = booking;
+const getStatusInfo = (status) => {
+  switch (status) {
+    case 'Pending Initial Professional Changes':
+    case 'Pending Professional Changes':
+      return {
+        text: 'Pending Pro',
+        bgColor: theme.colors.mybookings.main,
+        textColor: theme.colors.mybookings.secondary
+      };
+    case 'Pending Client Approval':
+      return {
+        text: 'Pending Client',
+        bgColor: theme.colors.mybookings.main,
+        textColor: theme.colors.mybookings.secondary
+      };
+    case 'Confirmed':
+      return {
+        text: 'Confirmed',
+        bgColor: theme.colors.mybookings.confirmedBg,
+        textColor: theme.colors.mybookings.confirmedText
+      };
+    case 'Completed':
+      return {
+        text: 'Completed',
+        bgColor: theme.colors.mybookings.completedBg,
+        textColor: theme.colors.mybookings.completedText
+      };
+    case 'Confirmed Pending Professional Changes':
+      return {
+        text: 'Confirmed • Pending Pro',
+        bgColor: theme.colors.mybookings.confirmedBg,
+        textColor: theme.colors.mybookings.confirmedText
+      };
+    case 'Confirmed Pending Client Approval':
+      return {
+        text: 'Confirmed • Pending Client',
+        bgColor: theme.colors.mybookings.confirmedBg,
+        textColor: theme.colors.mybookings.confirmedText
+      };
+    default:
+      return {
+        text: status,
+        bgColor: theme.colors.mybookings.main,
+        textColor: theme.colors.mybookings.secondary
+      };
+  }
+};
+
+const BookingCard = ({ booking, type, onViewDetails }) => {
+  const { id, status, date, time, serviceName } = booking;
   const name = type === 'professional' ? booking.clientName : booking.professionalName;
+  const statusInfo = getStatusInfo(status);
+  const pets = booking.pets || [];
 
   return (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => onViewDetails()}
-      activeOpacity={0.7}
-    >
-      <View>
-        <View style={styles.header}>
-          <Text style={styles.bookingId}>Booking #{id}</Text>
-          <Text style={[
-            styles.status,
-            { color: status === 'Confirmed' ? theme.colors.success : theme.colors.warning }
-          ]}>
-            {status}
-          </Text>
-        </View>
-
-        <Text style={styles.name}>
-          {type === 'professional' ? 'Client: ' : 'Professional: '}{name}
-        </Text>
-        
-        <Text style={styles.datetime}>
-          {date} at {time}
-        </Text>
-
-        <View style={styles.buttonContainer}>
-          
-          <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={(e) => {
-              e.stopPropagation(); // Prevent card click when button is clicked
-              onCancel();
-            }}
-          >
-            <Text style={[styles.buttonText, styles.cancelButtonText]}>
-              Cancel Booking
+    <View style={styles.card}>
+      <View style={styles.cardContent}>
+        <View style={styles.leftContent}>
+          <Image 
+            source={require('../../assets/default-profile.png')} 
+            style={styles.profileImage}
+          />
+          <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
+            <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
+              {statusInfo.text}
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.viewButton]}
-            onPress={(e) => {
-              e.stopPropagation(); // Prevent card click when button is clicked
-              onViewDetails();
-            }}
-          >
-            <Text style={styles.buttonText}>View Details</Text>
-          </TouchableOpacity>
+          </View>
+          <Text style={styles.name}>{name}</Text>
+          <Text style={styles.petInfo}>
+            {pets.map(pet => pet.name).join(', ')}
+          </Text>
+          <View style={styles.metaInfo}>
+            <Text style={styles.metaText}>{date}</Text>
+            <Text style={styles.metaText}> • </Text>
+            <Text style={styles.metaText}>{time}</Text>
+            <Text style={styles.metaText}> • </Text>
+            <Text style={styles.metaText}>{serviceName}</Text>
+          </View>
         </View>
+        <TouchableOpacity
+          style={styles.viewDetailsButton}
+          onPress={onViewDetails}
+        >
+          <Text style={styles.viewDetailsText}>View Details</Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceContrast,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
   },
-  header: {
+  cardContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  leftContent: {
+    flex: 1,
+  },
+  profileImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     marginBottom: 8,
   },
-  bookingId: {
-    fontSize: theme.fontSizes.medium,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-    fontFamily: theme.fonts.header.fontFamily,
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginBottom: 8,
   },
-  status: {
-    fontSize: theme.fontSizes.smallMedium,
+  statusText: {
+    fontSize: 12,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   name: {
-    fontSize: theme.fontSizes.medium,
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.mybookings.ownerName,
     marginBottom: 4,
     fontFamily: theme.fonts.regular.fontFamily,
   },
-  datetime: {
-    fontSize: theme.fontSizes.smallMedium,
-    color: theme.colors.placeholder,
-    marginBottom: 16,
+  petInfo: {
+    fontSize: 14,
+    color: theme.colors.text,
+    marginBottom: 4,
     fontFamily: theme.fonts.regular.fontFamily,
   },
-  buttonContainer: {
+  metaInfo: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  button: {
-    flex: 1,
-    padding: 8,
-    borderRadius: 4,
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
-  viewButton: {
-    backgroundColor: theme.colors.primary,
-  },
-  cancelButton: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.error,
-  },
-  buttonText: {
-    color: theme.colors.surface,
-    fontWeight: '500',
+  metaText: {
+    fontSize: 14,
+    color: theme.colors.mybookings.metaText,
     fontFamily: theme.fonts.regular.fontFamily,
   },
-  cancelButtonText: {
-    color: theme.colors.error,
+  viewDetailsButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  viewDetailsText: {
+    color: theme.colors.surfaceContrast,
+    fontSize: 14,
+    fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
   },
 });

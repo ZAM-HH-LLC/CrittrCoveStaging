@@ -31,6 +31,23 @@ export const theme = {
       quinary: '#516A6C', // #516A6C
       senary: '#515D6C', // #515D6C
     },
+    proDashboard: {
+      main: '#F0F9E5', // #F0F9E5
+      secondary: '#E7F3F8', // #E7F3F8
+      tertiary: '#FEF0DA', // #FEF0DA
+      quaternary: '#E1E2DB', // #E1E2DB
+    },
+    mybookings: {
+      main: '#FFF7ED', // Pending indicator background
+      secondary: '#EA580E', // Pending indicator text
+      tertiary: '#6A6C51', // #6A6C51
+      ownerName: '#4B4C3B', // Owner name text color
+      metaText: '#959885', // Date/time/service text color
+      confirmedBg: '#E8E9E2', // Confirmed button background
+      confirmedText: '#898974', // Confirmed button text
+      completedBg: '#F5F5F4', // Completed button background
+      completedText: '#CCCBC9', // Completed button text
+    },
     primary: '#6A6C51', // #6A6C51
     secondary: '#516C61', // #516C61
     background: '#f6f6f6', // #f6f6f6
