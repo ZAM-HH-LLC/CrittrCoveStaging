@@ -38,15 +38,28 @@ export const theme = {
       quaternary: '#E1E2DB', // #E1E2DB
     },
     mybookings: {
-      main: '#FFF7ED', // Pending indicator background
-      secondary: '#EA580E', // Pending indicator text
+      main: '#FFF7ED', // #FFF7ED Pending indicator background
+      secondary: '#EA580E', // #EA580E Pending indicator text
       tertiary: '#6A6C51', // #6A6C51
-      ownerName: '#4B4C3B', // Owner name text color
-      metaText: '#959885', // Date/time/service text color
-      confirmedBg: '#E8E9E2', // Confirmed button background
-      confirmedText: '#898974', // Confirmed button text
-      completedBg: '#F5F5F4', // Completed button background
-      completedText: '#CCCBC9', // Completed button text
+      ownerName: '#4B4C3B', // #4B4C3B Owner name text color
+      metaText: '#959885', // #959885 Date/time/service text color
+      confirmedBg: '#E8E9E2', // #E8E9E2 Confirmed button background
+      confirmedText: '#898974', // #898974 Confirmed button text
+      completedBg: '#F5F5F4', // #F5F5F4 Completed button background
+      completedText: '#898983', // #898983 Completed button text
+      searchBar: 'rgb(183, 183, 183)', // Search bar text color
+// colors if english name, its in theme.js:
+// We need to add these colors to theme.js, but i am not sure where to add them. 
+// the pending indicator will have bg color of: #FFF7ED
+// the text of the pending indicator will be: #EA580E
+// view details button bg color: primary
+// text of view details button: surfaceContrast
+// text color of start date/time/service name: #959885
+// text color of owners name: #4B4C3B
+// bg color of confirmed button: #E8E9E2
+// text color of confirmed button: #898974
+// completed bg color: #F5F5F4
+// completed text color:rgb(183, 183, 183)
     },
     primary: '#6A6C51', // #6A6C51
     secondary: '#516C61', // #516C61

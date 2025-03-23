@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Platform, Dimensions, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -13,17 +13,23 @@ import { API_BASE_URL } from '../config/config';
 
 const MyBookings = () => {
   const navigation = useNavigation();
-  const { isApprovedProfessional, userRole, is_DEBUG, isCollapsed } = useContext(AuthContext);
-  const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
+  const { isApprovedProfessional, userRole, is_DEBUG, isCollapsed, screenWidth } = useContext(AuthContext);
+  const [isMobile, setIsMobile] = useState(screenWidth < 900);
+  const [isWideScreen, setIsWideScreen] = useState(screenWidth >= 1200);
   const [activeTab, setActiveTab] = useState(userRole === 'professional' ? 'professional' : 'client');
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('all');
 
   useEffect(() => {
     const updateLayout = () => {
       setIsMobile(Dimensions.get('window').width < 900);
+      setIsWideScreen(Dimensions.get('window').width >= 1200);
     };
 
     const subscription = Dimensions.addEventListener('change', updateLayout);
@@ -39,60 +45,86 @@ const MyBookings = () => {
     }
   }, [userRole, isApprovedProfessional]);
 
-  const fetchBookings = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchBookings = async (pageNum = 1, isLoadMore = false) => {
+    if (isLoadMore) {
+      setIsLoadingMore(true);
+    } else {
+      setLoading(true);
+      setError(null);
+    }
+
     try {
-      // Real API call logic
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       if (!token) {
         throw new Error('No authentication token found');
       }
 
       if (is_DEBUG) {
-        console.log('Fetching real bookings:', {
+        console.log('MBA1234 Fetching bookings:', {
           isApprovedProfessional,
           userRole,
-          activeTab
+          activeTab,
+          page: pageNum,
+          status: activeFilter
         });
       }
 
       const response = await axios.get(
         `${API_BASE_URL}/api/bookings/v1/`,
-        { headers: { Authorization: `Bearer ${token}` }}
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            page: pageNum,
+            page_size: 20,
+            status: activeFilter
+          }
+        }
       );
 
-      if (activeTab === 'professional') {
-        setBookings(response.data.bookings.professional_bookings || []);
+      const newBookings = activeTab === 'professional' 
+        ? response.data.bookings.professional_bookings || []
+        : response.data.bookings.client_bookings || [];
+
+      if (isLoadMore) {
+        setBookings(prev => [...prev, ...newBookings]);
       } else {
-        setBookings(response.data.bookings.client_bookings || []);
+        setBookings(newBookings);
       }
+
+      setHasMore(newBookings.length === 20);
+      setPage(pageNum);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setError('Failed to fetch bookings');
     } finally {
       setLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
   // Fetch bookings when component mounts or when dependencies change
   useEffect(() => {
     if (is_DEBUG) {
-      console.log('Fetching bookings due to dependency change:', {
+      console.log('MBA1234 Fetching bookings due to dependency change:', {
         activeTab,
         userRole,
-        isApprovedProfessional
+        isApprovedProfessional,
+        activeFilter
       });
     }
-    fetchBookings();
-  }, [activeTab, userRole, isApprovedProfessional]);
+    setPage(1);
+    setBookings([]);
+    fetchBookings(1);
+  }, [activeTab, userRole, isApprovedProfessional, activeFilter]);
 
   // Handle search
   const handleSearch = (query) => {
     setSearchQuery(query);
     
     if (!query.trim()) {
-      fetchBookings();
+      setPage(1);
+      setBookings([]);
+      fetchBookings(1);
       return;
     }
 
@@ -114,9 +146,15 @@ const MyBookings = () => {
     setBookings(filtered);
   };
 
+  const handleLoadMore = () => {
+    if (!isLoadingMore && hasMore) {
+      fetchBookings(page + 1, true);
+    }
+  };
+
   const handleViewDetails = async (booking) => {
     if (is_DEBUG) {
-      console.log('Navigating to booking details:', {
+      console.log('MBA1234 Navigating to booking details:', {
         bookingId: booking.booking_id || booking.id,
         isProfessional: activeTab === 'professional'
       });
@@ -129,9 +167,8 @@ const MyBookings = () => {
   };
 
   const handleCancelBooking = async (bookingId) => {
-    // Implement booking cancellation logic
     if (is_DEBUG) {
-      console.log('Cancel booking:', bookingId);
+      console.log('MBA1234 Cancel booking:', bookingId);
     }
   };
 
@@ -196,7 +233,7 @@ const MyBookings = () => {
       {error && (
         <TouchableOpacity
           style={styles.retryButton}
-          onPress={fetchBookings}
+          onPress={() => fetchBookings(1)}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
@@ -204,18 +241,21 @@ const MyBookings = () => {
     </View>
   );
 
+  const renderFooter = () => {
+    if (!isLoadingMore) return null;
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+      </View>
+    );
+  };
+
   return (
     <View style={[
       styles.container,
       { marginLeft: isMobile ? 0 : (isCollapsed ? 70 : 250) }
     ]}>
-      {isMobile && (
-        <BackHeader
-          title="My Bookings"
-          onBackPress={() => handleBack(navigation)}
-        />
-      )}
-      <View style={[styles.content, { marginTop: isMobile ? 20 : 0 }]}>
+      <View style={[styles.content, { marginTop: isMobile ? 60 : 0 }]}>
         <View style={styles.mainContent}>
           <View style={styles.headerSection}>
             <Text style={styles.title}>My Bookings</Text>
@@ -241,44 +281,161 @@ const MyBookings = () => {
             )}
           </View>
           <View style={styles.bookingsContent}>
-            <View style={styles.searchContainer}>
-              <MaterialCommunityIcons name="magnify" size={24} color={theme.colors.placeholder} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by pet name, owner, or date"
-                value={searchQuery}
-                onChangeText={handleSearch}
-              />
-            </View>
-
-            <View style={styles.filterContainer}>
-              <TouchableOpacity 
-                style={[styles.filterButton, styles.activeFilterButton]}
-              >
-                <Text style={[styles.filterText, styles.activeFilterText]}>Pending</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.filterButton}>
-                <Text style={styles.filterText}>Confirmed</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.filterButton}>
-                <Text style={styles.filterText}>In Progress</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.filterButton}>
-                <Text style={styles.filterText}>Completed</Text>
-              </TouchableOpacity>
-            </View>
-
             {loading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
               </View>
             ) : bookings.length > 0 ? (
-              <FlatList
-                data={bookings}
-                renderItem={renderBookingCard}
-                keyExtractor={item => (item.booking_id || item.id || Math.random().toString()).toString()}
-                contentContainerStyle={styles.listContainer}
-              />
+              <View style={styles.bookingsContent}>
+                <View style={styles.stickyHeader}>
+                  <View style={[styles.stickyHeaderContent, { 
+                    flexDirection: isWideScreen ? 'row' : 'column'
+                  }]}>
+                    <View style={[
+                      styles.searchContainer, 
+                      isWideScreen ? { flex: 0.4, marginRight: 'auto' } : null
+                    ]}>
+                      <MaterialCommunityIcons name="magnify" size={24} color={theme.colors.mybookings.searchBar} />
+                      <TextInput
+                        style={[styles.searchInput, { color: theme.colors.mybookings.searchBar, width: '100%', height: '100%' }]}
+                        placeholder="Search by pet name, owner, or date"
+                        value={searchQuery}
+                        onChangeText={handleSearch}
+                        outlineStyle="none"
+                      />
+                    </View>
+
+                    <View style={[
+                      styles.filtersWrapper,
+                      isWideScreen ? { flex: 0.6, alignItems: 'flex-end' } : null
+                    ]}>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.filterScrollContent}
+                      >
+                        <View style={styles.filterContainer}>
+                          <TouchableOpacity 
+                            style={[
+                              styles.filterButton,
+                              styles.allButton,
+                            ]}
+                            onPress={() => setActiveFilter('all')}
+                          >
+                            <View style={styles.filterContent}>
+                              <MaterialCommunityIcons 
+                                name="filter-variant" 
+                                size={16} 
+                                color="#0784C6" 
+                              />
+                              <Text style={[styles.filterText, styles.allButtonText]}>
+                                All
+                              </Text>
+                              {activeFilter === 'all' && (
+                                <MaterialCommunityIcons 
+                                  name="check" 
+                                  size={16} 
+                                  color="#0784C6" 
+                                  style={styles.checkmark}
+                                />
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[
+                              styles.filterButton,
+                              styles.pendingButton,
+                            ]}
+                            onPress={() => setActiveFilter('pending')}
+                          >
+                            <View style={styles.filterContent}>
+                              <MaterialCommunityIcons 
+                                name="clock-outline" 
+                                size={16} 
+                                color={theme.colors.mybookings.secondary}
+                              />
+                              <Text style={[styles.filterText, styles.pendingButtonText]}>
+                                Pending
+                              </Text>
+                              {activeFilter === 'pending' && (
+                                <MaterialCommunityIcons 
+                                  name="check" 
+                                  size={16} 
+                                  color={theme.colors.mybookings.secondary}
+                                  style={styles.checkmark}
+                                />
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[
+                              styles.filterButton,
+                              styles.confirmedButton,
+                            ]}
+                            onPress={() => setActiveFilter('confirmed')}
+                          >
+                            <View style={styles.filterContent}>
+                              <MaterialCommunityIcons 
+                                name="check-circle-outline" 
+                                size={16} 
+                                color="#898974"
+                              />
+                              <Text style={[styles.filterText, styles.confirmedButtonText]}>
+                                Confirmed
+                              </Text>
+                              {activeFilter === 'confirmed' && (
+                                <MaterialCommunityIcons 
+                                  name="check" 
+                                  size={16} 
+                                  color="#898974"
+                                  style={styles.checkmark}
+                                />
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[
+                              styles.filterButton,
+                              styles.completedButton,
+                            ]}
+                            onPress={() => setActiveFilter('completed')}
+                          >
+                            <View style={styles.filterContent}>
+                              <MaterialCommunityIcons 
+                                name="flag-checkered" 
+                                size={16} 
+                                color={theme.colors.mybookings.completedText}
+                              />
+                              <Text style={[styles.filterText, styles.completedButtonText]}>
+                                Completed
+                              </Text>
+                              {activeFilter === 'completed' && (
+                                <MaterialCommunityIcons 
+                                  name="check" 
+                                  size={16} 
+                                  color={theme.colors.mybookings.completedText}
+                                  style={styles.checkmark}
+                                />
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                        </View>
+                      </ScrollView>
+                    </View>
+                  </View>
+                </View>
+
+                <FlatList
+                  data={bookings}
+                  renderItem={renderBookingCard}
+                  keyExtractor={item => (item.booking_id || item.id || Math.random().toString()).toString()}
+                  contentContainerStyle={styles.listContainer}
+                  onEndReached={handleLoadMore}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={renderFooter}
+                  ListHeaderComponent={<View style={[styles.listHeaderSpacing, { height: isWideScreen ? 130 : 190 }]} />}
+                />
+              </View>
             ) : (
               <EmptyStateMessage />
             )}
@@ -306,22 +463,24 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     overflow: 'auto',
-    // padding: 16,
   },
   mainContent: {
     flex: 1,
     width: '100%',
-    // maxWidth: 632,
     alignSelf: 'center',
     backgroundColor: theme.colors.background,
   },
   headerSection: {
     width: '100%',
     backgroundColor: theme.colors.surfaceContrast,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    zIndex: 2,
   },
   bookingsContent: {
-    padding: 24,
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    position: 'relative',
   },
   title: {
     fontSize: 32,
@@ -332,10 +491,10 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    gap: 32, // More space between tabs
+    gap: 32,
   },
   tab: {
-    paddingBottom: 8, // Space for the underline
+    paddingBottom: 8,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
@@ -351,51 +510,109 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '500',
   },
+  stickyHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: theme.colors.surfaceContrast,
+    zIndex: 2,
+    marginHorizontal: 24,
+    marginTop: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderRadius: 8,
+    padding: 16,
+  },
+  stickyHeaderContent: {
+    width: '100%',
+    gap: 16,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.surfaceContrast,
     borderRadius: 8,
     padding: 12,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#CCCBC9',
   },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
+  filterScrollContent: {
+    flexGrow: 0,
+  },
+  filtersWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginRight: -16,
   },
   filterContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
     gap: 8,
+    backgroundColor: theme.colors.surfaceContrast,
+    paddingVertical: 8,
+    paddingLeft: 4,
+    paddingRight: 16,
   },
   filterButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
   },
-  activeFilterButton: {
+  filterContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  checkmark: {
+    marginLeft: 4,
+  },
+  allButton: {
+    backgroundColor: '#EFF9FF',
+  },
+  allButtonText: {
+    color: '#0784C6',
+  },
+  pendingButton: {
     backgroundColor: theme.colors.mybookings.main,
+  },
+  pendingButtonText: {
+    color: theme.colors.mybookings.secondary,
+  },
+  confirmedButton: {
+    backgroundColor: '#E8E9E2',
+  },
+  confirmedButtonText: {
+    color: '#898974',
+  },
+  completedButton: {
+    backgroundColor: '#F5F5F4',
+  },
+  completedButtonText: {
+    color: theme.colors.mybookings.completedText,
   },
   filterText: {
     fontSize: 14,
-    color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
+    textAlign: 'center',
   },
-  activeFilterText: {
-    color: theme.colors.mybookings.secondary,
-    fontWeight: '500',
+  listHeaderSpacing: {
+    paddingTop: 16,
   },
   listContainer: {
-    paddingBottom: 16,
+    paddingHorizontal: 24,
+    paddingBottom: 34,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingMoreContainer: {
+    paddingVertical: 16,
     alignItems: 'center',
   },
   emptyStateContainer: {
@@ -445,6 +662,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  searchInput: {
+    outlineStyle: 'none',
+    outlineWidth: 0,
+    outline: 'none',
+    marginLeft: 8,
   },
 });
 
