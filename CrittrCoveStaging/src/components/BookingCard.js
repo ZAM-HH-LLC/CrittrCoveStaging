@@ -1,9 +1,10 @@
 // components/BookingCard.js
-import React, { useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useContext, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
+import { convertDateTimeFromUTC, formatDate } from '../utils/time_utils';
 
 const getStatusInfo = (status) => {
   switch (status) {
@@ -60,25 +61,28 @@ const getStatusInfo = (status) => {
   }
 };
 
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const month = date.toLocaleString('default', { month: 'short' });
-  const day = date.getDate();
-  return `${month} ${day}`;
-};
-
 const BookingCard = ({ booking, type, onViewDetails }) => {
   const { id, status, date, time, serviceName } = booking;
   const name = type === 'professional' ? booking.clientName : booking.professionalName;
   const statusInfo = getStatusInfo(status);
   const pets = booking.pets || [];
-  const { screenWidth } = useContext(AuthContext);
+  const { screenWidth, timeSettings } = useContext(AuthContext);
   const isMobile = screenWidth < 600;
+  const [isHovered, setIsHovered] = useState(false);
 
+  // Convert time from UTC to user's timezone if needed
+  const convertedDateTime = timeSettings?.timezone !== 'UTC' && date && time
+    ? convertDateTimeFromUTC(date, time, timeSettings.timezone, timeSettings.use_military_time)
+    : date && time ? { date, time } : null;
+
+  const convertedTime = convertedDateTime?.time;
+  const convertedDate = convertedDateTime?.date ? formatDate(convertedDateTime.date) : 'No date selected';
+
+  console.log('MBA134njo0vh03 convertedTime: ', convertedTime);
+  console.log('MBA134njo0vh03 convertedDate: ', convertedDate);
   const getMetaText = () => {
-    const dateText = date ? formatDate(date) : 'No date selected';
-    const timeText = time || 'No time selected';
+    // const dateText = date ? formatDate(date) : 'No date selected';
+    const timeText = convertedTime || 'No time selected';
     const serviceText = serviceName || 'No service selected';
 
     if (isMobile) {
@@ -87,7 +91,7 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
           <View style={styles.mobileMetaRow}>
             <View style={styles.metaItemContainer}>
               <MaterialCommunityIcons name="calendar" size={16} color={theme.colors.mybookings.metaText} />
-              <Text style={styles.metaText}>{dateText}</Text>
+              <Text style={styles.metaText}>{convertedDate}</Text>
             </View>
             <View style={styles.metaItemContainer}>
               <MaterialCommunityIcons name="clock-outline" size={16} color={theme.colors.mybookings.metaText} />
@@ -106,7 +110,7 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
       <View style={styles.metaInfo}>
         <View style={styles.metaItemContainer}>
           <MaterialCommunityIcons name="calendar" size={16} color={theme.colors.mybookings.metaText} />
-          <Text style={styles.metaText}>{dateText}</Text>
+          <Text style={styles.metaText}>{convertedDate}</Text>
         </View>
         <Text style={styles.metaText}> • </Text>
         <View style={styles.metaItemContainer}>
@@ -124,8 +128,13 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
 
   return (
     <TouchableOpacity 
-      style={styles.card}
+      style={[
+        styles.card,
+        Platform.OS === 'web' && isHovered && styles.cardHovered
+      ]}
       onPress={onViewDetails}
+      onMouseEnter={() => Platform.OS === 'web' && setIsHovered(true)}
+      onMouseLeave={() => Platform.OS === 'web' && setIsHovered(false)}
     >
       <View style={[styles.cardContent, isMobile && styles.mobileCardContent]}>
         <View style={[styles.topContent, isMobile && styles.mobileTopContent]}>
@@ -185,6 +194,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    ...(Platform.OS === 'web' && {
+      transition: 'all 0.2s ease-in-out',
+      cursor: 'pointer',
+    })
+  },
+  cardHovered: {
+    transform: [{ scale: 1.02 }],
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   cardContent: {
     flexDirection: 'column',

@@ -25,6 +25,7 @@ const MyBookings = () => {
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [hoveredFilter, setHoveredFilter] = useState(null);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -319,8 +320,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.allButton,
+                              Platform.OS === 'web' && hoveredFilter === 'all' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('all')}
+                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('all')}
+                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -345,8 +349,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.pendingButton,
+                              Platform.OS === 'web' && hoveredFilter === 'pending' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('pending')}
+                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('pending')}
+                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -371,8 +378,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.confirmedButton,
+                              Platform.OS === 'web' && hoveredFilter === 'confirmed' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('confirmed')}
+                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('confirmed')}
+                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -397,8 +407,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.completedButton,
+                              Platform.OS === 'web' && hoveredFilter === 'completed' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('completed')}
+                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('completed')}
+                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -560,6 +573,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     justifyContent: 'center',
+    ...(Platform.OS === 'web' && {
+      transition: 'all 0.2s ease-in-out',
+      cursor: 'pointer',
+    })
+  },
+  filterButtonHovered: {
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   filterContent: {
     flexDirection: 'row',

@@ -584,7 +584,7 @@ export const AuthProvider = ({ children }) => {
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       if (!token) {
         if (is_DEBUG) {
-          console.error('MBA9876 No token found for time settings');
+          console.error('MBA9876ano2n34567890 No token found for time settings');
         }
         return;
       }
@@ -594,12 +594,12 @@ export const AuthProvider = ({ children }) => {
       });
       
       if (is_DEBUG) {
-        console.log('MBA9876 Time settings response:', response.data);
+        console.log('MBA9876ano2n34567890 Time settings response:', response.data);
       }
       
       setTimeSettings(response.data);
     } catch (error) {
-      console.error('MBA9876 Error fetching time settings:', error.response ? error.response.data : error.message);
+      console.error('MBA9876ano2n34567890 Error fetching time settings:', error.response ? error.response.data : error.message);
     }
   };
 
