@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useContext } from 'react';
-import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StatusBar, TextInput, Text, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StatusBar, TextInput, Text, TouchableOpacity, Dimensions, Alert, Image } from 'react-native';
 import { Button, Card, Paragraph, useTheme, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons'; // Import the icon library
 import { theme } from '../styles/theme';
@@ -17,17 +17,17 @@ import BookingMessageCard from '../components/BookingMessageCard';
 import { formatOccurrenceFromUTC } from '../utils/time_utils';
 
 // First, create a function to generate dynamic styles
-const createStyles = (screenWidth) => StyleSheet.create({
+const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    paddingTop: screenWidth > 1000 ? 0 : 0,
-    paddingRight: screenWidth > 1000 ? 0 : 0,
-    paddingLeft: screenWidth > 1000 ? 0 : 0,
-    height: 'calc(100vh - 64px)',
+    paddingTop: screenWidth > 900 ? 0 : 0,
+    paddingRight: screenWidth > 900 ? 0 : 0,
+    paddingLeft: screenWidth > 900 ? 0 : 0,
+    height: screenWidth > 900 ? '100vh' : 'calc(100vh - 64px)',
     overflow: 'hidden',
     position: 'fixed',
-    top: 64,
+    top: screenWidth > 900 ? 0 : 64,
     left: 0,
     right: 0,
     bottom: 0,
@@ -53,7 +53,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
-    maxWidth: screenWidth > 1000 ? '100%' : 1000,
+    maxWidth: screenWidth > 900 ? '100%' : 900,
     alignSelf: 'center',
     width: '100%',
     overflow: 'hidden',
@@ -64,24 +64,21 @@ const createStyles = (screenWidth) => StyleSheet.create({
     display: 'flex',
     flexDirection: 'column',
     maxWidth: Platform.OS === 'web' ? 
-      (screenWidth <= 1000 ? '100%' : '70%') : 
+      (screenWidth <= 900 ? '100%' : '70%') : 
       '100%',
-    alignSelf: screenWidth <= 1000 ? 'stretch' : 'flex-start',
-    width: screenWidth <= 1000 ? '100%' : 'auto',
+    alignSelf: screenWidth <= 900 ? 'stretch' : 'flex-start',
+    width: screenWidth <= 900 ? '100%' : 'auto',
     height: '100%',
   },
   conversationListContainer: {
-    width: screenWidth <= 1000 ? '100%' : '30%',
-    maxWidth: screenWidth < 1000 ? '' : 600,
-    borderRightWidth: 2,
-    backgroundColor: theme.colors.surface,
+    width: screenWidth <= 900 ? '100%' : '30%',
+    maxWidth: screenWidth < 900 ? '' : 600,
+    backgroundColor: theme.colors.surfaceContrast,
     overflow: 'auto',
   },
   conversationItem: {
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    maxWidth: screenWidth < 1000 ? '' : 600,
+    maxWidth: screenWidth < 900 ? '' : 600,
     width: '100%',
   },
   selectedConversation: {
@@ -99,19 +96,32 @@ const createStyles = (screenWidth) => StyleSheet.create({
     flexDirection: 'column',
     overflow: 'hidden',
     paddingHorizontal: 5,
+    backgroundColor: '#FDFBF5',
   },
   messageHeader: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    padding: 22,
+    backgroundColor: theme.colors.surfaceContrast,
     width: '100%',
+    // marginVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: .5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    zIndex: 1,
+  },
+  profilePhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
   },
   messageHeaderName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: theme.colors.text,
-    textAlign: 'center',
     fontFamily: theme.fonts.header.fontFamily,
   },
   messagesContainer: {
@@ -125,10 +135,14 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   inputSection: {
     width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.surfaceContrast,
     padding: screenWidth > 600 ? 16 : 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -.5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    zIndex: 1,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -140,7 +154,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   attachButton: {
     padding: 8,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.surfaceContrast,
     borderRadius: 20,
     width: 40,
     height: 40,
@@ -151,7 +165,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.surfaceContrast,
     borderRadius: 20,
     marginRight: 8,
   },
@@ -169,7 +183,7 @@ const createStyles = (screenWidth) => StyleSheet.create({
   },
   messageCard: {
     marginVertical: 4,
-    maxWidth: screenWidth > 1000 ? '40%' : '75%',
+    maxWidth: screenWidth > 900 ? '40%' : '75%',
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -550,12 +564,35 @@ const createStyles = (screenWidth) => StyleSheet.create({
   loadingMore: {
     padding: 16,
   },
+  searchContainer: {
+    padding: 16,
+    backgroundColor: theme.colors.surfaceContrast,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    marginVertical: 6,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
 });
 
 const MessageHistory = ({ navigation, route }) => {
   const { colors } = useTheme();
   const { screenWidth } = useContext(AuthContext);
-  const styles = createStyles(screenWidth);
+  const styles = createStyles(screenWidth, false);
   
   // Add loading states
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
@@ -567,7 +604,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [isSending, setIsSending] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const { is_DEBUG, is_prototype, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
+  const { is_DEBUG, is_prototype, isCollapsed, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
   const [conversations, setConversations] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -578,6 +615,7 @@ const MessageHistory = ({ navigation, route }) => {
   const initialLoadRef = useRef(true);
   const [showBookingStepModal, setShowBookingStepModal] = useState(false);
   const [currentBookingId, setCurrentBookingId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -638,7 +676,7 @@ const MessageHistory = ({ navigation, route }) => {
 
         // Normal initialization
         const conversationsData = await fetchConversations();
-        if (Platform.OS === 'web' && screenWidth > 1000 && conversationsData?.length > 0) {
+        if (Platform.OS === 'web' && screenWidth > 900 && conversationsData?.length > 0) {
           setSelectedConversation(conversationsData[0].conversation_id);
         }
       } catch (error) {
@@ -763,8 +801,8 @@ const MessageHistory = ({ navigation, route }) => {
   useEffect(() => {
     const prevWidth = prevScreenWidthRef.current;
     const hasWidthCrossedThreshold = 
-      (prevWidth <= 1000 && screenWidth > 1000) || 
-      (prevWidth > 1000 && screenWidth <= 1000);
+      (prevWidth <= 900 && screenWidth > 900) || 
+      (prevWidth > 900 && screenWidth <= 900);
 
     if (is_DEBUG) {
       console.log('MBA98765 Screen width change:', {
@@ -778,7 +816,7 @@ const MessageHistory = ({ navigation, route }) => {
 
     // Only handle width threshold crossing
     if (hasWidthCrossedThreshold) {
-      if (screenWidth > 1000 && conversations.length > 0 && !selectedConversation) {
+      if (screenWidth > 900 && conversations.length > 0 && !selectedConversation) {
         if (is_DEBUG) {
           console.log('MBA98765 Auto-selecting first conversation on width change');
         }
@@ -1298,29 +1336,32 @@ const MessageHistory = ({ navigation, route }) => {
     }
   };
 
-
-  // Add new header component
-  const renderHeader = () => {
-    if (screenWidth <= 1000 && selectedConversation) {
-      return null;
-    }
-    return (
-      <View style={styles.headerContainer}>
-        <Text style={styles.headerTitle}>Conversations</Text>
-        <Button 
-          mode="text" 
-          onPress={() => {/* Handle filter */}}
-          style={styles.filterButton}
-        >
-          Filter
-        </Button>
-      </View>
-    );
+  // Add search functionality
+  const handleSearch = (text) => {
+    setSearchQuery(text);
+    // TODO: Implement search logic here
   };
 
-  // Update the conversation list component
+  // Update conversation list to include search
   const renderConversationList = () => (
     <View style={styles.conversationListContainer}>
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <MaterialCommunityIcons 
+            name="magnify" 
+            size={20} 
+            color={theme.colors.placeholder}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search conversations"
+            placeholderTextColor={theme.colors.placeholder}
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+        </View>
+      </View>
       {conversations.map((conv) => {
         const otherParticipantName = conv.participant1_id === CURRENT_USER_ID ? 
           conv.participant2_name : conv.participant1_name;
@@ -1335,7 +1376,6 @@ const MessageHistory = ({ navigation, route }) => {
           });
         }
         
-        // Convert both IDs to strings for comparison
         const isSelected = String(conv.conversation_id) === String(selectedConversation);
         
         return (
@@ -1393,7 +1433,20 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Update the message section to handle empty states and fix positioning
+  // Update message header to include profile photo
+  const renderMessageHeader = () => (
+    <View style={styles.messageHeader}>
+      <Image
+        source={selectedConversationData?.profile_photo || require('../../assets/default-profile.png')}
+        style={styles.profilePhoto}
+      />
+      <Text style={styles.messageHeaderName}>
+        {selectedConversationData?.other_user_name}
+      </Text>
+    </View>
+  );
+
+  // Update message section to use new header
   const renderMessageSection = () => {
     if (!selectedConversation) {
       return null;
@@ -1401,15 +1454,7 @@ const MessageHistory = ({ navigation, route }) => {
 
     return (
       <View style={styles.mainSection}>
-        {/* Header - only show on web full screen */}
-        {screenWidth > 1000 && (
-          <View style={styles.messageHeader}>
-            <Text style={styles.messageHeaderName}>
-              {selectedConversationData?.other_user_name}
-            </Text>
-          </View>
-        )}
-
+        {screenWidth > 900 && renderMessageHeader()}
         {/* Messages */}
         <View style={styles.messageSection}>
           <View style={styles.messagesContainer}>
@@ -1564,7 +1609,8 @@ const MessageHistory = ({ navigation, route }) => {
   return (
     <SafeAreaView style={[
       styles.container,
-      screenWidth <= 1000 && selectedConversation && styles.mobileContainer
+      screenWidth <= 900 && selectedConversation && styles.mobileContainer,
+      { marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0 },
     ]}>
       {isLoadingConversations ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -1573,9 +1619,8 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
       ) : conversations.length > 0 ? (
         <>
-          {renderHeader()}
           <View style={styles.contentContainer}>
-            {screenWidth <= 1000 ? (
+            {screenWidth <= 900 ? (
               selectedConversation ? (
                 <View style={styles.mobileMessageView}>
                   {renderMobileHeader()}
