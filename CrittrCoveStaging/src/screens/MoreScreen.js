@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { View, StyleSheet, Alert, Platform, SafeAreaView, StatusBar } from 'react-native';
 import { List, Divider, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,7 +8,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigateToFrom } from '../components/Navigation';
 
 const MoreScreen = ({ navigation }) => {
-  const { isSignedIn, isApprovedProfessional, userRole, switchRole, signOut } = useContext(AuthContext);
+  const { isSignedIn, isApprovedProfessional, userRole, switchRole, signOut, screenWidth, isCollapsed, is_DEBUG } = useContext(AuthContext);
+  const [isMobile, setIsMobile] = useState(screenWidth <= 900);
+  const styles = createStyles(screenWidth, isCollapsed);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setIsMobile(screenWidth <= 900);
+    };
+    updateLayout();
+  }, [screenWidth]);
 
   useEffect(() => {
     const initializeRoutes = async () => {
@@ -62,8 +71,6 @@ const MoreScreen = ({ navigation }) => {
   const handleSwitchRole = async () => {
     if (isApprovedProfessional) {
       const newRole = userRole === 'professional' ? 'petOwner' : 'professional';
-      // console.log('Current role:', userRole);
-      // console.log('Switching to:', newRole);
       
       await switchRole();
       
@@ -77,7 +84,6 @@ const MoreScreen = ({ navigation }) => {
       
       // Add a small delay to ensure state is updated before navigation
       setTimeout(() => {
-        // console.log('Navigating to:', newRoute);
         navigation.navigate(newRoute);
       }, 0);
     } else {
@@ -90,10 +96,6 @@ const MoreScreen = ({ navigation }) => {
     notSignedIn: [
       { title: 'Privacy Policy', icon: 'shield-account', route: 'PrivacyPolicy' },
       { title: 'Terms of Service', icon: 'file-document', route: 'TermsOfService' },
-      // ADD after MVP is released
-    //   { title: 'Help/FAQ', icon: 'help-circle', route: 'HelpFAQ' },
-    //   { title: 'Contact Us', icon: 'email', route: 'ContactUs' },
-    //   { title: 'Settings', icon: 'cog', route: 'Settings' },
     ],
     petOwner: [
       { title: 'Profile', icon: 'account', route: 'MyProfile' },
@@ -132,110 +134,99 @@ const MoreScreen = ({ navigation }) => {
     }
 
     return items.map((item, index) => (
-      <List.Item
-        key={index}
-        title={item.title}
-        titleStyle={styles.listItemTitle}
-        left={props => 
-          Platform.OS === 'web' 
-            ? <MaterialCommunityIcons name={item.icon} size={24} color={theme.colors.primary} />
-            : <List.Icon {...props} icon={item.icon} />}
-        onPress={() => handleNavigation(item.route)}
-        style={Platform.OS === 'web' ? styles.webListItem : null}
-      />
+      <React.Fragment key={index}>
+        <List.Item
+          title={item.title}
+          titleStyle={styles.listItemTitle}
+          left={props => 
+            Platform.OS === 'web' 
+              ? <MaterialCommunityIcons 
+                  name={item.icon} 
+                  size={screenWidth <= 900 ? 20 : 24} 
+                  color={theme.colors.primary} 
+                />
+              : <List.Icon {...props} icon={item.icon} />
+          }
+          onPress={() => handleNavigation(item.route)}
+          style={[
+            styles.webListItem,
+            { paddingHorizontal: screenWidth <= 900 ? 8 : 16 }
+          ]}
+        />
+        {index < items.length - 1 && <Divider />}
+      </React.Fragment>
     ));
   };
 
-  const renderWebView = () => (
-    <View style={styles.webContainer}>
-      <View style={styles.webContent}>
-        <List.Section style={styles.webListSection}>
-          {renderMenuItems()}
-        </List.Section>
-        {isSignedIn && isApprovedProfessional && (
-          <View style={styles.webButtonContainer}>
-            <Button 
-              mode="outlined" 
-              onPress={handleSwitchRole} 
-              style={styles.webButton}
-              labelStyle={styles.buttonText}
-            >
-              Switch to {userRole === 'professional' ? 'Pet Owner' : 'Professional'} Mode
-            </Button>
+  return (
+    <View style={styles.mainContainer}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <View style={styles.webContent}>
+            <List.Section style={styles.listSection}>
+              {renderMenuItems()}
+            </List.Section>
+            {isSignedIn && isApprovedProfessional && (
+              <View style={styles.buttonContainer}>
+                <Button 
+                  mode="outlined" 
+                  onPress={handleSwitchRole} 
+                  style={styles.switchRoleButton}
+                  labelStyle={styles.buttonText}
+                >
+                  Switch to {userRole === 'professional' ? 'Pet Owner' : 'Professional'} Mode
+                </Button>
+              </View>
+            )}
+            {isSignedIn && (
+              <View style={styles.buttonContainer}>
+                <Button 
+                  mode="contained" 
+                  onPress={handleLogout} 
+                  style={[styles.logoutButton]}
+                  labelStyle={styles.buttonText}
+                >
+                  Log Out
+                </Button>
+              </View>
+            )}
           </View>
-        )}
-        {isSignedIn && (
-          <View style={styles.webButtonContainer}>
-            <Button 
-              mode="contained" 
-              onPress={handleLogout} 
-              style={[styles.webButton, styles.logoutButton]}
-              labelStyle={styles.buttonText}
-            >
-              Log Out
-            </Button>
-          </View>
-        )}
-      </View>
+        </View>
+      </SafeAreaView>
     </View>
   );
-
-  const renderMobileView = () => (
-    <SafeAreaView style={styles.container}>
-      <List.Section>
-        {renderMenuItems()}
-      </List.Section>
-      {isSignedIn && isApprovedProfessional && (
-        <View style={styles.switchRoleButtonContainer}>
-          <Button mode="outlined" onPress={handleSwitchRole} style={styles.switchRoleButton}>
-            Switch to {userRole === 'professional' ? 'Pet Owner' : 'Professional'} Mode
-          </Button>
-        </View>
-      )}
-      {isSignedIn && (
-        <View style={styles.logoutButtonContainer}>
-          <Button mode="contained" onPress={handleLogout} style={styles.logoutButton}>
-            Log Out
-          </Button>
-        </View>
-      )}
-    </SafeAreaView>
-  );
-
-  return Platform.OS === 'web' ? renderWebView() : renderMobileView();
 };
 
-const styles = StyleSheet.create({
+const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    height: '100vh',
+    overflow: 'hidden',
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
+    transition: 'margin-left 0.3s ease',
+  },
   container: {
+    flex: 1,
+  },
+  content: {
     flex: 1,
     backgroundColor: theme.colors.background,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
-  logoutButtonContainer: {
-    padding: 16,
-  },
-  logoutButton: {
-    backgroundColor: theme.colors.error,
-  },
-  switchRoleButtonContainer: {
-    padding: 16,
-  },
-  switchRoleButton: {
-    borderColor: theme.colors.primary,
-  },
-  // Web-specific styles
-  webContainer: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   webContent: {
     width: '100%',
-    maxWidth: 600,
-    padding: 16,
+    maxWidth: screenWidth > 900 ? 800 : 600,
+    alignSelf: 'center',
+    padding: screenWidth <= 900 ? 10 : 16,
+    paddingTop: screenWidth <= 900 ? 80 : 16,
   },
-  webListSection: {
+  listSection: {
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
     marginBottom: 16,
@@ -243,17 +234,21 @@ const styles = StyleSheet.create({
   webListItem: {
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
-  },
-  webButtonContainer: {
-    marginBottom: 16,
-  },
-  webButton: {
-    width: '100%',
+    paddingVertical: screenWidth <= 900 ? 8 : 12,
   },
   listItemTitle: {
+    fontSize: screenWidth <= 900 ? theme.fontSizes.medium : theme.fontSizes.large,
     fontFamily: theme.fonts.regular.fontFamily,
     fontWeight: '600',
-    fontSize: 16,
+  },
+  buttonContainer: {
+    marginBottom: 16,
+  },
+  switchRoleButton: {
+    borderColor: theme.colors.primary,
+  },
+  logoutButton: {
+    backgroundColor: theme.colors.error,
   },
   buttonText: {
     fontFamily: theme.fonts.regular.fontFamily,
