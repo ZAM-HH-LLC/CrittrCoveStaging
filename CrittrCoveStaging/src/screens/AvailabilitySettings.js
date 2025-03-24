@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform, StatusBar, Dimensions, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
@@ -13,10 +13,14 @@ import { SERVICE_TYPES, fetchAvailabilityData, ALL_SERVICES } from '../data/mock
 import AvailabilityBottomSheet from '../components/AvailabilityBottomSheet';
 import UnavailableTimesModal from '../components/UnavailableTimesModal';
 import { useNavigation } from '@react-navigation/native';
+import { AuthContext } from '../context/AuthContext';
 
 const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const AvailabilitySettings = () => {
+  const { screenWidth, isCollapsed, is_DEBUG } = useContext(AuthContext);
+  const [isMobile, setIsMobile] = useState(screenWidth <= 900);
+  const styles = createStyles(screenWidth, isCollapsed);
   const [markedDates, setMarkedDates] = useState({});
   const [selectedDates, setSelectedDates] = useState([]);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
@@ -41,6 +45,13 @@ const AvailabilitySettings = () => {
   const [isBottomSheetMinimized, setIsBottomSheetMinimized] = useState(false);
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setIsMobile(screenWidth <= 900);
+    };
+    updateLayout();
+  }, [screenWidth]);
 
   useEffect(() => {
     const loadAvailabilityData = async () => {
@@ -512,20 +523,21 @@ const AvailabilitySettings = () => {
   }
 
   return (
-    <View style={styles.mainContainer}>
-      <SafeAreaView style={styles.container}>
+    <View style={createStyles(screenWidth, isCollapsed).mainContainer}>
+      <View style={createStyles(screenWidth, isCollapsed).container}>
         <ScrollView 
-          style={styles.scrollView} 
-          contentContainerStyle={styles.scrollContent}
+          style={createStyles(screenWidth, isCollapsed).scrollView}
+          contentContainerStyle={createStyles(screenWidth, isCollapsed).scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.centeredContainer}>
-            <View style={styles.header}>
-              <Text style={styles.title}>Availability</Text>
+          <View style={createStyles(screenWidth, isCollapsed).centeredContainer}>
+            <View style={createStyles(screenWidth, isCollapsed).header}>
+              <Text style={createStyles(screenWidth, isCollapsed).title}>Availability Settings</Text>
               <TouchableOpacity 
-                style={styles.defaultSettingsButton} 
+                style={createStyles(screenWidth, isCollapsed).defaultSettingsButton}
                 onPress={() => setIsSettingsModalVisible(true)}
               >
-                <Text style={styles.defaultSettingsText}>Default Settings</Text>
+                <Text style={createStyles(screenWidth, isCollapsed).defaultSettingsText}>Default Settings</Text>
                 <IconComponent 
                   name={Platform.OS === 'web' ? 'cog' : 'settings-outline'} 
                   size={24} 
@@ -534,95 +546,65 @@ const AvailabilitySettings = () => {
               </TouchableOpacity>
             </View>
 
-            {/* TODO: make the calendar look more user friendly */}
             <Calendar
-              markedDates={{
-                ...markedDates,
-                ...selectedDates.reduce((acc, date) => ({
-                  ...acc,
-                  [date]: {
-                    ...markedDates[date],
-                    selected: true,
-                    customStyles: {
-                      container: {
-                        backgroundColor: theme.colors.primary,
-                        width: selectedDates.length === 1 ? 35 : '100%',
-                        height: 35,
-                        borderRadius: selectedDates.length === 1 ? 17.5 : 0,
-                        ...(selectedDates.length > 1 && {
-                          borderRadius: 0,
-                          ...(date === selectedDates[0] && {
-                            borderTopLeftRadius: 17.5,
-                            borderBottomLeftRadius: 17.5,
-                          }),
-                          ...(date === selectedDates[selectedDates.length - 1] && {
-                            borderTopRightRadius: 17.5,
-                            borderBottomRightRadius: 17.5,
-                          }),
-                        }),
-                      },
-                      text: { 
-                        color: 'white',
-                        fontWeight: 'bold',
-                      }
-                    }
-                  }
-                }), {})
-              }}
-              markingType={'custom'}
-              theme={{
-                'stylesheet.calendar.main': {
-                  week: {
-                    marginVertical: 0,
-                    flexDirection: 'row',
-                    justifyContent: 'space-around',
-                  },
-                  dayContainer: {
-                    flex: 1,
-                    alignItems: 'center',
-                    padding: 0,
-                    margin: 0,
-                  }
-                },
-                'stylesheet.calendar.header': {
-                  header: {
-                    paddingLeft: 10,
-                    paddingRight: 10,
-                    paddingBottom: 20,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }
-                }
-              }}
-              style={{
-                paddingBottom: 20,
-                paddingLeft: 10,
-                paddingRight: 10
-              }}
+              style={[createStyles(screenWidth, isCollapsed).calendar, { width: screenWidth <= 900 ? '100%' : 'auto' }]}
+              markedDates={markedDates}
               onDayPress={onDayPress}
-              renderArrow={renderArrow}
+              theme={{
+                backgroundColor: 'transparent',
+                calendarBackground: 'transparent',
+                textSectionTitleColor: theme.colors.text,
+                selectedDayBackgroundColor: theme.colors.primary,
+                selectedDayTextColor: '#ffffff',
+                todayTextColor: theme.colors.primary,
+                dayTextColor: theme.colors.text,
+                textDisabledColor: '#d9e1e8',
+                dotColor: theme.colors.primary,
+                monthTextColor: theme.colors.text,
+                arrowColor: theme.colors.primary,
+                indicatorColor: theme.colors.primary,
+              }}
             />
 
-            {/* Color Code Key */}
-            <View style={styles.colorKeyContainer}>
-              <Text style={styles.colorKeyTitle}>Color Code Key:</Text>
-              <View style={styles.colorKeyItem}>
-                <View style={[styles.colorBox, { backgroundColor: 'lightgrey' }]} />
-                <Text style={styles.colorKeyText}>Unavailable All Day</Text>
+            <View style={createStyles(screenWidth, isCollapsed).colorKeyContainer}>
+              <Text style={createStyles(screenWidth, isCollapsed).colorKeyTitle}>Color Key</Text>
+              <View style={createStyles(screenWidth, isCollapsed).colorKeyItem}>
+                <View style={[createStyles(screenWidth, isCollapsed).colorBox, { backgroundColor: theme.colors.calendarColor }]} />
+                <Text style={createStyles(screenWidth, isCollapsed).colorKeyText}>Unavailable</Text>
               </View>
-              <View style={styles.colorKeyItem}>
-                <View style={[styles.colorBox, { backgroundColor: theme.colors.calendarColor }]} />
-                <Text style={styles.colorKeyText}>Partially Unavailable</Text>
-              </View>
-              <View style={styles.colorKeyItem}>
-                <View style={[styles.colorBox, { backgroundColor: theme.colors.calendarColorYellowBrown }]} />
-                <Text style={styles.colorKeyText}>Booked Dates</Text>
+              <View style={createStyles(screenWidth, isCollapsed).colorKeyItem}>
+                <View style={[createStyles(screenWidth, isCollapsed).colorBox, { backgroundColor: theme.colors.calendarColorYellowBrown }]} />
+                <Text style={createStyles(screenWidth, isCollapsed).colorKeyText}>Partially Available</Text>
               </View>
             </View>
           </View>
         </ScrollView>
-      </SafeAreaView>
+
+        <TouchableOpacity 
+          style={createStyles(screenWidth, isCollapsed).addButton}
+          onPress={() => setIsAddModalVisible(true)}
+        >
+          <Icon name="add" size={24} color={theme.colors.whiteText} />
+        </TouchableOpacity>
+      </View>
+
+      {isAddModalVisible && (
+        <AddAvailabilityModal
+          visible={isAddModalVisible}
+          onClose={() => setIsAddModalVisible(false)}
+          onSave={handleAddAvailability}
+          selectedDate={selectedDates.length > 0 ? selectedDates[0] : null}
+        />
+      )}
+
+      {isSettingsModalVisible && (
+        <DefaultSettingsModal
+          isVisible={isSettingsModalVisible}
+          onClose={() => setIsSettingsModalVisible(false)}
+          onSave={handleDefaultSettingsSave}
+          defaultSettings={defaultSettings}
+        />
+      )}
 
       {(showBottomSheet || isClosing) && (
         <>
@@ -666,21 +648,23 @@ const AvailabilitySettings = () => {
         onRemoveTimeSlot={handleRemoveTimeSlot}
         bookings={bookings}
       />
-
-      <DefaultSettingsModal
-        isVisible={isSettingsModalVisible}
-        onClose={() => setIsSettingsModalVisible(false)}
-        onSave={handleDefaultSettingsSave}
-        defaultSettings={defaultSettings}
-      />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   mainContainer: {
     flex: 1,
     backgroundColor: theme.colors.background,
+    height: '100vh',
+    overflow: 'hidden',
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
+    transition: 'margin-left 0.3s ease',
   },
   container: {
     flex: 1,
@@ -698,22 +682,26 @@ const styles = StyleSheet.create({
     right: 0,
   },
   centeredContainer: {
-    maxWidth: 1000,
+    maxWidth: screenWidth > 900 ? 1000 : '100%',
     width: '100%',
     alignSelf: 'center',
     flex: 1,
+    padding: screenWidth <= 900 ? 10 : 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: screenWidth <= 900 ? 10 : 16,
+    flexWrap: screenWidth <= 600 ? 'wrap' : 'nowrap',
+    gap: screenWidth <= 600 ? 10 : 0,
   },
   title: {
-    fontSize: theme.fontSizes.large,
+    fontSize: screenWidth <= 600 ? theme.fontSizes.medium : theme.fontSizes.large,
     fontWeight: 'bold',
     color: theme.colors.text,
     fontFamily: theme.fonts.header.fontFamily,
+    width: screenWidth <= 600 ? '100%' : 'auto',
   },
   addButton: {
     position: 'absolute',
@@ -744,10 +732,13 @@ const styles = StyleSheet.create({
   },
   colorKeyContainer: {
     marginTop: 20,
-    padding: 10,
+    padding: screenWidth <= 600 ? 15 : 10,
     backgroundColor: 'white',
     borderRadius: 5,
     elevation: 2,
+    flexDirection: screenWidth <= 600 ? 'column' : 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   colorKeyTitle: {
     fontSize: 16,
@@ -758,7 +749,8 @@ const styles = StyleSheet.create({
   colorKeyItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 5,
+    marginVertical: screenWidth <= 600 ? 2 : 5,
+    flex: screenWidth <= 600 ? 0 : 1,
   },
   colorBox: {
     width: 20,
@@ -818,6 +810,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+  },
+  calendar: {
+    paddingBottom: 20,
+    paddingLeft: 10,
+    paddingRight: 10
   },
 });
 
