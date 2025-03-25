@@ -31,6 +31,7 @@ from core.booking_operations import (
 )
 import traceback
 import pytz
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -1184,5 +1185,45 @@ def delete_existing_drafts(booking, user):
     except Exception as e:
         logger.error(f"Error deleting existing drafts: {str(e)}")
         return 0
+
+class UpdateBookingDraftView(APIView):
+    def patch(self, request, draft_id):
+        # Get the draft
+        draft = get_object_or_404(BookingDraft, draft_id=draft_id)
+        
+        # Update service and pets if provided
+        if 'service_id' in request.data:
+            service = get_object_or_404(Service, id=request.data['service_id'])
+            draft.service_id = service.id
+            draft.service_type = service.service_type
+            
+        if 'pet_ids' in request.data:
+            pets = Pet.objects.filter(id__in=request.data['pet_ids'])
+            draft.pet_ids = [pet.id for pet in pets]
+            draft.pet_names = [pet.name for pet in pets]
+            
+        draft.updated_at = timezone.now()
+        draft.save()
+        
+        # Get client and professional names
+        client = Client.objects.get(id=draft.client_id) if draft.client_id else None
+        professional = Professional.objects.get(id=draft.professional_id) if draft.professional_id else None
+        
+        # Prepare response data
+        response_data = {
+            'draft_id': draft.draft_id,
+            'status': draft.status,
+            'client_name': f"{client.first_name} {client.last_name}" if client else None,
+            'professional_name': f"{professional.first_name} {professional.last_name}" if professional else None,
+            'service_type': draft.service_type,
+            'pets': draft.pet_names,
+            'occurrences': draft.occurrences if draft.occurrences else [],
+            'cost_summary': {
+                'total_client_cost': draft.total_client_cost if hasattr(draft, 'total_client_cost') else None,
+                'total_professional_payout': draft.total_professional_payout if hasattr(draft, 'total_professional_payout') else None
+            }
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
 # Placeholder: Ready for views to be added

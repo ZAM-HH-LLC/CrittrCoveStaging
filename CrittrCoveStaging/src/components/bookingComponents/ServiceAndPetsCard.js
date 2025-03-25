@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  Alert,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { AuthContext } from '../../context/AuthContext';
 import { getBookingAvailableServices, getBookingAvailablePets } from '../../api/API';
+import axios from 'axios';
 
 const ServiceAndPetsCard = ({ 
   bookingId, 
@@ -21,7 +23,9 @@ const ServiceAndPetsCard = ({
   selectedService, 
   selectedPets,
   isLoading,
-  error 
+  error,
+  onNext,
+  currentBookingId
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
   const [availableServices, setAvailableServices] = useState([]);
@@ -212,6 +216,44 @@ const ServiceAndPetsCard = ({
         </View>
       </View>
     );
+  };
+
+  const handleNext = async () => {
+    if (is_DEBUG) {
+      console.log('MBA98765 handleNext:', {
+        selectedService,
+        selectedPets,
+        currentBookingId
+      });
+    }
+
+    if (!selectedService || selectedPets.length === 0) {
+      Alert.alert('Error', 'Please select both a service and at least one pet before proceeding.');
+      return;
+    }
+
+    try {
+      // Update the draft with selected service and pets
+      const response = await axios.patch(
+        `${API_BASE_URL}/api/booking_drafts/v1/${currentBookingId}/update/`,
+        {
+          service_id: selectedService.service_id,
+          pet_ids: selectedPets.map(pet => pet.pet_id)
+        }
+      );
+
+      if (is_DEBUG) {
+        console.log('MBA98765 Draft update response:', response.data);
+      }
+
+      // If successful, proceed to next step
+      onNext();
+    } catch (error) {
+      if (is_DEBUG) {
+        console.log('MBA98765 Error updating draft:', error);
+      }
+      Alert.alert('Error', 'Failed to update booking draft. Please try again.');
+    }
   };
 
   if (isLoading) {

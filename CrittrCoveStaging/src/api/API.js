@@ -19,6 +19,8 @@ export const getProfessionalServices = async () => {
   }
 };
 
+// Get all available services for a pro and
+// return the selected ones in the draft
 export const getBookingAvailableServices = async (bookingId) => {
   try {
     const token = await getStorage('userToken');

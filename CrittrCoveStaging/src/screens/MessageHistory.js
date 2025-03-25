@@ -1197,18 +1197,12 @@ const MessageHistory = ({ navigation, route }) => {
         <BookingMessageCard
           type={item.type_of_message === 'initial_booking_request' ? 'request' : 'approval'}
           data={{
-            service_type: item.metadata.service_type,
-            total_client_cost: totalClientCost,
+            ...item.metadata,
             occurrences: formattedOccurrences,
-            booking_id: item.metadata.booking_id,
+            totalClientCost
           }}
           isFromMe={isFromMe}
-          isProfessional={selectedConversationData?.is_professional}
-          onPress={() => navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
-            bookingId: item.metadata.booking_id,
-            initialData: null,
-            isProfessional: selectedConversationData.is_professional
-          })}
+          onEditDraft={() => handleEditDraft(item.metadata.draft_id)}
         />
       );
     }
@@ -1527,14 +1521,8 @@ const MessageHistory = ({ navigation, route }) => {
           <TouchableOpacity 
             style={styles.editDraftButton}
             onPress={() => {
-              if (draftData?.booking_id) {
-                navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
-                  bookingId: draftData.booking_id,
-                  initialData: null,
-                  isProfessional: selectedConversationData.is_professional,
-                  isEditingDraft: true,
-                  draftId: draftData.draft_id
-                });
+              if (draftData?.draft_id) {
+                handleEditDraft(draftData.draft_id);
               }
             }}
           >
@@ -1709,6 +1697,26 @@ const MessageHistory = ({ navigation, route }) => {
       </Button>
     </View>
   );
+
+  const handleEditDraft = (draft_id) => {
+    if (is_DEBUG) {
+      console.log('MBA98765 handleEditDraft:', {
+        draft_id,
+        showBookingStepModal
+      });
+    }
+    
+    // Use the provided draft_id
+    setCurrentBookingId(draft_id);
+    setShowDraftConfirmModal(false); // Ensure draft confirm modal is closed
+    // Add a small delay to ensure modal state is updated
+    setTimeout(() => {
+      if (is_DEBUG) {
+        console.log('MBA98765 Opening BookingStepModal with draft:', draft_id);
+      }
+      setShowBookingStepModal(true);
+    }, 100);
+  };
 
   return (
     <SafeAreaView style={[
