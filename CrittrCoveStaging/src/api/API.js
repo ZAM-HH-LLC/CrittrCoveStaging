@@ -23,7 +23,7 @@ export const getBookingAvailableServices = async (bookingId) => {
   try {
     const token = await getStorage('userToken');
     const response = await axios.get(
-      `${API_BASE_URL}/api/bookings/v1/${bookingId}/available_services/`,
+      `${API_BASE_URL}/api/booking_drafts/v1/${bookingId}/available_services/`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

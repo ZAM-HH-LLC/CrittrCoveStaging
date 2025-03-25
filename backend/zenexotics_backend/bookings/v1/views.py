@@ -439,21 +439,17 @@ class CreateBookingView(APIView):
             other_user_id = conversation.participant1_id if conversation.participant1_id != request.user.id else conversation.participant2_id
             client = get_object_or_404(Client, user_id=other_user_id)
 
-            # Check for existing in-progress draft
-            existing_draft = BookingDraft.objects.filter(
-                booking=None,
+            # Delete any existing in-progress drafts between these users
+            existing_drafts = BookingDraft.objects.filter(
+                Q(booking=None) | Q(booking__client=client, booking__professional=professional),
                 status='IN_PROGRESS',
                 draft_data__has_key='client_id',
                 draft_data__client_id=client.id,
                 draft_data__professional_id=professional.professional_id
-            ).first()
-
-            if existing_draft:
-                return Response({
-                    'draft_id': existing_draft.draft_id,
-                    'status': existing_draft.status,
-                    'draft_data': existing_draft.draft_data
-                })
+            )
+            if existing_drafts.exists():
+                logger.info(f"Deleting {existing_drafts.count()} existing drafts for client {client.id} and professional {professional.professional_id}")
+                existing_drafts.delete()
 
             # Create initial draft data
             draft_data = {
@@ -464,7 +460,8 @@ class CreateBookingView(APIView):
                 'status': BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
                 'pets': [],
                 'occurrences': [],
-                'can_edit': True
+                'can_edit': True,
+                'conversation_id': conversation_id  # Add conversation_id to draft data
             }
 
             # Create the draft
@@ -473,6 +470,8 @@ class CreateBookingView(APIView):
                 last_modified_by='PROFESSIONAL',
                 status='IN_PROGRESS'
             )
+
+            logger.info(f"Created new draft {draft.draft_id} for client {client.id} and professional {professional.professional_id}")
 
             return Response({
                 'draft_id': draft.draft_id,

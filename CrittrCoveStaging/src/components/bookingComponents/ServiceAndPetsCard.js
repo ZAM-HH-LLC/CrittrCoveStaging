@@ -42,11 +42,20 @@ const ServiceAndPetsCard = ({
     try {
       setIsLoadingServices(true);
       setServiceError(null);
-      const services = await getBookingAvailableServices(bookingId);
+      const response = await getBookingAvailableServices(bookingId);
       if (is_DEBUG) {
-        console.log('MBA12345 Available services:', services);
+        console.log('MBA12345 Available services response:', response);
       }
-      setAvailableServices(services);
+      setAvailableServices(response.services);
+      
+      // If there's a selected service in the response and no service is currently selected,
+      // automatically select it
+      if (response.selected_service_id && !selectedService) {
+        const serviceToSelect = response.services.find(s => s.service_id === response.selected_service_id);
+        if (serviceToSelect) {
+          onServiceSelect(serviceToSelect);
+        }
+      }
     } catch (error) {
       if (is_DEBUG) {
         console.error('MBA12345 Error fetching services:', error);
@@ -61,11 +70,18 @@ const ServiceAndPetsCard = ({
     try {
       setIsLoadingPets(true);
       setPetsError(null);
-      const pets = await getBookingAvailablePets(bookingId);
+      const response = await getBookingAvailablePets(bookingId);
       if (is_DEBUG) {
-        console.log('MBA12345 Available pets:', pets);
+        console.log('MBA12345 Available pets response:', response);
       }
-      setAvailablePets(pets);
+      setAvailablePets(response.pets);
+      
+      // If there are selected pets in the response and no pets are currently selected,
+      // automatically select them
+      if (response.selected_pet_ids && response.selected_pet_ids.length > 0 && selectedPets.length === 0) {
+        const petsToSelect = response.pets.filter(p => response.selected_pet_ids.includes(p.pet_id));
+        petsToSelect.forEach(pet => onPetSelect(pet));
+      }
     } catch (error) {
       if (is_DEBUG) {
         console.error('MBA12345 Error fetching pets:', error);

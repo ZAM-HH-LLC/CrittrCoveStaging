@@ -10,6 +10,7 @@ from booking_pets.models import BookingPets
 from booking_drafts.models import BookingDraft
 from pets.models import Pet
 from professionals.models import Professional
+from clients.models import Client
 from bookings.constants import BookingStates
 from services.models import Service
 from booking_occurrences.models import BookingOccurrence
@@ -27,7 +28,6 @@ from core.booking_operations import (
     calculate_occurrence_rates, 
     create_occurrence_data, 
     calculate_cost_summary
-    
 )
 import traceback
 import pytz
@@ -384,31 +384,109 @@ def update_draft_with_service(booking, service_id=None, occurrence_services=None
 # Views for booking_drafts app will be added here
 
 
+class AvailableServicesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, booking_id):
+        try:
+            # Get the draft and verify professional access
+            draft = get_object_or_404(BookingDraft, draft_id=booking_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            # If draft has a booking, verify it belongs to the professional
+            if draft.booking and draft.booking.professional != professional:
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Get all approved services for the professional
+            services = Service.objects.filter(
+                professional=professional,
+                moderation_status='APPROVED'
+            )
+
+            # Check for selected service in draft data
+            selected_service_id = None
+            if draft.draft_data and 'service_details' in draft.draft_data:
+                selected_service_id = draft.draft_data['service_details'].get('service_id')
+
+            # Format the response
+            services_data = [
+                OrderedDict([
+                    ('service_id', service.service_id),
+                    ('service_name', service.service_name),
+                    ('base_rate', service.base_rate),
+                    ('additional_animal_rate', service.additional_animal_rate),
+                    ('applies_after', service.applies_after),
+                    ('holiday_rate', service.holiday_rate),
+                    ('unit_of_time', service.unit_of_time),
+                    ('is_selected', service.service_id == selected_service_id)
+                ])
+                for service in services
+            ]
+
+            return Response({
+                'services': services_data,
+                'selected_service_id': selected_service_id
+            })
+        except Exception as e:
+            logger.error(f"Error in AvailableServicesView: {str(e)}")
+            return Response(
+                {"error": "Failed to get available services"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 class AvailablePetsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, booking_id):
-        # Get the booking and verify professional access
-        booking = get_object_or_404(Booking, booking_id=booking_id)
-        professional = get_object_or_404(Professional, user=request.user)
-        if booking.professional != professional:
-            return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            # Get the draft and verify professional access
+            draft = get_object_or_404(BookingDraft, draft_id=booking_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            # If draft has a booking, verify it belongs to the professional
+            if draft.booking and draft.booking.professional != professional:
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
-        # Get all pets for the client
-        client_pets = Pet.objects.filter(owner=booking.client.user)
+            # Get the client from the draft data or booking
+            client = None
+            if draft.booking:
+                client = draft.booking.client
+            elif draft.draft_data and 'client_id' in draft.draft_data:
+                client = Client.objects.get(id=draft.draft_data['client_id'])
 
-        # Format the response
-        pets_data = [
-            OrderedDict([
-                ('name', pet.name),
-                ('breed', pet.breed),
-                ('pet_id', pet.pet_id),
-                ('species', pet.species)
-            ])
-            for pet in client_pets
-        ]
+            if not client:
+                return Response({"error": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response(pets_data)
+            # Get all pets for the client
+            client_pets = Pet.objects.filter(owner=client.user)
+
+            # Get selected pets from draft data
+            selected_pet_ids = []
+            if draft.draft_data and 'pets' in draft.draft_data:
+                selected_pet_ids = [pet['pet_id'] for pet in draft.draft_data['pets']]
+
+            # Format the response
+            pets_data = [
+                OrderedDict([
+                    ('name', pet.name),
+                    ('breed', pet.breed),
+                    ('pet_id', pet.pet_id),
+                    ('species', pet.species),
+                    ('is_selected', pet.pet_id in selected_pet_ids)
+                ])
+                for pet in client_pets
+            ]
+
+            return Response({
+                'pets': pets_data,
+                'selected_pet_ids': selected_pet_ids
+            })
+        except Exception as e:
+            logger.error(f"Error in AvailablePetsView: {str(e)}")
+            return Response(
+                {"error": "Failed to get available pets"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class UpdateBookingPetsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1076,5 +1154,35 @@ class GetServiceRatesView(APIView):
                 {"error": "Failed to get service rates"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+def delete_existing_drafts(booking, user):
+    """Helper function to delete existing drafts and log the interaction"""
+    try:
+        existing_drafts = BookingDraft.objects.filter(booking=booking)
+        if existing_drafts.exists():
+            # Log the interaction before deleting
+            for draft in existing_drafts:
+                InteractionLog.objects.create(
+                    user=user,
+                    action='BOOKING_DRAFT_DELETED',
+                    target_type='BOOKING_DRAFT',
+                    target_id=str(booking.booking_id),
+                    metadata={
+                        'booking_id': booking.booking_id,
+                        'draft_data': draft.draft_data,
+                        'reason': 'Creating new draft'
+                    }
+                )
+            
+            # Delete the drafts
+            count = existing_drafts.count()
+            existing_drafts.delete()
+            
+            logger.info(f"Deleted {count} existing drafts for booking {booking.booking_id}")
+            return count
+        return 0
+    except Exception as e:
+        logger.error(f"Error deleting existing drafts: {str(e)}")
+        return 0
 
 # Placeholder: Ready for views to be added

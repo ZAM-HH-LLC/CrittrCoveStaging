@@ -24,6 +24,7 @@ from core.time_utils import (
 )
 import pytz
 from decimal import Decimal
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -130,23 +131,39 @@ def get_conversation_messages(request, conversation_id):
             # Get the other participant
             other_user = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
             
-            # Check if there's a draft between these users
-            draft = BookingDraft.objects.filter(
-                booking__client__user=other_user,
-                booking__professional__user=current_user,
-                status='IN_PROGRESS'
-            ).first()
+            # Determine if current user is professional
+            is_professional = Professional.objects.filter(user=current_user).exists()
+            
+            if is_professional:
+                # For professionals, check for drafts where they are the professional and other user is client
+                draft = BookingDraft.objects.filter(
+                    Q(booking=None) | Q(booking__client__user=other_user),
+                    draft_data__has_key='client_id',
+                    draft_data__client_id=Client.objects.get(user=other_user).id,
+                    draft_data__professional_id=Professional.objects.get(user=current_user).professional_id,
+                    status='IN_PROGRESS'
+                ).first()
+            else:
+                # For clients, check for drafts where they are the client and other user is professional
+                draft = BookingDraft.objects.filter(
+                    Q(booking=None) | Q(booking__client__user=current_user),
+                    draft_data__has_key='client_id',
+                    draft_data__client_id=Client.objects.get(user=current_user).id,
+                    draft_data__professional_id=Professional.objects.get(user=other_user).professional_id,
+                    status='IN_PROGRESS'
+                ).first()
             
             if draft:
                 has_draft = True
                 draft_data = {
                     'draft_id': draft.draft_id,
-                    'booking_id': draft.booking.booking_id,
+                    'booking_id': draft.booking.booking_id if draft.booking else None,
                     'status': draft.status,
                     'last_modified_by': draft.last_modified_by
                 }
         except Exception as e:
             logger.error(f"Error checking for draft: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
 
         return Response({
             'messages': messages_data,

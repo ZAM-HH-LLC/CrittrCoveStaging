@@ -15,6 +15,7 @@ import axios from 'axios';
 import { navigateToFrom } from '../components/Navigation';
 import BookingMessageCard from '../components/BookingMessageCard';
 import { formatOccurrenceFromUTC } from '../utils/time_utils';
+import DraftConfirmationModal from '../components/DraftConfirmationModal';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
@@ -640,6 +641,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [hasDraft, setHasDraft] = useState(false);
   const [draftData, setDraftData] = useState(null);
+  const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -977,13 +979,15 @@ const MessageHistory = ({ navigation, route }) => {
     }
   };
 
-  // Update the handleCreateBooking function to use selectedConversationData consistently
+  // Update the handleCreateBooking function
   const handleCreateBooking = async () => {
     if (is_DEBUG) {
       console.log('MBA98765 handleCreateBooking:', {
         selectedConversationData,
         selectedConversation,
-        isProfessional: selectedConversationData?.is_professional
+        isProfessional: selectedConversationData?.is_professional,
+        hasDraft,
+        draftData
       });
     }
     
@@ -1012,42 +1016,90 @@ const MessageHistory = ({ navigation, route }) => {
 
     if (isProfessional) {
       if (is_DEBUG) {
-        console.log('MBA98765 User is professional - creating booking and showing step modal');
+        console.log('MBA98765 User is professional - checking for existing draft', { hasDraft, draftData });
       }
-      try {
-        const token = await getStorage('userToken');
-        const response = await axios.post(
-          `${API_BASE_URL}/api/bookings/v1/create/`,
-          {
-            conversation_id: selectedConversation
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
 
-        if (is_DEBUG) {
-          console.log('MBA98765 Created booking with ID:', response.data.booking_id);
-        }
-
-        if (response.data.booking_id) {
-          setCurrentBookingId(response.data.booking_id);
-          // Ensure we set the modal to visible after setting the booking ID
-          setTimeout(() => {
-            setShowBookingStepModal(true);
-          }, 0);
-        }
-      } catch (error) {
-        console.error('Error creating booking:', error);
-        Alert.alert('Error', 'Unable to create booking. Please try again.');
+      if (hasDraft && draftData) {
+        // Show the draft confirmation modal
+        setShowDraftConfirmModal(true);
+      } else {
+        // No existing draft, create new one
+        await createNewDraft();
       }
     } else {
       console.log('MBA98765 User is client - showing request modal');
       setShowRequestModal(true);
     }
+  };
+
+  // Helper function to create a new draft
+  const createNewDraft = async () => {
+    try {
+      const token = await getStorage('userToken');
+      const response = await axios.post(
+        `${API_BASE_URL}/api/bookings/v1/create/`,
+        {
+          conversation_id: selectedConversation
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (is_DEBUG) {
+        console.log('MBA98765 Create draft response:', response.data);
+      }
+
+      // Refresh messages to update draft status
+      await fetchMessages(selectedConversation, 1);
+
+      // Open BookingStepModal with new draft
+      if (response.data.draft_id) {
+        setCurrentBookingId(response.data.draft_id);
+        setTimeout(() => {
+          setShowBookingStepModal(true);
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error creating draft:', error);
+      Alert.alert('Error', 'Unable to create draft. Please try again.');
+    }
+  };
+
+  // Add the handleContinueExisting function
+  const handleContinueExisting = () => {
+    if (is_DEBUG) {
+      console.log('MBA98765 handleContinueExisting:', {
+        draftData,
+        showDraftConfirmModal,
+        showBookingStepModal
+      });
+    }
+
+    setShowDraftConfirmModal(false);
+    
+    // Use draft_id instead of booking_id
+    if (draftData?.draft_id) {
+      setCurrentBookingId(draftData.draft_id);
+      // Add a small delay to ensure modal state is updated
+      setTimeout(() => {
+        if (is_DEBUG) {
+          console.log('MBA98765 Opening BookingStepModal with draft:', draftData.draft_id);
+        }
+        setShowBookingStepModal(true);
+      }, 100);
+    } else {
+      console.error('MBA98765 No draft_id found in draftData:', draftData);
+    }
+  };
+
+  // Add the handleCreateNew function
+  const handleCreateNew = async () => {
+    setShowDraftConfirmModal(false);
+    await createNewDraft();
   };
 
   // Update loadMoreMessages to check current state before loading
@@ -1715,6 +1767,13 @@ const MessageHistory = ({ navigation, route }) => {
           setShowBookingStepModal(false);
           setCurrentBookingId(null);
         }}
+      />
+
+      <DraftConfirmationModal
+        visible={showDraftConfirmModal}
+        onClose={() => setShowDraftConfirmModal(false)}
+        onContinueExisting={handleContinueExisting}
+        onCreateNew={handleCreateNew}
       />
     </SafeAreaView>
   );
