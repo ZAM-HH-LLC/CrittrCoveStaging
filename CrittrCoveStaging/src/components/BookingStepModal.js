@@ -17,6 +17,7 @@ import ServiceAndPetsCard from './bookingComponents/ServiceAndPetsCard';
 import DateSelectionCard from './bookingComponents/DateSelectionCard';
 import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
+import { updateBookingDraftPetsAndServices } from '../api/API';
 
 const STEPS = {
   SERVICES_AND_PETS: {
@@ -74,23 +75,15 @@ const BookingStepModal = ({
     if (is_DEBUG) {
       console.log('MBA12345 Selected/deselected pet:', pet);
     }
-    setBookingData(prev => {
-      const existingPetIndex = prev.pets.findIndex(p => p.pet_id === pet.pet_id);
-      let updatedPets;
+    
+    const updatedPets = bookingData.pets.find(p => p.pet_id === pet.pet_id)
+      ? bookingData.pets.filter(p => p.pet_id !== pet.pet_id)
+      : [...bookingData.pets, pet];
 
-      if (existingPetIndex >= 0) {
-        // Remove pet if already selected
-        updatedPets = prev.pets.filter(p => p.pet_id !== pet.pet_id);
-      } else {
-        // Add pet if not selected
-        updatedPets = [...prev.pets, pet];
-      }
-
-      return {
-        ...prev,
-        pets: updatedPets
-      };
-    });
+    setBookingData(prev => ({
+      ...prev,
+      pets: updatedPets
+    }));
   };
 
   const handleDateSelect = (dateData) => {
@@ -187,7 +180,7 @@ const BookingStepModal = ({
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!canProceedToNextStep()) {
       setError('Please complete all required fields before proceeding');
       return;
@@ -195,6 +188,21 @@ const BookingStepModal = ({
 
     setError(null);
     if (currentStep < STEPS.REVIEW_AND_RATES.id) {
+      // If we're on the first step, update the draft with selected service and pets
+      if (currentStep === STEPS.SERVICES_AND_PETS.id) {
+        try {
+          await updateBookingDraftPetsAndServices(bookingId, {
+            service_id: bookingData.service?.service_id,
+            pets: bookingData.pets
+          });
+        } catch (error) {
+          if (is_DEBUG) {
+            console.error('MBA12345 Error updating booking draft:', error);
+          }
+          setError('Failed to save service and pet selections');
+          return;
+        }
+      }
       setCurrentStep(prev => prev + 1);
     } else {
       onComplete(bookingData);

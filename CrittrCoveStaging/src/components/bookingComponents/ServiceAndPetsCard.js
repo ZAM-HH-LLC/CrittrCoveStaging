@@ -136,6 +136,14 @@ const ServiceAndPetsCard = ({
         ]}>
           {service.service_name}
         </Text>
+        {isSelected && (
+          <MaterialCommunityIcons 
+            name="check" 
+            size={24} 
+            color={theme.colors.mainColors.main}
+            style={styles.serviceCheckIcon}
+          />
+        )}
       </TouchableOpacity>
     );
   };
@@ -457,6 +465,11 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     textAlign: 'center',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  serviceCheckIcon: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
 });
 

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
-import { getStorage } from '../context/AuthContext';
+import { getStorage, debugLog } from '../context/AuthContext';
 
 // Get all professional services for service manager screen
 export const getProfessionalServices = async () => {
@@ -75,6 +75,33 @@ export const approveBooking = async (bookingId) => {
     return response.data;
   } catch (error) {
     console.error('Error approving booking:', error);
+    throw error;
+  }
+};
+
+export const updateBookingDraftPetsAndServices = async (draftId, data) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await axios.patch(
+      `${API_BASE_URL}/api/booking_drafts/v1/${draftId}/update_pets_and_services/`,
+      data,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    debugLog('MBA12345 Draft update response:', response.data);
+
+    return response.data;
+  } catch (error) {
+    debugLog('MBA12345 Error updating booking draft:', error);
     throw error;
   }
 };

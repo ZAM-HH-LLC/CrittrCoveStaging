@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
@@ -25,6 +25,19 @@ export const getStorage = async (key) => {
   }
 };
 
+// Create a debug logging utility
+let debugEnabled = false;
+
+export const setDebugEnabled = (enabled) => {
+  debugEnabled = enabled;
+};
+
+export const debugLog = (message) => {
+  if (debugEnabled) {
+    console.log(message);
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userRole, setUserRole] = useState(null);
@@ -44,6 +57,11 @@ export const AuthProvider = ({ children }) => {
 
   // Set is_DEBUG to false by default in prototype mode
   const [is_DEBUG, setIsDebug] = useState(true);
+
+  // Update debug state when is_DEBUG changes
+  useEffect(() => {
+    setDebugEnabled(is_DEBUG);
+  }, [is_DEBUG]);
 
   // Preload Stripe modules when user signs in
   useEffect(() => {

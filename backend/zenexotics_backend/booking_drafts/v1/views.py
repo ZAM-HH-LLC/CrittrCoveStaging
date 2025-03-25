@@ -1226,4 +1226,104 @@ class UpdateBookingDraftView(APIView):
         
         return Response(response_data, status=status.HTTP_200_OK)
 
+class UpdateBookingDraftPetsAndServicesView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def patch(self, request, draft_id):
+        logger.info("MBA12345 - Starting UpdateBookingDraftPetsAndServicesView.patch")
+        logger.info(f"MBA12345 - Request data: {request.data}")
+        
+        try:
+            # Get the draft and verify professional access
+            draft = get_object_or_404(BookingDraft, draft_id=draft_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if draft.booking and draft.booking.professional != professional:
+                logger.error(f"MBA12345 - Unauthorized access attempt by {request.user.email} for draft {draft_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Update service if provided
+            if 'service_id' in request.data:
+                service = get_object_or_404(
+                    Service,
+                    service_id=request.data['service_id'],
+                    professional=professional,
+                    moderation_status='APPROVED'
+                )
+                if 'service_details' not in draft.draft_data:
+                    draft.draft_data['service_details'] = {}
+                draft.draft_data['service_details'].update({
+                    'service_type': service.service_name,
+                    'service_id': service.service_id
+                })
+
+            # Update pets if provided
+            if 'pets' in request.data:
+                pets_data = request.data['pets']
+                if not isinstance(pets_data, list):
+                    return Response(
+                        {"error": "Invalid pets data format"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Get client from booking or draft data
+                client = None
+                if draft.booking:
+                    client = draft.booking.client
+                elif draft.draft_data and 'client_id' in draft.draft_data:
+                    client = Client.objects.get(id=draft.draft_data['client_id'])
+                else:
+                    return Response(
+                        {"error": "Client not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                # Validate all pets belong to the client
+                for pet_data in pets_data:
+                    try:
+                        Pet.objects.get(pet_id=pet_data['pet_id'], owner=client.user)
+                    except Pet.DoesNotExist:
+                        return Response(
+                            {"error": f"Pet with ID {pet_data['pet_id']} not found or does not belong to client"},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+
+                draft.draft_data['pets'] = pets_data
+
+            # Update draft status if needed
+            if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
+                draft.draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+
+            # Save the draft
+            draft.save()
+
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_DRAFT_UPDATED',
+                target_type='BOOKING_DRAFT',
+                target_id=str(draft_id),
+                metadata={
+                    'draft_id': draft_id,
+                    'service_updated': 'service_id' in request.data,
+                    'pets_updated': 'pets' in request.data,
+                    'status_changed': draft.draft_data.get('status') != draft.booking.status if draft.booking else False
+                }
+            )
+
+            logger.info(f"MBA12345 - Successfully updated booking draft {draft_id}")
+            return Response({
+                'status': 'success',
+                'draft_data': draft.draft_data
+            })
+
+        except Exception as e:
+            logger.error(f"MBA12345 - Error in UpdateBookingDraftPetsAndServicesView: {str(e)}")
+            logger.error(f"MBA12345 - Full error traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": f"An error occurred while updating the booking draft: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 # Placeholder: Ready for views to be added
