@@ -11,6 +11,7 @@ import { theme } from '../styles/theme';
 import { navigateToFrom } from '../components/Navigation';
 import ProfessionalServiceCard from '../components/ProfessionalServiceCard';
 import { getProfessionalServices } from '../api/API';
+import BookingCard from '../components/BookingCard';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -141,9 +142,10 @@ const ProfessionalDashboard = ({ navigation }) => {
       setIsLoading(true);
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       
-      // Fetch bookings
+      // Fetch bookings based on user role
+      const endpoint = isProfessional ? 'professionals' : 'clients';
       const bookingsResponse = await axios.get(
-        `${API_BASE_URL}/api/${userRole === 'professional' ? 'professionals' : 'users'}/v1/dashboard/`,
+        `${API_BASE_URL}/api/${endpoint}/v1/dashboard/`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -154,7 +156,7 @@ const ProfessionalDashboard = ({ navigation }) => {
       setBookings(bookingsResponse.data.upcoming_bookings || []);
 
       // Fetch services if professional
-      if (userRole === 'professional') {
+      if (isProfessional) {
         try {
           const servicesData = await getProfessionalServices();
           setServices(servicesData || []);
@@ -347,57 +349,47 @@ const ProfessionalDashboard = ({ navigation }) => {
         </View>
       ) : filteredBookings.length > 0 ? (
         filteredBookings.map((booking) => (
-          <TouchableOpacity
+          <BookingCard
             key={is_prototype ? booking.id : booking.booking_id}
-            onPress={() => navigateToFrom(navigation, 'BookingDetails', 'ProfessionalDashboard', { 
+            booking={{
+              id: is_prototype ? booking.id : booking.booking_id,
+              clientName: is_prototype ? booking.client : booking.client_name,
+              serviceName: is_prototype ? booking.service : booking.service_type,
+              date: is_prototype ? booking.date : booking.start_date,
+              time: is_prototype ? booking.time : booking.start_time,
+              status: is_prototype ? booking.status : booking.status,
+              pets: is_prototype ? [{ name: booking.pet }] : booking.pets
+            }}
+            type="professional"
+            onViewDetails={() => navigateToFrom(navigation, 'BookingDetails', 'ProfessionalDashboard', { 
               bookingId: is_prototype ? booking.id : booking.booking_id 
             })}
-            style={styles.bookingItem}
-          >
-            <View style={styles.bookingContent}>
-              <View style={styles.bookingInfo}>
-                <MaterialCommunityIcons name="calendar" size={24} color={theme.colors.primary} />
-                <View style={styles.bookingDetails}>
-                  <Text style={styles.bookingTitle}>
-                    {is_prototype ? 
-                      `${booking.client} - ${booking.pet}` :
-                      `${booking.client_name} - ${booking.pets.slice(0, 3).map(pet => pet.name).join(', ')}${booking.pets.length > 3 ? '...' : ''}`
-                    }
-                  </Text>
-                  <Text style={styles.bookingTime}>
-                    {is_prototype ?
-                      `${booking.date} at ${booking.time}` :
-                      `${booking.start_date} at ${booking.start_time}`
-                    }
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.bookingStatus}>
-                <Text style={[styles.statusText, { color: theme.colors.primary }]}>
-                  {booking.status ? 
-                    booking.status :
-                    'Error, status not found. Please contact support.'  // Default status for upcoming bookings from dashboard
-                  }
-                </Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progress, { width: '60%' }]} />
-                </View>
-                <Text style={styles.timeLeft}>2 hours left</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
+          />
         ))
       ) : (
         <View style={styles.emptyStateContainer}>
           <MaterialCommunityIcons name="calendar" size={48} color={theme.colors.textSecondary} />
           <Text style={styles.emptyStateTitle}>No {activeFilter} bookings</Text>
-          <Text style={styles.emptyStateText}>Create services to start receiving bookings from clients.</Text>
+          <Text style={styles.emptyStateText}>
+            {isProfessional 
+              ? 'Create services to start receiving bookings from clients.'
+              : 'Find professional services to book your first appointment.'}
+          </Text>
           <TouchableOpacity
             style={styles.createServiceButton}
-            onPress={() => navigateToFrom(navigation, 'ServiceManager', 'ProfessionalDashboard')}
+            onPress={() => navigateToFrom(navigation, 
+              isProfessional ? 'ServiceManager' : 'SearchProfessionals', 
+              'ProfessionalDashboard'
+            )}
           >
-            <MaterialCommunityIcons name="plus" size={20} color={theme.colors.surface} />
-            <Text style={styles.createServiceButtonText}>Create Service</Text>
+            <MaterialCommunityIcons 
+              name={isProfessional ? "plus" : "magnify"} 
+              size={20} 
+              color={theme.colors.surface} 
+            />
+            <Text style={styles.createServiceButtonText}>
+              {isProfessional ? 'Create Service' : 'Find Professionals'}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
