@@ -146,7 +146,12 @@ const ProfessionalDashboard = ({ navigation }) => {
         `${API_BASE_URL}/api/${userRole === 'professional' ? 'professionals' : 'users'}/v1/dashboard/`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setBookings(bookingsResponse.data.bookings || []);
+
+      if (is_DEBUG) {
+        console.log('MBA5678 Dashboard response:', bookingsResponse.data);
+      }
+
+      setBookings(bookingsResponse.data.upcoming_bookings || []);
 
       // Fetch services if professional
       if (userRole === 'professional') {
@@ -369,7 +374,10 @@ const ProfessionalDashboard = ({ navigation }) => {
               </View>
               <View style={styles.bookingStatus}>
                 <Text style={[styles.statusText, { color: theme.colors.primary }]}>
-                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                  {booking.status ? 
+                    booking.status :
+                    'Error, status not found. Please contact support.'  // Default status for upcoming bookings from dashboard
+                  }
                 </Text>
                 <View style={styles.progressBar}>
                   <View style={[styles.progress, { width: '60%' }]} />

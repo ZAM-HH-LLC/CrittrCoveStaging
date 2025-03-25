@@ -67,7 +67,8 @@ def get_professional_dashboard(request):
                     'start_date': next_occurrence.start_date,
                     'start_time': next_occurrence.start_time,
                     'service_type': booking.service_id.service_name,
-                    'pets': SimplePetSerializer(Pet.objects.filter(bookingpets__booking=booking), many=True).data
+                    'pets': SimplePetSerializer(Pet.objects.filter(bookingpets__booking=booking), many=True).data,
+                    'status': booking.status
                 }
                 serialized_bookings.append(booking_data)
 
