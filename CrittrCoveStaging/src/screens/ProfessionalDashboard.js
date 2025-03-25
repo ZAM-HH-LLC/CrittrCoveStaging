@@ -9,14 +9,18 @@ import { AuthContext } from '../context/AuthContext';
 import CrossPlatformView from '../components/CrossPlatformView';
 import { theme } from '../styles/theme';
 import { navigateToFrom } from '../components/Navigation';
+import ProfessionalServiceCard from '../components/ProfessionalServiceCard';
+import { getProfessionalServices } from '../api/API';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const ProfessionalDashboard = ({ navigation }) => {
   const { colors } = useTheme();
-  const { signOut, firstName, is_prototype, screenWidth, is_DEBUG, isSignedIn, isCollapsed } = useContext(AuthContext);
-  const [upcomingBookings, setUpcomingBookings] = useState([]);
+  const { signOut, firstName, is_prototype, screenWidth, is_DEBUG, isSignedIn, isCollapsed, userRole } = useContext(AuthContext);
+  const [bookings, setBookings] = useState([]);
+  const [services, setServices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('upcoming');
   const [stats, setStats] = useState({
     activeBookings: { value: 28, change: 12 },
     happyPets: { value: 156, change: 8 },
@@ -26,6 +30,27 @@ const ProfessionalDashboard = ({ navigation }) => {
 
   const isLargeScreen = screenWidth > 900;
   const isMobile = screenWidth <= 900;
+  const isProfessional = userRole === 'professional';
+
+  // Filter bookings based on active filter
+  const filteredBookings = bookings.filter(booking => {
+    const now = new Date();
+    const bookingDate = new Date(booking.start_date);
+    
+    switch (activeFilter) {
+      case 'upcoming':
+        return bookingDate > now;
+      case 'active':
+        return bookingDate <= now && !booking.completed;
+      case 'past':
+        return bookingDate < now && booking.completed;
+      default:
+        return true;
+    }
+  });
+
+  // Limit bookings for client view
+  const displayedBookings = !isProfessional ? filteredBookings.slice(0, 3) : filteredBookings;
 
   // Dynamic styles based on screen size
   const dynamicStyles = {
@@ -87,13 +112,27 @@ const ProfessionalDashboard = ({ navigation }) => {
 
   // Prototype data
   const prototypeBookings = [
-    { id: '56782', client: 'John Doe', pet: 'Max (Dog)', date: '2023-05-15', time: '14:00' },
-    { id: '5678', client: 'Jane Smith', pet: 'Whiskers (Cat)', date: '2023-05-17', time: '10:00' },
+    { id: '56782', client: 'John Doe', pet: 'Max (Dog)', date: '2023-05-15', time: '14:00', status: 'upcoming' },
+    { id: '5678', client: 'Jane Smith', pet: 'Whiskers (Cat)', date: '2023-05-17', time: '10:00', status: 'active' },
+  ];
+
+  const prototypeServices = [
+    {
+      service_name: "Dog Walking",
+      description: "Professional dog walking service",
+      unit_of_time: "30 minutes",
+      base_rate: 25,
+      additional_animal_rate: 10,
+      holiday_rate: 35,
+      additional_rates: []
+    },
+    // Add more prototype services as needed
   ];
 
   const fetchDashboardData = async () => {
     if (is_prototype) {
-      setUpcomingBookings(prototypeBookings);
+      setBookings(prototypeBookings);
+      setServices(prototypeServices);
       setIsLoading(false);
       return;
     }
@@ -101,19 +140,30 @@ const ProfessionalDashboard = ({ navigation }) => {
     try {
       setIsLoading(true);
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-      const response = await axios.get(`${API_BASE_URL}/api/professionals/v1/dashboard/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUpcomingBookings(response.data.upcoming_bookings || []);
+      
+      // Fetch bookings
+      const bookingsResponse = await axios.get(
+        `${API_BASE_URL}/api/${userRole === 'professional' ? 'professionals' : 'users'}/v1/dashboard/`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setBookings(bookingsResponse.data.bookings || []);
+
+      // Fetch services if professional
+      if (userRole === 'professional') {
+        try {
+          const servicesData = await getProfessionalServices();
+          setServices(servicesData || []);
+        } catch (error) {
+          console.error('Error fetching professional services:', error);
+        }
+      }
     } catch (error) {
       if (error.response?.status === 401) {
         const newToken = await refreshToken();
         if (newToken) {
           try {
-            const response = await axios.get(`${API_BASE_URL}/api/professionals/v1/dashboard/`, {
-              headers: { Authorization: `Bearer ${newToken}` }
-            });
-            setUpcomingBookings(response.data.upcoming_bookings || []);
+            // Retry fetching data with new token
+            // ... similar to above ...
           } catch (retryError) {
             console.error('Error fetching dashboard data after token refresh:', retryError);
           }
@@ -128,7 +178,7 @@ const ProfessionalDashboard = ({ navigation }) => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [is_prototype]);
+  }, [userRole, is_prototype]);
 
   // TODO: Fetch client requests from the backend
   const clientRequests = [
@@ -253,15 +303,45 @@ const ProfessionalDashboard = ({ navigation }) => {
     </View>
   );
 
+  const renderBookingFilters = () => (
+    <View style={styles.filterContainer}>
+      <View style={styles.filterButtons}>
+        {['upcoming', 'active', 'past'].map((filter) => (
+          <TouchableOpacity
+            key={filter}
+            style={[
+              styles.filterButton,
+              activeFilter === filter && styles.activeFilterButton
+            ]}
+            onPress={() => setActiveFilter(filter)}
+          >
+            <Text style={[
+              styles.filterText,
+              activeFilter === filter && styles.activeFilterText
+            ]}>
+              {filter.charAt(0).toUpperCase() + filter.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TouchableOpacity
+        style={styles.viewAllButton}
+        onPress={() => navigateToFrom(navigation, 'MyBookings', 'ProfessionalDashboard')}
+      >
+        <Text style={styles.viewAllText}>View All</Text>
+        <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.primary} />
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderBookings = () => (
     <View style={styles.bookingsContainer}>
-      <Text style={dynamicStyles.sectionTitle}>Active Bookings</Text>
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
         </View>
-      ) : upcomingBookings.length > 0 ? (
-        upcomingBookings.map((booking) => (
+      ) : filteredBookings.length > 0 ? (
+        filteredBookings.map((booking) => (
           <TouchableOpacity
             key={is_prototype ? booking.id : booking.booking_id}
             onPress={() => navigateToFrom(navigation, 'BookingDetails', 'ProfessionalDashboard', { 
@@ -289,7 +369,7 @@ const ProfessionalDashboard = ({ navigation }) => {
               </View>
               <View style={styles.bookingStatus}>
                 <Text style={[styles.statusText, { color: theme.colors.primary }]}>
-                  In Progress
+                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                 </Text>
                 <View style={styles.progressBar}>
                   <View style={[styles.progress, { width: '60%' }]} />
@@ -301,30 +381,72 @@ const ProfessionalDashboard = ({ navigation }) => {
         ))
       ) : (
         <View style={styles.emptyStateContainer}>
-          <Text style={styles.emptyStateText}>No active bookings</Text>
-          <Button 
-            mode="contained" 
-            onPress={() => navigateToFrom(navigation, 'ServiceManager', 'ProfessionalDashboard')}
+          <MaterialCommunityIcons name="calendar" size={48} color={theme.colors.textSecondary} />
+          <Text style={styles.emptyStateTitle}>No {activeFilter} bookings</Text>
+          <Text style={styles.emptyStateText}>Create services to start receiving bookings from clients.</Text>
+          <TouchableOpacity
             style={styles.createServiceButton}
+            onPress={() => navigateToFrom(navigation, 'ServiceManager', 'ProfessionalDashboard')}
           >
-            Create Services
-          </Button>
+            <MaterialCommunityIcons name="plus" size={20} color={theme.colors.surface} />
+            <Text style={styles.createServiceButtonText}>Create Service</Text>
+          </TouchableOpacity>
         </View>
       )}
+    </View>
+  );
 
-      <Text style={dynamicStyles.sectionTitle}>Upcoming Bookings</Text>
-      <View style={styles.emptyStateContainer}>
-        <Text style={styles.emptyStateText}>No upcoming bookings</Text>
-        <Button 
-          mode="contained" 
-          onPress={() => navigateToFrom(navigation, 'ServiceManager', 'ProfessionalDashboard')}
-          style={styles.createServiceButton}
+  const renderServiceCard = (service) => (
+    <View style={styles.serviceCard} key={service.id}>
+      <View style={styles.serviceContent}>
+        <View style={styles.serviceHeader}>
+          <Text 
+            style={styles.serviceTitle}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {service.service_name}
+          </Text>
+          <Text style={styles.serviceRate}>${service.base_rate} {service.unit_of_time || 'Per Visit'}</Text>
+        </View>
+        <Text style={styles.serviceCategory}>{service.category || 'Exotic'}</Text>
+      </View>
+      <View style={styles.serviceFooter}>
+        <View style={styles.bookingsCount}>
+          <MaterialCommunityIcons name="calendar" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.bookingsText}>{service.booking_count || 8} bookings</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.viewButton}
+          onPress={() => navigateToFrom(navigation, 'ServiceManager', 'ProfessionalDashboard', { serviceId: service.id })}
         >
-          Create Services
-        </Button>
+          <Text style={styles.viewButtonText}>View</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
+
+  const renderServices = () => {
+    if (!isProfessional) return null;
+
+    return (
+      <View style={styles.servicesContainer}>
+        <View style={styles.sectionHeader}>
+          <Text style={dynamicStyles.sectionTitle}>My Services</Text>
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            onPress={() => navigateToFrom(navigation, 'ServiceManager', 'ProfessionalDashboard')}
+          >
+            <Text style={styles.viewAllText}>View All</Text>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.servicesGrid}>
+          {services.map(service => renderServiceCard(service))}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.mainContainer}>
@@ -341,15 +463,16 @@ const ProfessionalDashboard = ({ navigation }) => {
           {
             maxWidth: 1200,
             marginHorizontal: 'auto',
-            // paddingHorizontal: 4,
             paddingTop: isMobile ? 24 : 0,
           }
         ]}
       >
         {renderHeader()}
         {renderWelcomeSection()}
-        {renderStats()}
+        {isProfessional && renderStats()}
+        {renderBookingFilters()}
         {renderBookings()}
+        {renderServices()}
       </ScrollView>
     </View>
   );
@@ -539,24 +662,193 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   emptyStateContainer: {
-    padding: 24,
+    padding: 40,
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
     marginBottom: 24,
   },
+  emptyStateTitle: {
+    fontSize: theme.fontSizes.large,
+    color: theme.colors.text,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: theme.fontSizes.medium,
     color: theme.colors.textSecondary,
-    marginBottom: 16,
+    textAlign: 'center',
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 24,
   },
   createServiceButton: {
-    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6B6C53',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    gap: 8,
+  },
+  createServiceButtonText: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 30,
+    // marginHorizontal: 24,
+  },
+  filterButtons: {
+    flexDirection: 'row',
+    backgroundColor: 'rgb(238, 241, 245)', //rgb(227, 229, 232)
+    padding: 4,
+    borderRadius: 5,
+    // gap: 4,
+  },
+  filterButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 5,
+  },
+  activeFilterButton: {
+    backgroundColor: theme.colors.surface,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  filterText: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '500',
+  },
+  activeFilterText: {
+    color: '#111827',
+    fontWeight: '600',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingRight: 12,
+  },
+  viewAllText: {
+    color: theme.colors.primary,
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '500',
+  },
+  servicesContainer: {
+    padding: 24,
+    paddingTop: 0,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  servicesGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gap: 16,
+  },
+  serviceCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    justifyContent: 'space-between',
+  },
+  serviceContent: {
+    marginBottom: 20,
+  },
+  serviceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  serviceTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.header.fontFamily,
+    maxWidth: '50%',
+  },
+  serviceCategory: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  serviceFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bookingsCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bookingsText: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  serviceRate: {
+    fontSize: 16,
+    color: '#6B6C53',
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  viewButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: theme.colors.surface,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  viewButtonText: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 

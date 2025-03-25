@@ -108,7 +108,7 @@ export default function Navigation({ navigation }) {
   const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { colors } = useTheme();
-  const { isSignedIn, is_DEBUG, userRole, isCollapsed, setIsCollapsed } = useContext(AuthContext);
+  const { isSignedIn, is_DEBUG, userRole, isCollapsed, setIsCollapsed, switchRole, screenWidth } = useContext(AuthContext);
   const [currentRoute, setCurrentRoute] = useState('');
   const [notificationCount, setNotificationCount] = useState(3); // We can make this dynamic later
 
@@ -236,7 +236,7 @@ export default function Navigation({ navigation }) {
       ];
     } else {
       return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
         { title: professionalsTitle, icon: 'magnify', route: 'SearchProfessionalsListing' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Become a Pro', icon: 'paw', route: 'BecomeProfessional' },
@@ -249,7 +249,7 @@ export default function Navigation({ navigation }) {
     const menuItems = renderMenuItems();
     const itemWidth = Dimensions.get('window').width / menuItems.length;
     return (
-      <View style={styles.customNavBar}>
+      <View style={[styles.customNavBar, { backgroundColor: theme.colors.surfaceContrast }]}>
         {menuItems.map((item, index) => (
           <TouchableOpacity
             key={index}
@@ -259,9 +259,9 @@ export default function Navigation({ navigation }) {
             <MaterialCommunityIcons 
               name={item.icon} 
               size={24} 
-              color={theme.colors.whiteText} 
+              color={theme.colors.text} 
             />
-            <Text style={styles.navText} numberOfLines={2} ellipsizeMode="tail">
+            <Text style={[styles.navText, { color: theme.colors.text }]} numberOfLines={2} ellipsizeMode="tail">
               {item.title}
             </Text>
           </TouchableOpacity>
@@ -300,6 +300,37 @@ export default function Navigation({ navigation }) {
           />
         </TouchableOpacity>
         <View style={styles.menuItems}>
+          {!isCollapsed && (
+            <View style={styles.roleToggleContainer}>
+              <Text style={styles.roleToggleTitle}>Switch Role:</Text>
+              <View style={styles.roleButtonsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    userRole !== 'professional' && styles.roleButtonActive
+                  ]}
+                  onPress={() => userRole === 'professional' && switchRole()}
+                >
+                  <Text style={[
+                    styles.roleButtonText,
+                    userRole !== 'professional' && styles.roleButtonTextActive
+                  ]}>Client</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    userRole === 'professional' && styles.roleButtonActive
+                  ]}
+                  onPress={() => userRole !== 'professional' && switchRole()}
+                >
+                  <Text style={[
+                    styles.roleButtonText,
+                    userRole === 'professional' && styles.roleButtonTextActive
+                  ]}>Professional</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
           {menuItems.map((item, index) => {
             const isActive = currentRoute === item.route || 
                            (item.route === 'More' && item.title === 'Settings' && currentRoute === 'More');
@@ -361,18 +392,24 @@ export default function Navigation({ navigation }) {
   };
 
   const renderMobileHeader = () => {
+    const logoSize = screenWidth <= 470 ? { width: 100, height: 30 } : { width: 150, height: 40 };
+    
     return (
-      <View style={[styles.mobileHeader, { backgroundColor: colors.primary }]}>
+      <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.mobileHeaderContent}>
           <TouchableOpacity onPress={() => handleNavigation('Home')}>
             <Image 
               source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')} 
-              style={styles.mobileLogo} 
+              style={[
+                styles.mobileLogo,
+                { tintColor: theme.colors.primary },
+                logoSize
+              ]} 
             />
           </TouchableOpacity>
           <View style={styles.mobileRightContent}>
             <TouchableOpacity onPress={() => handleNavigation('Notifications')} style={styles.iconButton}>
-              <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.whiteText} />
+              <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationText}>{notificationCount}</Text>
@@ -388,7 +425,48 @@ export default function Navigation({ navigation }) {
           </View>
         </View>
         {isMenuOpen && (
-          <View style={styles.mobileMenu}>
+          <View style={[styles.mobileMenu, { backgroundColor: theme.colors.surfaceContrast }]}>
+            {isSignedIn && (
+              <View style={styles.mobileRoleToggleContainer}>
+                <Text style={styles.mobileRoleToggleTitle}>Switch Role:</Text>
+                <View style={styles.mobileRoleButtonsContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.mobileRoleButton,
+                      userRole !== 'professional' && styles.mobileRoleButtonActive
+                    ]}
+                    onPress={() => {
+                      if (userRole === 'professional') {
+                        switchRole();
+                        setIsMenuOpen(false);
+                      }
+                    }}
+                  >
+                    <Text style={[
+                      styles.mobileRoleButtonText,
+                      userRole !== 'professional' && styles.mobileRoleButtonTextActive
+                    ]}>Client</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.mobileRoleButton,
+                      userRole === 'professional' && styles.mobileRoleButtonActive
+                    ]}
+                    onPress={() => {
+                      if (userRole !== 'professional') {
+                        switchRole();
+                        setIsMenuOpen(false);
+                      }
+                    }}
+                  >
+                    <Text style={[
+                      styles.mobileRoleButtonText,
+                      userRole === 'professional' && styles.mobileRoleButtonTextActive
+                    ]}>Professional</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
             {renderMenuItems().map((item, index) => (
               <TouchableOpacity
                 key={index}
@@ -412,12 +490,12 @@ export default function Navigation({ navigation }) {
     <>
       {Platform.OS === 'web' ? (
         <>
-          {!isMobile && isSignedIn && userRole === 'professional' && (
+          {!isMobile && isSignedIn && (
             <View style={styles.navContainer}>
               {renderDesktopSidebar()}
             </View>
           )}
-          {(isMobile || !isSignedIn || userRole !== 'professional') && renderMobileHeader()}
+          {(isMobile || !isSignedIn) && renderMobileHeader()}
         </>
       ) : (
         <View style={styles.container}>
@@ -640,10 +718,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   mobileLogo: {
-    width: 150,
-    height: 40,
     resizeMode: 'contain',
-    tintColor: theme.colors.whiteText,
   },
   mobileRightContent: {
     flexDirection: 'row',
@@ -704,5 +779,79 @@ const styles = StyleSheet.create({
   },
   activeItem: {
     backgroundColor: '#F0F9E5',
+  },
+  roleToggleContainer: {
+    padding: 12,
+    marginBottom: 16,
+    borderRadius: 8,
+    backgroundColor: '#F0F9E5',
+  },
+  roleToggleTitle: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  roleButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  roleButton: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  roleButtonActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  roleButtonText: {
+    fontSize: theme.fontSizes.small,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.primary,
+  },
+  roleButtonTextActive: {
+    color: theme.colors.surface,
+  },
+  mobileRoleToggleContainer: {
+    padding: 16,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  mobileRoleToggleTitle: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  mobileRoleButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  mobileRoleButton: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  mobileRoleButtonActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  mobileRoleButtonText: {
+    fontSize: theme.fontSizes.small,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.primary,
+  },
+  mobileRoleButtonTextActive: {
+    color: theme.colors.surface,
   },
 });

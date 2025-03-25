@@ -166,18 +166,6 @@ const MoreScreen = ({ navigation }) => {
             <List.Section style={styles.listSection}>
               {renderMenuItems()}
             </List.Section>
-            {isSignedIn && isApprovedProfessional && (
-              <View style={styles.buttonContainer}>
-                <Button 
-                  mode="outlined" 
-                  onPress={handleSwitchRole} 
-                  style={styles.switchRoleButton}
-                  labelStyle={styles.buttonText}
-                >
-                  Switch to {userRole === 'professional' ? 'Pet Owner' : 'Professional'} Mode
-                </Button>
-              </View>
-            )}
             {isSignedIn && (
               <View style={styles.buttonContainer}>
                 <Button 

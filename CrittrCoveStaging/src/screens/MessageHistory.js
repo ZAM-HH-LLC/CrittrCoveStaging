@@ -96,7 +96,7 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     flexDirection: 'column',
     overflow: 'hidden',
     paddingHorizontal: 5,
-    backgroundColor: '#FDFBF5',
+    backgroundColor: theme.colors.surface, // #FDFBF5
   },
   messageHeader: {
     padding: 22,
