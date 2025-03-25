@@ -439,23 +439,52 @@ class CreateBookingView(APIView):
             other_user_id = conversation.participant1_id if conversation.participant1_id != request.user.id else conversation.participant2_id
             client = get_object_or_404(Client, user_id=other_user_id)
 
-            # Create the booking
-            booking = Booking.objects.create(
-                client=client,
-                professional=professional,
-                status=BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-                initiated_by=request.user
+            # Check for existing in-progress draft
+            existing_draft = BookingDraft.objects.filter(
+                booking=None,
+                status='IN_PROGRESS',
+                draft_data__has_key='client_id',
+                draft_data__client_id=client.id,
+                draft_data__professional_id=professional.professional_id
+            ).first()
+
+            if existing_draft:
+                return Response({
+                    'draft_id': existing_draft.draft_id,
+                    'status': existing_draft.status,
+                    'draft_data': existing_draft.draft_data
+                })
+
+            # Create initial draft data
+            draft_data = {
+                'client_id': client.id,
+                'professional_id': professional.professional_id,
+                'client_name': client.user.name,
+                'professional_name': professional.user.name,
+                'status': BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+                'pets': [],
+                'occurrences': [],
+                'can_edit': True
+            }
+
+            # Create the draft
+            draft = BookingDraft.objects.create(
+                draft_data=draft_data,
+                last_modified_by='PROFESSIONAL',
+                status='IN_PROGRESS'
             )
 
             return Response({
-                'booking_id': booking.booking_id,
-                'status': booking.status
+                'draft_id': draft.draft_id,
+                'status': draft.status,
+                'draft_data': draft.draft_data
             })
 
         except Exception as e:
-            logger.error(f"Error creating booking: {str(e)}")
+            logger.error(f"Error creating booking draft: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return Response(
-                {"error": "Failed to create booking"},
+                {"error": "An error occurred while creating the booking draft"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

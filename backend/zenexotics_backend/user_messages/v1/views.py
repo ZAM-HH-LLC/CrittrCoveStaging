@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 from bookings.models import Booking
 from booking_summary.models import BookingSummary
+from booking_drafts.models import BookingDraft
 from django.db.models import Q
 from core.time_utils import (
     convert_to_utc,
@@ -122,9 +123,36 @@ def get_conversation_messages(request, conversation_id):
             status='sent'
         ).update(status='read')
 
+        # Check for existing draft
+        has_draft = False
+        draft_data = None
+        try:
+            # Get the other participant
+            other_user = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
+            
+            # Check if there's a draft between these users
+            draft = BookingDraft.objects.filter(
+                booking__client__user=other_user,
+                booking__professional__user=current_user,
+                status='IN_PROGRESS'
+            ).first()
+            
+            if draft:
+                has_draft = True
+                draft_data = {
+                    'draft_id': draft.draft_id,
+                    'booking_id': draft.booking.booking_id,
+                    'status': draft.status,
+                    'last_modified_by': draft.last_modified_by
+                }
+        except Exception as e:
+            logger.error(f"Error checking for draft: {str(e)}")
+
         return Response({
             'messages': messages_data,
-            'has_more': len(messages) == page_size
+            'has_more': len(messages) == page_size,
+            'has_draft': has_draft,
+            'draft_data': draft_data
         })
 
     except Exception as e:

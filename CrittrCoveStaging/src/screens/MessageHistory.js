@@ -587,6 +587,28 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  messageHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  editDraftButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginLeft: 'auto',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  editDraftText: {
+    marginLeft: 4,
+    color: theme.colors.primary,
+    fontSize: 14,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
 });
 
 const MessageHistory = ({ navigation, route }) => {
@@ -616,6 +638,8 @@ const MessageHistory = ({ navigation, route }) => {
   const [showBookingStepModal, setShowBookingStepModal] = useState(false);
   const [currentBookingId, setCurrentBookingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hasDraft, setHasDraft] = useState(false);
+  const [draftData, setDraftData] = useState(null);
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -889,6 +913,9 @@ const MessageHistory = ({ navigation, route }) => {
       if (page === 1) {
         console.log('MBABOSS [8] Setting messages for page 1');
         setMessages(response.data.messages || []);
+        // Set draft data only on first page load
+        setHasDraft(response.data.has_draft || false);
+        setDraftData(response.data.draft_data || null);
       } else {
         console.log('MBABOSS [8] Appending messages for page:', page);
         setMessages(prev => [...prev, ...(response.data.messages || [])]);
@@ -1433,16 +1460,41 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Update message header to include profile photo
+  // Update message header to include profile photo and edit draft button
   const renderMessageHeader = () => (
     <View style={styles.messageHeader}>
-      <Image
-        source={selectedConversationData?.profile_photo || require('../../assets/default-profile.png')}
-        style={styles.profilePhoto}
-      />
-      <Text style={styles.messageHeaderName}>
-        {selectedConversationData?.other_user_name}
-      </Text>
+      <View style={styles.messageHeaderContent}>
+        <Image
+          source={selectedConversationData?.profile_photo || require('../../assets/default-profile.png')}
+          style={styles.profilePhoto}
+        />
+        <Text style={styles.messageHeaderName}>
+          {selectedConversationData?.other_user_name}
+        </Text>
+        {hasDraft && (
+          <TouchableOpacity 
+            style={styles.editDraftButton}
+            onPress={() => {
+              if (draftData?.booking_id) {
+                navigateToFrom(navigation, 'BookingDetails', 'MessageHistory', {
+                  bookingId: draftData.booking_id,
+                  initialData: null,
+                  isProfessional: selectedConversationData.is_professional,
+                  isEditingDraft: true,
+                  draftId: draftData.draft_id
+                });
+              }
+            }}
+          >
+            <MaterialCommunityIcons 
+              name="pencil" 
+              size={20} 
+              color={theme.colors.primary} 
+            />
+            <Text style={styles.editDraftText}>Edit Draft</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
