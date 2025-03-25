@@ -977,12 +977,14 @@ const DateSelectionCard = ({
 
 const { width, height } = Dimensions.get('window');
 const maxCalendarHeight = height * 0.4;
+const isDesktopView = width > 480;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
     padding: 12,
+    minHeight: isDesktopView ? 600 : 'auto',
   },
   bookingTypeContainer: {
     flexDirection: 'row',
@@ -1039,10 +1041,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
-    // borderWidth: 1,
-    // borderColor: theme.colors.modernBorder,
-    maxHeight: maxCalendarHeight,
-    overflow: 'hidden',
+    maxHeight: isDesktopView ? (width > 700 ? 600 : 500) : maxCalendarHeight,
+    overflow: 'visible',
+    minHeight: isDesktopView ? (width > 700 ? 500 : 400) : 350,
+    display: 'flex',
+    flexDirection: 'column',
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -1066,7 +1069,8 @@ const styles = StyleSheet.create({
   weekdaysContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 4,
+    marginBottom: isDesktopView ? 8 : 4,
+    paddingHorizontal: 4,
   },
   weekdayText: {
     flex: 1,
@@ -1079,7 +1083,10 @@ const styles = StyleSheet.create({
   weekRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 4,
+    marginBottom: isDesktopView ? 12 : 4,
+    minHeight: isDesktopView ? (width > 700 ? 70 : 50) : 40,
+    flex: 1,
+    paddingHorizontal: 4,
   },
   dateCell: {
     flex: 1,
@@ -1087,10 +1094,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 4,
-    padding: 2,
+    padding: isDesktopView ? 4 : 2,
+    minHeight: isDesktopView ? (width > 700 ? 60 : 40) : 'auto',
   },
   dateText: {
-    fontSize: 14,
+    fontSize: isDesktopView ? (width > 700 ? 16 : 14) : 14,
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
   },
