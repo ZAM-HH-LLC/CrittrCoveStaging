@@ -43,6 +43,9 @@ const TimeRangeSelector = ({
   const timePickerStartRef = useRef(null);
   const timePickerEndRef = useRef(null);
 
+  const hourScrollViewRef = useRef(null);
+  const minuteScrollViewRef = useRef(null);
+
   // Update slider width when container size changes
   useEffect(() => {
     if (!sliderContainerRef.current) return;
@@ -77,9 +80,13 @@ const TimeRangeSelector = ({
       };
       const isInsideStart = isChildOf(target, timePickerStartRef);
       const isInsideEnd = isChildOf(target, timePickerEndRef);
+      
       if (!isInsideStart && !isInsideEnd) {
-        setShowTimePicker(false);
-        setActiveTimeType(null);
+        // Immediately close the picker
+        requestAnimationFrame(() => {
+          setShowTimePicker(false);
+          setActiveTimeType(null);
+        });
       }
     };
 
@@ -177,9 +184,16 @@ const TimeRangeSelector = ({
   };
 
   const handleTimePress = (type) => {
-    setActiveTimeType(type);
-    setShowTimePicker(true);
-    if (is_DEBUG) console.log('MBA123: Opening time picker for', type);
+    if (activeTimeType === type && showTimePicker) {
+      // If clicking the same time picker that's already open, close it
+      setShowTimePicker(false);
+      setActiveTimeType(null);
+    } else {
+      // Open the clicked time picker
+      setActiveTimeType(type);
+      setShowTimePicker(true);
+    }
+    if (is_DEBUG) console.log('MBA123: Toggle time picker for', type);
   };
 
   const formatTime = (hour, minutes = 0) => {
@@ -271,6 +285,34 @@ const TimeRangeSelector = ({
     onTimeSelect(newTimes);
   };
 
+  const scrollToSelectedTime = (type) => {
+    if (is_DEBUG) console.log('MBA123: Scrolling to selected time for', type);
+    
+    requestAnimationFrame(() => {
+      const currentTime = type === 'start' ? times.startTime : times.endTime;
+      const hour = currentTime.hours % 12 || 12;
+      const minute = currentTime.minutes;
+
+      // Calculate scroll positions
+      const hourScrollPos = (hour - 1) * 40; // 40 is the height of each time option
+      const minuteScrollPos = minute * 40;
+
+      // Scroll to positions
+      if (hourScrollViewRef.current) {
+        hourScrollViewRef.current.scrollTo({ y: Math.max(0, hourScrollPos - 80), animated: false });
+      }
+      if (minuteScrollViewRef.current) {
+        minuteScrollViewRef.current.scrollTo({ y: Math.max(0, minuteScrollPos - 80), animated: false });
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (showTimePicker) {
+      scrollToSelectedTime(activeTimeType);
+    }
+  }, [showTimePicker, activeTimeType]);
+
   const renderDurationBox = () => (
     <View style={styles.durationBox}>
       <View style={styles.durationContent}>
@@ -288,73 +330,92 @@ const TimeRangeSelector = ({
     </View>
   );
 
-  const renderTimePickerDropdown = (type) => (
-    <View 
-      ref={type === 'start' ? timePickerStartRef : timePickerEndRef}
-      style={[
-        styles.timePickerDropdown,
-        type === 'end' && styles.timePickerDropdownEnd
-      ]} 
-    >
-      <View style={styles.timePickerContent}>
-        <ScrollView 
-          style={styles.timePickerColumn} 
-          showsVerticalScrollIndicator={true}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-        >
-          {generateHourOptions().map(({ label, value }) => (
-            <TouchableOpacity
-              key={`hour-${value}`}
-              style={[
-                styles.timeOption,
-                value === (type === 'end' ? times.endTime.hours : times.startTime.hours % 12 || 12) && styles.timeOptionSelected
-              ]}
-              onPress={() => handleTimeSelect('hour', value)}
-            >
-              <Text style={styles.timeOptionText}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        <ScrollView 
-          style={styles.timePickerColumn} 
-          showsVerticalScrollIndicator={true}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-        >
-          {generateMinuteOptions().map(({ label, value }) => (
-            <TouchableOpacity
-              key={`minute-${value}`}
-              style={[
-                styles.timeOption,
-                value === (type === 'end' ? times.endTime.minutes : times.startTime.minutes) && styles.timeOptionSelected
-              ]}
-              onPress={() => handleTimeSelect('minute', value)}
-            >
-              <Text style={styles.timeOptionText}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        <View style={styles.timePickerColumn}>
-          {['AM', 'PM'].map((period) => (
-            <TouchableOpacity
-              key={`period-${period}`}
-              style={[
-                styles.timeOption,
-                (type === 'end' ? times.endTime.hours >= 12 : times.startTime.hours >= 12 ? 'PM' : 'AM') === period && styles.timeOptionSelected
-              ]}
-              onPress={() => handleTimeSelect('period', period)}
-            >
-              <Text style={styles.timeOptionText}>{period}</Text>
-            </TouchableOpacity>
-          ))}
+  const renderTimePickerDropdown = (type) => {
+    const currentTime = type === 'start' ? times.startTime : times.endTime;
+    const currentHour = currentTime.hours % 12 || 12;
+    const currentMinutes = currentTime.minutes;
+    const isPM = currentTime.hours >= 12;
+
+    return (
+      <View 
+        ref={type === 'start' ? timePickerStartRef : timePickerEndRef}
+        style={[
+          styles.timePickerDropdownContainer,
+          type === 'start' ? styles.timePickerDropdownStart : styles.timePickerDropdownEnd,
+          styles.timePickerAnimation
+        ]} 
+      >
+        <View style={styles.timePickerContent}>
+          <ScrollView 
+            ref={hourScrollViewRef}
+            style={styles.timePickerColumn} 
+            showsVerticalScrollIndicator={true}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+          >
+            {generateHourOptions().map(({ label, value }) => (
+              <TouchableOpacity
+                key={`hour-${value}`}
+                style={[
+                  styles.timeOption,
+                  value === currentHour && styles.timeOptionSelected
+                ]}
+                onPress={() => handleTimeSelect('hour', value)}
+              >
+                <Text style={[
+                  styles.timeOptionText,
+                  value === currentHour && styles.timeOptionSelectedText
+                ]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <ScrollView 
+            ref={minuteScrollViewRef}
+            style={styles.timePickerColumn} 
+            showsVerticalScrollIndicator={true}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+          >
+            {generateMinuteOptions().map(({ label, value }) => (
+              <TouchableOpacity
+                key={`minute-${value}`}
+                style={[
+                  styles.timeOption,
+                  value === currentMinutes && styles.timeOptionSelected
+                ]}
+                onPress={() => handleTimeSelect('minute', value)}
+              >
+                <Text style={[
+                  styles.timeOptionText,
+                  value === currentMinutes && styles.timeOptionSelectedText
+                ]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <View style={styles.timePickerColumn}>
+            {['AM', 'PM'].map((period) => (
+              <TouchableOpacity
+                key={`period-${period}`}
+                style={[
+                  styles.timeOption,
+                  (isPM ? 'PM' : 'AM') === period && styles.timeOptionSelected
+                ]}
+                onPress={() => handleTimeSelect('period', period)}
+              >
+                <Text style={[
+                  styles.timeOptionText,
+                  (isPM ? 'PM' : 'AM') === period && styles.timeOptionSelectedText
+                ]}>{period}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderTimeButton = (type) => (
-    <View style={[styles.timeSelectContainer, { marginTop: type === 'start' ? 12 : 0 }]}>
+    <View style={[styles.timeSelectContainer, type === 'start' ? styles.startTimeContainer : styles.endTimeContainer]}>
       <View style={styles.dateTimeWrapper}>
         <View style={styles.dateHeaderContainer}>
           <View style={styles.dateContainer}>
@@ -447,10 +508,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     position: 'relative',
-    zIndex: 100,
+    zIndex: 3000,
   },
   overnightContainer: {
     gap: 24,
+    position: 'relative',
+    zIndex: 3000,
   },
   dateTimeSection: {
     gap: 8,
@@ -547,18 +610,25 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   timeSelectContainer: {
+    position: 'relative',
+    zIndex: 3000,
+    width: '100%',
   },
   dateTimeWrapper: {
     borderWidth: 1,
     borderColor: '#E5E5E5',
     borderRadius: 8,
     padding: 12,
+    position: 'relative',
+    backgroundColor: theme.colors.background,
+    width: '100%',
   },
   dateHeaderContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    position: 'relative',
   },
   dateContainer: {
     flexDirection: 'row',
@@ -585,11 +655,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  timePickerDropdown: {
+  startTimeContainer: {
+    position: 'relative',
+    zIndex: 4000,
+    marginTop: 12,
+  },
+  endTimeContainer: {
+    position: 'relative',
+    zIndex: 3500,
+    marginTop: 12,
+  },
+  timePickerDropdownContainer: {
     position: 'absolute',
     top: '100%',
     left: 0,
-    right: 0,
     backgroundColor: theme.colors.background,
     borderRadius: 8,
     borderWidth: 1,
@@ -600,29 +679,36 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     marginTop: 4,
-    zIndex: 1000,
+    width: '100%',
+    opacity: 1,
+    transform: [{ translateY: 0 }],
+  },
+  timePickerDropdownStart: {
+    zIndex: 4100,
   },
   timePickerDropdownEnd: {
-    left: 'auto',
-    right: 0,
+    zIndex: 3600,
+    position: 'absolute',
+    maxHeight: 300,
   },
   timePickerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
-    zIndex: 100,
+    padding: 8,
+    width: '100%',
+    backgroundColor: theme.colors.background,
   },
   timePickerColumn: {
     flex: 1,
     maxHeight: 200,
     paddingRight: 4,
-    zIndex: 100,
   },
   timeOption: {
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 4,
-    zIndex: 100,
+    height: 40, // Fixed height for calculations
   },
   timeOptionSelected: {
     backgroundColor: theme.colors.mainColors.main + '20',
@@ -633,8 +719,16 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
     textAlign: 'center',
   },
+  timeOptionSelectedText: {
+    color: theme.colors.mainColors.main,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+  },
   mobileText: {
     fontSize: Platform.OS === 'web' && window.innerWidth <= 768 ? theme.fontSizes.smallMedium : theme.fontSizes.medium,
+  },
+  timePickerAnimation: {
+    transition: Platform.OS === 'web' ? 'opacity 0.2s ease, transform 0.2s ease' : undefined,
   },
 });
 

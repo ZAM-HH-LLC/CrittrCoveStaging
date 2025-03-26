@@ -173,7 +173,8 @@ const BookingStepModal = ({
         // Check if dateSelectionData exists and is valid
         return bookingData.dateSelectionData && bookingData.dateSelectionData.isValid;
       case STEPS.TIME_SELECTION.id:
-        return bookingData.times && bookingData.times.startTime !== undefined && bookingData.times.endTime !== undefined;
+        // Always allow proceeding from time selection since we have default times
+        return true;
       // Add validation for other steps as they are implemented
       default:
         return false;
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
     backgroundColor: theme.colors.background,
     borderRadius: 12,
-    overflow: 'hidden',
+    position: 'relative',
   },
   stepIndicatorContainer: {
     width: '100%',
@@ -329,15 +330,25 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.modernBorder,
+    position: 'relative',
+    zIndex: 1,
   },
   content: {
     flex: 1,
+    overflow: 'visible',
+    position: 'relative',
+    zIndex: 2000,
   },
   footer: {
     flexDirection: 'row',
     padding: 16,
     justifyContent: 'space-between',
     gap: 12,
+    backgroundColor: theme.colors.background,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.modernBorder,
+    position: 'relative',
+    zIndex: 1000,
   },
   cancelButton: {
     flex: 1,

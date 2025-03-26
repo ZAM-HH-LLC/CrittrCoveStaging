@@ -182,21 +182,20 @@ const TimeSelectionCard = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 16,
+    padding: 16,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 3000,
   },
   card: {
     backgroundColor: theme.colors.background,
     borderRadius: 12,
-    // padding: 16,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 3000,
   },
   customizeButtonContainer: {
     marginBottom: 24,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2800,
   },
   customizeButton: {
     flexDirection: 'row',
@@ -209,7 +208,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.mainColors.main,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2800,
   },
   customizeButtonText: {
     color: theme.colors.mainColors.main,
@@ -220,7 +219,7 @@ const styles = StyleSheet.create({
   presetsContainer: {
     gap: 12,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2700,
   },
   presetsTitle: {
     fontSize: theme.fontSizes.medium,
@@ -233,7 +232,7 @@ const styles = StyleSheet.create({
     gap: 12,
     alignSelf: 'flex-start',
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2700,
   },
   presetButton: {
     paddingVertical: 6,
@@ -252,7 +251,7 @@ const styles = StyleSheet.create({
   individualTimeRangesContainer: {
     maxHeight: 400,
     position: 'relative',
-    zIndex: 1100,
+    zIndex: 3100,
   },
   timeRangeContainer: {
     marginBottom: 8,
@@ -263,6 +262,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     position: 'relative',
+    zIndex: 3000,
   },
 });
 
