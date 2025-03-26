@@ -204,6 +204,32 @@ const BookingStepModal = ({
           return;
         }
       }
+      
+      // Handle time selection calculations before proceeding
+      if (currentStep === STEPS.TIME_SELECTION.id) {
+        try {
+          if (bookingData.service?.isOvernightForced || bookingData.times?.isOvernightForced) {
+            if (is_DEBUG) {
+              console.log('MBA12345 Calculating overnight booking totals');
+            }
+            // TODO: Call overnight booking calculation endpoint
+            // const response = await calculateOvernightBookingTotals(bookingId, bookingData);
+          } else {
+            if (is_DEBUG) {
+              console.log('MBA12345 Calculating non-overnight booking totals');
+            }
+            // TODO: Call non-overnight booking calculation endpoint
+            // const response = await calculateNonOvernightBookingTotals(bookingId, bookingData);
+          }
+        } catch (error) {
+          if (is_DEBUG) {
+            console.error('MBA12345 Error calculating booking totals:', error);
+          }
+          setError('Failed to calculate booking totals');
+          return;
+        }
+      }
+
       setCurrentStep(prev => prev + 1);
     } else {
       onComplete(bookingData);
