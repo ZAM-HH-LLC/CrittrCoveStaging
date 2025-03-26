@@ -105,3 +105,37 @@ export const updateBookingDraftPetsAndServices = async (draftId, data) => {
     throw error;
   }
 };
+
+export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate, startTime, endTime) => {
+    try {
+        console.log('MBA1234 - Updating booking draft time and date:', {
+            draftId,
+            startDate,
+            endDate,
+            startTime,
+            endTime
+        });
+
+        const response = await axios.post(
+            `${API_BASE_URL}/api/booking_drafts/v1/update-time-and-date/${draftId}/`,
+            {
+                start_date: startDate,
+                end_date: endDate,
+                start_time: startTime,
+                end_time: endTime
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${await getStorage('userToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        console.log('MBA1234 - Booking draft time and date update response:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('MBA1234 - Error updating booking draft time and date:', error);
+        throw error;
+    }
+};

@@ -17,7 +17,8 @@ import ServiceAndPetsCard from './bookingComponents/ServiceAndPetsCard';
 import DateSelectionCard from './bookingComponents/DateSelectionCard';
 import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
-import { updateBookingDraftPetsAndServices } from '../api/API';
+import { updateBookingDraftPetsAndServices, updateBookingDraftTimeAndDate } from '../api/API';
+import { convertToUTC, formatDateForAPI, formatTimeForAPI } from '../utils/time_utils';
 
 const STEPS = {
   SERVICES_AND_PETS: {
@@ -208,19 +209,42 @@ const BookingStepModal = ({
       // Handle time selection calculations before proceeding
       if (currentStep === STEPS.TIME_SELECTION.id) {
         try {
-          if (bookingData.service?.isOvernightForced || bookingData.times?.isOvernightForced) {
-            if (is_DEBUG) {
-              console.log('MBA12345 Calculating overnight booking totals');
-            }
-            // TODO: Call overnight booking calculation endpoint
-            // const response = await calculateOvernightBookingTotals(bookingId, bookingData);
-          } else {
-            if (is_DEBUG) {
-              console.log('MBA12345 Calculating non-overnight booking totals');
-            }
-            // TODO: Call non-overnight booking calculation endpoint
-            // const response = await calculateNonOvernightBookingTotals(bookingId, bookingData);
+          if (is_DEBUG) {
+            console.log('MBA12345 Original booking data:', bookingData);
           }
+
+          // Format dates for API
+          const startDate = formatDateForAPI(bookingData.dateRange.startDate);
+          const endDate = formatDateForAPI(bookingData.dateRange.endDate);
+
+          // Convert times to UTC
+          const startTimeUTC = convertToUTC(
+            startDate,
+            formatTimeForAPI(bookingData.times.startTime),
+            'US/Mountain' // TODO: Get actual user timezone from context
+          );
+
+          const endTimeUTC = convertToUTC(
+            endDate,
+            formatTimeForAPI(bookingData.times.endTime),
+            'US/Mountain' // TODO: Get actual user timezone from context
+          );
+
+          if (is_DEBUG) {
+            console.log('MBA12345 Converted times to UTC:', {
+              startTimeUTC,
+              endTimeUTC
+            });
+          }
+
+          // Call the API with UTC times
+          await updateBookingDraftTimeAndDate(
+            bookingId,
+            startDate,
+            endDate,
+            startTimeUTC.time,
+            endTimeUTC.time
+          );
         } catch (error) {
           if (is_DEBUG) {
             console.error('MBA12345 Error calculating booking totals:', error);

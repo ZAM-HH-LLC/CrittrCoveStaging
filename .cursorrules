@@ -4,12 +4,25 @@ File Locations:
 backend: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend
 frontend: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/CrittrCoveStaging
 
+Time and Date Format Rules:
+1. When sending data from frontend to backend:
+   - Dates should be in "YYYY-MM-DD" format
+   - Times should be in "HH:mm" format (24-hour/military)
+   - All times should be in UTC
+   - Use time_utils.js for all timezone conversions
+2. When receiving data from backend:
+   - Dates will be in "YYYY-MM-DD" format
+   - Times will be in "HH:mm" format (24-hour/military)
+   - All times will be in UTC
+   - Use time_utils.js to convert to user's timezone for display
+3. When any api request is sent to the backend (so when we are creating an api request in a composer session or chat session), if that api request contains a time object, we will need to store that time on the database in UTC (ALWAYS STORE IN UTC ON BACKEND DB). The frontend should be converting this time to/from UTC from the users timezone using the time_utils.js file located in the frontend. The backend will store and respond with this UTC timezone to the client for the client to then convert it again back to the user's timezone.
+4. The same thing needs to happen with military time conversion. The database should always store times in military, but the user will be making the request to the backend always in military time as the frontend should convert the non-military times (if non-military) to military times using the time_utils.js file on the frontend.
+
 Extra instructions:
-1. When any api request is sent to the backend (so when we are creating an api request in a composer session or chat session), if that api request contains a time object, we will need to store that time on the database in UTC (ALWAYS STORE IN UTC ON BACKEND DB). The frontend should be converting this time to/from UTC from the users timezone using the time_utils.js file located in the frontend. The backend will store and respond with this UTC timezone to the client for the client to then convert it again back to the user's timezone.
-2. The same thing needs to happen with military time conversion. The database should always store times in military, but the user will be making the request to the backend always in military time as the frontend should convert the non-military times (if non-military) to military times using the time_utils.js file on the frontend.
+1. Try to reduce server load where it makes sense. For example, on the bookingstepmodal's first step: the service and pets editor shouldn't call the backend if the backend got a service and pet, unless and changes were done to it. Only call the backend when needed, or in the above example, when it has changes from the data recieved from the backend. 
+2. When adding any frontend call to the backend, these should be done inside of CrittrCoveStaging/src/api/API.js with a sufficient comment above them with what the function is doing/sending and what it is responding with
 3. When adding new debug messages with console.log on the frontend, make sure to use the authContext.js's is_DEBUG field as and if is_DEBUG is true then log that console log message.
 4. when adding error messages or anything of the sort, NEVER use alerts. Use modals instead for a more friendly user experience, and compatibility across platforms.
-5. When adding any frontend call to the backend, these should be done inside of CrittrCoveStaging/src/api/API.js with a sufficient comment above them with what the function is doing/sending and what it is responding with
 
 Debugging:
 1. If we encounter a 404 not found after making changes to frontend files, it is not a backend issue 99.999% of the time, even if we edit views and v1/urls.py, it still isn't the issue with the url being incorrect, it is almost always an import issue, using a variable that doesn't exist, or something like that.

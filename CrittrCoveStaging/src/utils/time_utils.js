@@ -386,4 +386,56 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
       dst_message: ''
     };
   }
+};
+
+/**
+ * Formats a date for API calls (YYYY-MM-DD)
+ * @param {Date|string} date - The date to format
+ * @returns {string} Formatted date string
+ */
+export const formatDateForAPI = (date) => {
+  if (!date) return null;
+  
+  // If date is a string, convert to Date object
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  // Format as YYYY-MM-DD
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Formats a time for API calls (HH:mm)
+ * @param {Object|string} time - The time to format (object with hours/minutes or string)
+ * @returns {string} Formatted time string in 24-hour format
+ */
+export const formatTimeForAPI = (time) => {
+  if (!time) return null;
+  
+  let hours, minutes;
+  
+  if (typeof time === 'object' && time.hours !== undefined) {
+    // Handle time object format
+    hours = time.hours;
+    minutes = time.minutes;
+  } else if (typeof time === 'string') {
+    // Handle string format (assuming HH:mm format)
+    [hours, minutes] = time.split(':').map(Number);
+  } else {
+    throw new Error('Invalid time format');
+  }
+  
+  // Ensure hours and minutes are valid
+  hours = parseInt(hours);
+  minutes = parseInt(minutes);
+  
+  if (isNaN(hours) || isNaN(minutes)) {
+    throw new Error('Invalid time values');
+  }
+  
+  // Format as HH:mm
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }; 

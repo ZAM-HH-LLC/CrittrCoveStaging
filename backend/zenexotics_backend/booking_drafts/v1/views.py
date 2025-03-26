@@ -18,7 +18,7 @@ from decimal import Decimal
 from collections import OrderedDict
 import json
 from rest_framework.renderers import JSONRenderer
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from interaction_logs.models import InteractionLog
 from engagement_logs.models import EngagementLog
 from error_logs.models import ErrorLog
@@ -32,6 +32,7 @@ from core.booking_operations import (
 import traceback
 import pytz
 from django.utils import timezone
+from booking_drafts.serializers import OvernightBookingCalculationSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -1322,6 +1323,155 @@ class UpdateBookingDraftPetsAndServicesView(APIView):
         except Exception as e:
             logger.error(f"MBA12345 - Error in UpdateBookingDraftPetsAndServicesView: {str(e)}")
             logger.error(f"MBA12345 - Full error traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": f"An error occurred while updating the booking draft: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UpdateBookingDraftTimeAndDateView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, draft_id):
+        logger.info("MBA1234 - Starting UpdateBookingDraftTimeAndDateView.post")
+        logger.info(f"MBA1234 - Request data: {request.data}")
+        
+        try:
+            # Get the draft and verify professional access
+            draft = get_object_or_404(BookingDraft, draft_id=draft_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if draft.booking and draft.booking.professional != professional:
+                logger.error(f"MBA1234 - Unauthorized access attempt by {request.user.email} for draft {draft_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Validate input data
+            serializer = OvernightBookingCalculationSerializer(data=request.data)
+            if not serializer.is_valid():
+                logger.error(f"MBA1234 - Invalid input data: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get validated data
+            start_date = serializer.validated_data['start_date']
+            end_date = serializer.validated_data['end_date']
+            start_time = serializer.validated_data['start_time']
+            end_time = serializer.validated_data['end_time']
+
+            # Calculate number of nights
+            nights = (end_date - start_date).days
+            if end_time > start_time:
+                nights += 1
+            logger.info(f"MBA1234 - Calculated nights: {nights}")
+
+            # Get service from draft data
+            service = None
+            if draft.draft_data and 'service_details' in draft.draft_data:
+                try:
+                    service = Service.objects.get(
+                        service_name=draft.draft_data['service_details']['service_type'],
+                        professional=professional,
+                        moderation_status='APPROVED'
+                    )
+                except Service.DoesNotExist:
+                    logger.error("MBA1234 - Service not found in draft data")
+                    return Response(
+                        {"error": "Service not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            # Get number of pets
+            num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
+
+            # Calculate base rate and additional charges
+            base_rate = Decimal(str(service.base_rate))
+            additional_rate = Decimal(str(service.additional_animal_rate))
+            holiday_rate = Decimal(str(service.holiday_rate))
+
+            # Calculate additional pet charges
+            additional_pet_charges = Decimal('0')
+            if num_pets > 1:
+                additional_pets = num_pets - 1
+                additional_pet_charges = additional_rate * additional_pets
+
+            # Calculate total cost (base rate per night + additional pet charges per night)
+            total_cost = (base_rate + additional_pet_charges) * nights
+
+            # Create single occurrence for the entire stay
+            occurrence = OrderedDict([
+                ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_0"),
+                ('start_date', start_date.isoformat()),
+                ('end_date', end_date.isoformat()),
+                ('start_time', start_time.strftime('%H:%M')),
+                ('end_time', end_time.strftime('%H:%M')),
+                ('calculated_cost', float(total_cost)),
+                ('base_total', float(base_rate * nights)),
+                ('multiple', nights),
+                ('rates', OrderedDict([
+                    ('base_rate', str(base_rate)),
+                    ('additional_animal_rate', str(additional_rate)),
+                    ('applies_after', service.applies_after),
+                    ('holiday_rate', str(holiday_rate)),
+                    ('holiday_days', 0),
+                    ('additional_rates', [])
+                ]))
+            ])
+
+            # Calculate cost summary
+            platform_fee = (total_cost * Decimal('0.10')).quantize(Decimal('0.01'))
+            taxes = ((total_cost + platform_fee) * Decimal('0.08')).quantize(Decimal('0.01'))
+            total_client_cost = total_cost + platform_fee + taxes
+            total_sitter_payout = (total_cost * Decimal('0.90')).quantize(Decimal('0.01'))
+
+            cost_summary = OrderedDict([
+                ('subtotal', float(total_cost)),
+                ('platform_fee', float(platform_fee)),
+                ('taxes', float(taxes)),
+                ('total_client_cost', float(total_client_cost)),
+                ('total_sitter_payout', float(total_sitter_payout)),
+                ('is_prorated', True)
+            ])
+
+            # Update draft data
+            if not draft.draft_data:
+                draft.draft_data = {}
+
+            draft.draft_data.update({
+                'occurrences': [occurrence],
+                'cost_summary': cost_summary,
+                'nights': nights
+            })
+
+            # Update draft status if needed
+            if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
+                draft.draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+
+            # Save the draft
+            draft.save()
+
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_DRAFT_UPDATED',
+                target_type='BOOKING_DRAFT',
+                target_id=str(draft_id),
+                metadata={
+                    'draft_id': draft_id,
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat(),
+                    'nights': nights,
+                    'total_cost': float(total_cost)
+                }
+            )
+
+            logger.info(f"MBA1234 - Successfully updated booking draft {draft_id}")
+            return Response({
+                'status': 'success',
+                'draft_data': draft.draft_data
+            })
+
+        except Exception as e:
+            logger.error(f"MBA1234 - Error in UpdateBookingDraftTimeAndDateView: {str(e)}")
+            logger.error(f"MBA1234 - Full error traceback: {traceback.format_exc()}")
             return Response(
                 {"error": f"An error occurred while updating the booking draft: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
