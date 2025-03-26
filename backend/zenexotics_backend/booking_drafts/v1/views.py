@@ -419,6 +419,7 @@ class AvailableServicesView(APIView):
                     ('applies_after', service.applies_after),
                     ('holiday_rate', service.holiday_rate),
                     ('unit_of_time', service.unit_of_time),
+                    ('is_overnight', service.is_overnight),
                     ('is_selected', service.service_id == selected_service_id)
                 ])
                 for service in services

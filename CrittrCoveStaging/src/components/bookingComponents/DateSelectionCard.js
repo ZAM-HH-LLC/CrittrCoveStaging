@@ -17,13 +17,14 @@ const DateSelectionCard = ({
   bookingType = 'one-time', // 'one-time' or 'recurring'
   dateRangeType = 'date-range', // 'date-range' or 'multiple-days'
   initialDateRange = null,
+  isOvernightForced = false,
 }) => {
   const { is_DEBUG, screenWidth } = useContext(AuthContext);
   const isDesktop = screenWidth > 768;
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDatesList, setSelectedDatesList] = useState(selectedDates);
-  const [selectedBookingType, setSelectedBookingType] = useState(bookingType);
-  const [selectedDateRangeType, setSelectedDateRangeType] = useState(dateRangeType);
+  const [selectedBookingType, setSelectedBookingType] = useState(isOvernightForced ? 'one-time' : bookingType);
+  const [selectedDateRangeType, setSelectedDateRangeType] = useState('date-range');
   const [rangeStartDate, setRangeStartDate] = useState(initialDateRange ? initialDateRange.startDate : null);
   const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState([1, 3]); // Default to M,W
   const [selectedFrequency, setSelectedFrequency] = useState('weekly'); // 'weekly', 'bi-weekly', 'monthly'
@@ -48,6 +49,7 @@ const DateSelectionCard = ({
       console.log('MBA54321 DateSelectionCard initialized with dates:', selectedDates);
       console.log('MBA54321 Current booking type:', selectedBookingType);
       console.log('MBA54321 Current date range type:', selectedDateRangeType);
+      console.log('MBA54321 Is overnight forced:', isOvernightForced);
     }
   }, []);
 
@@ -82,6 +84,8 @@ const DateSelectionCard = ({
   }, [initialDateRange, datesFromRange]);
 
   const handleBookingTypeSelect = (type) => {
+    if (isOvernightForced) return; // Prevent booking type changes for overnight services
+    
     if (is_DEBUG) {
       console.log('MBA54321 Booking type selected:', type);
     }
@@ -751,32 +755,37 @@ const DateSelectionCard = ({
 
     return (
       <>
-        <View style={styles.dateRangeTypeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.dateRangeTypeButton,
-              selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButton
-            ]}
-            onPress={() => handleDateRangeTypeSelect('date-range')}
-          >
-            <Text style={[
-              styles.dateRangeTypeText,
-              selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeText
-            ]}>Date Range</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.dateRangeTypeButton,
-              selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeButton
-            ]}
-            onPress={() => handleDateRangeTypeSelect('multiple-days')}
-          >
-            <Text style={[
-              styles.dateRangeTypeText,
-              selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeText
-            ]}>Multiple Days</Text>
-          </TouchableOpacity>
-        </View>
+        {!isOvernightForced && (
+          <View style={styles.dateRangeTypeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.dateRangeTypeButton,
+                selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButton
+              ]}
+              onPress={() => handleDateRangeTypeSelect('date-range')}
+            >
+              <Text style={[
+                styles.dateRangeTypeText,
+                selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeText
+              ]}>Date Range</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.dateRangeTypeButton,
+                selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeButton
+              ]}
+              onPress={() => handleDateRangeTypeSelect('multiple-days')}
+            >
+              <Text style={[
+                styles.dateRangeTypeText,
+                selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeText
+              ]}>Multiple Days</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {isOvernightForced && (
+          <Text style={[styles.sectionTitle, { fontSize: screenWidth > 768 ? 26 : 16 }]}>Select Date Range</Text>
+        )}
 
         {renderCalendar()}
       </>
@@ -940,35 +949,47 @@ const DateSelectionCard = ({
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.bookingTypeContainer}>
-        <TouchableOpacity
-          style={[
-            styles.bookingTypeButton,
-            selectedBookingType === 'one-time' && styles.selectedBookingTypeButton
-          ]}
-          onPress={() => handleBookingTypeSelect('one-time')}
-        >
-          <Text style={[
-            styles.bookingTypeText,
-            selectedBookingType === 'one-time' && styles.selectedBookingTypeText
-          ]}>One-time</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.bookingTypeButton,
-            selectedBookingType === 'recurring' && styles.selectedBookingTypeButton
-          ]}
-          onPress={() => handleBookingTypeSelect('recurring')}
-        >
-          <Text style={[
-            styles.bookingTypeText,
-            selectedBookingType === 'recurring' && styles.selectedBookingTypeText
-          ]}>Recurring</Text>
-        </TouchableOpacity>
-      </View>
+      {!isOvernightForced && (
+        <View style={styles.bookingTypeContainer}>
+          <TouchableOpacity
+            style={[
+              styles.bookingTypeButton,
+              selectedBookingType === 'one-time' && styles.selectedBookingTypeButton
+            ]}
+            onPress={() => handleBookingTypeSelect('one-time')}
+          >
+            <Text style={[
+              styles.bookingTypeText,
+              selectedBookingType === 'one-time' && styles.selectedBookingTypeText
+            ]}>One-time</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.bookingTypeButton,
+              selectedBookingType === 'recurring' && styles.selectedBookingTypeButton
+            ]}
+            onPress={() => handleBookingTypeSelect('recurring')}
+          >
+            <Text style={[
+              styles.bookingTypeText,
+              selectedBookingType === 'recurring' && styles.selectedBookingTypeText
+            ]}>Recurring</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {renderOneTimeOptions()}
-      {renderRecurringOptions()}
+      {isOvernightForced ? (
+        <>
+          <Text style={[styles.sectionTitle, { fontSize: screenWidth > 768 ? 26 : 16 }]}>Select Date Range</Text>
+          {renderCalendar()}
+        </>
+      ) : (
+        <>
+          {renderOneTimeOptions()}
+          {renderRecurringOptions()}
+        </>
+      )}
+      
       {selectedBookingType === 'one-time' && renderSelectedDates()}
       <RecurringCalendarPreview />
     </ScrollView>

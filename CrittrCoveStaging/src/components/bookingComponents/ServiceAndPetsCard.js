@@ -57,7 +57,10 @@ const ServiceAndPetsCard = ({
       if (response.selected_service_id && !selectedService) {
         const serviceToSelect = response.services.find(s => s.service_id === response.selected_service_id);
         if (serviceToSelect) {
-          onServiceSelect(serviceToSelect);
+          onServiceSelect({
+            ...serviceToSelect,
+            isOvernightForced: serviceToSelect.is_overnight
+          });
         }
       }
     } catch (error) {
@@ -122,7 +125,10 @@ const ServiceAndPetsCard = ({
           styles.serviceCard,
           isSelected && styles.selectedServiceCard
         ]}
-        onPress={() => onServiceSelect(service)}
+        onPress={() => onServiceSelect({
+          ...service,
+          isOvernightForced: service.is_overnight
+        })}
       >
         {/* TODO: change to animal type based icons */}
         <MaterialCommunityIcons 

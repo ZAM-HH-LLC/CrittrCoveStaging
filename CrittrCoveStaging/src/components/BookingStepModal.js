@@ -237,6 +237,7 @@ const BookingStepModal = ({
             bookingType={bookingData.bookingType}
             dateRangeType={bookingData.dateRangeType}
             initialDateRange={bookingData.dateRange}
+            isOvernightForced={bookingData.service?.isOvernightForced}
           />
         );
       case STEPS.TIME_SELECTION.id:
