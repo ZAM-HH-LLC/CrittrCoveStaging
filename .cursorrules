@@ -23,6 +23,7 @@ Extra instructions:
 2. When adding any frontend call to the backend, these should be done inside of CrittrCoveStaging/src/api/API.js with a sufficient comment above them with what the function is doing/sending and what it is responding with
 3. When adding new debug messages with console.log on the frontend, make sure to use the authContext.js's debugLog function to print the message to the log if the is_DEBUG in authContext is true. The function is working for logging, so anytime cursor ai wants to add a console log, instead of console.log("message"), use debugLog("Message", dataForMessage); 
 4. when adding error messages or anything of the sort, NEVER use alerts. Use modals instead for a more friendly user experience, and compatibility across platforms.
+5. Anytime i ask you a question about anything, your job is to respond and think about the architecture like a senior software engineer would. 
 
 Debugging:
 1. If we encounter a 404 not found after making changes to frontend files, it is not a backend issue 99.999% of the time, even if we edit views and v1/urls.py, it still isn't the issue with the url being incorrect, it is almost always an import issue, using a variable that doesn't exist, or something like that.
