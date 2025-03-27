@@ -1,13 +1,185 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { Dimensions, Platform } from 'react-native';
-import { navigate } from '../../App';
+import { navigate, navigateToFrom } from '../../App';
 import { initStripe } from '../utils/StripeService';
 
 export const SCREEN_WIDTH = Dimensions.get('window').width;
 export const SCREEN_HEIGHT = Dimensions.get('window').height;
+
+// Create a debug logging utility
+let debugEnabled = false;
+
+export const setDebugEnabled = (enabled) => {
+  debugEnabled = enabled;
+};
+
+export const debugLog = (message, data = null) => {
+  if (debugEnabled) {
+    if (data) {
+      console.log(message, data);
+    } else {
+      console.log(message);
+    }
+  }
+};
+
+class AuthService {
+  constructor() {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.isRefreshing = false;
+    this.refreshSubscribers = [];
+    this.is_DEBUG = false;
+  }
+
+  setDebug(enabled) {
+    this.is_DEBUG = enabled;
+    console.log('MBA98765 AuthService debug mode:', enabled);
+  }
+
+  async initialize() {
+    console.log('MBA98765 Starting AuthService.initialize()');
+    try {
+      if (Platform.OS === 'web') {
+        console.log('MBA98765 Web platform detected, using sessionStorage');
+        this.accessToken = sessionStorage.getItem('userToken');
+        this.refreshToken = sessionStorage.getItem('refreshToken');
+      } else {
+        console.log('MBA98765 Mobile platform detected, using AsyncStorage');
+        [this.accessToken, this.refreshToken] = await AsyncStorage.multiGet([
+          'userToken',
+          'refreshToken'
+        ]);
+      }
+
+      console.log('MBA98765 Tokens retrieved:', {
+        hasAccessToken: !!this.accessToken,
+        hasRefreshToken: !!this.refreshToken
+      });
+
+      return {
+        hasAccessToken: !!this.accessToken,
+        hasRefreshToken: !!this.refreshToken
+      };
+    } catch (error) {
+      console.error('MBA98765 Error in AuthService.initialize():', error);
+      return { hasAccessToken: false, hasRefreshToken: false };
+    }
+  }
+
+  async getAccessToken() {
+    console.log('MBA98765 getAccessToken called');
+    if (!this.accessToken && this.refreshToken) {
+      console.log('MBA98765 No access token but has refresh token, attempting refresh');
+      await this.refreshTokens();
+    }
+    return this.accessToken;
+  }
+
+  async refreshTokens() {
+    console.log('MBA98765 refreshTokens called');
+    if (this.isRefreshing) {
+      console.log('MBA98765 Token refresh already in progress, subscribing');
+      return new Promise((resolve) => {
+        this.refreshSubscribers.push((token) => resolve(token));
+      });
+    }
+
+    if (!this.refreshToken) {
+      console.log('MBA98765 No refresh token available');
+      return null;
+    }
+
+    try {
+      this.isRefreshing = true;
+      console.log('MBA98765 Starting token refresh');
+
+      const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
+        refresh: this.refreshToken
+      });
+
+      this.accessToken = response.data.access;
+      
+      if (Platform.OS === 'web') {
+        sessionStorage.setItem('userToken', this.accessToken);
+      } else {
+        await AsyncStorage.setItem('userToken', this.accessToken);
+      }
+
+      console.log('MBA98765 Token refresh successful');
+
+      this.refreshSubscribers.forEach(callback => callback(this.accessToken));
+      this.refreshSubscribers = [];
+      
+      return this.accessToken;
+    } catch (error) {
+      console.error('MBA98765 Token refresh failed:', error.response?.status);
+      this.clearTokens();
+      throw error;
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
+  async validateToken(token) {
+    console.log('MBA98765 validateToken called');
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/token/verify/`, {
+        token: token
+      });
+
+      console.log('MBA98765 Token validation successful');
+      return response.status === 200;
+    } catch (error) {
+      console.error('MBA98765 Token validation failed:', error.response?.status);
+      return false;
+    }
+  }
+
+  async clearTokens() {
+    console.log('MBA98765 clearTokens called');
+    try {
+      if (Platform.OS === 'web') {
+        sessionStorage.removeItem('userToken');
+        sessionStorage.removeItem('refreshToken');
+      } else {
+        await AsyncStorage.multiRemove(['userToken', 'refreshToken']);
+      }
+      this.accessToken = null;
+      this.refreshToken = null;
+      
+      console.log('MBA98765 Tokens cleared');
+    } catch (error) {
+      console.error('MBA98765 Error clearing tokens:', error);
+    }
+  }
+
+  async setTokens(accessToken, refreshToken) {
+    console.log('MBA98765 setTokens called');
+    try {
+      this.accessToken = accessToken;
+      this.refreshToken = refreshToken;
+
+      if (Platform.OS === 'web') {
+        sessionStorage.setItem('userToken', accessToken);
+        sessionStorage.setItem('refreshToken', refreshToken);
+      } else {
+        await AsyncStorage.multiSet([
+          ['userToken', accessToken],
+          ['refreshToken', refreshToken]
+        ]);
+      }
+
+      console.log('MBA98765 Tokens set successfully');
+    } catch (error) {
+      console.error('MBA98765 Error setting tokens:', error);
+      throw error;
+    }
+  }
+}
 
 export const AuthContext = createContext();
 
@@ -25,20 +197,10 @@ export const getStorage = async (key) => {
   }
 };
 
-// Create a debug logging utility
-let debugEnabled = false;
-
-export const setDebugEnabled = (enabled) => {
-  debugEnabled = enabled;
-};
-
-export const debugLog = (message) => {
-  if (debugEnabled) {
-    console.log(message);
-  }
-};
-
 export const AuthProvider = ({ children }) => {
+  const authService = useRef(new AuthService());
+  const isInitializedRef = useRef(false);
+  
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [isApprovedProfessional, setIsApprovedProfessional] = useState(false);
@@ -51,17 +213,150 @@ export const AuthProvider = ({ children }) => {
     timezone_abbrev: 'UTC',
     use_military_time: false
   });
-
-  // SET TO "true" FOR NO API CALLS
   const [is_prototype, setIsPrototype] = useState(false);
-
-  // Set is_DEBUG to false by default in prototype mode
   const [is_DEBUG, setIsDebug] = useState(true);
 
-  // Update debug state when is_DEBUG changes
+  // Set debug mode
   useEffect(() => {
-    setDebugEnabled(is_DEBUG);
+    console.log('MBA98765 Setting up debug mode');
+    authService.current.setDebug(is_DEBUG);
   }, [is_DEBUG]);
+
+  // Set up axios interceptors
+  useEffect(() => {
+    console.log('MBA98765 Setting up axios interceptors');
+    const requestInterceptor = axios.interceptors.request.use(
+      async (config) => {
+        if (!is_prototype) {
+          const token = await authService.current.getAccessToken();
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    const responseInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+        
+        if (error.response?.status === 401 && !originalRequest._retry && !is_prototype) {
+          originalRequest._retry = true;
+          
+          try {
+            const newToken = await authService.current.refreshTokens();
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return axios(originalRequest);
+          } catch (refreshError) {
+            await signOut();
+            return Promise.reject(refreshError);
+          }
+        }
+        
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      console.log('MBA98765 Cleaning up axios interceptors');
+      axios.interceptors.request.eject(requestInterceptor);
+      axios.interceptors.response.eject(responseInterceptor);
+    };
+  }, [is_prototype]);
+
+  // Initialize auth
+  useEffect(() => {
+    console.log('MBA98765 Starting auth initialization');
+    const init = async () => {
+      if (isInitializedRef.current) {
+        console.log('MBA98765 Already initialized, skipping');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        if (is_prototype) {
+          console.log('MBA98765 Prototype mode detected');
+          setIsSignedIn(true);
+          setUserRole('professional');
+          setIsApprovedProfessional(true);
+          setFirstName('John');
+          isInitializedRef.current = true;
+          setLoading(false);
+          return;
+        }
+
+        console.log('MBA98765 Initializing auth service');
+        const { hasAccessToken, hasRefreshToken } = await authService.current.initialize();
+        
+        console.log('MBA98765 Auth initialization result:', { hasAccessToken, hasRefreshToken });
+        
+        if (hasAccessToken && hasRefreshToken) {
+          console.log('MBA98765 Validating token');
+          const isValid = await authService.current.validateToken(authService.current.accessToken);
+          
+          if (!isValid) {
+            console.log('MBA98765 Token invalid, attempting refresh');
+            await authService.current.refreshTokens();
+          }
+          
+          setIsSignedIn(true);
+          
+          // Get stored role
+          let storedRole = null;
+          if (Platform.OS === 'web') {
+            storedRole = sessionStorage.getItem('userRole');
+          } else {
+            storedRole = await AsyncStorage.getItem('userRole');
+          }
+          
+          console.log('MBA98765 Stored role:', storedRole);
+          
+          if (storedRole) {
+            setUserRole(storedRole);
+            // Get professional status if role is professional
+            if (storedRole === 'professional') {
+              const status = await getProfessionalStatus(authService.current.accessToken);
+              setIsApprovedProfessional(status.isApprovedProfessional);
+            }
+          } else {
+            // If no stored role, get it from the backend
+            const status = await getProfessionalStatus(authService.current.accessToken);
+            setUserRole(status.suggestedRole);
+            setIsApprovedProfessional(status.isApprovedProfessional);
+            
+            // Store the role
+            if (Platform.OS === 'web') {
+              sessionStorage.setItem('userRole', status.suggestedRole);
+            } else {
+              await AsyncStorage.setItem('userRole', status.suggestedRole);
+            }
+          }
+          
+          await fetchUserName();
+        } else {
+          console.log('MBA98765 No valid tokens found');
+          setIsSignedIn(false);
+          setUserRole(null);
+          setIsApprovedProfessional(false);
+        }
+      } catch (error) {
+        console.error('MBA98765 Error in auth initialization:', error);
+        setIsSignedIn(false);
+        setUserRole(null);
+        setIsApprovedProfessional(false);
+      } finally {
+        console.log('MBA98765 Finishing auth initialization');
+        isInitializedRef.current = true;
+        setLoading(false);
+      }
+    };
+
+    init();
+  }, []);
 
   // Preload Stripe modules when user signs in
   useEffect(() => {
@@ -83,125 +378,31 @@ export const AuthProvider = ({ children }) => {
         subscription.remove();
       }
     };
-  }, []); // No dependencies needed for dimension changes
-
-  // Handle initial auth state separately
-  useEffect(() => {
-    const loadInitialAuth = async () => {
-      try {
-        if (is_prototype) {
-          // In prototype mode, set default professional state
-          setIsSignedIn(true);
-          setUserRole('professional');
-          setIsApprovedProfessional(true);
-          await AsyncStorage.multiSet([
-            ['userRole', 'professional'],
-            ['isApprovedProfessional', 'true']
-          ]);
-          return;
-        }
-
-        const authStatus = await checkAuthStatus();
-        if (authStatus.isSignedIn) {
-          await fetchUserName();
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadInitialAuth();
-  }, []); // Only run on mount
+  }, []);
 
   const fetchUserName = async () => {
     if (is_prototype) {
-      // In prototype mode, set a default name
       setFirstName('John');
       return;
     }
     try {
-      let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+      console.log('MBA98765 Fetching user name');
+      const token = await authService.current.getAccessToken();
       if (!token) {
-        if (is_DEBUG) {
-          console.error('No token found');
-        }
+        console.log('MBA98765 No token found for user name');
         return;
       }
+      console.log('MBA98765 Making request to get user name');
       const response = await axios.get(`${API_BASE_URL}/api/users/v1/get-name/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('MBA98765 User name response:', response.data);
       setFirstName(response.data.first_name);
     } catch (error) {
-      console.error('Error fetching user name:', error.response ? error.response.data : error.message);
+      console.error('MBA98765 Error fetching user name:', error.response ? error.response.data : error.message);
+      setFirstName(''); // Reset firstName on error
     }
   };
-
-  // Single useEffect for auth state management
-  useEffect(() => {
-    const loadAuthState = async () => {
-      try {
-        // Ensure storedApproval is retrieved correctly and handle null or undefined values
-        let token, storedRole, storedApproval;
-
-        if (Platform.OS === "web") {
-          token = sessionStorage.getItem('userToken');
-          storedRole = sessionStorage.getItem('userRole');
-          storedApproval = sessionStorage.getItem('isApprovedProfessional');
-          if (is_DEBUG) {
-            console.log("MBA got token:", token, "storedRole:", storedRole, "StoredApproval:", storedApproval);
-          }
-        } else {
-          [token, storedRole, storedApproval] = await AsyncStorage.multiGet([
-            'userToken',
-            'userRole',
-            'isApprovedProfessional'
-          ]);
-        }
-
-        // Handle null or undefined storedApproval
-        const isApproved = storedApproval ? storedApproval[1] === 'true' : false;
-
-        // If we have stored values, use them
-        if (token) {
-          if (is_DEBUG) {
-            console.log("MBA got into load auth state if token. storedRole:", storedRole);
-          }
-          setIsSignedIn(true);
-          setUserRole(storedRole || 'petOwner');
-          setIsApprovedProfessional(isApproved);
-
-          if (is_DEBUG) {
-            console.log('Initial auth state set:', {
-              role: storedRole || 'petOwner',
-              isApproved: isApproved
-            });
-          }
-        } else {
-          if (is_DEBUG) {
-            console.log('No token found, setting to signed out state');
-          }
-          setIsSignedIn(false);
-          setUserRole(null);
-          setIsApprovedProfessional(false);
-        }
-      } catch (error) {
-        console.error('Error loading auth state:', error);
-      } finally {
-        setLoading(false);
-        if (is_DEBUG) {
-          console.log('Finished loadAuthState');
-        }
-      }
-    };
-
-    loadAuthState();
-  }, []); // Only run on mount
-
-  useEffect(() => {
-    if (isSignedIn) {
-      fetchUserName();
-    }
-  }, [isSignedIn]);
 
   const getProfessionalStatus = async (token) => {
     try {
@@ -209,15 +410,15 @@ export const AuthProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log('Professional status response:', response.data);
+      if (is_DEBUG) {
+        debugLog('MBA98765 Professional status response:', response.data);
+      }
       
       const { is_approved } = response.data;
       
-      // Set approval status only
       setIsApprovedProfessional(is_approved);
       await AsyncStorage.setItem('isApprovedProfessional', String(is_approved));
       
-      // Just return the status without modifying roles
       return {
         isApprovedProfessional: is_approved,
         suggestedRole: is_approved ? 'professional' : 'petOwner'
@@ -231,56 +432,51 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signIn = async (token, refreshTokenValue) => {
+  const signIn = async (token, refreshTokenValue, navigation) => {
     try {
-      if (Platform.OS === "web") {
-        sessionStorage.setItem('userToken', token);
-        sessionStorage.setItem('refreshToken', refreshTokenValue);
-      } else {
-        await AsyncStorage.multiSet([
-          ['userToken', token],
-          ['refreshToken', refreshTokenValue],
-        ]);
+      if (is_DEBUG) {
+        debugLog('MBA98765 Starting sign in process');
       }
 
-      if (is_DEBUG) {
-        console.log('MBA sign in token', token, 'refreshToken', refreshTokenValue);
-      }
-      setIsSignedIn(true);
-      
       if (is_prototype) {
-        // In prototype mode, set default values without API calls
-        const initialRole = 'professional';
-        setUserRole(initialRole);
-        if (Platform.OS === 'web') {
-          sessionStorage.setItem('userRole', initialRole);
-        } else {
-          await AsyncStorage.setItem('userRole', initialRole);
+        if (is_DEBUG) {
+          debugLog('MBA98765 Signing in with prototype mode');
         }
+        setIsSignedIn(true);
+        setUserRole('professional');
         setIsApprovedProfessional(true);
+        setFirstName('John');
         return {
-          userRole: initialRole,
+          userRole: 'professional',
           isApprovedProfessional: true
         };
       }
-      
-      // Get professional status and set initial role
-      const status = await getProfessionalStatus(token);
 
+      await authService.current.setTokens(token, refreshTokenValue);
+      setIsSignedIn(true);
+      
+      const status = await getProfessionalStatus(token);
       const initialRole = status.suggestedRole;
       
-      // Set and store the role
       setUserRole(initialRole);
+      setIsApprovedProfessional(status.isApprovedProfessional);
+      
+      // Store the role
       if (Platform.OS === 'web') {
         sessionStorage.setItem('userRole', initialRole);
       } else {
         await AsyncStorage.setItem('userRole', initialRole);
       }
-      
-      // Add logging to track access and refresh tokens during signIn
+
       if (is_DEBUG) {
-        console.log('Access token stored:', token);
-        console.log('Refresh token stored:', refreshTokenValue);
+        debugLog('MBA98765 Sign in successful:', { initialRole, isApprovedProfessional: status.isApprovedProfessional });
+      }
+
+      // Navigate to professional dashboard after successful sign in
+      if (navigation) {
+        setTimeout(() => {
+          navigateToFrom(navigation, 'ProfessionalDashboard');
+        }, 0);
       }
 
       return {
@@ -288,6 +484,9 @@ export const AuthProvider = ({ children }) => {
         isApprovedProfessional: status.isApprovedProfessional
       };
     } catch (error) {
+      if (is_DEBUG) {
+        debugLog('MBA98765 Sign in error:', error);
+      }
       console.error('Error during sign in:', error);
       throw error;
     }
@@ -295,27 +494,19 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async () => {
     try {
-      await AsyncStorage.multiRemove([
-        'userToken', 
-        'refreshToken', 
-        'userRole', 
-        'isApprovedProfessional'
-      ]);
-
-      await sessionStorage.removeItem('userToken');
-      await sessionStorage.removeItem('refreshToken');
+      await authService.current.clearTokens();
+      await AsyncStorage.multiRemove(['userRole', 'isApprovedProfessional']);
       await sessionStorage.removeItem('userRole');
       await sessionStorage.removeItem('isApprovedProfessional');
     } catch (error) {
       console.error('Error clearing storage:', error);
     }
 
-    // Set state updates
     setIsSignedIn(false);
     setIsApprovedProfessional(false);
     setUserRole(null);
+    setFirstName('');
 
-    // Ensure state updates are processed before navigation
     setTimeout(() => {
       if (Platform.OS === 'web') {
         sessionStorage.setItem('explicitSignOut', 'true');
@@ -327,7 +518,7 @@ export const AuthProvider = ({ children }) => {
   const switchRole = async () => {
     if (isApprovedProfessional) {
       if (is_DEBUG) {
-        console.log("MBA userRole", userRole);
+        debugLog('MBA98765 Switching role, current role:', userRole);
       }
       const newRole = userRole === 'professional' ? 'petOwner' : 'professional';
       setUserRole(newRole);
@@ -338,271 +529,25 @@ export const AuthProvider = ({ children }) => {
           await AsyncStorage.setItem('userRole', newRole);
         }
         
-        // Verify the role was stored correctly
-        const storedRole = Platform.OS === "web" ? sessionStorage.getItem('userRole') : await AsyncStorage.getItem('userRole');
-        console.log("MBA Stored role:", storedRole);
-
-        console.log("MBA New role:", newRole);
-
+        if (is_DEBUG) {
+          debugLog('MBA98765 Role switched to:', newRole);
+        }
       } catch (error) {
         console.error('Error updating role in storage:', error);
       }
     } else {
       console.log('User is not an approved professional, cannot switch roles');
     }
-
-    // Add logging in switchRole to track isApprovedProfessional state
-    console.log('Switching role. Current isApprovedProfessional:', isApprovedProfessional);
   };
-
-  const validateToken = async (token) => {
-    try {
-      if (is_prototype) {
-        // In prototype mode, always return true for token validation
-        if (is_DEBUG) {
-          console.log('Prototype mode: Mock token validation successful');
-        }
-        return true;
-      }
-
-      const response = await axios.post(`${API_BASE_URL}/api/token/verify/`, {
-        token: token
-      });
-
-      if (response.status !== 200) {
-        console.log('Token validation error:', response.status);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.log('Token validation error:', error.response?.status);
-      return false;
-    }
-  };
-
-  const refreshUserToken = async (refreshToken) => {
-    try {
-      // Ensure refresh token is retrieved correctly in refreshUserToken
-      const refreshToken = Platform.OS === "web" ? sessionStorage.getItem('refreshToken') : await AsyncStorage.getItem('refreshToken');
-      if (!refreshToken) {
-        console.error('No refresh token found');
-        return null;
-      }
-
-      const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
-        refresh: refreshToken
-      });
-      const newToken = response.data.access;
-      if (Platform.OS === 'web') {
-        sessionStorage.setItem('userToken', newToken);
-      } else {
-        await AsyncStorage.setItem('userToken', newToken);
-      }
-      return newToken;
-    } catch (error) {
-      console.error('Error refreshing token:', error.response?.status);
-      return null;
-    }
-  };
-
-  const checkAuthStatus = async () => {
-    try {
-      // Check for explicit sign out flag first
-      if (Platform.OS === 'web') {
-        const wasExplicitSignOut = sessionStorage.getItem('explicitSignOut') === 'true';
-        if (wasExplicitSignOut) {
-          // Clear the flag
-          sessionStorage.removeItem('explicitSignOut');
-          return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
-        }
-      }
-
-      // Get current route/path
-      let currentPath = '';
-      if (Platform.OS === 'web') {
-        currentPath = window.location.pathname.slice(1);
-      } else {
-        currentPath = await AsyncStorage.getItem('currentRoute');
-      }
-
-      // Check if we're on the home page or root URL
-      const isHomePage = !currentPath || currentPath === '' || currentPath.toLowerCase() === 'home';
-
-      if (is_prototype) {
-        const token = Platform.OS === "web" ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
-        if (!token) {
-          if (is_DEBUG) {
-            console.log('Prototype mode: No token found, signing out');
-          }
-          return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
-        }
-
-        if (is_DEBUG) {
-          console.log('Prototype mode: Token found, setting signed in state');
-        }
-        setIsSignedIn(true);
-        const storedRole = Platform.OS === "web" ? sessionStorage.getItem('userRole') : await AsyncStorage.getItem('userRole');
-
-        if (is_DEBUG) {
-          console.log("MBA setting user role", storedRole);
-        }
-        setUserRole(storedRole === 'professional' || storedRole === 'petOwner' ? storedRole : 'petOwner');
-        setIsApprovedProfessional(true);
-        return {
-          isSignedIn: true,
-          userRole: storedRole === 'professional' || storedRole === 'petOwner' ? storedRole : 'petOwner',
-          isApprovedProfessional: true
-        };
-      }
-
-      let token, refreshToken, storedRole, storedApproval;
-
-      if (Platform.OS === "web") {
-        token = sessionStorage.getItem('userToken');
-        refreshToken = sessionStorage.getItem('refreshToken');
-        storedRole = sessionStorage.getItem('userRole');
-        storedApproval = sessionStorage.getItem('isApprovedProfessional');
-      } else {
-        [token, refreshToken, storedRole, storedApproval] = await AsyncStorage.multiGet([
-          'userToken',
-          'refreshToken',
-          'userRole',
-          'isApprovedProfessional'
-        ]);
-      }
-
-      if (is_DEBUG) {
-        console.log("MBA userToken:", token);
-        console.log("MBA refreshToken:", refreshToken);
-        console.log("MBA storedRole:", storedRole);
-        console.log("MBA isApprovedProfessional:", isApprovedProfessional);
-        console.log("MBA storedApproval:", storedApproval);
-        console.log("Current path:", currentPath);
-        console.log("Is home page:", isHomePage);
-      }
-
-      // Handle no tokens scenario
-      if (!token || !refreshToken) {
-        console.log('No tokens found - handling based on current route');
-        
-        // If we're on the home page or root URL, just return unauthenticated state
-        if (isHomePage) {
-          return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
-        }
-        
-        // For any other page, sign out and redirect
-        await signOut();
-        return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
-      }
-
-      // Rest of the existing token validation logic
-      let currentToken = token;
-      let isValid = false;
-
-      if (currentToken) {
-        isValid = await validateToken(currentToken);
-      }
-
-      if (!isValid && refreshToken) {
-        console.log('MBA12kkn9234567890 Retrying refresh token');
-        const newToken = await refreshUserToken(refreshToken);
-        if (newToken) {
-          console.log('MBA12kkn9234567890 Got token:', newToken);
-          currentToken = newToken;
-          isValid = true;
-        }
-      }
-
-      if (!isValid) {
-        console.log('No valid token available - handling based on current route');
-        if (isHomePage) {
-          navigate('Home');
-          return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
-        }
-        await signOut();
-        return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
-      }
-
-      // At this point we have a valid token
-      console.log('Token validation successful, checking professional status with token:', currentToken);
-      const status = await getProfessionalStatus(currentToken);
-      console.log('Professional status check result:', status);
-
-      setIsSignedIn(true);
-      setIsApprovedProfessional(status.isApprovedProfessional);
-
-      // If on SearchProfessionalsListing, force petOwner role but don't store it
-      if (currentPath === 'SearchProfessionalsListing') {
-        setUserRole('petOwner');
-        return {
-          isSignedIn: true,
-          userRole: 'petOwner',
-          isApprovedProfessional: status.isApprovedProfessional
-        };
-      }
-
-      // For all other cases, use the stored role if it exists
-      if (storedRole) {
-        const role = storedRole;
-
-        setUserRole(role);
-        return {
-          isSignedIn: true,
-          userRole: role,
-          isApprovedProfessional: status.isApprovedProfessional
-        };
-      }
-
-      // Only set a new role if we don't have one stored (first login)
-
-      const newRole = status.suggestedRole || 'petOwner';
-
-      setUserRole(newRole);
-      await AsyncStorage.setItem('userRole', newRole);
-
-      return {
-        isSignedIn: true,
-        userRole: newRole,
-        isApprovedProfessional: status.isApprovedProfessional
-      };
-    } catch (error) {
-      console.error('Error in checkAuthStatus:', error);
-      await signOut();
-      return { isSignedIn: false, userRole: null, isApprovedProfessional: false };
-    } finally {
-      if (is_DEBUG) {
-        console.log('=== Ending checkAuthStatus ===');
-      }
-    }
-  };
-
-  // Add useEffect to persist role changes
-  useEffect(() => {
-    if (is_prototype && isSignedIn) {
-      AsyncStorage.setItem('userRole', userRole || 'professional');
-      AsyncStorage.setItem('isApprovedProfessional', String(isApprovedProfessional));
-    }
-  }, [is_prototype, isSignedIn, userRole, isApprovedProfessional]);
-
-  // Ensure isApprovedProfessional is set to true in prototype mode
-  useEffect(() => {
-    if (is_prototype) {
-      setIsApprovedProfessional(true);
-      if (is_DEBUG) {
-        console.log('Prototype mode: isApprovedProfessional set to true');
-      }
-    }
-  }, [is_prototype]);
 
   const fetchTimeSettings = async () => {
     if (is_prototype) return;
     
     try {
-      let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
+      const token = await authService.current.getAccessToken();
       if (!token) {
         if (is_DEBUG) {
-          console.error('MBA9876ano2n34567890 No token found for time settings');
+          debugLog('MBA98765 No token found for time settings');
         }
         return;
       }
@@ -612,12 +557,12 @@ export const AuthProvider = ({ children }) => {
       });
       
       if (is_DEBUG) {
-        console.log('MBA9876ano2n34567890 Time settings response:', response.data);
+        debugLog('MBA98765 Time settings response:', response.data);
       }
       
       setTimeSettings(response.data);
     } catch (error) {
-      console.error('MBA9876ano2n34567890 Error fetching time settings:', error.response ? error.response.data : error.message);
+      console.error('MBA98765 Error fetching time settings:', error.response ? error.response.data : error.message);
     }
   };
 
@@ -627,6 +572,65 @@ export const AuthProvider = ({ children }) => {
       fetchTimeSettings();
     }
   }, [isSignedIn, is_prototype]);
+
+  const checkAuthStatus = async () => {
+    try {
+      if (is_prototype) {
+        return {
+          isSignedIn: true,
+          userRole: 'professional',
+          isApprovedProfessional: true
+        };
+      }
+
+      const { hasAccessToken, hasRefreshToken } = await authService.current.initialize();
+      
+      if (hasAccessToken && hasRefreshToken) {
+        const isValid = await authService.current.validateToken(authService.current.accessToken);
+        
+        if (!isValid) {
+          await authService.current.refreshTokens();
+        }
+
+        // Get stored role
+        let storedRole = null;
+        if (Platform.OS === 'web') {
+          storedRole = sessionStorage.getItem('userRole');
+        } else {
+          storedRole = await AsyncStorage.getItem('userRole');
+        }
+
+        if (storedRole) {
+          return {
+            isSignedIn: true,
+            userRole: storedRole,
+            isApprovedProfessional: storedRole === 'professional'
+          };
+        } else {
+          // If no stored role, get it from the backend
+          const status = await getProfessionalStatus(authService.current.accessToken);
+          return {
+            isSignedIn: true,
+            userRole: status.suggestedRole,
+            isApprovedProfessional: status.isApprovedProfessional
+          };
+        }
+      }
+
+      return {
+        isSignedIn: false,
+        userRole: null,
+        isApprovedProfessional: false
+      };
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      return {
+        isSignedIn: false,
+        userRole: null,
+        isApprovedProfessional: false
+      };
+    }
+  };
 
   return (
     <AuthContext.Provider
@@ -647,6 +651,7 @@ export const AuthProvider = ({ children }) => {
         switchRole,
         setIsDebug,
         setIsPrototype,
+        checkAuthStatus,
       }}
     >
       {children}
