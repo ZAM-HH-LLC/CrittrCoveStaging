@@ -217,16 +217,29 @@ const BookingStepModal = ({
           const startDate = formatDateForAPI(bookingData.dateRange.startDate);
           const endDate = formatDateForAPI(bookingData.dateRange.endDate);
 
+          // Format times for conversion
+          const startTime = formatTimeForAPI(bookingData.times.startTime);
+          const endTime = formatTimeForAPI(bookingData.times.endTime);
+
+          if (is_DEBUG) {
+            console.log('MBA12345 Formatted dates and times:', {
+              startDate,
+              endDate,
+              startTime,
+              endTime
+            });
+          }
+
           // Convert times to UTC
           const startTimeUTC = convertToUTC(
             startDate,
-            formatTimeForAPI(bookingData.times.startTime),
+            startTime,
             'US/Mountain' // TODO: Get actual user timezone from context
           );
 
           const endTimeUTC = convertToUTC(
             endDate,
-            formatTimeForAPI(bookingData.times.endTime),
+            endTime,
             'US/Mountain' // TODO: Get actual user timezone from context
           );
 
@@ -237,17 +250,23 @@ const BookingStepModal = ({
             });
           }
 
-          // Call the API with UTC times
+          // Call the API with UTC times and dates
           await updateBookingDraftTimeAndDate(
             bookingId,
-            startDate,
-            endDate,
+            startTimeUTC.date,  // Use the UTC date
+            endTimeUTC.date,    // Use the UTC date
             startTimeUTC.time,
             endTimeUTC.time
           );
         } catch (error) {
           if (is_DEBUG) {
             console.error('MBA12345 Error calculating booking totals:', error);
+            console.error('MBA12345 Error stack:', error.stack);
+            console.error('MBA12345 Error details:', {
+              message: error.message,
+              name: error.name,
+              response: error.response?.data
+            });
           }
           setError('Failed to calculate booking totals');
           return;

@@ -1,5 +1,6 @@
 import { format, parse } from 'date-fns';
 import { formatInTimeZone, toZonedTime, fromZonedTime, utcToZonedTime, getTimezoneOffset } from 'date-fns-tz';
+import moment from 'moment-timezone';
 
 /**
  * Formats a date string into "MMM d" format (e.g., "Mar 5")
@@ -55,63 +56,48 @@ export const convertTo12Hour = (time24h) => {
 };
 
 /**
- * Converts local time to UTC
+ * Converts a time from a specific timezone to UTC
+ * @param {string} date - The date in YYYY-MM-DD format
+ * @param {string} time - The time in HH:mm format (24-hour)
+ * @param {string} fromTimezone - The source timezone (e.g., 'US/Mountain')
+ * @returns {Object} Object containing the UTC date and time
  */
-export const convertToUTC = (date, time, timezone) => {
-    try {
-        console.log('MBA134njo0vh03 Converting to UTC - Input:', { date, time, timezone });
-        
-        // Check if time is already in 24-hour format and convert if necessary
-        let time24 = time;
-        if (!/:/.test(time)) {
-            time24 = convertTo24Hour(time);
-        }
-        console.log('MBA134njo0vh03 24-hour time:', time24);
-        
-        // Parse date and time
-        const [year, month, day] = date.split('-').map(Number);
-        const [hours, minutes] = time24.split(':').map(Number);
-        
-        // Create the date string in ISO format for the local time
-        const localDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
-        
-        // Use formatInTimeZone to get the UTC time
-        // We use 'UTC' as the target timezone to get the UTC equivalent
-        const utcDateStr = formatInTimeZone(localDateStr, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: 'UTC' });
-        const utcDate = new Date(utcDateStr);
-        
-        console.log('MBA134njo0vh03 Conversion details:', {
-            input: {
-                date,
-                time,
-                timezone,
-                time24,
-                localDateStr
-            },
-            conversion: {
-                utcDateStr,
-                utcDate: utcDate.toISOString()
-            }
-        });
-        
-        // Format UTC time using formatInTimeZone to ensure we get UTC time, not local time
-        const utcTimeStr = formatInTimeZone(utcDate, 'UTC', 'HH:mm');
-        const utcDateStr2 = formatInTimeZone(utcDate, 'UTC', 'yyyy-MM-dd');
-        
-        console.log('MBA134njo0vh03 Final UTC output:', {
-            time: utcTimeStr,
-            date: utcDateStr2,
-            originalUTC: utcDate.toISOString()
-        });
-        
-        return {
-            time: utcTimeStr,
-            date: utcDateStr2
-        };
-    } catch (error) {
-        console.error('MBA134njo0vh03 Error in convertToUTC:', error);
-        throw error;
-    }
+export const convertToUTC = (date, time, fromTimezone) => {
+  try {
+    console.log('MBA12345 Converting to UTC - Input:', { date, time, fromTimezone });
+
+    // Create a moment object in the source timezone
+    const localMoment = moment.tz(`${date} ${time}`, fromTimezone);
+    
+    // Convert to UTC
+    const utcMoment = localMoment.utc();
+    
+    // Format the date and time
+    const utcDate = utcMoment.format('YYYY-MM-DD');
+    const utcTime = utcMoment.format('HH:mm');
+
+    console.log('MBA12345 UTC conversion result:', {
+      input: {
+        date,
+        time,
+        fromTimezone
+      },
+      output: {
+        utcDate,
+        utcTime,
+        originalMoment: localMoment.format(),
+        utcMoment: utcMoment.format()
+      }
+    });
+    
+    return {
+      date: utcDate,
+      time: utcTime
+    };
+  } catch (error) {
+    console.error('MBA12345 Error converting to UTC:', error);
+    throw error;
+  }
 };
 
 /**
