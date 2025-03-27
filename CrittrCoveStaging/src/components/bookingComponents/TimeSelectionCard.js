@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
@@ -14,29 +14,71 @@ const TimeSelectionCard = ({
   const { is_DEBUG } = useContext(AuthContext);
   const [showIndividualDays, setShowIndividualDays] = useState(false);
   const [individualTimeRanges, setIndividualTimeRanges] = useState({});
+  const [times, setTimes] = useState(initialTimes);
 
-  const handleTimeSelect = (timeData, dateKey = 'default') => {
+  const handleTimeSelect = (type, value) => {
     if (is_DEBUG) {
-      console.log('MBA54321 handleTimeSelect:', { timeData, dateKey });
+      console.log('MBA12345 Time selection:', { type, value });
     }
-
-    if (onTimeSelect) {
-      if (showIndividualDays) {
-        // Update individual time ranges
-        const newTimeRanges = {
-          ...individualTimeRanges,
-          [dateKey]: timeData
+    const currentTimes = { ...times };
+    
+    if (type === 'start') {
+      if (value.hours !== undefined) {
+        currentTimes.startTime = {
+          ...currentTimes.startTime,
+          hours: value.hours,
+          minutes: value.minutes || 0  // Default to 0 if minutes not provided
         };
-        setIndividualTimeRanges(newTimeRanges);
-        
-        // Send all time ranges to parent
-        onTimeSelect(newTimeRanges);
-      } else {
-        // Send single time range for default mode
-        onTimeSelect(timeData);
+      }
+      if (value.minutes !== undefined) {
+        currentTimes.startTime = {
+          ...currentTimes.startTime,
+          minutes: value.minutes
+        };
+      }
+    } else if (type === 'end') {
+      if (value.hours !== undefined) {
+        currentTimes.endTime = {
+          ...currentTimes.endTime,
+          hours: value.hours,
+          minutes: value.minutes || 0  // Default to 0 if minutes not provided
+        };
+      }
+      if (value.minutes !== undefined) {
+        currentTimes.endTime = {
+          ...currentTimes.endTime,
+          minutes: value.minutes
+        };
       }
     }
+
+    if (is_DEBUG) {
+      console.log('MBA12345 Updated times:', currentTimes);
+    }
+    setTimes(currentTimes);
+    onTimeSelect(currentTimes);
   };
+
+  // Initialize times with proper format
+  useEffect(() => {
+    if (initialTimes) {
+      const formattedTimes = {
+        startTime: {
+          hours: initialTimes.startTime ? parseInt(initialTimes.startTime.split(':')[0]) : 9,
+          minutes: initialTimes.startTime ? parseInt(initialTimes.startTime.split(':')[1]) : 0
+        },
+        endTime: {
+          hours: initialTimes.endTime ? parseInt(initialTimes.endTime.split(':')[0]) : 17,
+          minutes: initialTimes.endTime ? parseInt(initialTimes.endTime.split(':')[1]) : 0
+        },
+        isOvernightForced: initialTimes.isOvernightForced || false
+      };
+      if (is_DEBUG) {
+        console.log('MBA12345 Initializing times:', formattedTimes);
+      }
+      setTimes(formattedTimes);
+    }
+  }, [initialTimes]);
 
   const handlePresetSelect = (preset) => {
     let newTimes = {};
@@ -65,7 +107,7 @@ const TimeSelectionCard = ({
       default:
         return;
     }
-    handleTimeSelect(newTimes);
+    handleTimeSelect(null, newTimes);
   };
 
   const formatDateRange = (startDate, endDate) => {
@@ -100,8 +142,8 @@ const TimeSelectionCard = ({
         <View key={dateKey} style={[styles.timeRangeContainer, { zIndex: zIndexCounter }]}>
           <TimeRangeSelector
             title={`${formatDate(dateKey)}`}
-            onTimeSelect={(timeData) => handleTimeSelect(timeData, dateKey)}
-            initialTimes={individualTimeRanges[dateKey] || initialTimes}
+            onTimeSelect={(timeData) => handleTimeSelect(null, timeData)}
+            initialTimes={individualTimeRanges[dateKey] || times}
             showOvernightToggle={!selectedService?.is_overnight}
             dateRange={{ startDate: dateKey, endDate: dateKey }}
             is_overnight={selectedService?.is_overnight || false}
@@ -125,8 +167,8 @@ const TimeSelectionCard = ({
         {!showIndividualDays && (
           <TimeRangeSelector
             title={`Default Time Range`}
-            onTimeSelect={handleTimeSelect}
-            initialTimes={initialTimes}
+            onTimeSelect={(timeData) => handleTimeSelect(null, timeData)}
+            initialTimes={times}
             showOvernightToggle={!selectedService?.is_overnight}
             dateRange={dateRange}
             is_overnight={selectedService?.is_overnight || false}

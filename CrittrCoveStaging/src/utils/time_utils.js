@@ -1,6 +1,7 @@
 import { format, parse } from 'date-fns';
 import { formatInTimeZone, toZonedTime, fromZonedTime, utcToZonedTime, getTimezoneOffset } from 'date-fns-tz';
 import moment from 'moment-timezone';
+import { debugLog } from '../context/AuthContext';
 
 /**
  * Formats a date string into "MMM d" format (e.g., "Mar 5")
@@ -399,7 +400,12 @@ export const formatDateForAPI = (date) => {
  * @returns {string} Formatted time string in 24-hour format
  */
 export const formatTimeForAPI = (time) => {
-  if (!time) return null;
+  if (!time) {
+    debugLog('MBA12345 formatTimeForAPI received null/undefined time:', time);
+    return null;
+  }
+  
+  debugLog('MBA12345 formatTimeForAPI input:', time);
   
   let hours, minutes;
   
@@ -407,10 +413,13 @@ export const formatTimeForAPI = (time) => {
     // Handle time object format
     hours = time.hours;
     minutes = time.minutes;
+    debugLog('MBA12345 formatTimeForAPI processing time object:', { hours, minutes });
   } else if (typeof time === 'string') {
     // Handle string format (assuming HH:mm format)
     [hours, minutes] = time.split(':').map(Number);
+    debugLog('MBA12345 formatTimeForAPI processing time string:', { hours, minutes });
   } else {
+    debugLog('MBA12345 formatTimeForAPI invalid time format:', typeof time);
     throw new Error('Invalid time format');
   }
   
@@ -419,9 +428,12 @@ export const formatTimeForAPI = (time) => {
   minutes = parseInt(minutes);
   
   if (isNaN(hours) || isNaN(minutes)) {
+    debugLog('MBA12345 formatTimeForAPI invalid time values:', { hours, minutes });
     throw new Error('Invalid time values');
   }
   
   // Format as HH:mm
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const result = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  debugLog('MBA12345 formatTimeForAPI result:', result);
+  return result;
 }; 

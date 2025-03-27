@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
 import { updateBookingDraftPetsAndServices, updateBookingDraftTimeAndDate } from '../api/API';
 import { convertToUTC, formatDateForAPI, formatTimeForAPI } from '../utils/time_utils';
+import { debugLog } from '../context/AuthContext';
 
 const STEPS = {
   SERVICES_AND_PETS: {
@@ -55,17 +56,25 @@ const BookingStepModal = ({
     dates: initialData.dates || [],
     bookingType: initialData.bookingType || 'one-time',
     dateRangeType: initialData.dateRangeType || 'date-range',
-    times: initialData.times || {},
+    times: initialData.times || {
+      startTime: '09:00',  // Default start time
+      endTime: '17:00',    // Default end time
+      isOvernightForced: false
+    },
     rates: initialData.rates || {},
     dateSelectionData: null,
     dateRange: null,
   });
   const [error, setError] = useState(null);
 
+  // Add effect to log initial data
+  useEffect(() => {
+    debugLog('MBA12345 Initial data received:', initialData);
+    debugLog('MBA12345 Initial booking data state:', bookingData);
+  }, [initialData]);
+
   const handleServiceSelect = (service) => {
-    if (is_DEBUG) {
-      console.log('MBA12345 Selected service:', service);
-    }
+    debugLog('MBA12345 Selected service:', service);
     setBookingData(prev => ({
       ...prev,
       service
@@ -73,9 +82,7 @@ const BookingStepModal = ({
   };
 
   const handlePetSelect = (pet) => {
-    if (is_DEBUG) {
-      console.log('MBA12345 Selected/deselected pet:', pet);
-    }
+    debugLog('MBA12345 Selected/deselected pet:', pet);
     
     const updatedPets = bookingData.pets.find(p => p.pet_id === pet.pet_id)
       ? bookingData.pets.filter(p => p.pet_id !== pet.pet_id)
@@ -88,9 +95,7 @@ const BookingStepModal = ({
   };
 
   const handleDateSelect = (dateData) => {
-    if (is_DEBUG) {
-      console.log('MBA12345 Selected dates:', dateData);
-    }
+    debugLog('MBA12345 Selected dates:', dateData);
     setBookingData(prev => {
       // Preserve date range when switching to multiple-days
       let newDateRange = prev.dateRange;
@@ -120,9 +125,7 @@ const BookingStepModal = ({
   };
 
   const handleBookingTypeChange = (bookingType) => {
-    if (is_DEBUG) {
-      console.log('MBA12345 Booking type changed:', bookingType);
-    }
+    debugLog('MBA12345 Booking type changed:', bookingType);
     setBookingData(prev => ({
       ...prev,
       bookingType,
@@ -132,9 +135,7 @@ const BookingStepModal = ({
   };
 
   const handleDateRangeTypeChange = (dateRangeType) => {
-    if (is_DEBUG) {
-      console.log('MBA12345 Date range type changed:', dateRangeType);
-    }
+    debugLog('MBA12345 Date range type changed:', dateRangeType);
     setBookingData(prev => ({
       ...prev,
       dateRangeType
@@ -142,22 +143,18 @@ const BookingStepModal = ({
   };
 
   const handleTimeSelect = (timeData) => {
-    if (is_DEBUG) {
-      console.log('MBA12345 Selected times:', timeData);
-    }
+    debugLog('MBA12345 Selected times:', timeData);
     setBookingData(prev => {
       // Create a new times object that preserves any existing values
       const updatedTimes = {
         ...prev.times,
-        startTime: timeData.startTime || prev.times.startTime,
-        endTime: timeData.endTime || prev.times.endTime,
+        startTime: timeData.startTime ? `${String(timeData.startTime.hours).padStart(2, '0')}:${String(timeData.startTime.minutes || 0).padStart(2, '0')}` : prev.times.startTime,
+        endTime: timeData.endTime ? `${String(timeData.endTime.hours).padStart(2, '0')}:${String(timeData.endTime.minutes || 0).padStart(2, '0')}` : prev.times.endTime,
         isOvernightForced: timeData.isOvernightForced
       };
 
-      if (is_DEBUG) {
-        console.log('MBA12345 Previous times:', prev.times);
-        console.log('MBA12345 Updated times:', updatedTimes);
-      }
+      debugLog('MBA12345 Previous times:', prev.times);
+      debugLog('MBA12345 Updated times:', updatedTimes);
 
       return {
         ...prev,
@@ -209,26 +206,28 @@ const BookingStepModal = ({
       // Handle time selection calculations before proceeding
       if (currentStep === STEPS.TIME_SELECTION.id) {
         try {
-          if (is_DEBUG) {
-            console.log('MBA12345 Original booking data:', bookingData);
-          }
+          debugLog('MBA12345 Original booking data:', bookingData);
 
           // Format dates for API
           const startDate = formatDateForAPI(bookingData.dateRange.startDate);
           const endDate = formatDateForAPI(bookingData.dateRange.endDate);
 
           // Format times for conversion
-          const startTime = formatTimeForAPI(bookingData.times.startTime);
-          const endTime = formatTimeForAPI(bookingData.times.endTime);
+          debugLog('MBA12345 Time data before formatting:', {
+            startTime: bookingData.times.startTime,
+            endTime: bookingData.times.endTime
+          });
 
-          if (is_DEBUG) {
-            console.log('MBA12345 Formatted dates and times:', {
-              startDate,
-              endDate,
-              startTime,
-              endTime
-            });
-          }
+          // No need to format times again since they're already in HH:mm format
+          const startTime = bookingData.times.startTime;
+          const endTime = bookingData.times.endTime;
+
+          debugLog('MBA12345 Formatted dates and times:', {
+            startDate,
+            endDate,
+            startTime,
+            endTime
+          });
 
           // Convert times to UTC
           const startTimeUTC = convertToUTC(
@@ -243,27 +242,23 @@ const BookingStepModal = ({
             'US/Mountain' // TODO: Get actual user timezone from context
           );
 
-          if (is_DEBUG) {
-            console.log('MBA12345 Converted times to UTC:', {
-              startTimeUTC,
-              endTimeUTC
-            });
-          }
+          debugLog('MBA12345 Converted times to UTC:', {
+            startTimeUTC,
+            endTimeUTC
+          });
 
           // Check if dates shifted in UTC conversion
           const hasDateShift = startDate !== startTimeUTC.date || endDate !== endTimeUTC.date;
           const nightCountAdjustment = hasDateShift ? -1 : 0;
 
-          if (is_DEBUG) {
-            console.log('MBA12345 Date shift detected:', {
-              hasDateShift,
-              nightCountAdjustment,
-              originalStartDate: startDate,
-              originalEndDate: endDate,
-              utcStartDate: startTimeUTC.date,
-              utcEndDate: endTimeUTC.date
-            });
-          }
+          debugLog('MBA12345 Date shift detected:', {
+            hasDateShift,
+            nightCountAdjustment,
+            originalStartDate: startDate,
+            originalEndDate: endDate,
+            utcStartDate: startTimeUTC.date,
+            utcEndDate: endTimeUTC.date
+          });
 
           // Call the API with UTC times and dates
           await updateBookingDraftTimeAndDate(
@@ -275,15 +270,13 @@ const BookingStepModal = ({
             nightCountAdjustment
           );
         } catch (error) {
-          if (is_DEBUG) {
-            console.error('MBA12345 Error calculating booking totals:', error);
-            console.error('MBA12345 Error stack:', error.stack);
-            console.error('MBA12345 Error details:', {
-              message: error.message,
-              name: error.name,
-              response: error.response?.data
-            });
-          }
+          debugLog('MBA12345 Error calculating booking totals:', error);
+          debugLog('MBA12345 Error stack:', error.stack);
+          debugLog('MBA12345 Error details:', {
+            message: error.message,
+            name: error.name,
+            response: error.response?.data
+          });
           setError('Failed to calculate booking totals');
           return;
         }
