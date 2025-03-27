@@ -16,6 +16,7 @@ import { AuthContext } from '../context/AuthContext';
 import ServiceAndPetsCard from './bookingComponents/ServiceAndPetsCard';
 import DateSelectionCard from './bookingComponents/DateSelectionCard';
 import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
+import ReviewAndRatesCard from './bookingComponents/ReviewAndRatesCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
 import { updateBookingDraftPetsAndServices, updateBookingDraftTimeAndDate } from '../api/API';
 import { convertToUTC, formatDateForAPI, formatTimeForAPI } from '../utils/time_utils';
@@ -173,6 +174,8 @@ const BookingStepModal = ({
       case STEPS.TIME_SELECTION.id:
         // Always allow proceeding from time selection since we have default times
         return true;
+      case STEPS.REVIEW_AND_RATES.id:
+        return true;
       // Add validation for other steps as they are implemented
       default:
         return false;
@@ -195,9 +198,7 @@ const BookingStepModal = ({
             pets: bookingData.pets
           });
         } catch (error) {
-          if (is_DEBUG) {
-            console.error('MBA12345 Error updating booking draft:', error);
-          }
+          debugLog('MBA54321 Error updating booking draft:', error);
           setError('Failed to save service and pet selections');
           return;
         }
@@ -206,14 +207,14 @@ const BookingStepModal = ({
       // Handle time selection calculations before proceeding
       if (currentStep === STEPS.TIME_SELECTION.id) {
         try {
-          debugLog('MBA12345 Original booking data:', bookingData);
+          debugLog('MBA54321 Original booking data:', bookingData);
 
           // Format dates for API
           const startDate = formatDateForAPI(bookingData.dateRange.startDate);
           const endDate = formatDateForAPI(bookingData.dateRange.endDate);
 
           // Format times for conversion
-          debugLog('MBA12345 Time data before formatting:', {
+          debugLog('MBA54321 Time data before formatting:', {
             startTime: bookingData.times.startTime,
             endTime: bookingData.times.endTime
           });
@@ -222,7 +223,7 @@ const BookingStepModal = ({
           const startTime = bookingData.times.startTime;
           const endTime = bookingData.times.endTime;
 
-          debugLog('MBA12345 Formatted dates and times:', {
+          debugLog('MBA54321 Formatted dates and times:', {
             startDate,
             endDate,
             startTime,
@@ -242,7 +243,7 @@ const BookingStepModal = ({
             'US/Mountain' // TODO: Get actual user timezone from context
           );
 
-          debugLog('MBA12345 Converted times to UTC:', {
+          debugLog('MBA54321 Converted times to UTC:', {
             startTimeUTC,
             endTimeUTC
           });
@@ -251,7 +252,7 @@ const BookingStepModal = ({
           const hasDateShift = startDate !== startTimeUTC.date || endDate !== endTimeUTC.date;
           const nightCountAdjustment = hasDateShift ? -1 : 0;
 
-          debugLog('MBA12345 Date shift detected:', {
+          debugLog('MBA54321 Date shift detected:', {
             hasDateShift,
             nightCountAdjustment,
             originalStartDate: startDate,
@@ -261,7 +262,7 @@ const BookingStepModal = ({
           });
 
           // Call the API with UTC times and dates
-          await updateBookingDraftTimeAndDate(
+          const response = await updateBookingDraftTimeAndDate(
             bookingId,
             startTimeUTC.date,  // Use the UTC date
             endTimeUTC.date,    // Use the UTC date
@@ -269,10 +270,19 @@ const BookingStepModal = ({
             endTimeUTC.time,
             nightCountAdjustment
           );
+
+          debugLog('MBA54321 Received response from updateBookingDraftTimeAndDate:', response);
+
+          // Update booking data with the response
+          setBookingData(prev => ({
+            ...prev,
+            ...response
+          }));
+
         } catch (error) {
-          debugLog('MBA12345 Error calculating booking totals:', error);
-          debugLog('MBA12345 Error stack:', error.stack);
-          debugLog('MBA12345 Error details:', {
+          debugLog('MBA54321 Error calculating booking totals:', error);
+          debugLog('MBA54321 Error stack:', error.stack);
+          debugLog('MBA54321 Error details:', {
             message: error.message,
             name: error.name,
             response: error.response?.data
@@ -297,6 +307,8 @@ const BookingStepModal = ({
   };
 
   const renderCurrentStep = () => {
+    debugLog('MBA54321 Rendering step:', currentStep, 'with bookingData:', bookingData);
+    
     switch (currentStep) {
       case STEPS.SERVICES_AND_PETS.id:
         return (
@@ -328,7 +340,12 @@ const BookingStepModal = ({
             selectedService={bookingData.service}
           />
         );
-      // Add other step components as they are implemented
+      case STEPS.REVIEW_AND_RATES.id:
+        return (
+          <ReviewAndRatesCard
+            bookingData={bookingData}
+          />
+        );
       default:
         return null;
     }
@@ -349,12 +366,14 @@ const BookingStepModal = ({
               currentStep={currentStep}
             />
           </View>
-          <View style={styles.content}>
-            {renderCurrentStep()}
-          </View>
-          {error && (
-            <Text style={styles.errorText}>{error}</Text>
-          )}
+          <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
+            <View style={styles.content}>
+              {renderCurrentStep()}
+            </View>
+            {error && (
+              <Text style={styles.errorText}>{error}</Text>
+            )}
+          </ScrollView>
           <View style={styles.footer}>
             <TouchableOpacity
               style={styles.cancelButton}
@@ -376,7 +395,7 @@ const BookingStepModal = ({
                 styles.nextButtonText,
                 !canProceedToNextStep() && styles.disabledButtonText
               ]}>
-                Next
+                {currentStep === STEPS.REVIEW_AND_RATES.id ? 'Confirm Booking' : 'Next'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -400,7 +419,9 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
     backgroundColor: theme.colors.background,
     borderRadius: 12,
-    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
   },
   stepIndicatorContainer: {
     width: '100%',
@@ -408,14 +429,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.modernBorder,
-    position: 'relative',
-    zIndex: 1,
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    flexGrow: 1,
   },
   content: {
     flex: 1,
-    overflow: 'visible',
-    position: 'relative',
-    zIndex: 2000,
+    backgroundColor: theme.colors.background,
   },
   footer: {
     flexDirection: 'row',
@@ -425,8 +448,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderTopWidth: 1,
     borderTopColor: theme.colors.modernBorder,
-    position: 'relative',
-    zIndex: 1000,
   },
   cancelButton: {
     flex: 1,
