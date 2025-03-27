@@ -280,9 +280,20 @@ const TimeRangeSelector = ({
       [isStart ? 'startTime' : 'endTime']: newTime
     };
     
+    if (is_DEBUG) {
+      console.log('MBA12345 Time selection in picker:', {
+        type,
+        value,
+        isStart,
+        currentTime,
+        newTime,
+        newTimes
+      });
+    }
+
     setTimes(newTimes);
     previousTimes.current = newTimes;
-    onTimeSelect(newTimes);
+    onTimeSelect(isStart ? 'start' : 'end', newTime);
   };
 
   const scrollToSelectedTime = (type) => {

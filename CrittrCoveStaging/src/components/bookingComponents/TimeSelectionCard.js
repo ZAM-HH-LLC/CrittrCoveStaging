@@ -16,18 +16,24 @@ const TimeSelectionCard = ({
   const [individualTimeRanges, setIndividualTimeRanges] = useState({});
   const [times, setTimes] = useState(initialTimes);
 
-  const handleTimeSelect = (type, value) => {
+  const handleOvernightTimeSelect = (type, value) => {
     if (is_DEBUG) {
-      console.log('MBA12345 Time selection:', { type, value });
+      console.log('MBA12345 Overnight time selection:', { type, value });
     }
+
     const currentTimes = { ...times };
     
-    if (type === 'start') {
+    // If value is a complete time object (from preset or direct selection)
+    if (value && value.startTime && value.endTime) {
+      currentTimes.startTime = value.startTime;
+      currentTimes.endTime = value.endTime;
+      currentTimes.isOvernightForced = value.isOvernightForced;
+    } else if (type === 'start') {
       if (value.hours !== undefined) {
         currentTimes.startTime = {
           ...currentTimes.startTime,
           hours: value.hours,
-          minutes: value.minutes || 0  // Default to 0 if minutes not provided
+          minutes: value.minutes || 0
         };
       }
       if (value.minutes !== undefined) {
@@ -41,7 +47,7 @@ const TimeSelectionCard = ({
         currentTimes.endTime = {
           ...currentTimes.endTime,
           hours: value.hours,
-          minutes: value.minutes || 0  // Default to 0 if minutes not provided
+          minutes: value.minutes || 0
         };
       }
       if (value.minutes !== undefined) {
@@ -53,10 +59,37 @@ const TimeSelectionCard = ({
     }
 
     if (is_DEBUG) {
-      console.log('MBA12345 Updated times:', currentTimes);
+      console.log('MBA12345 Updated overnight times:', currentTimes);
     }
     setTimes(currentTimes);
     onTimeSelect(currentTimes);
+  };
+
+  const handleIndividualDayTimeSelect = (timeData, dateKey) => {
+    if (is_DEBUG) {
+      console.log('MBA12345 Individual day time selection:', { timeData, dateKey });
+    }
+
+    // Update individual time ranges
+    const newTimeRanges = {
+      ...individualTimeRanges,
+      [dateKey]: {
+        ...individualTimeRanges[dateKey],
+        startTime: timeData.startTime ? {
+          hours: timeData.startTime.hours,
+          minutes: timeData.startTime.minutes || 0
+        } : individualTimeRanges[dateKey]?.startTime,
+        endTime: timeData.endTime ? {
+          hours: timeData.endTime.hours,
+          minutes: timeData.endTime.minutes || 0
+        } : individualTimeRanges[dateKey]?.endTime,
+        isOvernightForced: timeData.isOvernightForced
+      }
+    };
+    setIndividualTimeRanges(newTimeRanges);
+    
+    // Send all time ranges to parent
+    onTimeSelect(newTimeRanges);
   };
 
   // Initialize times with proper format
@@ -107,7 +140,7 @@ const TimeSelectionCard = ({
       default:
         return;
     }
-    handleTimeSelect(null, newTimes);
+    handleOvernightTimeSelect(null, newTimes);
   };
 
   const formatDateRange = (startDate, endDate) => {
@@ -134,7 +167,7 @@ const TimeSelectionCard = ({
     
     const currentDate = new Date(startDate);
     const endDateObj = new Date(endDate);
-    let zIndexCounter = 1000; // Start with a high base z-index
+    let zIndexCounter = 1000;
     
     while (currentDate <= endDateObj) {
       const dateKey = currentDate.toISOString().split('T')[0];
@@ -142,7 +175,7 @@ const TimeSelectionCard = ({
         <View key={dateKey} style={[styles.timeRangeContainer, { zIndex: zIndexCounter }]}>
           <TimeRangeSelector
             title={`${formatDate(dateKey)}`}
-            onTimeSelect={(timeData) => handleTimeSelect(null, timeData)}
+            onTimeSelect={(timeData) => handleIndividualDayTimeSelect(timeData, dateKey)}
             initialTimes={individualTimeRanges[dateKey] || times}
             showOvernightToggle={!selectedService?.is_overnight}
             dateRange={{ startDate: dateKey, endDate: dateKey }}
@@ -151,7 +184,7 @@ const TimeSelectionCard = ({
         </View>
       );
       currentDate.setDate(currentDate.getDate() + 1);
-      zIndexCounter -= 10; // Decrease z-index for each subsequent card
+      zIndexCounter -= 10;
     }
 
     return (
@@ -167,7 +200,7 @@ const TimeSelectionCard = ({
         {!showIndividualDays && (
           <TimeRangeSelector
             title={`Default Time Range`}
-            onTimeSelect={(timeData) => handleTimeSelect(null, timeData)}
+            onTimeSelect={handleOvernightTimeSelect}
             initialTimes={times}
             showOvernightToggle={!selectedService?.is_overnight}
             dateRange={dateRange}
