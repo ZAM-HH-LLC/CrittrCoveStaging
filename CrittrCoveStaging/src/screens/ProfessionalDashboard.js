@@ -240,10 +240,10 @@ const ProfessionalDashboard = ({ navigation }) => {
           <View style={styles.welcomeHeader}>
             <View style={styles.welcomeTextContainer}>
               <Text style={dynamicStyles.welcomeTitle}>
-                Welcome back, {is_prototype ? 'John' : firstName}! 👋
+                Welcome back{firstName ? ', ' + firstName : ''}! 👋
               </Text>
               <Text style={dynamicStyles.bookingCount}>
-                You have 3 active bookings and 5 upcoming appointments today.
+                You have {bookings.filter(b => !b.completed).length} active bookings and {bookings.filter(b => new Date(b.start_date) > new Date()).length} upcoming appointments today.
               </Text>
             </View>
           </View>
