@@ -106,7 +106,7 @@ export const updateBookingDraftPetsAndServices = async (draftId, data) => {
   }
 };
 
-export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate, startTime, endTime) => {
+export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate, startTime, endTime, nightCountAdjustment = 0) => {
     try {
         console.log('MBA1234 - Updating booking draft time and date:', {
             draftId,
@@ -122,7 +122,8 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
                 start_date: startDate,
                 end_date: endDate,
                 start_time: startTime,
-                end_time: endTime
+                end_time: endTime,
+                night_count_adjustment: nightCountAdjustment
             },
             {
                 headers: {
@@ -135,7 +136,7 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
         console.log('MBA1234 - Booking draft time and date update response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('MBA1234 - Error updating booking draft time and date:', error);
+        console.error('MBA98765 Error updating booking draft time and date:', error);
         throw error;
     }
 };

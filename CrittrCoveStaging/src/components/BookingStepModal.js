@@ -250,13 +250,29 @@ const BookingStepModal = ({
             });
           }
 
+          // Check if dates shifted in UTC conversion
+          const hasDateShift = startDate !== startTimeUTC.date || endDate !== endTimeUTC.date;
+          const nightCountAdjustment = hasDateShift ? -1 : 0;
+
+          if (is_DEBUG) {
+            console.log('MBA12345 Date shift detected:', {
+              hasDateShift,
+              nightCountAdjustment,
+              originalStartDate: startDate,
+              originalEndDate: endDate,
+              utcStartDate: startTimeUTC.date,
+              utcEndDate: endTimeUTC.date
+            });
+          }
+
           // Call the API with UTC times and dates
           await updateBookingDraftTimeAndDate(
             bookingId,
             startTimeUTC.date,  // Use the UTC date
             endTimeUTC.date,    // Use the UTC date
             startTimeUTC.time,
-            endTimeUTC.time
+            endTimeUTC.time,
+            nightCountAdjustment
           );
         } catch (error) {
           if (is_DEBUG) {

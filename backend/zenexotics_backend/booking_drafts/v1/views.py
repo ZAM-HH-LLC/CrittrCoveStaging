@@ -1358,10 +1358,16 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             end_time = serializer.validated_data['end_time']
 
             # Calculate number of nights
+            # First get the base number of days between dates
             nights = (end_date - start_date).days
-            if end_time > start_time:
-                nights += 1
-            logger.info(f"MBA1234 - Calculated nights: {nights}")
+            
+            
+            # Apply night count adjustment if provided
+            night_count_adjustment = serializer.validated_data.get('night_count_adjustment', 0)
+            nights += night_count_adjustment
+            
+            logger.info(f"MBA1234 - Calculated nights: {nights} (with adjustment: {night_count_adjustment})")
+            logger.info(f"MBA1234 - Start: {start_date} {start_time}, End: {end_date} {end_time}")
 
             # Get service from draft data
             service = None

@@ -6,6 +6,7 @@ class OvernightBookingCalculationSerializer(serializers.Serializer):
     end_date = serializers.DateField()
     start_time = serializers.TimeField()
     end_time = serializers.TimeField()
+    night_count_adjustment = serializers.IntegerField(required=False, default=0)
     
     def validate(self, data):
         """
@@ -16,7 +17,7 @@ class OvernightBookingCalculationSerializer(serializers.Serializer):
         start_time = data['start_time']
         end_time = data['end_time']
 
-        # Combine date and time for comparison
+        # Convert times to datetime for comparison
         start_dt = datetime.combine(start_date, start_time)
         end_dt = datetime.combine(end_date, end_time)
 
