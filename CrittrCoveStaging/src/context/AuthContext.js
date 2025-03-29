@@ -316,19 +316,14 @@ export const AuthProvider = ({ children }) => {
           
           console.log('MBA98765 Stored role:', storedRole);
           
+          // Always get professional status
+          const status = await getProfessionalStatus(authService.current.accessToken);
+          setIsApprovedProfessional(status.isApprovedProfessional);
+          
           if (storedRole) {
             setUserRole(storedRole);
-            // Get professional status if role is professional
-            if (storedRole === 'professional') {
-              const status = await getProfessionalStatus(authService.current.accessToken);
-              setIsApprovedProfessional(status.isApprovedProfessional);
-            }
           } else {
-            // If no stored role, get it from the backend
-            const status = await getProfessionalStatus(authService.current.accessToken);
             setUserRole(status.suggestedRole);
-            setIsApprovedProfessional(status.isApprovedProfessional);
-            
             // Store the role
             if (Platform.OS === 'web') {
               sessionStorage.setItem('userRole', status.suggestedRole);

@@ -108,9 +108,31 @@ export default function Navigation({ navigation }) {
   const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { colors } = useTheme();
-  const { isSignedIn, is_DEBUG, userRole, isCollapsed, setIsCollapsed, switchRole, screenWidth } = useContext(AuthContext);
+  const { 
+    isSignedIn, 
+    is_DEBUG, 
+    userRole, 
+    isCollapsed, 
+    setIsCollapsed, 
+    switchRole, 
+    screenWidth, 
+    signOut,
+    isApprovedProfessional 
+  } = useContext(AuthContext);
   const [currentRoute, setCurrentRoute] = useState('');
   const [notificationCount, setNotificationCount] = useState(3); // We can make this dynamic later
+
+  // Add effect to log state changes
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA98386196v Navigation State Update:', {
+        isSignedIn,
+        userRole,
+        isApprovedProfessional,
+        currentRoute
+      });
+    }
+  }, [isSignedIn, userRole, isApprovedProfessional, currentRoute]);
 
   const openMenu = () => setVisible(true);
   const closeMenu = () => setVisible(false);
@@ -227,21 +249,33 @@ export default function Navigation({ navigation }) {
     } else if (userRole === 'professional') {
       return [
         { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
-        { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
-        { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
+        { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
         { title: 'Availability', icon: 'clock-outline', route: 'AvailabilitySettings' },
-        { title: 'Settings', icon: 'cog', route: 'Settings' },
-        { title: 'More', icon: 'dots-horizontal', route: 'More' },
+        { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
+        { title: 'Profile', icon: 'account', route: 'MyProfile' },
       ];
     } else {
       return [
         { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
-        { title: professionalsTitle, icon: 'magnify', route: 'SearchProfessionalsListing' },
+        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
-        { title: 'Become a Pro', icon: 'paw', route: 'BecomeProfessional' },
-        { title: 'More', icon: 'dots-horizontal', route: 'More' },
+        { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
+        { title: 'Profile', icon: 'account', route: 'MyProfile' },
+        { title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' },
       ];
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (is_DEBUG) {
+        console.log('MBA98386196v Logging out user');
+      }
+      await signOut();
+      navigation.navigate('SignIn');
+    } catch (error) {
+      console.error('Error during logout:', error);
     }
   };
 
@@ -273,9 +307,17 @@ export default function Navigation({ navigation }) {
   const renderDesktopSidebar = () => {
     const menuItems = renderMenuItems();
     const sidebarWidth = isCollapsed ? 70 : 250;
+    const isProfessionalRole = userRole === 'professional';
+    const isClientRole = userRole === 'petOwner';
 
     if (is_DEBUG) {
-      console.log('MBA98386196v Current Route in Sidebar:', currentRoute);
+      console.log('MBA98386196v Rendering Sidebar:', {
+        userRole,
+        isApprovedProfessional,
+        currentRoute,
+        isProfessionalRole,
+        isClientRole
+      });
     }
 
     return (
@@ -307,25 +349,50 @@ export default function Navigation({ navigation }) {
                 <TouchableOpacity
                   style={[
                     styles.roleButton,
-                    userRole !== 'professional' && styles.roleButtonActive
+                    isClientRole && styles.roleButtonActive
                   ]}
-                  onPress={() => userRole === 'professional' && switchRole()}
+                  onPress={() => {
+                    if (is_DEBUG) {
+                      console.log('MBA98386196v Client Role Button Press:', {
+                        currentRole: userRole,
+                        isApprovedProfessional
+                      });
+                    }
+                    if (isProfessionalRole) {
+                      switchRole();
+                    }
+                  }}
+                  activeOpacity={0.7}
                 >
                   <Text style={[
                     styles.roleButtonText,
-                    userRole !== 'professional' && styles.roleButtonTextActive
+                    isClientRole && styles.roleButtonTextActive
                   ]}>Client</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
                     styles.roleButton,
-                    userRole === 'professional' && styles.roleButtonActive
+                    isProfessionalRole && styles.roleButtonActive,
+                    !isApprovedProfessional && styles.roleButtonDisabled
                   ]}
-                  onPress={() => userRole !== 'professional' && switchRole()}
+                  onPress={() => {
+                    if (is_DEBUG) {
+                      console.log('MBA98386196v Professional Role Button Press:', {
+                        currentRole: userRole,
+                        isApprovedProfessional
+                      });
+                    }
+                    if (isClientRole && isApprovedProfessional) {
+                      switchRole();
+                    }
+                  }}
+                  disabled={!isApprovedProfessional}
+                  activeOpacity={isApprovedProfessional ? 0.7 : 1}
                 >
                   <Text style={[
                     styles.roleButtonText,
-                    userRole === 'professional' && styles.roleButtonTextActive
+                    isProfessionalRole && styles.roleButtonTextActive,
+                    !isApprovedProfessional && styles.roleButtonTextDisabled
                   ]}>Professional</Text>
                 </TouchableOpacity>
               </View>
@@ -363,7 +430,7 @@ export default function Navigation({ navigation }) {
         </View>
         <TouchableOpacity
           style={[styles.logoutButton, { width: sidebarWidth }]}
-          onPress={() => handleNavigation('SignOut')}
+          onPress={handleLogout}
         >
           <MaterialCommunityIcons 
             name="logout" 
@@ -393,6 +460,8 @@ export default function Navigation({ navigation }) {
 
   const renderMobileHeader = () => {
     const logoSize = screenWidth <= 470 ? { width: 100, height: 30 } : { width: 150, height: 40 };
+    const isProfessionalRole = userRole === 'professional';
+    const isClientRole = userRole === 'petOwner';
     
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
@@ -433,35 +502,52 @@ export default function Navigation({ navigation }) {
                   <TouchableOpacity
                     style={[
                       styles.mobileRoleButton,
-                      userRole !== 'professional' && styles.mobileRoleButtonActive
+                      isClientRole && styles.mobileRoleButtonActive
                     ]}
                     onPress={() => {
-                      if (userRole === 'professional') {
+                      if (is_DEBUG) {
+                        console.log('MBA98386196v Mobile Client Role Button Press:', {
+                          currentRole: userRole,
+                          isApprovedProfessional
+                        });
+                      }
+                      if (isProfessionalRole) {
                         switchRole();
                         setIsMenuOpen(false);
                       }
                     }}
+                    activeOpacity={0.7}
                   >
                     <Text style={[
                       styles.mobileRoleButtonText,
-                      userRole !== 'professional' && styles.mobileRoleButtonTextActive
+                      isClientRole && styles.mobileRoleButtonTextActive
                     ]}>Client</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
                       styles.mobileRoleButton,
-                      userRole === 'professional' && styles.mobileRoleButtonActive
+                      isProfessionalRole && styles.mobileRoleButtonActive,
+                      !isApprovedProfessional && styles.mobileRoleButtonDisabled
                     ]}
                     onPress={() => {
-                      if (userRole !== 'professional') {
+                      if (is_DEBUG) {
+                        console.log('MBA98386196v Mobile Professional Role Button Press:', {
+                          currentRole: userRole,
+                          isApprovedProfessional
+                        });
+                      }
+                      if (isClientRole && isApprovedProfessional) {
                         switchRole();
                         setIsMenuOpen(false);
                       }
                     }}
+                    disabled={!isApprovedProfessional}
+                    activeOpacity={isApprovedProfessional ? 0.7 : 1}
                   >
                     <Text style={[
                       styles.mobileRoleButtonText,
-                      userRole === 'professional' && styles.mobileRoleButtonTextActive
+                      isProfessionalRole && styles.mobileRoleButtonTextActive,
+                      !isApprovedProfessional && styles.mobileRoleButtonTextDisabled
                     ]}>Professional</Text>
                   </TouchableOpacity>
                 </View>
@@ -480,6 +566,18 @@ export default function Navigation({ navigation }) {
                 <Text style={styles.mobileMenuItemText}>{item.title}</Text>
               </TouchableOpacity>
             ))}
+            {isSignedIn && (
+              <TouchableOpacity
+                style={[styles.mobileMenuItem, styles.mobileLogoutItem]}
+                onPress={() => {
+                  handleLogout();
+                  setIsMenuOpen(false);
+                }}
+              >
+                <MaterialCommunityIcons name="logout" size={24} color="#F26969" />
+                <Text style={[styles.mobileMenuItemText, styles.mobileLogoutText]}>Logout</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -805,14 +903,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: theme.colors.primary,
+    cursor: 'pointer',
   },
-  roleButtonActive: {
-    backgroundColor: theme.colors.primary,
+  roleButtonDisabled: {
+    opacity: 0.5,
+    borderColor: theme.colors.border,
+    cursor: 'not-allowed',
   },
   roleButtonText: {
     fontSize: theme.fontSizes.small,
     fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.primary,
+  },
+  roleButtonTextDisabled: {
+    color: theme.colors.border,
+  },
+  roleButtonActive: {
+    backgroundColor: theme.colors.primary,
   },
   roleButtonTextActive: {
     color: theme.colors.surface,
@@ -843,15 +950,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.primary,
   },
-  mobileRoleButtonActive: {
-    backgroundColor: theme.colors.primary,
+  mobileRoleButtonDisabled: {
+    opacity: 0.5,
+    borderColor: theme.colors.border,
   },
   mobileRoleButtonText: {
     fontSize: theme.fontSizes.small,
     fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.primary,
   },
+  mobileRoleButtonTextDisabled: {
+    color: theme.colors.border,
+  },
+  mobileRoleButtonActive: {
+    backgroundColor: theme.colors.primary,
+  },
   mobileRoleButtonTextActive: {
     color: theme.colors.surface,
+  },
+  mobileLogoutItem: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    marginTop: 8,
+  },
+  mobileLogoutText: {
+    color: '#F26969',
   },
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { View, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Image, Platform, StatusBar, Alert, useWindowDimensions } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Image, Platform, StatusBar, Alert, useWindowDimensions, SafeAreaView } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { Button, Portal, Dialog, Paragraph } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +20,9 @@ import { DEFAULT_SERVICES } from '../data/mockData';
 const MyProfile = () => {
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
+  const { screenWidth, isCollapsed, is_DEBUG } = useContext(AuthContext);
+  const [isMobile, setIsMobile] = useState(screenWidth <= 900);
+  const styles = createStyles(screenWidth, isCollapsed);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -122,6 +125,13 @@ const MyProfile = () => {
     };
     fetchProfessionalStatus();
   }, []);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setIsMobile(screenWidth <= 900);
+    };
+    updateLayout();
+  }, [screenWidth]);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -258,231 +268,236 @@ const MyProfile = () => {
   }
 
   return (
-    <CrossPlatformView fullWidthHeader={true}>
-      <BackHeader 
-        title="My Profile" 
-        onBackPress={() => navigation.navigate('More')} 
-      />
-      <ScrollView 
-        ref={scrollViewRef} 
-        contentContainerStyle={styles.scrollViewContent}
-        style={styles.scrollView}
-      >
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'client' && styles.activeTab]}
-            onPress={() => setActiveTab('client')}
-          >
-            <Text style={[styles.tabText, activeTab === 'client' && styles.activeTabText]}>Account Info</Text>
-          </TouchableOpacity>
-          {isApprovedProfessional && (
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'professional' && styles.activeTab]}
-              onPress={() => setActiveTab('professional')}
-            >
-              <Text style={[styles.tabText, activeTab === 'professional' && styles.activeTabText]}>Professional</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {activeTab === 'client' && (
-          <View style={styles.centeredContent}>
-            <View style={styles.profileHeader}>
-              <Text style={styles.name}>Profile Photo</Text>
-              <TouchableOpacity onPress={pickImage}>
-                {profilePhoto ? (
-                  <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
-                ) : (
-                  <View style={[styles.profilePhoto, styles.profilePhotoPlaceholder]}>
-                    <Ionicons name="person" size={60} color={theme.colors.placeholder} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Personal Information</Text>
-                <TouchableOpacity onPress={() => toggleEditMode('personal')}>
-                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-                </TouchableOpacity>
-              </View>
-              {renderEditableField('Name', name, setName, 'personal')}
-              {renderEditableField('Email', email, setEmail, 'personal')}
-              {renderEditableField('Phone', phone, setPhone, 'personal')}
-              {renderEditableField('Birthday', birthday, setBirthday, 'personal', 'birthday')}
-            </View>
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Address</Text>
-                <TouchableOpacity onPress={() => toggleEditMode('address')}>
-                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-                </TouchableOpacity>
-              </View>
-              {renderEditableField('Address', address, setAddress, 'address')}
-              {renderEditableField('City', city, setCity, 'address')}
-              {renderEditableField('State', state, setState, 'address')}
-              {renderEditableField('ZIP', zip, setZip, 'address')}
-              {renderEditableField('Country', country, setCountry, 'address')}
-              {/* {editMode.address && <Button mode="contained" onPress={() => toggleEditMode('address')} style={styles.saveButton}>Save</Button>} */}
-            </View>
-            <EditableSection
-              title="About Me"
-              value={bio}
-              onChangeText={setBio}
-              editMode={editMode.bio}
-              toggleEditMode={() => toggleEditMode('bio')}
-              setHasUnsavedChanges={setHasUnsavedChanges}
-              getContentWidth={getContentWidth}
-            />
-            <RecordedPets pets={pets} />
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Emergency Contact</Text>
-                <TouchableOpacity onPress={() => toggleEditMode('emergency')}>
-                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-                </TouchableOpacity>
-              </View>
-              {renderEditableField('Name', emergencyContact.name, (text) => setEmergencyContact({ ...emergencyContact, name: text }), 'emergency')}
-              {renderEditableField('Phone', emergencyContact.phone, (text) => setEmergencyContact({ ...emergencyContact, phone: text }), 'emergency')}
-              {/* {editMode.emergency && <Button mode="contained" onPress={() => toggleEditMode('emergency')} style={styles.saveButton}>Save</Button>} */}
-            </View>
-            <View style={[
-              styles.section, 
-              Platform.OS !== 'web' && styles.lastSection
-            ]}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Authorized Household Members</Text>
-                <View style={styles.iconContainer}>
-                  <TouchableOpacity onPress={showAuthorizedMembersPopup} ref={questionMarkRef}>
-                    <Ionicons name="help-circle-outline" size={20} color={theme.colors.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => toggleEditMode('household')}>
-                    <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-              {authorizedHouseholdMembers.map((member, index) => (
-                editMode.household ? (
-                  <TextInput
-                    key={index}
-                    value={member}
-                    onChangeText={(text) => {
-                      const updatedMembers = [...authorizedHouseholdMembers];
-                      updatedMembers[index] = text;
-                      setHasUnsavedChanges(true);
-                      setAuthorizedHouseholdMembers(updatedMembers);
-                    }}
-                    style={[styles.input, { width: getContentWidth() }]}
-                  />
-                ) : (
-                  <Text key={index} style={[styles.fieldText, { width: getContentWidth() }]}>{member}</Text>
-                )
-              ))}
-              {editMode.household && (
-                <View style={{ width: getContentWidth() }}>
-                  <Button 
-                    mode="outlined" 
-                    onPress={() => setAuthorizedHouseholdMembers([...authorizedHouseholdMembers, ''])} 
-                    style={styles.addButton}
-                  >
-                    Add Household Member
-                  </Button>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-        {activeTab === 'professional' && (
-          <ProfessionalTab
-            services={services}
-            setServices={setServices}
-            setHasUnsavedChanges={setHasUnsavedChanges}
-            getContentWidth={getContentWidth}
-            pets={pets}
-            editMode={editMode}
-            toggleEditMode={toggleEditMode}
+    <View style={styles.mainContainer}>
+      <SafeAreaView style={styles.container}>
+        {isMobile && (
+          <BackHeader 
+            title="My Profile" 
+            onBackPress={() => navigation.navigate('More')} 
           />
         )}
-      </ScrollView>
-      <FloatingSaveButton 
-        visible={hasUnsavedChanges}
-        onSave={saveChanges}
-        btnText={'Save Changes'}
-      />
-      <Portal>
-        {Platform.OS === 'web' ? (
-          showAuthorizedMembersInfo && (
-            <View
-              style={[
-                styles.webPopup,
-                { top: popupPosition.top, left: popupPosition.left },
-              ]}
+        <ScrollView 
+          ref={scrollViewRef} 
+          contentContainerStyle={styles.scrollViewContent}
+          style={styles.scrollView}
+        >
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'client' && styles.activeTab]}
+              onPress={() => setActiveTab('client')}
             >
-              <Text style={styles.webPopupTitle}>Authorized Household Members</Text>
-              <Text style={styles.webPopupText}>
-                Authorized household members are individuals who are allowed to make decisions about your pets in your absence. 
-                This may include family members, roommates, or trusted friends who have access to your home and can care for your pets if needed.
-              </Text>
-              <Button onPress={() => setShowAuthorizedMembersInfo(false)}>Got it</Button>
+              <Text style={[styles.tabText, activeTab === 'client' && styles.activeTabText]}>Account Info</Text>
+            </TouchableOpacity>
+            {isApprovedProfessional && (
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'professional' && styles.activeTab]}
+                onPress={() => setActiveTab('professional')}
+              >
+                <Text style={[styles.tabText, activeTab === 'professional' && styles.activeTabText]}>Professional</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {activeTab === 'client' && (
+            <View style={styles.centeredContent}>
+              <View style={styles.profileHeader}>
+                <Text style={styles.name}>Profile Photo</Text>
+                <TouchableOpacity onPress={pickImage}>
+                  {profilePhoto ? (
+                    <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
+                  ) : (
+                    <View style={[styles.profilePhoto, styles.profilePhotoPlaceholder]}>
+                      <Ionicons name="person" size={isMobile ? 40 : 60} color={theme.colors.placeholder} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Personal Information</Text>
+                  <TouchableOpacity onPress={() => toggleEditMode('personal')}>
+                    <MaterialCommunityIcons name="pencil" size={isMobile ? 18 : 20} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </View>
+                {renderEditableField('Name', name, setName, 'personal')}
+                {renderEditableField('Email', email, setEmail, 'personal')}
+                {renderEditableField('Phone', phone, setPhone, 'personal')}
+                {renderEditableField('Birthday', birthday, setBirthday, 'personal', 'birthday')}
+              </View>
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Address</Text>
+                  <TouchableOpacity onPress={() => toggleEditMode('address')}>
+                    <MaterialCommunityIcons name="pencil" size={isMobile ? 18 : 20} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </View>
+                {renderEditableField('Address', address, setAddress, 'address')}
+                {renderEditableField('City', city, setCity, 'address')}
+                {renderEditableField('State', state, setState, 'address')}
+                {renderEditableField('ZIP', zip, setZip, 'address')}
+                {renderEditableField('Country', country, setCountry, 'address')}
+              </View>
+              <EditableSection
+                title="About Me"
+                value={bio}
+                onChangeText={setBio}
+                editMode={editMode.bio}
+                toggleEditMode={() => toggleEditMode('bio')}
+                setHasUnsavedChanges={setHasUnsavedChanges}
+                getContentWidth={getContentWidth}
+              />
+              <RecordedPets pets={pets} />
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Emergency Contact</Text>
+                  <TouchableOpacity onPress={() => toggleEditMode('emergency')}>
+                    <MaterialCommunityIcons name="pencil" size={isMobile ? 18 : 20} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </View>
+                {renderEditableField('Name', emergencyContact.name, (text) => setEmergencyContact({ ...emergencyContact, name: text }), 'emergency')}
+                {renderEditableField('Phone', emergencyContact.phone, (text) => setEmergencyContact({ ...emergencyContact, phone: text }), 'emergency')}
+              </View>
+              <View style={[
+                styles.section, 
+                Platform.OS !== 'web' && styles.lastSection
+              ]}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Authorized Household Members</Text>
+                  <View style={styles.iconContainer}>
+                    <TouchableOpacity onPress={showAuthorizedMembersPopup} ref={questionMarkRef}>
+                      <Ionicons name="help-circle-outline" size={isMobile ? 18 : 20} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => toggleEditMode('household')}>
+                      <MaterialCommunityIcons name="pencil" size={isMobile ? 18 : 20} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {authorizedHouseholdMembers.map((member, index) => (
+                  editMode.household ? (
+                    <TextInput
+                      key={index}
+                      value={member}
+                      onChangeText={(text) => {
+                        const updatedMembers = [...authorizedHouseholdMembers];
+                        updatedMembers[index] = text;
+                        setHasUnsavedChanges(true);
+                        setAuthorizedHouseholdMembers(updatedMembers);
+                      }}
+                      style={[styles.input, { width: getContentWidth() }]}
+                    />
+                  ) : (
+                    <Text key={index} style={[styles.fieldText, { width: getContentWidth() }]}>{member}</Text>
+                  )
+                ))}
+                {editMode.household && (
+                  <View style={{ width: getContentWidth() }}>
+                    <Button 
+                      mode="outlined" 
+                      onPress={() => setAuthorizedHouseholdMembers([...authorizedHouseholdMembers, ''])} 
+                      style={styles.addButton}
+                    >
+                      Add Household Member
+                    </Button>
+                  </View>
+                )}
+              </View>
             </View>
-          )
-        ) : (
-          <Dialog visible={showAuthorizedMembersInfo} onDismiss={() => setShowAuthorizedMembersInfo(false)}>
-            <Dialog.Title>Authorized Household Members</Dialog.Title>
-            <Dialog.Content>
-              <Paragraph>
-                Authorized household members are individuals who are allowed to make decisions about your pets in your absence. 
-                This may include family members, roommates, or trusted friends who have access to your home and can care for your pets if needed.
-              </Paragraph>
-            </Dialog.Content>
-            <Dialog.Actions>
-              <Button onPress={() => setShowAuthorizedMembersInfo(false)}>Got it</Button>
-            </Dialog.Actions>
-          </Dialog>
-        )}
-      </Portal>
-    </CrossPlatformView>
+          )}
+          {activeTab === 'professional' && (
+            <ProfessionalTab
+              services={services}
+              setServices={setServices}
+              setHasUnsavedChanges={setHasUnsavedChanges}
+              getContentWidth={getContentWidth}
+              pets={pets}
+              editMode={editMode}
+              toggleEditMode={toggleEditMode}
+            />
+          )}
+        </ScrollView>
+        <FloatingSaveButton 
+          visible={hasUnsavedChanges}
+          onSave={saveChanges}
+          btnText={'Save Changes'}
+        />
+        <Portal>
+          {Platform.OS === 'web' ? (
+            showAuthorizedMembersInfo && (
+              <View
+                style={[
+                  styles.webPopup,
+                  { top: popupPosition.top, left: popupPosition.left },
+                ]}
+              >
+                <Text style={styles.webPopupTitle}>Authorized Household Members</Text>
+                <Text style={styles.webPopupText}>
+                  Authorized household members are individuals who are allowed to make decisions about your pets in your absence. 
+                  This may include family members, roommates, or trusted friends who have access to your home and can care for your pets if needed.
+                </Text>
+                <Button onPress={() => setShowAuthorizedMembersInfo(false)}>Got it</Button>
+              </View>
+            )
+          ) : (
+            <Dialog visible={showAuthorizedMembersInfo} onDismiss={() => setShowAuthorizedMembersInfo(false)}>
+              <Dialog.Title>Authorized Household Members</Dialog.Title>
+              <Dialog.Content>
+                <Paragraph>
+                  Authorized household members are individuals who are allowed to make decisions about your pets in your absence. 
+                  This may include family members, roommates, or trusted friends who have access to your home and can care for your pets if needed.
+                </Paragraph>
+              </Dialog.Content>
+              <Dialog.Actions>
+                <Button onPress={() => setShowAuthorizedMembersInfo(false)}>Got it</Button>
+              </Dialog.Actions>
+            </Dialog>
+          )}
+        </Portal>
+      </SafeAreaView>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    height: '100vh',
+    overflow: 'hidden',
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
+    transition: 'margin-left 0.3s ease',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: theme.colors.surface,
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  headerText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-  },
   scrollViewContent: {
-    padding: 16,
+    padding: screenWidth <= 900 ? 10 : 16,
     alignItems: 'center',
+  },
+  centeredContent: {
+    width: '100%',
+    maxWidth: screenWidth > 900 ? 800 : 600,
+    alignItems: 'center',
+    alignSelf: 'center',
   },
   tabContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
-    // borderWidth: 1,
-    // borderColor: theme.colors.border,
     width: '100%',
-    maxWidth: 600,
+    maxWidth: screenWidth > 900 ? 800 : 600,
     alignSelf: 'center',
+    paddingHorizontal: screenWidth <= 900 ? 10 : 16,
   },
   tab: {
     flex: 1,
-    padding: 10,
+    padding: screenWidth <= 900 ? 8 : 10,
     alignItems: 'center',
     borderRadius: 5,
     backgroundColor: theme.colors.surface,
@@ -495,18 +510,19 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: theme.colors.text,
+    fontSize: screenWidth <= 900 ? 14 : 16,
   },
   activeTabText: {
     color: theme.colors.background,
   },
   profileHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: screenWidth <= 900 ? 15 : 20,
   },
   profilePhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: screenWidth <= 900 ? 60 : 80,
+    height: screenWidth <= 900 ? 60 : 80,
+    borderRadius: screenWidth <= 900 ? 30 : 40,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -517,10 +533,10 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.placeholder,
   },
   name: {
-    fontSize: 20,
+    fontSize: screenWidth <= 900 ? 18 : 20,
     fontWeight: 'bold',
     color: theme.colors.primary,
-    marginBottom: 10,
+    marginBottom: screenWidth <= 900 ? 8 : 10,
   },
   location: {
     fontSize: 16,
@@ -528,76 +544,77 @@ const styles = StyleSheet.create({
   },
   section: {
     width: '100%',
-    maxWidth: 600,
+    maxWidth: screenWidth > 900 ? 800 : 600,
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: screenWidth <= 900 ? 15 : 20,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
   lastSection: {
-    marginBottom: 100, // Extra padding for last section on mobile
+    marginBottom: screenWidth <= 900 ? 80 : 100,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-    marginBottom: 10,
+    marginBottom: screenWidth <= 900 ? 8 : 10,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: screenWidth <= 900 ? 18 : 20,
     fontWeight: 'bold',
     color: theme.colors.primary,
   },
   input: {
-    marginBottom: 10,
+    marginBottom: screenWidth <= 900 ? 8 : 10,
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderWidth: 1,
-    padding: 10,
+    padding: screenWidth <= 900 ? 8 : 10,
     borderRadius: 5,
+    width: '100%',
   },
   bioInput: {
     backgroundColor: theme.colors.surface,
     width: '100%',
-    maxWidth: 600,
+    maxWidth: screenWidth > 900 ? 800 : 600,
   },
   petItem: {
-    marginBottom: 10,
-    padding: 10,
+    marginBottom: screenWidth <= 900 ? 8 : 10,
+    padding: screenWidth <= 900 ? 8 : 10,
     backgroundColor: theme.colors.surface,
     borderRadius: 5,
     width: '100%',
-    maxWidth: 600,
+    maxWidth: screenWidth > 900 ? 800 : 600,
   },
   petItemContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   petPhoto: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 10,
+    width: screenWidth <= 900 ? 40 : 50,
+    height: screenWidth <= 900 ? 40 : 50,
+    borderRadius: screenWidth <= 900 ? 20 : 25,
+    marginRight: screenWidth <= 900 ? 8 : 10,
   },
   petName: {
-    fontSize: 16,
+    fontSize: screenWidth <= 900 ? 14 : 16,
     fontWeight: 'bold',
   },
   petInfo: {
     flex: 1,
   },
   petDetails: {
-    fontSize: 14,
+    fontSize: screenWidth <= 900 ? 12 : 14,
     color: theme.colors.placeholder,
     flexWrap: 'wrap',
   },
   addButton: {
-    marginTop: 10,
+    marginTop: screenWidth <= 900 ? 8 : 10,
   },
   saveButton: {
     backgroundColor: theme.colors.primary,
-    marginTop: 10,
+    marginTop: screenWidth <= 900 ? 8 : 10,
   },
   centered: {
     justifyContent: 'center',
@@ -610,10 +627,10 @@ const styles = StyleSheet.create({
   webPopup: {
     position: 'absolute',
     backgroundColor: 'white',
-    padding: 20,
+    padding: screenWidth <= 900 ? 15 : 20,
     borderRadius: 10,
-    width: 300,
-    maxWidth: '90vw', // Ensure popup doesn't exceed viewport width
+    width: Math.min(300, screenWidth * 0.8),
+    maxWidth: '90vw',
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -625,37 +642,32 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   webPopupTitle: {
-    fontSize: 18,
+    fontSize: screenWidth <= 900 ? 16 : 18,
     fontWeight: 'bold',
-    // marginBottom: 10,
   },
   webPopupText: {
-    marginBottom: 20,
+    marginBottom: screenWidth <= 900 ? 15 : 20,
+    fontSize: screenWidth <= 900 ? 14 : 16,
   },
   fieldText: {
-    marginBottom: 10,
-  },
-  centeredContent: {
-    width: '100%',
-    maxWidth: 600,
-    alignItems: 'center',
-    alignSelf: 'center',
+    marginBottom: screenWidth <= 900 ? 8 : 10,
+    fontSize: screenWidth <= 900 ? 14 : 16,
   },
   fieldContainer: {
-    marginBottom: 16,
+    marginBottom: screenWidth <= 900 ? 12 : 16,
   },
   fieldLabel: {
-    fontSize: theme.fontSizes.small,
+    fontSize: screenWidth <= 900 ? 12 : 14,
     color: theme.colors.text,
     marginBottom: 4,
   },
   birthdayContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: screenWidth <= 900 ? 12 : 16,
   },
   ageText: {
-    fontSize: theme.fontSizes.medium,
+    fontSize: screenWidth <= 900 ? 14 : 16,
     color: theme.colors.text,
   },
 });
