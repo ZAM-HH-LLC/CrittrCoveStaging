@@ -1356,6 +1356,7 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             end_date = serializer.validated_data['end_date']
             start_time = serializer.validated_data['start_time']
             end_time = serializer.validated_data['end_time']
+            user_timezone = serializer.validated_data.get('user_timezone', 'US/Mountain')
 
             # Get service from draft data
             service = None
@@ -1381,15 +1382,21 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             additional_rate = Decimal(str(service.additional_animal_rate))
             holiday_rate = Decimal(str(service.holiday_rate))
 
-            # Calculate number of nights
-            # First get the base number of days between dates
-            nights = (end_date - start_date).days
-            
-            # Apply night count adjustment if provided
-            night_count_adjustment = serializer.validated_data.get('night_count_adjustment', 0)
-            nights += night_count_adjustment
-            
-            logger.info(f"MBA1234 - Calculated nights: {nights} (with adjustment: {night_count_adjustment})")
+            # Calculate number of nights based on local times
+            # Create datetime objects in the user's timezone
+            start_dt = datetime.combine(start_date, start_time)
+            end_dt = datetime.combine(end_date, end_time)
+
+            # Calculate the difference in days
+            nights = (end_dt - start_dt).days
+
+            # If the end time is earlier than the start time on the same day,
+            # or if the end time is on the next day but earlier than the start time,
+            # we need to adjust the night count
+            if end_time < start_time:
+                nights += 1
+
+            logger.info(f"MBA1234 - Calculated nights: {nights}")
             logger.info(f"MBA1234 - Start: {start_date} {start_time}, End: {end_date} {end_time}")
 
             # Calculate additional pet charges
@@ -1410,7 +1417,7 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 ('end_time', end_time.strftime('%H:%M')),
                 ('calculated_cost', float(total_cost)),
                 ('base_total', float(base_rate * nights)),
-                ('unit_of_time', service.unit_of_time), # TODO: Change this to mapping of unit of time to multiple.
+                ('unit_of_time', service.unit_of_time),
                 ('multiple', nights),
                 ('rates', OrderedDict([
                     ('base_rate', str(base_rate)),

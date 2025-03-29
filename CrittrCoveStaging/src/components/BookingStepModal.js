@@ -213,62 +213,44 @@ const BookingStepModal = ({
           const startDate = formatDateForAPI(bookingData.dateRange.startDate);
           const endDate = formatDateForAPI(bookingData.dateRange.endDate);
 
-          // Format times for conversion
-          debugLog('MBA54321 Time data before formatting:', {
-            startTime: bookingData.times.startTime,
-            endTime: bookingData.times.endTime
-          });
+          // Format times for API (in 24-hour format)
+          const startTime = formatTimeForAPI(bookingData.times.startTime);
+          const endTime = formatTimeForAPI(bookingData.times.endTime);
 
-          // No need to format times again since they're already in HH:mm format
-          const startTime = bookingData.times.startTime;
-          const endTime = bookingData.times.endTime;
-
-          debugLog('MBA54321 Formatted dates and times:', {
+          debugLog('MBA54321 Local dates and times:', {
             startDate,
             endDate,
             startTime,
             endTime
           });
 
-          // Convert times to UTC
-          const startTimeUTC = convertToUTC(
+          // Convert local times to UTC before sending to backend
+          const { date: utcStartDate, time: utcStartTime } = convertToUTC(
             startDate,
             startTime,
-            'US/Mountain' // TODO: Get actual user timezone from context
+            'US/Mountain'
           );
 
-          const endTimeUTC = convertToUTC(
+          const { date: utcEndDate, time: utcEndTime } = convertToUTC(
             endDate,
             endTime,
-            'US/Mountain' // TODO: Get actual user timezone from context
+            'US/Mountain'
           );
 
-          debugLog('MBA54321 Converted times to UTC:', {
-            startTimeUTC,
-            endTimeUTC
-          });
-
-          // Check if dates shifted in UTC conversion
-          const hasDateShift = startDate !== startTimeUTC.date || endDate !== endTimeUTC.date;
-          const nightCountAdjustment = hasDateShift ? -1 : 0;
-
-          debugLog('MBA54321 Date shift detected:', {
-            hasDateShift,
-            nightCountAdjustment,
-            originalStartDate: startDate,
-            originalEndDate: endDate,
-            utcStartDate: startTimeUTC.date,
-            utcEndDate: endTimeUTC.date
+          debugLog('MBA54321 UTC dates and times:', {
+            utcStartDate,
+            utcStartTime,
+            utcEndDate,
+            utcEndTime
           });
 
           // Call the API with UTC times and dates
           const response = await updateBookingDraftTimeAndDate(
             bookingId,
-            startTimeUTC.date,  // Use the UTC date
-            endTimeUTC.date,    // Use the UTC date
-            startTimeUTC.time,
-            endTimeUTC.time,
-            nightCountAdjustment
+            utcStartDate,
+            utcEndDate,
+            utcStartTime,
+            utcEndTime
           );
 
           debugLog('MBA54321 Received response from updateBookingDraftTimeAndDate:', response);

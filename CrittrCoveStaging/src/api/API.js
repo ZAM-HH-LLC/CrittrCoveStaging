@@ -106,7 +106,7 @@ export const updateBookingDraftPetsAndServices = async (draftId, data) => {
   }
 };
 
-export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate, startTime, endTime, nightCountAdjustment = 0) => {
+export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate, startTime, endTime) => {
     try {
         console.log('MBA1234 - Updating booking draft time and date:', {
             draftId,
@@ -122,8 +122,7 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
                 start_date: startDate,
                 end_date: endDate,
                 start_time: startTime,
-                end_time: endTime,
-                night_count_adjustment: nightCountAdjustment
+                end_time: endTime
             },
             {
                 headers: {

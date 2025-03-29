@@ -107,15 +107,21 @@ const ReviewAndRatesCard = ({ bookingData }) => {
     const occurrence = bookingData?.occurrences?.[0];
     if (!occurrence) return null;
 
+    // Get the user's timezone from context
+    const { timeSettings } = useContext(AuthContext);
+    const userTimezone = timeSettings?.timezone || 'US/Mountain';
+
     const formattedDateRange = formatDateTimeRangeFromUTC({
       startDate: occurrence.start_date,
       startTime: occurrence.start_time,
       endDate: occurrence.end_date,
       endTime: occurrence.end_time,
-      userTimezone: timeSettings.timezone,
+      userTimezone: userTimezone,
       includeTimes: true,
       includeTimezone: true
     });
+
+    debugLog('MBA54321 Formatted date range:', formattedDateRange);
 
     return (
       <View style={styles.section}>

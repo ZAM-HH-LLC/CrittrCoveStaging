@@ -463,57 +463,41 @@ export const FORMAT_TYPES = {
  */
 export const formatFromUTC = (dateStr, timeStr = null, userTimezone, formatType = FORMAT_TYPES.MEDIUM_DATE) => {
   try {
-    debugLog('MBA134njo0vh02c23 formatFromUTC input:', { dateStr, timeStr, userTimezone, formatType });
+    console.log('MBA134njo0vh02c23 formatFromUTC input:', { dateStr, timeStr, userTimezone, formatType });
     
-    // Combine date and time if both are provided
-    const dateTimeStr = timeStr ? `${dateStr}T${timeStr}:00Z` : `${dateStr}T00:00:00Z`;
-    const utcDate = parseISO(dateTimeStr);
-    
-    debugLog('MBA134njo0vh02c23 utcDate:', utcDate);
-    
-    // For timezone-aware formatting, use formatInTimeZone directly with the UTC date
+    // Create a moment object in UTC with proper format
+    const utcMoment = moment.utc(`${dateStr}T${timeStr || '00:00'}:00Z`);
+    console.log('MBA134njo0vh02c23 UTC moment:', utcMoment.format());
+
+    // Convert to user's timezone
+    const localMoment = utcMoment.tz(userTimezone);
+    console.log('MBA134njo0vh02c23 Local moment:', localMoment.format());
+
+    // Get timezone abbreviation
+    const tzAbbrev = localMoment.zoneAbbr();
+    console.log('MBA134njo0vh02c23 Timezone abbreviation:', tzAbbrev);
+
+    // Format based on type
     switch (formatType) {
       case FORMAT_TYPES.SHORT_DATE:
-      console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d):', formatInTimeZone(utcDate, userTimezone, 'MMM d'));
-        return formatInTimeZone(utcDate, userTimezone, 'MMM d');
-        
+        return localMoment.format('MMM D');
       case FORMAT_TYPES.MEDIUM_DATE:
-        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d, yyyy):', formatInTimeZone(utcDate, userTimezone, 'MMM d, yyyy'));
-        return formatInTimeZone(utcDate, userTimezone, 'MMM d, yyyy');
-        
+        return localMoment.format('MMM D, YYYY');
       case FORMAT_TYPES.LONG_DATE:
-        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMMM d, yyyy):', formatInTimeZone(utcDate, userTimezone, 'MMMM d, yyyy'));
-        return formatInTimeZone(utcDate, userTimezone, 'MMMM d, yyyy');
-        
+        return localMoment.format('MMMM D, YYYY');
       case FORMAT_TYPES.TIME_ONLY:
-        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, h:mm a):', formatInTimeZone(utcDate, userTimezone, 'h:mm a'));
-        return formatInTimeZone(utcDate, userTimezone, 'h:mm a');
-        
+        return localMoment.format('h:mm A');
       case FORMAT_TYPES.TIME_ONLY_24H:
-        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, HH:mm):', formatInTimeZone(utcDate, userTimezone, 'HH:mm'));
-        return formatInTimeZone(utcDate, userTimezone, 'HH:mm');
-        
+        return localMoment.format('HH:mm');
       case FORMAT_TYPES.DATE_TIME:
-        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d, yyyy h:mm a):', formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a"));
-        return formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a");
-        
+        return localMoment.format("MMM D, YYYY 'at' h:mm A");
       case FORMAT_TYPES.DATE_TIME_WITH_TZ:
-        // Get timezone abbreviation
-        const timezoneName = Intl.DateTimeFormat('en-US', {
-          timeZoneName: 'short',
-          timeZone: userTimezone
-        }).formatToParts(utcDate).find(part => part.type === 'timeZoneName')?.value || '';
-
-        console.log('MBA134njo0vh02c23 timezoneName:', timezoneName);
-        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d, yyyy h:mm a) + " " + timezoneName:', formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a") + ' ' + timezoneName);
-        
-        return formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a") + ' ' + timezoneName;
-        
+        return `${localMoment.format("MMM D, YYYY 'at' h:mm A")} ${tzAbbrev}`;
       default:
-        return formatInTimeZone(utcDate, userTimezone, 'MMM d, yyyy');
+        return localMoment.format('MMM D, YYYY');
     }
   } catch (error) {
-    debugLog('Error formatting date/time:', error);
+    console.error('MBA134njo0vh02c23 Error in formatFromUTC:', error);
     return '';
   }
 };
@@ -540,44 +524,62 @@ export const formatDateTimeRangeFromUTC = ({
   includeTimezone = true
 }) => {
   try {
-    if (includeTimes) {
-      const startFormatted = formatFromUTC(
-        startDate, 
-        startTime, 
-        userTimezone, 
-        FORMAT_TYPES.DATE_TIME
-      );
-      
-      const endFormatted = formatFromUTC(
-        endDate,
-        endTime,
-        userTimezone,
-        includeTimezone ? FORMAT_TYPES.DATE_TIME_WITH_TZ : FORMAT_TYPES.DATE_TIME
-      );
+    console.log('MBA134njo0vh02c23 formatDateTimeRangeFromUTC input:', {
+      startDate,
+      startTime,
+      endDate,
+      endTime,
+      userTimezone,
+      includeTimes,
+      includeTimezone
+    });
 
-      console.log('MBA134njo0vh02c23 startFormatted:', startFormatted);
-      console.log('MBA134njo0vh02c23 endFormatted:', endFormatted);
+    if (includeTimes) {
+      // Create UTC moments with proper format
+      const startUtcMoment = moment.utc(`${startDate}T${startTime}:00Z`);
+      const endUtcMoment = moment.utc(`${endDate}T${endTime}:00Z`);
+
+      console.log('MBA134njo0vh02c23 UTC moments:', {
+        start: startUtcMoment.format(),
+        end: endUtcMoment.format()
+      });
+
+      // Convert to local timezone
+      const startLocalMoment = startUtcMoment.tz(userTimezone);
+      const endLocalMoment = endUtcMoment.tz(userTimezone);
+
+      console.log('MBA134njo0vh02c23 Local moments:', {
+        start: startLocalMoment.format(),
+        end: endLocalMoment.format()
+      });
+
+      // Get timezone abbreviation
+      const tzAbbrev = startLocalMoment.zoneAbbr();
+      console.log('MBA134njo0vh02c23 Timezone abbreviation:', tzAbbrev);
+
+      // Format the dates without timezone in the format string
+      const startFormatted = startLocalMoment.format("MMM D, YYYY at h:mm A");
+      const endFormatted = endLocalMoment.format("MMM D, YYYY at h:mm A");
+
+      // Add timezone abbreviation if needed
+      const finalStart = includeTimezone ? `${startFormatted} ${tzAbbrev}` : startFormatted;
+      const finalEnd = includeTimezone ? `${endFormatted} ${tzAbbrev}` : endFormatted;
+
+      console.log('MBA134njo0vh02c23 Formatted dates:', {
+        startFormatted: finalStart,
+        endFormatted: finalEnd,
+        tzAbbrev
+      });
       
-      return `${startFormatted} - ${endFormatted}`;
+      return `${finalStart} - ${finalEnd}`;
     } else {
-      const startFormatted = formatFromUTC(
-        startDate,
-        null,
-        userTimezone,
-        FORMAT_TYPES.MEDIUM_DATE
-      );
+      const startLocalMoment = moment.utc(`${startDate}T00:00:00Z`).tz(userTimezone);
+      const endLocalMoment = moment.utc(`${endDate}T00:00:00Z`).tz(userTimezone);
       
-      const endFormatted = formatFromUTC(
-        endDate,
-        null,
-        userTimezone,
-        FORMAT_TYPES.MEDIUM_DATE
-      );
-      
-      return `${startFormatted} - ${endFormatted}`;
+      return `${startLocalMoment.format('MMM D, YYYY')} - ${endLocalMoment.format('MMM D, YYYY')}`;
     }
   } catch (error) {
-    debugLog('Error formatting date/time range:', error);
+    console.error('MBA134njo0vh02c23 Error in formatDateTimeRangeFromUTC:', error);
     return '';
   }
 }; 
