@@ -1,11 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import AddServiceModal from './AddServiceModal';
+import ServiceCreationModal from './ServiceCreationModal';
 import ProfessionalServiceCard from './ProfessionalServiceCard';
 import ConfirmationModal from './ConfirmationModal';
 import { Portal } from 'react-native-paper';
+import { AuthContext } from '../context/AuthContext';
 
 const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfessionalTab = false, isMobile = false }) => {
   const [showModal, setShowModal] = useState(false);
@@ -16,6 +17,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   const [serviceToDelete, setServiceToDelete] = useState(null);
   const [hoveredButton, setHoveredButton] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState(null);
+  const { screenWidth } = useContext(AuthContext);
   const [collapseTooltipPosition, setCollapseTooltipPosition] = useState(null);
   const buttonRef = useRef(null);
   const collapseButtonRef = useRef(null);
@@ -41,14 +43,39 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   };
 
   const handleSaveService = (updatedService) => {
+    // Transform the service data to match the backend structure
+    const transformedService = {
+      service_name: updatedService.serviceName,
+      description: updatedService.serviceDescription,
+      unit_of_time: updatedService.lengthOfService,
+      base_rate: updatedService.rates.base_rate,
+      additional_animal_rate: updatedService.rates.additionalAnimalRate,
+      holiday_rate: updatedService.rates.holidayRate,
+      categories: updatedService.generalCategories.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        is_custom: cat.isCustom || false
+      })),
+      animal_types: updatedService.animalTypes.map(type => ({
+        name: type.name,
+        category_id: type.categoryId,
+        is_custom: type.isCustom || false
+      })),
+      additional_rates: updatedService.additionalRates.map(rate => ({
+        title: rate.label,
+        rate: rate.value,
+        description: rate.description
+      }))
+    };
+
     if (editingService !== null) {
       setServices(prev => 
         prev.map((service, index) => 
-          index === editingService.index ? updatedService : service
+          index === editingService.index ? transformedService : service
         )
       );
     } else {
-      setServices(prev => [...prev, updatedService]);
+      setServices(prev => [...prev, transformedService]);
     }
     setHasUnsavedChanges(true);
     setEditingService(null);
@@ -97,35 +124,44 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       return null;
     }
 
+    // Transform the service data to match the frontend structure
     const serviceData = {
       serviceName: item.service_name,
       description: item.description,
       lengthOfService: item.unit_of_time,
+      generalCategories: item.categories?.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        isCustom: cat.is_custom
+      })) || [],
+      animalTypes: item.animal_types?.map(type => ({
+        name: type.name,
+        categoryId: type.category_id,
+        isCustom: type.is_custom
+      })) || [],
       rates: {
         base_rate: item.base_rate,
         additionalAnimalRate: item.additional_animal_rate,
         holidayRate: item.holiday_rate
       },
-      additionalRates: item.additional_rates.map(rate => ({
+      additionalRates: item.additional_rates?.map(rate => ({
         label: rate.title,
         value: rate.rate,
         description: rate.description
-      }))
+      })) || []
     };
 
     return (
-      <View style={styles.serviceCardWrapper}>
-        <ProfessionalServiceCard
-          key={`service-${index}`}
-          item={serviceData}
-          index={index}
-          onEdit={() => handleEditService(index)}
-          onDelete={() => handleDeleteService(index)}
-          isCollapsed={collapsedServices.includes(index)}
-          onToggleCollapse={() => toggleCollapse(index)}
-          isProfessionalTab={isProfessionalTab}
-        />
-      </View>
+      <ProfessionalServiceCard
+        key={`service-${index}`}
+        item={serviceData}
+        index={index}
+        onEdit={() => handleEditService(index)}
+        onDelete={() => handleDeleteService(index)}
+        isCollapsed={collapsedServices.includes(index)}
+        onToggleCollapse={() => toggleCollapse(index)}
+        isProfessionalTab={isProfessionalTab}
+      />
     );
   };
 
@@ -203,8 +239,12 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         </View>
 
         {(Array.isArray(services) && services.length > 0) ? (
-          <View style={styles.servicesGrid}>
-            {services.map((item, index) => renderService({ item, index }))}
+          <View style={[styles.servicesGrid, { justifyContent: screenWidth > 600 ? '' : 'center' }]}>
+            {services.map((item, index) => (
+              <View key={`service-wrapper-${index}`} style={styles.serviceCardWrapper}>
+                {renderService({ item, index })}
+              </View>
+            ))}
           </View>
         ) : (
           <View style={styles.emptyContainer}>
@@ -220,7 +260,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       </View>
       
 
-      <AddServiceModal
+      <ServiceCreationModal
         visible={showModal}
         onClose={() => {
           setShowModal(false);

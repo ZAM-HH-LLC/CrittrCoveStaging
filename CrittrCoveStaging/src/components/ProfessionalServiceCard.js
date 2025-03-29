@@ -77,6 +77,8 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
+    display: 'flex',
+    justifyContent: 'center',
     shadowOffset: {
       width: 0,
       height: 2,
