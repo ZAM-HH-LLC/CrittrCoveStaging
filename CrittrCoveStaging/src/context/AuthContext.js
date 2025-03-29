@@ -3,7 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { Dimensions, Platform } from 'react-native';
-import { navigate, navigateToFrom } from '../../App';
+import { navigate } from '../../App';
+import { navigateToFrom } from '../components/Navigation';
 import { initStripe } from '../utils/StripeService';
 
 export const SCREEN_WIDTH = Dimensions.get('window').width;

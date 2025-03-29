@@ -273,11 +273,15 @@ const BookingStepModal = ({
 
           debugLog('MBA54321 Received response from updateBookingDraftTimeAndDate:', response);
 
-          // Update booking data with the response
-          setBookingData(prev => ({
-            ...prev,
-            ...response
-          }));
+          // Update booking data with the response's draft_data
+          if (response?.draft_data) {
+            setBookingData(prev => ({
+              ...prev,
+              ...response.draft_data
+            }));
+          } else {
+            debugLog('MBA54321 No draft_data in response:', response);
+          }
 
         } catch (error) {
           debugLog('MBA54321 Error calculating booking totals:', error);

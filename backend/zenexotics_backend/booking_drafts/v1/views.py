@@ -1357,18 +1357,6 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             start_time = serializer.validated_data['start_time']
             end_time = serializer.validated_data['end_time']
 
-            # Calculate number of nights
-            # First get the base number of days between dates
-            nights = (end_date - start_date).days
-            
-            
-            # Apply night count adjustment if provided
-            night_count_adjustment = serializer.validated_data.get('night_count_adjustment', 0)
-            nights += night_count_adjustment
-            
-            logger.info(f"MBA1234 - Calculated nights: {nights} (with adjustment: {night_count_adjustment})")
-            logger.info(f"MBA1234 - Start: {start_date} {start_time}, End: {end_date} {end_time}")
-
             # Get service from draft data
             service = None
             if draft.draft_data and 'service_details' in draft.draft_data:
@@ -1393,6 +1381,17 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             additional_rate = Decimal(str(service.additional_animal_rate))
             holiday_rate = Decimal(str(service.holiday_rate))
 
+            # Calculate number of nights
+            # First get the base number of days between dates
+            nights = (end_date - start_date).days
+            
+            # Apply night count adjustment if provided
+            night_count_adjustment = serializer.validated_data.get('night_count_adjustment', 0)
+            nights += night_count_adjustment
+            
+            logger.info(f"MBA1234 - Calculated nights: {nights} (with adjustment: {night_count_adjustment})")
+            logger.info(f"MBA1234 - Start: {start_date} {start_time}, End: {end_date} {end_time}")
+
             # Calculate additional pet charges
             additional_pet_charges = Decimal('0')
             if num_pets > 1:
@@ -1400,7 +1399,7 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 additional_pet_charges = additional_rate * additional_pets
 
             # Calculate total cost (base rate per night + additional pet charges per night)
-            total_cost = (base_rate + additional_pet_charges) * nights
+            total_cost = (base_rate * nights) + additional_pet_charges
 
             # Create single occurrence for the entire stay
             occurrence = OrderedDict([
@@ -1411,6 +1410,7 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 ('end_time', end_time.strftime('%H:%M')),
                 ('calculated_cost', float(total_cost)),
                 ('base_total', float(base_rate * nights)),
+                ('unit_of_time', service.unit_of_time), # TODO: Change this to mapping of unit of time to multiple.
                 ('multiple', nights),
                 ('rates', OrderedDict([
                     ('base_rate', str(base_rate)),

@@ -2,6 +2,8 @@ import { format, parse } from 'date-fns';
 import { formatInTimeZone, toZonedTime, fromZonedTime, utcToZonedTime, getTimezoneOffset } from 'date-fns-tz';
 import moment from 'moment-timezone';
 import { debugLog } from '../context/AuthContext';
+// import { format as formatDate } from 'date-fns';
+import { parseISO } from 'date-fns';
 
 /**
  * Formats a date string into "MMM d" format (e.g., "Mar 5")
@@ -436,4 +438,146 @@ export const formatTimeForAPI = (time) => {
   const result = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   debugLog('MBA12345 formatTimeForAPI result:', result);
   return result;
+};
+
+// Format types for consistent date/time formatting across the app
+export const FORMAT_TYPES = {
+  SHORT_DATE: 'SHORT_DATE',           // Mar 4
+  MEDIUM_DATE: 'MEDIUM_DATE',         // Mar 4, 2025
+  LONG_DATE: 'LONG_DATE',            // March 4, 2025
+  TIME_ONLY: 'TIME_ONLY',            // 4:42 PM
+  TIME_ONLY_24H: 'TIME_ONLY_24H',    // 16:42
+  DATE_TIME: 'DATE_TIME',            // Mar 4, 2025 at 4:42 PM
+  DATE_TIME_WITH_TZ: 'DATE_TIME_WITH_TZ', // Mar 4, 2025 at 4:42 PM MDT
+  DATE_RANGE: 'DATE_RANGE',          // Mar 4 - Mar 5
+  DATE_TIME_RANGE: 'DATE_TIME_RANGE' // Mar 4, 2025 at 4:42 PM - Mar 5, 2025 at 5:00 PM MDT
+};
+
+/**
+ * Converts UTC date and time strings to user's timezone and formats according to specified type
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @param {string} timeStr - Time in HH:mm format (24-hour)
+ * @param {string} userTimezone - User's timezone (e.g., 'America/Denver')
+ * @param {string} formatType - One of FORMAT_TYPES
+ * @returns {string} Formatted date/time string
+ */
+export const formatFromUTC = (dateStr, timeStr = null, userTimezone, formatType = FORMAT_TYPES.MEDIUM_DATE) => {
+  try {
+    debugLog('MBA134njo0vh02c23 formatFromUTC input:', { dateStr, timeStr, userTimezone, formatType });
+    
+    // Combine date and time if both are provided
+    const dateTimeStr = timeStr ? `${dateStr}T${timeStr}:00Z` : `${dateStr}T00:00:00Z`;
+    const utcDate = parseISO(dateTimeStr);
+    
+    debugLog('MBA134njo0vh02c23 utcDate:', utcDate);
+    
+    // For timezone-aware formatting, use formatInTimeZone directly with the UTC date
+    switch (formatType) {
+      case FORMAT_TYPES.SHORT_DATE:
+      console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d):', formatInTimeZone(utcDate, userTimezone, 'MMM d'));
+        return formatInTimeZone(utcDate, userTimezone, 'MMM d');
+        
+      case FORMAT_TYPES.MEDIUM_DATE:
+        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d, yyyy):', formatInTimeZone(utcDate, userTimezone, 'MMM d, yyyy'));
+        return formatInTimeZone(utcDate, userTimezone, 'MMM d, yyyy');
+        
+      case FORMAT_TYPES.LONG_DATE:
+        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMMM d, yyyy):', formatInTimeZone(utcDate, userTimezone, 'MMMM d, yyyy'));
+        return formatInTimeZone(utcDate, userTimezone, 'MMMM d, yyyy');
+        
+      case FORMAT_TYPES.TIME_ONLY:
+        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, h:mm a):', formatInTimeZone(utcDate, userTimezone, 'h:mm a'));
+        return formatInTimeZone(utcDate, userTimezone, 'h:mm a');
+        
+      case FORMAT_TYPES.TIME_ONLY_24H:
+        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, HH:mm):', formatInTimeZone(utcDate, userTimezone, 'HH:mm'));
+        return formatInTimeZone(utcDate, userTimezone, 'HH:mm');
+        
+      case FORMAT_TYPES.DATE_TIME:
+        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d, yyyy h:mm a):', formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a"));
+        return formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a");
+        
+      case FORMAT_TYPES.DATE_TIME_WITH_TZ:
+        // Get timezone abbreviation
+        const timezoneName = Intl.DateTimeFormat('en-US', {
+          timeZoneName: 'short',
+          timeZone: userTimezone
+        }).formatToParts(utcDate).find(part => part.type === 'timeZoneName')?.value || '';
+
+        console.log('MBA134njo0vh02c23 timezoneName:', timezoneName);
+        console.log('MBA134njo0vh02c23 formatInTimeZone(utcDate, userTimezone, MMM d, yyyy h:mm a) + " " + timezoneName:', formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a") + ' ' + timezoneName);
+        
+        return formatInTimeZone(utcDate, userTimezone, "MMM d, yyyy 'at' h:mm a") + ' ' + timezoneName;
+        
+      default:
+        return formatInTimeZone(utcDate, userTimezone, 'MMM d, yyyy');
+    }
+  } catch (error) {
+    debugLog('Error formatting date/time:', error);
+    return '';
+  }
+};
+
+/**
+ * Formats a date/time range from UTC to user's timezone
+ * @param {Object} params - Range parameters
+ * @param {string} params.startDate - Start date in YYYY-MM-DD format
+ * @param {string} params.startTime - Start time in HH:mm format
+ * @param {string} params.endDate - End date in YYYY-MM-DD format
+ * @param {string} params.endTime - End time in HH:mm format
+ * @param {string} params.userTimezone - User's timezone
+ * @param {boolean} params.includeTimes - Whether to include times in the output
+ * @param {boolean} params.includeTimezone - Whether to include timezone in the output
+ * @returns {string} Formatted date/time range
+ */
+export const formatDateTimeRangeFromUTC = ({
+  startDate,
+  startTime,
+  endDate,
+  endTime,
+  userTimezone,
+  includeTimes = true,
+  includeTimezone = true
+}) => {
+  try {
+    if (includeTimes) {
+      const startFormatted = formatFromUTC(
+        startDate, 
+        startTime, 
+        userTimezone, 
+        FORMAT_TYPES.DATE_TIME
+      );
+      
+      const endFormatted = formatFromUTC(
+        endDate,
+        endTime,
+        userTimezone,
+        includeTimezone ? FORMAT_TYPES.DATE_TIME_WITH_TZ : FORMAT_TYPES.DATE_TIME
+      );
+
+      console.log('MBA134njo0vh02c23 startFormatted:', startFormatted);
+      console.log('MBA134njo0vh02c23 endFormatted:', endFormatted);
+      
+      return `${startFormatted} - ${endFormatted}`;
+    } else {
+      const startFormatted = formatFromUTC(
+        startDate,
+        null,
+        userTimezone,
+        FORMAT_TYPES.MEDIUM_DATE
+      );
+      
+      const endFormatted = formatFromUTC(
+        endDate,
+        null,
+        userTimezone,
+        FORMAT_TYPES.MEDIUM_DATE
+      );
+      
+      return `${startFormatted} - ${endFormatted}`;
+    }
+  } catch (error) {
+    debugLog('Error formatting date/time range:', error);
+    return '';
+  }
 }; 

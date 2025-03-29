@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,12 @@ import {
 import { theme } from '../../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../../context/AuthContext';
+import { AuthContext } from '../../context/AuthContext';
+import { formatDateTimeRangeFromUTC, formatFromUTC, FORMAT_TYPES } from '../../utils/time_utils';
 
 const ReviewAndRatesCard = ({ bookingData }) => {
+  const { timeSettings } = useContext(AuthContext);
+
   useEffect(() => {
     debugLog('MBA54321 ReviewAndRatesCard received bookingData:', bookingData);
   }, [bookingData]);
@@ -23,32 +27,19 @@ const ReviewAndRatesCard = ({ bookingData }) => {
   const renderBaseRate = () => {
     debugLog('MBA54321 Rendering base rate with data:', bookingData?.occurrences?.[0]?.rates);
     const occurrence = bookingData?.occurrences?.[0];
-    if (!occurrence?.rates?.base_rate) {
-      debugLog('MBA54321 No base rate data available');
-      return (
-        <View>
-          <Text style={styles.sectionHeader}>Base Rate</Text>
-          <View style={styles.card}>
-            <View style={styles.rateItem}>
-              <View>
-                <Text style={styles.rateLabel}>Standard Rate</Text>
-                <Text style={styles.subLabel}>Per day rate</Text>
-              </View>
-              <Text style={styles.rateAmount}>$150.00</Text>
-            </View>
-          </View>
-        </View>
-      );
+    if (!occurrence?.rates?.base_rate || !occurrence?.unit_of_time) {
+      debugLog('MBA54321 No base rate or unit of time data available');
+      return null;
     }
 
     return (
       <View>
         <Text style={styles.sectionHeader}>Base Rate</Text>
-        <View style={styles.card}>
-          <View style={styles.rateItem}>
+        <View style={[styles.card, { paddingTop: 16 }]}>
+          <View style={[styles.rateItem, { paddingVertical: 0, borderBottomWidth: 0 }]}>
             <View>
               <Text style={styles.rateLabel}>Standard Rate</Text>
-              <Text style={styles.subLabel}>Per day rate</Text>
+              <Text style={styles.subLabel}>{occurrence?.unit_of_time}</Text>
             </View>
             <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.base_rate)}</Text>
           </View>
@@ -59,6 +50,11 @@ const ReviewAndRatesCard = ({ bookingData }) => {
 
   const renderAdditionalRates = () => {
     debugLog('MBA54321 Rendering additional rates');
+    const occurrence = bookingData?.occurrences?.[0];
+    if (!occurrence?.rates) return null;
+
+    const { additional_animal_rate, holiday_rate, additional_rates = [], applies_after } = occurrence.rates;
+
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeaderContainer}>
@@ -68,20 +64,39 @@ const ReviewAndRatesCard = ({ bookingData }) => {
           </TouchableOpacity>
         </View>
         <View style={styles.card}>
-          <View style={styles.rateItem}>
-            <View>
-              <Text style={styles.rateLabel}>Extended Hours</Text>
-              <Text style={styles.subLabel}>After 5:00 PM</Text>
+          {additional_animal_rate && (
+            <View style={styles.rateItem}>
+              <View>
+                <Text style={styles.rateLabel}>Additional Pet Rate</Text>
+                <Text style={styles.subLabel}>Applies after {applies_after} pets</Text>
+              </View>
+              <Text style={styles.additionalAmount}>+{formatCurrency(additional_animal_rate)}</Text>
             </View>
-            <Text style={styles.additionalAmount}>+$50</Text>
-          </View>
-          <View style={[styles.rateItem, styles.lastItem]}>
-            <View>
-              <Text style={styles.rateLabel}>Weekend Rate</Text>
-              <Text style={styles.subLabel}>Saturdays & Sundays</Text>
+          )}
+          {holiday_rate && (
+            <View style={styles.rateItem}>
+              <View>
+                <Text style={styles.rateLabel}>Holiday Rate</Text>
+                <Text style={styles.subLabel}>Applied on holidays</Text>
+              </View>
+              <Text style={styles.additionalAmount}>+{formatCurrency(holiday_rate)}</Text>
             </View>
-            <Text style={styles.additionalAmount}>+$75</Text>
-          </View>
+          )}
+          {additional_rates.map((rate, index) => (
+            <View 
+              key={index} 
+              style={[
+                styles.rateItem, 
+                index === additional_rates.length - 1 && !holiday_rate && styles.lastItem
+              ]}
+            >
+              <View>
+                <Text style={styles.rateLabel}>{rate.name}</Text>
+                <Text style={styles.subLabel}>{rate.description}</Text>
+              </View>
+              <Text style={styles.additionalAmount}>+{formatCurrency(rate.amount)}</Text>
+            </View>
+          ))}
         </View>
       </View>
     );
@@ -90,99 +105,46 @@ const ReviewAndRatesCard = ({ bookingData }) => {
   const renderBookingBreakdown = () => {
     debugLog('MBA54321 Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
     const occurrence = bookingData?.occurrences?.[0];
-    if (!occurrence) {
-      debugLog('MBA54321 No occurrence data available');
-      return (
-        <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Booking Breakdown</Text>
-          <View style={styles.card}>
-            <View style={styles.breakdownSection}>
-              <View style={styles.dateHeader}>
-                <Text style={styles.dateText}>Mar 5, 2025</Text>
-                <TouchableOpacity>
-                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.breakdownItem}>
-                <Text style={styles.breakdownLabel}>Base Rate (9:00 AM - 5:00 PM)</Text>
-                <Text style={styles.breakdownAmount}>$150.00</Text>
-              </View>
-              <View style={styles.breakdownItem}>
-                <Text style={styles.breakdownLabel}>Extended Hours (2 hours)</Text>
-                <Text style={styles.breakdownAmount}>$50.00</Text>
-              </View>
-              <View style={[styles.breakdownItem, styles.totalItem]}>
-                <Text style={styles.breakdownLabel}>Day Total</Text>
-                <Text style={styles.breakdownAmount}>$200.00</Text>
-              </View>
-            </View>
+    if (!occurrence) return null;
 
-            <View style={styles.breakdownSection}>
-              <View style={styles.dateHeader}>
-                <Text style={styles.recurringText}>Weekly Recurring (Mon, Wed, Fri)</Text>
-                <TouchableOpacity>
-                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.breakdownItem}>
-                <Text style={styles.breakdownLabel}>Base Rate × 3 days</Text>
-                <Text style={styles.breakdownAmount}>$450.00</Text>
-              </View>
-              <View style={[styles.breakdownItem, styles.totalItem]}>
-                <Text style={styles.breakdownLabel}>Weekly Total</Text>
-                <Text style={styles.breakdownAmount}>$450.00</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      );
-    }
+    const formattedDateRange = formatDateTimeRangeFromUTC({
+      startDate: occurrence.start_date,
+      startTime: occurrence.start_time,
+      endDate: occurrence.end_date,
+      endTime: occurrence.end_time,
+      userTimezone: timeSettings.timezone,
+      includeTimes: true,
+      includeTimezone: true
+    });
 
     return (
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>Booking Breakdown</Text>
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingTop: 16 }]}>
           <View style={styles.breakdownSection}>
             <View style={styles.dateHeader}>
-              <Text style={styles.dateText}>
-                {new Date(occurrence.start_date).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric', 
-                  year: 'numeric' 
-                })}
-              </Text>
+              <View style={styles.dateTextContainer}>
+                <Text style={styles.dateText}>{formattedDateRange}</Text>
+              </View>
               <TouchableOpacity>
                 <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
               </TouchableOpacity>
             </View>
             <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Base Rate ({occurrence.start_time} - {occurrence.end_time})</Text>
+              <View style={styles.breakdownLabelContainer}>
+                <Text style={styles.breakdownLabel}>
+                  Base Rate ({occurrence.unit_of_time})
+                </Text>
+                <Text style={styles.breakdownCalculation}>
+                  {occurrence.multiple} × {formatCurrency(occurrence.rates.base_rate)} = {formatCurrency(occurrence.base_total)}
+                </Text>
+              </View>
               <Text style={styles.breakdownAmount}>{formatCurrency(occurrence.base_total)}</Text>
             </View>
-            <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Extended Hours (2 hours)</Text>
-              <Text style={styles.breakdownAmount}>$50.00</Text>
-            </View>
-            <View style={[styles.breakdownItem, styles.totalItem]}>
-              <Text style={styles.breakdownLabel}>Day Total</Text>
+            {/* Add any additional rate breakdowns here if needed */}
+            <View style={[styles.breakdownItem, styles.totalItem, { borderBottomWidth: 0 }]}>
+              <Text style={styles.breakdownLabel}>Date Range Total</Text>
               <Text style={styles.breakdownAmount}>{formatCurrency(occurrence.calculated_cost)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.breakdownSection}>
-            <View style={styles.dateHeader}>
-              <Text style={styles.recurringText}>Weekly Recurring (Mon, Wed, Fri)</Text>
-              <TouchableOpacity>
-                <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Base Rate × 3 days</Text>
-              <Text style={styles.breakdownAmount}>$450.00</Text>
-            </View>
-            <View style={[styles.breakdownItem, styles.totalItem]}>
-              <Text style={styles.breakdownLabel}>Weekly Total</Text>
-              <Text style={styles.breakdownAmount}>$450.00</Text>
             </View>
           </View>
         </View>
@@ -193,34 +155,44 @@ const ReviewAndRatesCard = ({ bookingData }) => {
   const renderTotalAmount = () => {
     debugLog('MBA54321 Rendering total amount with data:', bookingData?.cost_summary);
     const costSummary = bookingData?.cost_summary;
-    if (!costSummary) {
-      debugLog('MBA54321 No cost summary data available');
-      return (
-        <View style={styles.section}>
-          <View style={styles.card}>
-            <View style={styles.subtotalRow}>
-              <Text style={styles.subtotalLabel}>Subtotal</Text>
-              <Text style={styles.subtotalAmount}>$650.00</Text>
-            </View>
-            <View style={styles.totalAmountContainer}>
-              <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalAmount}>$650.00</Text>
-            </View>
-          </View>
-        </View>
-      );
-    }
+    if (!costSummary) return null;
 
     return (
       <View style={styles.section}>
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingTop: 16 }]}>
           <View style={styles.subtotalRow}>
             <Text style={styles.subtotalLabel}>Subtotal</Text>
             <Text style={styles.subtotalAmount}>{formatCurrency(costSummary.subtotal)}</Text>
           </View>
+          
+          {/* Platform Fee */}
+          <View style={styles.feeRow}>
+            <Text style={styles.feeLabel}>Platform Fee</Text>
+            <Text style={styles.feeAmount}>{formatCurrency(costSummary.platform_fee)}</Text>
+          </View>
+          
+          {/* Taxes */}
+          <View style={styles.feeRow}>
+            <Text style={styles.feeLabel}>Taxes</Text>
+            <Text style={styles.feeAmount}>{formatCurrency(costSummary.taxes)}</Text>
+          </View>
+
+          {/* Total Client Cost */}
           <View style={styles.totalAmountContainer}>
-            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalLabel}>Total Client Cost</Text>
             <Text style={styles.totalAmount}>{formatCurrency(costSummary.total_client_cost)}</Text>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Professional Payout */}
+          <View style={styles.payoutContainer}>
+            <Text style={styles.payoutLabel}>Professional Payout</Text>
+            <Text style={styles.payoutAmount}>{formatCurrency(costSummary.total_sitter_payout)}</Text>
+            <Text style={styles.payoutBreakdown}>
+              (Subtotal {formatCurrency(costSummary.subtotal)} - Platform Fee {formatCurrency(costSummary.platform_fee)})
+            </Text>
           </View>
         </View>
       </View>
@@ -263,7 +235,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surfaceContrast,
     borderRadius: 8,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -274,7 +247,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingBottom: 16,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.modernBorder,
   },
@@ -310,13 +283,6 @@ const styles = StyleSheet.create({
   },
   breakdownSection: {
     paddingBottom: 16,
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.modernBorder,
-  },
-  breakdownSection: {
-    marginBottom: 16,
-    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.modernBorder,
   },
@@ -326,10 +292,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  dateTextContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
   dateText: {
     fontSize: 16,
     fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
+    flexWrap: 'wrap',
   },
   recurringText: {
     fontSize: 16,
@@ -343,16 +314,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   totalItem: {
-    marginTop: 8,
-    paddingTop: 8,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: theme.colors.modernBorder,
     marginBottom: 0,
+  },
+  breakdownLabelContainer: {
+    flex: 1,
   },
   breakdownLabel: {
     fontSize: 16,
     fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
+  },
+  breakdownCalculation: {
+    fontSize: 14,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.placeHolderText,
+    marginTop: 4,
   },
   breakdownAmount: {
     fontSize: 16,
@@ -392,6 +371,47 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: theme.fonts.header.fontFamily,
     color: theme.colors.text,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  feeLabel: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+  },
+  feeAmount: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: theme.colors.modernBorder,
+    marginVertical: 16,
+  },
+  payoutContainer: {
+    marginTop: 8,
+  },
+  payoutLabel: {
+    fontSize: 18,
+    fontFamily: theme.fonts.header.fontFamily,
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  payoutAmount: {
+    fontSize: 24,
+    fontFamily: theme.fonts.header.fontFamily,
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  payoutBreakdown: {
+    fontSize: 14,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.placeHolderText,
   },
 });
 
