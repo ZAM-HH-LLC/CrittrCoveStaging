@@ -31,8 +31,26 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
     if (showThresholdDropdown) setShowThresholdDropdown(false);
   };
 
+  const formatNumericInput = (text) => {
+    // Remove any non-numeric characters except decimal point
+    let numericValue = text.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = numericValue.split('.');
+    if (parts.length > 2) {
+      numericValue = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    // Limit to 2 decimal places
+    if (parts[1]?.length > 2) {
+      numericValue = parts[0] + '.' + parts[1].slice(0, 2);
+    }
+
+    return numericValue;
+  };
+
   const handleBaseRateChange = (text) => {
-    const numericValue = text.replace(/[^0-9.]/g, '');
+    const numericValue = formatNumericInput(text);
     setServiceData(prev => ({
       ...prev,
       rates: {
@@ -54,7 +72,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
   };
 
   const handleAdditionalAnimalRateChange = (text) => {
-    const numericValue = text.replace(/[^0-9.]/g, '');
+    const numericValue = formatNumericInput(text);
     setServiceData(prev => ({
       ...prev,
       rates: {
@@ -76,7 +94,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
   };
 
   const handleHolidayRateChange = (text) => {
-    const numericValue = text.replace(/[^0-9.]/g, '');
+    const numericValue = formatNumericInput(text);
     setServiceData(prev => ({
       ...prev,
       rates: {
@@ -87,6 +105,9 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
   };
 
   const handleCustomRateChange = (field, value) => {
+    if (field === 'rate') {
+      value = formatNumericInput(value);
+    }
     setNewCustomRate(prev => ({
       ...prev,
       [field]: value
@@ -156,7 +177,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
         <Text style={styles.title}>Set Your Rates</Text>
 
         <View style={[styles.rateContainer, { zIndex: 3 }]}>
-          <Text style={styles.label}>Base Rate <Text style={{ color: theme.colors.surface }}>(Required)</Text></Text>
+          <Text style={styles.label}>Base Rate <Text style={{ color: theme.colors.placeHolderText }}>(Required)</Text></Text>
           <View style={styles.rateInputGroup}>
             <View style={[styles.currencyInputContainer, { flex: 1 }]}>
               <Text style={styles.currencySymbol}>$</Text>
@@ -198,7 +219,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
         </View>
 
         <View style={[styles.rateContainer, { zIndex: 2 }]}>
-          <Text style={styles.label}>Additional Animal Rate <Text style={{ color: theme.colors.surface }}>(Optional)</Text></Text>
+          <Text style={styles.label}>Additional Animal Rate <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
           <View style={styles.rateInputGroup}>
             <View style={[styles.currencyInputContainer, { flex: 1 }]}>
               <Text style={styles.currencySymbol}>$</Text>
@@ -240,7 +261,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
         </View>
 
         <View style={styles.holidayRateContainer}>
-          <Text style={styles.label}>Holiday Rate <Text style={{ color: theme.colors.surface }}>(Optional)</Text></Text>
+          <Text style={styles.label}>Holiday Rate <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
           <View style={styles.percentageInputContainer}>
             <TextInput
               style={styles.percentageInput}
@@ -255,7 +276,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
         </View>
 
         <View style={styles.customRatesContainer}>
-          <Text style={styles.label}>Custom Charges <Text style={{ color: theme.colors.surface }}>(Optional)</Text></Text>
+          <Text style={styles.label}>Custom Charges <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
           {serviceData.additionalRates?.map((rate, index) => (
             <View key={index} style={styles.customRateItem}>
               <View style={styles.customRateContent}>
@@ -270,7 +291,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
                   <MaterialCommunityIcons
                     name="pencil"
                     size={20}
-                    color={theme.colors.surface}
+                    color={theme.colors.placeHolderText}
                   />
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -280,7 +301,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
                   <MaterialCommunityIcons
                     name="delete"
                     size={20}
-                    color={theme.colors.surface}
+                    color={theme.colors.placeHolderText}
                   />
                 </TouchableOpacity>
               </View>
