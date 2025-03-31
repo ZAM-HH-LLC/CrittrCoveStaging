@@ -262,7 +262,7 @@ export default function Navigation({ navigation }) {
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile' },
-        { title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' },
+        ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
       ];
     }
   };

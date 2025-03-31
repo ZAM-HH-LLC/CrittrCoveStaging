@@ -173,7 +173,7 @@ const ReviewAndRatesCard = ({ bookingData }) => {
           
           {/* Platform Fee */}
           <View style={styles.feeRow}>
-            <Text style={styles.feeLabel}>Platform Fee</Text>
+            <Text style={styles.feeLabel}>Service Fee</Text>
             <Text style={styles.feeAmount}>{formatCurrency(costSummary.platform_fee)}</Text>
           </View>
           
@@ -197,7 +197,7 @@ const ReviewAndRatesCard = ({ bookingData }) => {
             <Text style={styles.payoutLabel}>Professional Payout</Text>
             <Text style={styles.payoutAmount}>{formatCurrency(costSummary.total_sitter_payout)}</Text>
             <Text style={styles.payoutBreakdown}>
-              (Subtotal {formatCurrency(costSummary.subtotal)} - Platform Fee {formatCurrency(costSummary.platform_fee)})
+              (Subtotal {formatCurrency(costSummary.subtotal)} - Service Fee {formatCurrency(costSummary.platform_fee)})
             </Text>
           </View>
         </View>
