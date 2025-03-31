@@ -251,15 +251,15 @@ export default function Navigation({ navigation }) {
         { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
-        { title: 'Availability', icon: 'clock-outline', route: 'AvailabilitySettings' },
+        // { title: 'Availability', icon: 'clock-outline', route: 'AvailabilitySettings' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile' },
       ];
     } else {
       return [
         { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
-        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
+        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile' },
         ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),

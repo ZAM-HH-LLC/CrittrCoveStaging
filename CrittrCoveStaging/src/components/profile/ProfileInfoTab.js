@@ -18,6 +18,13 @@ const FACILITY_PRESETS = [
   { id: 'food_storage', icon: 'food-variant', title: 'Pet Food Storage', description: 'Dedicated food storage area' },
 ];
 
+const INSURANCE_OPTIONS = [
+  { id: 'none', label: 'No Insurance', description: 'I do not have insurance' },
+  { id: 'petplan', label: 'PetPlan Insurance', description: 'Comprehensive pet insurance coverage' },
+  { id: 'trupanion', label: 'Trupanion', description: 'Lifetime coverage for your pets' },
+  { id: 'custom', label: 'Custom Insurance', description: 'Upload my own insurance card' }
+];
+
 const AddressForm = ({ address, setAddress }) => (
   <View style={styles.addressForm}>
     <TextInput
@@ -64,9 +71,9 @@ const AddressForm = ({ address, setAddress }) => (
   </View>
 );
 
-const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMultiline, isProfessional, isFacilities, selectedFacilities = [] }) => {
+const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMultiline, isProfessional, isInsurance, selectedInsurance = { type: 'none', card: null }, onInsuranceChange }) => {
   const [localValue, setLocalValue] = useState('');
-  const [localFacilities, setLocalFacilities] = useState([]);
+  const [localInsurance, setLocalInsurance] = useState(selectedInsurance);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [addressForm, setAddressForm] = useState({
     street: '',
@@ -76,11 +83,15 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
     zip: '',
     country: ''
   });
+  const [insuranceStep, setInsuranceStep] = useState(1); // 1: Choose type, 2: Upload/Select insurance
+  const [insuranceType, setInsuranceType] = useState(null); // 'own' or 'platform'
 
   useEffect(() => {
     if (visible) {
-      if (isFacilities) {
-        setLocalFacilities(selectedFacilities);
+      if (isInsurance) {
+        setLocalInsurance(selectedInsurance);
+        setInsuranceStep(1);
+        setInsuranceType(null);
       } else if (isLocation) {
         // Parse the existing address if available
         const addressParts = value.split(',').map(part => part.trim());
@@ -96,11 +107,11 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
         setLocalValue(value || '');
       }
     }
-  }, [visible, value, selectedFacilities]);
+  }, [visible, value, selectedInsurance]);
 
   const handleSave = () => {
-    if (isFacilities) {
-      onSave(localFacilities);
+    if (isInsurance) {
+      onSave(localInsurance);
     } else if (isLocation) {
       const formattedAddress = [
         addressForm.street,
@@ -115,6 +126,32 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
       onSave(localValue);
     }
     onClose();
+  };
+
+  const handleInsuranceTypeSelect = (type) => {
+    setInsuranceType(type);
+    setInsuranceStep(2);
+  };
+
+  const handleInsuranceChange = async (insuranceType) => {
+    if (insuranceType === 'custom') {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        const newInsurance = { type: 'custom', card: result.assets[0].uri };
+        setLocalInsurance(newInsurance);
+        onInsuranceChange(insuranceType);
+      }
+    } else {
+      const newInsurance = { type: insuranceType, card: null };
+      setLocalInsurance(newInsurance);
+      onInsuranceChange(insuranceType);
+    }
   };
 
   const handleGetCurrentLocation = async () => {
@@ -149,6 +186,94 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
     }
   };
 
+  const renderInsuranceContent = () => {
+    if (insuranceStep === 1) {
+      return (
+        <View style={styles.insuranceStepContent}>
+          <Text style={styles.insuranceStepTitle}>Choose Insurance Type</Text>
+          <TouchableOpacity 
+            style={styles.insuranceTypeButton}
+            onPress={() => handleInsuranceTypeSelect('own')}
+          >
+            <MaterialCommunityIcons name="file-document" size={24} color={theme.colors.primary} />
+            <View style={styles.insuranceTypeContent}>
+              <Text style={styles.insuranceTypeTitle}>Use My Own Insurance</Text>
+              <Text style={styles.insuranceTypeDescription}>Upload your existing insurance card</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.insuranceTypeButton}
+            onPress={() => handleInsuranceTypeSelect('platform')}
+          >
+            <MaterialCommunityIcons name="shield-check" size={24} color={theme.colors.primary} />
+            <View style={styles.insuranceTypeContent}>
+              <Text style={styles.insuranceTypeTitle}>Use Platform Insurance</Text>
+              <Text style={styles.insuranceTypeDescription}>Select from our insurance providers</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (insuranceStep === 2) {
+      if (insuranceType === 'own') {
+        return (
+          <View style={styles.insuranceStepContent}>
+            <Text style={styles.insuranceStepTitle}>Upload Insurance Card</Text>
+            <TouchableOpacity 
+              style={styles.uploadButton}
+              onPress={() => handleInsuranceChange('custom')}
+            >
+              <MaterialCommunityIcons name="file-upload" size={24} color={theme.colors.primary} />
+              <Text style={styles.uploadText}>Upload Insurance Card</Text>
+            </TouchableOpacity>
+            {localInsurance.type === 'custom' && localInsurance.card && (
+              <View style={styles.customInsuranceCard}>
+                <Image 
+                  source={{ uri: localInsurance.card }} 
+                  style={styles.insuranceCardImage}
+                />
+                <Text style={styles.insuranceCardText}>Custom Insurance Card</Text>
+              </View>
+            )}
+          </View>
+        );
+      }
+
+      return (
+        <View style={styles.insuranceStepContent}>
+          <Text style={styles.insuranceStepTitle}>Select Insurance Provider</Text>
+          {INSURANCE_OPTIONS.filter(opt => opt.id !== 'custom').map((option) => (
+            <TouchableOpacity
+              key={option.id}
+              style={[
+                styles.insuranceOption,
+                localInsurance.type === option.id && styles.selectedInsuranceOption
+              ]}
+              onPress={() => {
+                const newInsurance = { type: option.id, card: null };
+                setLocalInsurance(newInsurance);
+                onInsuranceChange(option.id);
+              }}
+            >
+              <MaterialCommunityIcons 
+                name={option.id === 'none' ? 'shield-off' : 'shield-check'} 
+                size={24} 
+                color={theme.colors.primary} 
+              />
+              <View style={styles.insuranceOptionContent}>
+                <Text style={styles.insuranceOptionTitle}>{option.label}</Text>
+                <Text style={styles.insuranceOptionDescription}>{option.description}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <Modal
       visible={visible}
@@ -159,94 +284,55 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
       <View style={styles.modalOverlay}>
         <View style={[
           styles.modalContent,
-          isFacilities && styles.facilitiesModalContent,
-          isLocation && styles.locationModalContent
+          isInsurance && styles.insuranceModalContent
         ]}>
-          <Text style={styles.modalTitle}>{title}</Text>
+          <View style={styles.modalHeader}>
+            {isInsurance && insuranceStep === 2 && (
+              <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => setInsuranceStep(1)}
+              >
+                <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.primary} />
+                <Text style={styles.backButtonText}>Back</Text>
+              </TouchableOpacity>
+            )}
+            <Text style={[
+              styles.modalTitle,
+              isInsurance && insuranceStep === 2 && styles.modalTitleCentered
+            ]}>{title}</Text>
+          </View>
           
-          {isFacilities ? (
-            <ScrollView style={styles.facilitiesScrollView}>
-              {FACILITY_PRESETS.map((facility) => (
-                <TouchableOpacity
-                  key={facility.id}
-                  style={[
-                    styles.facilityPresetItem,
-                    localFacilities.includes(facility.id) && styles.selectedFacilityPreset
-                  ]}
-                  onPress={() => {
-                    setLocalFacilities(prev => 
-                      prev.includes(facility.id)
-                        ? prev.filter(id => id !== facility.id)
-                        : prev.length < 3 
-                          ? [...prev, facility.id]
-                          : prev
-                    );
-                  }}
-                >
-                  <MaterialCommunityIcons 
-                    name={facility.icon} 
-                    size={24} 
-                    color={localFacilities.includes(facility.id) ? theme.colors.background : theme.colors.text} 
-                  />
-                  <View style={styles.facilityPresetContent}>
-                    <Text style={[
-                      styles.facilityPresetTitle,
-                      localFacilities.includes(facility.id) && styles.selectedFacilityText
-                    ]}>
-                      {facility.title}
-                    </Text>
-                    <Text style={[
-                      styles.facilityPresetDescription,
-                      localFacilities.includes(facility.id) && styles.selectedFacilityText
-                    ]}>
-                      {facility.description}
-                    </Text>
-                  </View>
-                  {localFacilities.includes(facility.id) && (
-                    <MaterialCommunityIcons 
-                      name="check" 
-                      size={20} 
-                      color={theme.colors.background} 
-                      style={styles.checkIcon}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-              {localFacilities.length >= 3 && (
-                <Text style={styles.maxFacilitiesText}>
-                  Maximum of 3 facilities can be displayed. All selections will be saved.
-                </Text>
-              )}
-            </ScrollView>
-          ) : isLocation ? (
-            <View style={styles.locationContent}>
-              {!isProfessional && (
-                <TouchableOpacity 
-                  style={styles.locationButton}
-                  onPress={handleGetCurrentLocation}
-                  disabled={isLoadingLocation}
-                >
-                  {isLoadingLocation ? (
-                    <ActivityIndicator color={theme.colors.background} />
-                  ) : (
-                    <>
-                      <MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.background} />
-                      <Text style={styles.locationButtonText}>Use Current Location</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-              <AddressForm address={addressForm} setAddress={setAddressForm} />
-            </View>
-          ) : (
-            <TextInput
-              style={[styles.modalInput, isMultiline && styles.multilineInput]}
-              value={localValue}
-              onChangeText={setLocalValue}
-              multiline={isMultiline}
-              numberOfLines={isMultiline ? 4 : 1}
-              autoFocus
-            />
+          {isInsurance ? renderInsuranceContent() : (
+            isLocation ? (
+              <View style={styles.locationContent}>
+                {!isProfessional && (
+                  <TouchableOpacity 
+                    style={styles.locationButton}
+                    onPress={handleGetCurrentLocation}
+                    disabled={isLoadingLocation}
+                  >
+                    {isLoadingLocation ? (
+                      <ActivityIndicator color={theme.colors.background} />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.background} />
+                        <Text style={styles.locationButtonText}>Use Current Location</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+                <AddressForm address={addressForm} setAddress={setAddressForm} />
+              </View>
+            ) : (
+              <TextInput
+                style={[styles.modalInput, isMultiline && styles.multilineInput]}
+                value={localValue}
+                onChangeText={setLocalValue}
+                multiline={isMultiline}
+                numberOfLines={isMultiline ? 4 : 1}
+                autoFocus
+              />
+            )
           )}
           
           <View style={styles.modalButtons}>
@@ -294,12 +380,13 @@ const ProfileInfoTab = ({
   reviews,
   role,
   isProfessional,
-  facilities = []
+  insurance = { type: 'none', card: null },
+  onNavigateToTab,
 }) => {
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
-  const [selectedFacilities, setSelectedFacilities] = useState(facilities);
+  const [selectedInsurance, setSelectedInsurance] = useState(insurance);
 
   const handleEdit = (field, currentValue) => {
     setEditValue(currentValue);
@@ -307,14 +394,37 @@ const ProfileInfoTab = ({
   };
 
   const handleSave = (value) => {
-    if (editingField === 'facilities') {
-      setSelectedFacilities(value);
-      onChangeText('facilities', value);
+    if (editingField === 'insurance') {
+      setSelectedInsurance(value);
+      onChangeText('insurance', value);
     } else {
       onChangeText(editingField, value);
     }
     setHasUnsavedChanges(true);
     setEditingField(null);
+  };
+
+  const handleInsuranceChange = async (insuranceType) => {
+    if (insuranceType === 'custom') {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        const newInsurance = { type: 'custom', card: result.assets[0].uri };
+        setSelectedInsurance(newInsurance);
+        onChangeText('insurance', newInsurance);
+        setHasUnsavedChanges(true);
+      }
+    } else {
+      const newInsurance = { type: insuranceType, card: null };
+      setSelectedInsurance(newInsurance);
+      onChangeText('insurance', newInsurance);
+      setHasUnsavedChanges(true);
+    }
   };
 
   const handleAddPhoto = async () => {
@@ -332,6 +442,99 @@ const ProfileInfoTab = ({
   };
 
   const location = `${city}${state ? `, ${state}` : ''}`;
+
+  const renderFacilitiesSection = () => {
+    if (isProfessional) return null;
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Home & Facilities</Text>
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={() => onNavigateToTab('pets_preferences')}
+          >
+            <View style={styles.editButtonContent}>
+              <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
+              <Text style={styles.editButtonText}>Edit Facilities</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.facilitiesGrid}>
+          {[
+            { icon: 'home', title: 'Housing Type', value: 'Private House' },
+            { icon: 'tree', title: 'Outdoor Space', value: 'Fenced Yard' },
+            { icon: 'shield-check', title: 'Security', value: '24/7 Monitoring' }
+          ].map((facility, index) => (
+            <View 
+              key={facility.title} 
+              style={[
+                styles.facilityItem,
+                { backgroundColor: index % 2 === 0 ? 
+                  theme.colors.proDashboard.secondary : 
+                  theme.colors.proDashboard.tertiary 
+                }
+              ]}
+            >
+              <MaterialCommunityIcons name={facility.icon} size={24} color={theme.colors.text} />
+              <View style={styles.facilityContent}>
+                <Text style={styles.facilityTitle}>{facility.title}</Text>
+                <Text style={styles.facilityValue}>{facility.value}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderInsuranceSection = () => {
+    if (!isProfessional) return null;
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Insurance</Text>
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={() => handleEdit('insurance', JSON.stringify(selectedInsurance))}
+          >
+            <View style={styles.editButtonContent}>
+              <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
+              <Text style={styles.editButtonText}>Edit Insurance</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.insuranceContent}>
+          {selectedInsurance.type === 'custom' && selectedInsurance.card ? (
+            <View style={styles.customInsuranceCard}>
+              <Image 
+                source={{ uri: selectedInsurance.card }} 
+                style={styles.insuranceCardImage}
+              />
+              <Text style={styles.insuranceCardText}>Custom Insurance Card</Text>
+            </View>
+          ) : (
+            <View style={styles.insuranceOption}>
+              <MaterialCommunityIcons 
+                name={selectedInsurance.type === 'none' ? 'shield-off' : 'shield-check'} 
+                size={24} 
+                color={theme.colors.primary} 
+              />
+              <View style={styles.insuranceOptionContent}>
+                <Text style={styles.insuranceOptionTitle}>
+                  {INSURANCE_OPTIONS.find(opt => opt.id === selectedInsurance.type)?.label || 'No Insurance'}
+                </Text>
+                <Text style={styles.insuranceOptionDescription}>
+                  {INSURANCE_OPTIONS.find(opt => opt.id === selectedInsurance.type)?.description || 'No insurance selected'}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -403,42 +606,8 @@ const ProfileInfoTab = ({
               <Text style={styles.bioText}>{bio || 'Tell us about yourself...'}</Text>
             </View>
 
-            {/* Home & Facilities Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Home & Facilities</Text>
-                <TouchableOpacity 
-                  style={styles.editButton}
-                  onPress={() => handleEdit('facilities', JSON.stringify(facilities))}
-                >
-                  <Text style={styles.editButtonText}>Edit Facilities</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.facilitiesGrid}>
-                {[
-                  { icon: 'home', title: 'Housing Type', value: 'Private House' },
-                  { icon: 'tree', title: 'Outdoor Space', value: 'Fenced Yard' },
-                  { icon: 'shield-check', title: 'Security', value: '24/7 Monitoring' }
-                ].map((facility, index) => (
-                  <View 
-                    key={facility.title} 
-                    style={[
-                      styles.facilityItem,
-                      { backgroundColor: index % 2 === 0 ? 
-                        theme.colors.proDashboard.secondary : 
-                        theme.colors.proDashboard.tertiary 
-                      }
-                    ]}
-                  >
-                    <MaterialCommunityIcons name={facility.icon} size={24} color={theme.colors.text} />
-                    <View style={styles.facilityContent}>
-                      <Text style={styles.facilityTitle}>{facility.title}</Text>
-                      <Text style={styles.facilityValue}>{facility.value}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
+            {/* Show either Home & Facilities (for clients) or Insurance (for professionals) */}
+            {isProfessional ? renderInsuranceSection() : renderFacilitiesSection()}
 
             {/* Portfolio Photos Section */}
             <View style={styles.section}>
@@ -478,8 +647,9 @@ const ProfileInfoTab = ({
         isLocation={editingField === 'location'}
         isMultiline={editingField === 'bio'}
         isProfessional={isProfessional}
-        isFacilities={editingField === 'facilities'}
-        selectedFacilities={selectedFacilities}
+        isInsurance={editingField === 'insurance'}
+        selectedInsurance={selectedInsurance}
+        onInsuranceChange={handleInsuranceChange}
       />
     </View>
   );
@@ -689,11 +859,35 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     maxHeight: '90%',
   },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    position: 'relative',
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 16,
+    flex: 1,
+  },
+  modalTitleCentered: {
+    textAlign: 'center',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    position: 'absolute',
+    left: 0,
+    padding: 8,
+    zIndex: 1,
+  },
+  backButtonText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
   },
   modalInput: {
     backgroundColor: theme.colors.background,
@@ -867,6 +1061,96 @@ const styles = StyleSheet.create({
   },
   modalSaveButtonDisabled: {
     opacity: 0.5,
+  },
+  insuranceContent: {
+    gap: 16,
+  },
+  customInsuranceCard: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  insuranceCardImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: theme.colors.background,
+  },
+  insuranceCardText: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+  },
+  insuranceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    padding: 16,
+    borderRadius: 8,
+    gap: 16,
+  },
+  insuranceOptionContent: {
+    flex: 1,
+  },
+  insuranceOptionTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  insuranceOptionDescription: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+  },
+  editButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  insuranceStepContent: {
+    gap: 16,
+  },
+  insuranceStepTitle: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 16,
+  },
+  insuranceTypeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    padding: 16,
+    borderRadius: 8,
+    gap: 16,
+  },
+  insuranceTypeContent: {
+    flex: 1,
+  },
+  insuranceTypeTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  insuranceTypeDescription: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.background,
+    padding: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  uploadText: {
+    fontSize: 16,
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  selectedInsuranceOption: {
+    backgroundColor: theme.colors.primary + '20',
   },
 });
 

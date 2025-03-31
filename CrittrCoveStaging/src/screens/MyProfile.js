@@ -143,7 +143,7 @@ const MyProfile = () => {
   }, []);
 
   const tabs = [
-    { id: 'profile_info', label: 'Profile Info' },
+    { id: 'profile_info', label: userRole === 'professional' ? 'Professional Profile Info' : 'Client Profile Info' },
     ...(userRole === 'professional' ? [{ id: 'services_availability', label: 'Services & Availability' }] : []),
     { id: 'pets_preferences', label: 'Pets & Preferences' },
     { id: 'settings_payments', label: 'Settings & Payments' }
@@ -188,14 +188,31 @@ const MyProfile = () => {
       case 'profile_info':
         return (
           <ProfileInfoTab
-            {...profileData}
+            profilePhoto={profileData.profilePhoto}
+            name={profileData.name}
+            email={profileData.email}
+            phone={profileData.phone}
+            age={profileData.age}
+            address={profileData.address}
+            city={profileData.city}
+            state={profileData.state}
+            zip={profileData.zip}
+            country={profileData.country}
+            bio={profileData.bio}
+            emergencyContact={profileData.emergencyContact}
+            authorizedHouseholdMembers={profileData.authorizedHouseholdMembers}
             editMode={editMode}
             toggleEditMode={toggleEditMode}
             onChangeText={handleUpdateField}
             pickImage={handlePickImage}
-            getContentWidth={() => '100%'}
             setHasUnsavedChanges={setHasUnsavedChanges}
             isMobile={isMobile}
+            rating={profileData.rating}
+            reviews={profileData.reviews}
+            role={userRole}
+            isProfessional={userRole === 'professional'}
+            insurance={profileData.insurance}
+            onNavigateToTab={setActiveTab}
           />
         );
       case 'services_availability':
