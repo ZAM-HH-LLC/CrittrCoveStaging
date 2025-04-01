@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#CCCBC9',
+    borderColor: '#CCCBC9', // #CCCBC9
   },
   filterScrollContent: {
     flexGrow: 0,
@@ -599,10 +599,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   allButton: {
-    backgroundColor: '#EFF9FF',
+    backgroundColor: '#EFF9FF', // #EFF9FF
   },
   allButtonText: {
-    color: '#0784C6',
+    color: '#0784C6', // #0784C6
   },
   pendingButton: {
     backgroundColor: theme.colors.mybookings.main,
@@ -611,13 +611,13 @@ const styles = StyleSheet.create({
     color: theme.colors.mybookings.secondary,
   },
   confirmedButton: {
-    backgroundColor: '#E8E9E2',
+    backgroundColor: '#E8E9E2', // #E8E9E2
   },
   confirmedButtonText: {
-    color: '#898974',
+    color: '#898974', // #898974
   },
   completedButton: {
-    backgroundColor: '#F5F5F4',
+    backgroundColor: '#F5F5F4', // #F5F5F4
   },
   completedButtonText: {
     color: theme.colors.mybookings.completedText,
