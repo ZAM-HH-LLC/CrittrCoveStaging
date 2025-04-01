@@ -93,7 +93,7 @@ const LocationInput = ({ value, onChange, suggestions, onSuggestionSelect }) => 
   );
 };
 
-const SearchRefiner = ({ onFiltersChange }) => {
+const SearchRefiner = ({ onFiltersChange, onShowProfessionals }) => {
   const [filters, setFilters] = useState({
     category: '',
     location: '',
@@ -132,22 +132,25 @@ const SearchRefiner = ({ onFiltersChange }) => {
     onFiltersChange(newFilters);
   };
 
+  const handleRateChange = (value) => {
+    handleFilterChange('maxRate', value);
+  };
+
   const renderPriceRange = () => (
     <View style={styles.section}>
       <Text style={styles.label}>Rate Range</Text>
       <View style={styles.priceRangeContainer}>
-        <Text>${filters.minRate}</Text>
+        <Text style={styles.priceText}>${filters.minRate}</Text>
         <Slider
           style={styles.slider}
           minimumValue={0}
           maximumValue={250}
-          step={5}
           value={filters.maxRate}
-          onValueChange={(value) => handleFilterChange('maxRate', value)}
+          onValueChange={handleRateChange}
           minimumTrackTintColor={theme.colors.primary}
           maximumTrackTintColor={theme.colors.border}
         />
-        <Text>${filters.maxRate}</Text>
+        <Text style={styles.priceText}>${filters.maxRate}</Text>
       </View>
     </View>
   );
@@ -187,7 +190,12 @@ const SearchRefiner = ({ onFiltersChange }) => {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Refine Search</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Refine Search</Text>
+        <TouchableOpacity style={styles.personButton} onPress={onShowProfessionals}>
+          <MaterialCommunityIcons name="account-group" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+      </View>
       
       {renderLocationInput()}
 
@@ -246,6 +254,13 @@ const SearchRefiner = ({ onFiltersChange }) => {
       <View style={[styles.section, { zIndex: 1 }]}>
         {renderPriceRange()}
       </View>
+
+      <TouchableOpacity 
+        style={styles.showProfessionalsButton}
+        onPress={onShowProfessionals}
+      >
+        <Text style={styles.showProfessionalsText}>Show Professionals</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 };
@@ -253,93 +268,54 @@ const SearchRefiner = ({ onFiltersChange }) => {
 const styles = StyleSheet.create({
   container: {
     padding: theme.spacing.medium,
-    backgroundColor: theme.colors.background,
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
     height: '100%',
+    width: '100%',
+    overflow: 'auto',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xlarge,
   },
   title: {
-    fontSize: theme.fontSizes.large,
-    fontWeight: 'bold',
+    fontSize: theme.fontSizes.xlarge,
+    fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: theme.spacing.large,
     fontFamily: theme.fonts.header.fontFamily,
   },
   section: {
-    marginBottom: theme.spacing.large,
+    marginBottom: theme.spacing.xlarge,
     position: 'relative',
   },
   label: {
-    fontSize: theme.fontSizes.medium + 2,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '500',
     color: theme.colors.text,
     marginBottom: theme.spacing.small,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   dropdown: {
-    height: 50,
+    height: 48,
     backgroundColor: theme.colors.background,
     borderRadius: 8,
-    padding: theme.spacing.small,
+    padding: theme.spacing.medium,
     borderWidth: 1,
     borderColor: theme.colors.border,
-  },
-  datePickerContainer: {
-    flexDirection: 'column',
-    gap: theme.spacing.small,
-  },
-  datePickerWrapper: {
-    maxWidth: 200,
-  },
-  dateLabel: {
-    fontSize: theme.fontSizes.small + 2,
-    color: theme.colors.text,
-    marginBottom: 4,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  dateInput: {
-    flex: 1,
-    height: 50,
-    backgroundColor: theme.colors.inputBackground,
-    borderRadius: 8,
-    padding: theme.spacing.small,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  rateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.small,
-  },
-  rateInput: {
-    flex: 1,
-    height: 50,
-    backgroundColor: theme.colors.inputBackground,
-    borderRadius: 8,
-    padding: theme.spacing.small,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  priceRangeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.small,
-  },
-  slider: {
-    flex: 1,
-    height: 40,
-    marginHorizontal: 10,
   },
   locationInputWrapper: {
     position: 'relative',
     marginBottom: theme.spacing.small,
   },
   locationInput: {
-    height: 40,
+    height: 48,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: 8,
-    paddingHorizontal: theme.spacing.small,
+    paddingHorizontal: theme.spacing.medium,
     backgroundColor: theme.colors.background,
+    fontSize: theme.fontSizes.medium,
   },
   suggestionsWrapper: {
     position: 'absolute',
@@ -352,85 +328,72 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     borderRadius: 8,
     zIndex: 1000,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   suggestionsContainer: {
     flex: 1,
   },
   suggestionItem: {
-    padding: theme.spacing.small,
+    padding: theme.spacing.medium,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
   datePickersContainer: {
     flexDirection: 'column',
-    gap: theme.spacing.small,
+    gap: theme.spacing.medium,
+  },
+  datePickerWrapper: {
+    width: '100%',
+  },
+  dateLabel: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    marginBottom: 8,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '500',
+  },
+  dateInput: {
+    height: 48,
+    backgroundColor: theme.colors.background,
+    borderRadius: 8,
+    padding: theme.spacing.medium,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    fontSize: theme.fontSizes.medium,
+  },
+  priceRangeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.medium,
+    marginTop: theme.spacing.small,
+  },
+  slider: {
+    flex: 1,
+    height: 48,
+    marginHorizontal: theme.spacing.medium,
+  },
+  priceText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    minWidth: 50,
   },
   selectedText: {
-    fontSize: theme.fontSizes.large + 2,
-    color: '#000000',
-    fontWeight: '1200',
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   placeholderText: {
-    fontSize: theme.fontSizes.medium + 2,
+    fontSize: theme.fontSizes.medium,
     color: theme.colors.placeholderText,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  selectedItem: {
-    borderRadius: 8,
-    backgroundColor: theme.colors.background,
-    borderWidth: 8,
-    borderColor: theme.colors.primary,
-  },
-  dropdownIcon: {
-    width: 20,
-    height: 20,
-  },
-  itemContainer: {
-    padding: theme.spacing.small,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  itemText: {
-    fontSize: theme.fontSizes.medium + 2,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  selectedChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: 8,
-    padding: theme.spacing.small,
-    marginRight: theme.spacing.small,
-    marginBottom: theme.spacing.small,
-  },
-  selectedChipText: {
-    fontSize: theme.fontSizes.medium + 2,
-    color: '#000000',
-    marginRight: theme.spacing.small,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  dropdownItem: {
-    padding: theme.spacing.small,
-  },
-  dropdownItemSelected: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: 4,
-    margin: 2,
-  },
-  dropdownItemText: {
-    fontSize: theme.fontSizes.medium + 2,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  dropdownItemTextSelected: {
-    color: theme.colors.text,
-    fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   dropdownContainer: {
@@ -438,6 +401,44 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    padding: theme.spacing.medium,
+  },
+  dropdownItemSelected: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    borderRadius: 8,
+    margin: 4,
+  },
+  dropdownItemText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  dropdownItemTextSelected: {
+    color: theme.colors.primary,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  personButton: {
+    padding: theme.spacing.small,
+    borderRadius: 8,
+  },
+  showProfessionalsButton: {
+    backgroundColor: theme.colors.primary,
+    padding: theme.spacing.medium,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: theme.spacing.large,
+  },
+  showProfessionalsText: {
+    color: theme.colors.whiteText,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 
