@@ -67,6 +67,14 @@ const MyProfile = () => {
     connections: { used: 0, total: 'Unlimited' }
   });
 
+  // Get initialTab from navigation params
+  useEffect(() => {
+    const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+    if (params?.initialTab) {
+      setActiveTab(params.initialTab);
+    }
+  }, [navigation]);
+
   useEffect(() => {
     const updateLayout = () => {
       setIsMobile(screenWidth <= 900);

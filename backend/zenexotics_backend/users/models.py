@@ -62,6 +62,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     identity_verified = models.BooleanField(default=False)
     email_is_verified = models.BooleanField(default=False)
     
+    # Subscription and Beta related
+    subscription_plan = models.IntegerField(
+        default=0,
+        help_text="0: Free tier, 1: Waitlist tier, 2: Commission tier, 3: Pro subscription, 4: Client subscription, 5: Dual subscription"
+    )
+    is_waitlister = models.BooleanField(default=False)
+    signed_up_on_beta = models.BooleanField(default=False)
+    
     # Payment related
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
     
@@ -119,3 +127,17 @@ class UserSettings(models.Model):
 
     def __str__(self):
         return f"Settings for {self.user.name}"
+
+class Waitlister(models.Model):
+    email = models.EmailField(unique=True)
+    signup_date = models.DateTimeField(auto_now_add=True)
+    preferences = models.JSONField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        db_table = 'waitlisters'
+        verbose_name = 'Waitlister'
+        verbose_name_plural = 'Waitlisters'
+    
+    def __str__(self):
+        return f"Waitlister: {self.email}"

@@ -13,6 +13,8 @@ from pets.models import Pet
 from bookings.constants import BookingStates
 from services.models import Service
 from django.shortcuts import get_object_or_404
+from payment_methods.models import PaymentMethod
+from django.db.models import Q
 
 # Configure logging to print to console
 logger = logging.getLogger(__name__)
@@ -72,9 +74,29 @@ def get_professional_dashboard(request):
                 }
                 serialized_bookings.append(booking_data)
 
+        # Check for bank account
+        has_bank_account = PaymentMethod.objects.filter(
+            user=request.user,
+            bank_account_last4__isnull=False
+        ).exclude(
+            bank_account_last4=''
+        ).exists()
+
+        # Check for services
+        has_services = Service.objects.filter(professional=professional).exists()
+
+        # Calculate onboarding progress
+        onboarding_progress = {
+            'profile_complete': professional.calculate_profile_completion(),
+            'has_bank_account': has_bank_account,
+            'has_services': has_services,
+            'subscription_plan': request.user.subscription_plan
+        }
+
         # Prepare response data
         response_data = {
-            'upcoming_bookings': serialized_bookings
+            'upcoming_bookings': serialized_bookings,
+            'onboarding_progress': onboarding_progress
         }
 
         return Response(response_data)

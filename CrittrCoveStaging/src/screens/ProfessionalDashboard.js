@@ -22,11 +22,11 @@ const ProfessionalDashboard = ({ navigation }) => {
   const [services, setServices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('upcoming');
-  const [stats, setStats] = useState({
-    activeBookings: { value: 28, change: 12 },
-    happyPets: { value: 156, change: 8 },
-    monthlyEarnings: { value: 2845, change: 15 },
-    clientSatisfaction: { value: 98, rating: 4.9 }
+  const [onboardingProgress, setOnboardingProgress] = useState({
+    profile_complete: 0,
+    has_bank_account: false,
+    has_services: false,
+    subscription_plan: 0
   });
 
   const isLargeScreen = screenWidth > 900;
@@ -69,13 +69,13 @@ const ProfessionalDashboard = ({ navigation }) => {
       marginTop: 12,
     },
     statValue: {
-      fontSize: isLargeScreen ? 28 : 24,
+      fontSize: isLargeScreen ? 20 : 16,
       fontWeight: '600',
       color: theme.colors.text,
       fontFamily: theme.fonts.header.fontFamily,
     },
     statLabel: {
-      fontSize: isLargeScreen ? 14 : 12,
+      fontSize: isLargeScreen ? 16 : 14,
       color: theme.colors.textSecondary,
       fontFamily: theme.fonts.regular.fontFamily,
       marginTop: 4,
@@ -134,6 +134,12 @@ const ProfessionalDashboard = ({ navigation }) => {
     if (is_prototype) {
       setBookings(prototypeBookings);
       setServices(prototypeServices);
+      setOnboardingProgress({
+        profile_complete: 0.5,
+        has_bank_account: false,
+        has_services: true,
+        subscription_plan: 0
+      });
       setIsLoading(false);
       return;
     }
@@ -144,16 +150,22 @@ const ProfessionalDashboard = ({ navigation }) => {
       
       // Fetch bookings based on user role
       const endpoint = isProfessional ? 'professionals' : 'clients';
-      const bookingsResponse = await axios.get(
+      const response = await axios.get(
         `${API_BASE_URL}/api/${endpoint}/v1/dashboard/`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (is_DEBUG) {
-        console.log('MBA5678 Dashboard response:', bookingsResponse.data);
+        console.log('MBA5678 Dashboard response:', response.data);
       }
 
-      setBookings(bookingsResponse.data.upcoming_bookings || []);
+      setBookings(response.data.upcoming_bookings || []);
+      setOnboardingProgress(response.data.onboarding_progress || {
+        profile_complete: 0,
+        has_bank_account: false,
+        has_services: false,
+        subscription_plan: 0
+      });
 
       // Fetch services if professional
       if (isProfessional) {
@@ -170,7 +182,17 @@ const ProfessionalDashboard = ({ navigation }) => {
         if (newToken) {
           try {
             // Retry fetching data with new token
-            // ... similar to above ...
+            const response = await axios.get(
+              `${API_BASE_URL}/api/${isProfessional ? 'professionals' : 'clients'}/v1/dashboard/`,
+              { headers: { Authorization: `Bearer ${newToken}` } }
+            );
+            setBookings(response.data.upcoming_bookings || []);
+            setOnboardingProgress(response.data.onboarding_progress || {
+              profile_complete: 0,
+              has_bank_account: false,
+              has_services: false,
+              subscription_plan: 0
+            });
           } catch (retryError) {
             console.error('Error fetching dashboard data after token refresh:', retryError);
           }
@@ -252,60 +274,144 @@ const ProfessionalDashboard = ({ navigation }) => {
     </View>
   );
 
-  const renderStats = () => (
+  const renderOnboardingProgress = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#F0F9E5' }]}>
-              <MaterialCommunityIcons name="calendar-check" size={24} color={theme.colors.primary} />
-            </View>
-            <Text style={[dynamicStyles.statChange, { color: theme.colors.success }]}>
-              +{stats.activeBookings.change}% ↑
-            </Text>
-          </View>
-          <Text style={dynamicStyles.statValue}>{stats.activeBookings.value}</Text>
-          <Text style={dynamicStyles.statLabel}>Active Bookings</Text>
-        </View>
+        {isProfessional ? (
+          // Professional onboarding cards
+          <>
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'MyProfile', 'ProfessionalDashboard', { initialTab: 'profile_info' })}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#F0F9E5' }]}>
+                  <MaterialCommunityIcons name="account-check" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.profile_complete === 1 ? theme.colors.success : theme.colors.warning }]}>
+                  {Math.round(onboardingProgress.profile_complete * 100)}% Complete
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Profile</Text>
+              <Text style={dynamicStyles.statLabel}>Complete your profile to get started</Text>
+            </TouchableOpacity>
 
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#E7F3F8' }]}>
-              <MaterialCommunityIcons name="paw" size={24} color={theme.colors.primary} />
-            </View>
-            <Text style={[dynamicStyles.statChange, { color: theme.colors.success }]}>
-              +{stats.happyPets.change}% ↑
-            </Text>
-          </View>
-          <Text style={dynamicStyles.statValue}>{stats.happyPets.value}</Text>
-          <Text style={dynamicStyles.statLabel}>Happy Pets</Text>
-        </View>
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'MyProfile', 'ProfessionalDashboard', { initialTab: 'settings_payments' })}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#E7F3F8' }]}>
+                  <MaterialCommunityIcons name="bank" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_bank_account ? theme.colors.success : theme.colors.warning }]}>
+                  {onboardingProgress.has_bank_account ? 'Connected' : 'Not Connected'}
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Bank Account</Text>
+              <Text style={dynamicStyles.statLabel}>Connect your bank to receive payments</Text>
+            </TouchableOpacity>
 
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
-              <MaterialCommunityIcons name="currency-usd" size={24} color={theme.colors.primary} />
-            </View>
-            <Text style={[dynamicStyles.statChange, { color: theme.colors.success }]}>
-              +{stats.monthlyEarnings.change}% ↑
-            </Text>
-          </View>
-          <Text style={dynamicStyles.statValue}>${stats.monthlyEarnings.value}</Text>
-          <Text style={dynamicStyles.statLabel}>Monthly Earnings</Text>
-        </View>
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'ServiceManager', 'ProfessionalDashboard')}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
+                  <MaterialCommunityIcons name="briefcase" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_services ? theme.colors.success : theme.colors.warning }]}>
+                  {onboardingProgress.has_services ? 'Active' : 'No Services'}
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Services</Text>
+              <Text style={dynamicStyles.statLabel}>Add services to start accepting bookings</Text>
+            </TouchableOpacity>
 
-        <View style={styles.statCard}>
-          <View style={styles.statHeader}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#E1E2DB' }]}>
-              <MaterialCommunityIcons name="star" size={24} color={theme.colors.primary} />
-            </View>
-            <Text style={[dynamicStyles.statChange, { color: theme.colors.warning }]}>
-              {stats.clientSatisfaction.rating}/5 ⭐
-            </Text>
-          </View>
-          <Text style={dynamicStyles.statValue}>{stats.clientSatisfaction.value}%</Text>
-          <Text style={dynamicStyles.statLabel}>Client Satisfaction</Text>
-        </View>
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'MyProfile', 'ProfessionalDashboard', { initialTab: 'settings_payments' })}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#E1E2DB' }]}>
+                  <MaterialCommunityIcons name="star" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.subscription_plan > 0 ? theme.colors.success : theme.colors.warning }]}>
+                  {onboardingProgress.subscription_plan === 0 ? 'Free Tier' : 'Premium'}
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Subscription</Text>
+              <Text style={dynamicStyles.statLabel}>Upgrade for more features</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          // Client onboarding cards
+          <>
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'MyProfile', 'ProfessionalDashboard', { initialTab: 'profile_info' })}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#F0F9E5' }]}>
+                  <MaterialCommunityIcons name="account-check" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.profile_complete === 1 ? theme.colors.success : theme.colors.warning }]}>
+                  {Math.round(onboardingProgress.profile_complete * 100)}% Complete
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Profile</Text>
+              <Text style={dynamicStyles.statLabel}>Complete your profile to get started</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'MyProfile', 'ProfessionalDashboard', { initialTab: 'settings_payments' })}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#E7F3F8' }]}>
+                  <MaterialCommunityIcons name="credit-card" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_payment_method ? theme.colors.success : theme.colors.warning }]}>
+                  {onboardingProgress.has_payment_method ? 'Connected' : 'Not Connected'}
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Payment Method</Text>
+              <Text style={dynamicStyles.statLabel}>Add a payment method to book services</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'MyProfile', 'ProfessionalDashboard', { initialTab: 'pets_preferences' })}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
+                  <MaterialCommunityIcons name="paw" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_pets ? theme.colors.success : theme.colors.warning }]}>
+                  {onboardingProgress.has_pets ? 'Added' : 'No Pets'}
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Pets</Text>
+              <Text style={dynamicStyles.statLabel}>Add your pets to book services</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigateToFrom(navigation, 'MyProfile', 'ProfessionalDashboard', { initialTab: 'settings_payments' })}
+            >
+              <View style={styles.statHeader}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#E1E2DB' }]}>
+                  <MaterialCommunityIcons name="star" size={24} color={theme.colors.primary} />
+                </View>
+                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.subscription_plan > 0 ? theme.colors.success : theme.colors.warning }]}>
+                  {onboardingProgress.subscription_plan === 0 ? 'Free Tier' : 'Premium'}
+                </Text>
+              </View>
+              <Text style={dynamicStyles.statValue}>Subscription</Text>
+              <Text style={dynamicStyles.statLabel}>Upgrade for more features</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -313,7 +419,7 @@ const ProfessionalDashboard = ({ navigation }) => {
   const renderBookingFilters = () => (
     <View style={styles.filterContainer}>
       <View style={styles.filterButtons}>
-        {['upcoming', 'active', 'past'].map((filter) => (
+        {['upcoming', 'active'].map((filter) => (
           <TouchableOpacity
             key={filter}
             style={[
@@ -469,7 +575,7 @@ const ProfessionalDashboard = ({ navigation }) => {
       >
         {renderHeader()}
         {renderWelcomeSection()}
-        {isProfessional && renderStats()}
+        {renderOnboardingProgress()}
         {renderBookingFilters()}
         {renderBookings()}
         {renderServices()}
@@ -581,6 +687,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    ...Platform.select({
+      ios: {
+        activeOpacity: 0.7,
+      },
+      android: {
+        android_ripple: {
+          color: 'rgba(0, 0, 0, 0.1)',
+        },
+      },
+    }),
   },
   statHeader: {
     flexDirection: 'row',

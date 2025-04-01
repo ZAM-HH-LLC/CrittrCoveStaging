@@ -20,6 +20,7 @@ from ..serializers import ClientProfileEditSerializer
 from pets.models import Pet
 from booking_pets.models import BookingPets
 from ..serializers import PetSerializer
+from payment_methods.models import PaymentMethod
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +93,18 @@ def get_client_dashboard(request):
                 }
                 serialized_bookings.append(booking_data)
 
+        # Calculate onboarding progress
+        onboarding_progress = {
+            'profile_complete': client.calculate_profile_completion(),
+            'has_pets': Pet.objects.filter(owner=client.user).exists(),
+            'has_payment_method': PaymentMethod.objects.filter(user=client.user, is_primary=True).exists(),
+            'subscription_plan': getattr(client.user, 'current_subscription_plan', 0)  # Default to 0 if not set
+        }
+
         # Prepare response data
         response_data = {
-            'upcoming_bookings': serialized_bookings
+            'upcoming_bookings': serialized_bookings,
+            'onboarding_progress': onboarding_progress
         }
 
         return Response(response_data)

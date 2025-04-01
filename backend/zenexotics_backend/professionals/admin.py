@@ -3,11 +3,29 @@ from .models import Professional
 
 @admin.register(Professional)
 class ProfessionalAdmin(admin.ModelAdmin):
-    list_display = ('professional_id', 'get_name', 'get_email', 'average_rating', 'total_num_of_reviews', 'subscribed', 'created_at')
-    list_filter = ('subscribed', 'is_insured', 'average_rating')
-    search_fields = ('user__email', 'user__name', 'bio', 'experience')
-    readonly_fields = ('professional_id', 'created_at')
-    
+    list_display = [
+        'professional_id',
+        'user',
+        'is_insured',
+        'created_at',
+        'updated_at'
+    ]
+    list_filter = [
+        'is_insured',
+        'created_at',
+        'updated_at'
+    ]
+    search_fields = [
+        'user__name',
+        'user__email',
+        'bio'
+    ]
+    readonly_fields = [
+        'professional_id',
+        'created_at',
+        'updated_at'
+    ]
+
     def get_name(self, obj):
         return obj.user.name
     get_name.short_description = 'Name'
@@ -21,16 +39,10 @@ class ProfessionalAdmin(admin.ModelAdmin):
             'fields': ('professional_id', 'user')
         }),
         ('Profile Information', {
-            'fields': ('bio', 'experience')
-        }),
-        ('Ratings & Reviews', {
-            'fields': ('average_rating', 'total_num_of_reviews')
-        }),
-        ('Status', {
-            'fields': ('is_insured', 'subscribed')
+            'fields': ('bio', 'is_insured')
         }),
         ('Timestamps', {
-            'fields': ('created_at',),
+            'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     ) 

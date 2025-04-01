@@ -9,16 +9,25 @@ class Professional(models.Model):
         related_name='professional_profile'
     )
     bio = models.TextField(blank=True)
-    average_rating = models.FloatField(default=0.0)
-    total_num_of_reviews = models.PositiveIntegerField(default=0)
-    experience = models.TextField(blank=True)
     is_insured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    subscribed = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def calculate_profile_completion(self):
+        required_fields = {
+            'bio': self.bio,
+            'is_insured': self.is_insured
+        }
+        
+        completed_fields = sum(1 for value in required_fields.values() if value)
+        total_fields = len(required_fields)
+        
+        return completed_fields / total_fields if total_fields > 0 else 0.0
 
     class Meta:
         db_table = 'professionals'
-        ordering = ['-created_at']
+        verbose_name = 'Professional'
+        verbose_name_plural = 'Professionals'
 
     def __str__(self):
         return f"Professional: {self.user.name}" 

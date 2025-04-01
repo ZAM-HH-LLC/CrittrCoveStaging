@@ -35,5 +35,19 @@ class Client(models.Model):
     def __str__(self):
         return f"Client: {self.user.name}"
 
+    def calculate_profile_completion(self):
+        """Calculate the profile completion percentage based on required fields."""
+        required_fields = {
+            'about_me': bool(self.about_me and self.about_me.strip()),
+            'emergency_contact': bool(self.emergency_contact and 
+                                   self.emergency_contact.get('name') and 
+                                   self.emergency_contact.get('phone')),
+            'authorized_household_members': bool(self.authorized_household_members and 
+                                              len(self.authorized_household_members) > 0)
+        }
+        
+        completed_fields = sum(1 for completed in required_fields.values() if completed)
+        return completed_fields / len(required_fields)
+
     class Meta:
         ordering = ['-created_at']
