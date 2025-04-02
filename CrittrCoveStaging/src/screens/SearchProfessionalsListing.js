@@ -253,14 +253,14 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
                 onShowProfessionals={handleShowProfessionals}
               />
             ) : (
-              <ProfessionalList
-                professionals={professionals}
-                onLoadMore={handleLoadMore}
-                onProfessionalSelect={handleProfessionalSelect}
+            <ProfessionalList
+              professionals={professionals}
+              onLoadMore={handleLoadMore}
+              onProfessionalSelect={handleProfessionalSelect}
                 isMobile={isMobile}
                 filters={activeFilters}
                 onFilterPress={() => setShowingSearch(true)}
-              />
+            />
             )}
           </View>
           <View style={[styles.mapColumn, { width: mapColumnWidth }]}>

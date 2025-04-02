@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, ScrollView } from 'react-native';
+import React, { useState, useRef, useCallback, useContext } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, ScrollView, Switch } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Dropdown from 'react-native-element-dropdown/src/components/Dropdown';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -11,7 +11,9 @@ import { debounce } from 'lodash';
 import MultiSelect from 'react-native-element-dropdown/src/components/MultiSelect';
 import CustomMultiSelect from '../components/CustomMultiSelect';
 import { SERVICE_TYPES, GENERAL_CATEGORIES } from '../data/mockData';
-import { SCREEN_WIDTH } from '../context/AuthContext';
+import { AuthContext } from '../context/AuthContext';
+import Tooltip from './Tooltip';
+import ServiceTypeSelect from './ServiceTypeSelect';
 
 const generalCategoriesData = GENERAL_CATEGORIES.map(category => ({
   label: category,
@@ -93,100 +95,42 @@ const LocationInput = ({ value, onChange, suggestions, onSuggestionSelect }) => 
   );
 };
 
-const SearchRefiner = ({ onFiltersChange, onShowProfessionals }) => {
-  const [filters, setFilters] = useState({
-    category: '',
-    location: '',
-    animalType: '',
-    service: '',
-    startDate: new Date(),
-    endDate: new Date(),
-    selectedPets: [],
-    minRate: 0,
-    maxRate: 250
-  });
+const AnimalTypeButton = ({ icon, label, selected, onPress }) => (
+  <TouchableOpacity 
+    style={[styles.animalTypeButton, selected && styles.animalTypeButtonSelected]} 
+    onPress={onPress}
+  >
+    <MaterialCommunityIcons 
+      name={icon} 
+      size={24} 
+      color={selected ? theme.colors.whiteText : theme.colors.text} 
+    />
+    <Text style={[styles.animalTypeLabel, selected && styles.animalTypeLabelSelected]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
   const [location, setLocation] = useState('');
   const [locationSuggestions, setLocationSuggestions] = useState([]);
-  const [selectedServices, setSelectedServices] = useState([]);
-  const [selectedGeneralCategories, setSelectedGeneralCategories] = useState([]);
-  const [selectedAnimalTypes, setSelectedAnimalTypes] = useState([]);
-  const [isServiceDropdownOpen, setIsServiceDropdownOpen] = useState(false);
-  const [isAnimalDropdownOpen, setIsAnimalDropdownOpen] = useState(false);
-  const [isGeneralDropdownOpen, setIsGeneralDropdownOpen] = useState(false);
+  const [service, setService] = useState('');
+  const [selectedAnimals, setSelectedAnimals] = useState([]);
+  const [overnightService, setOvernightService] = useState(false);
+  const [priceRange, setPriceRange] = useState(200);
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [insuredOnly, setInsuredOnly] = useState(false);
+  const { screenWidth } = useContext(AuthContext);
 
-  const categories = SERVICE_TYPES.map(service => ({
-    label: service,
-    value: service.toLowerCase().replace(/\s+/g, '-').replace(/[()]/g, '')
-  }));
-
-  const animalTypes = [
-    { label: 'Dogs', value: 'dog' },
-    { label: 'Cats', value: 'cat' },
-    { label: 'Birds', value: 'bird' },
-    { label: 'Small Animals', value: 'small-animal' }
-  ];
-
-  const handleFilterChange = (key, value) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-    onFiltersChange(newFilters);
+  const handleAnimalSelect = (animal) => {
+    if (selectedAnimals.includes(animal)) {
+      setSelectedAnimals(selectedAnimals.filter(a => a !== animal));
+    } else {
+      setSelectedAnimals([...selectedAnimals, animal]);
+    }
   };
-
-  const handleRateChange = (value) => {
-    handleFilterChange('maxRate', value);
-  };
-
-  const renderPriceRange = () => (
-    <View style={styles.section}>
-      <Text style={styles.label}>Rate Range</Text>
-      <View style={styles.priceRangeContainer}>
-        <Text style={styles.priceText}>${filters.minRate}</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={0}
-          maximumValue={250}
-          value={filters.maxRate}
-          onValueChange={handleRateChange}
-          minimumTrackTintColor={theme.colors.primary}
-          maximumTrackTintColor={theme.colors.border}
-        />
-        <Text style={styles.priceText}>${filters.maxRate}</Text>
-      </View>
-    </View>
-  );
-
-  const renderLocationInput = () => (
-    <View style={[styles.section, { zIndex: 4000 }]}>
-      <Text style={styles.label}>Location</Text>
-      <LocationInput
-        value={location}
-        onChange={setLocation}
-        suggestions={locationSuggestions}
-        onSuggestionSelect={setLocationSuggestions}
-      />
-    </View>
-  );
-
-  const renderDatePickers = () => (
-    <View style={styles.section}>
-      <View style={styles.datePickersContainer}>
-        <View style={styles.datePickerWrapper}>
-          <Text style={styles.dateLabel}>Start Date</Text>
-          <DatePicker
-            value={filters.startDate}
-            onChange={(date) => handleFilterChange('startDate', date)}
-          />
-        </View>
-        <View style={styles.datePickerWrapper}>
-          <Text style={styles.dateLabel}>End Date</Text>
-          <DatePicker
-            value={filters.endDate}
-            onChange={(date) => handleFilterChange('endDate', date)}
-          />
-        </View>
-      </View>
-    </View>
-  );
 
   return (
     <ScrollView style={styles.container}>
@@ -195,71 +139,152 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals }) => {
         <TouchableOpacity style={styles.personButton} onPress={onShowProfessionals}>
           <MaterialCommunityIcons name="account-group" size={24} color={theme.colors.text} />
         </TouchableOpacity>
+        {isMobile && (
+          <View style={styles.headerButtons}>
+            <TouchableOpacity style={styles.iconButton}>
+              <MaterialCommunityIcons name="map" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
+
+      <Text style={styles.label}>I'm looking for services for my:</Text>
+      <View style={styles.animalTypesContainer}>
+        <AnimalTypeButton
+          icon="dog"
+          label="Dogs"
+          selected={selectedAnimals.includes('dogs')}
+          onPress={() => handleAnimalSelect('dogs')}
+        />
+        <AnimalTypeButton
+          icon="cat"
+          label="Cats"
+          selected={selectedAnimals.includes('cats')}
+          onPress={() => handleAnimalSelect('cats')}
+        />
+        <AnimalTypeButton
+          icon="fish"
+          label="Fish"
+          selected={selectedAnimals.includes('fish')}
+          onPress={() => handleAnimalSelect('fish')}
+        />
+        <AnimalTypeButton
+          icon="bird"
+          label="Birds"
+          selected={selectedAnimals.includes('birds')}
+          onPress={() => handleAnimalSelect('birds')}
+        />
+      </View>
+
+      {/* Service Input */}
+      <Text style={styles.label}>What service do you need? (e.g., Dog Walking, Pet Sitting)</Text>
+      <ServiceTypeSelect
+        value={service}
+        onChange={setService}
+      />
       
-      {renderLocationInput()}
+      {/* Location Input */}
+      <Text style={styles.label}>Location</Text>
+      <View style={styles.locationContainer}>
+      <LocationInput
+        value={location}
+        onChange={setLocation}
+        suggestions={locationSuggestions}
+        onSuggestionSelect={setLocationSuggestions}
+      />
+        <TouchableOpacity style={[styles.useLocationButton, { marginBottom: 16 }]}>
+          <MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.text} />
+          <Text style={styles.useLocationText}>Use My Location</Text>
+        </TouchableOpacity>
+      </View>
 
-      <View style={[styles.section, { zIndex: 3001 }]}>
-        <CustomMultiSelect
-          label="General Categories"
-          data={generalCategoriesData}
-          value={selectedGeneralCategories}
-          onChange={(newValue) => {
-            setSelectedGeneralCategories(newValue);
-            handleFilterChange('general', newValue);
-          }}
-          placeholder="Select general categories"
-          isOpen={isGeneralDropdownOpen}
-          setIsOpen={setIsGeneralDropdownOpen}
-          zIndex={3000}
+      {/* Overnight Service */}
+      <View style={styles.switchContainer}>
+        <Text style={styles.label}>Overnight Service</Text>
+        <Switch
+          value={overnightService}
+          onValueChange={setOvernightService}
+          trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
         />
       </View>
 
-      <View style={[styles.section, { zIndex: 3000 }]}>
-        <CustomMultiSelect
-          label="Animal Types"
-          data={animalTypes}
-          value={selectedAnimalTypes}
-          onChange={(newValue) => {
-            setSelectedAnimalTypes(newValue);
-            handleFilterChange('animalTypes', newValue);
-          }}
-          placeholder="Select animal types"
-          isOpen={isAnimalDropdownOpen}
-          setIsOpen={setIsAnimalDropdownOpen}
-          zIndex={2000}
+      {/* Price Range */}
+      <Text style={styles.label}>Price Range</Text>
+      <View style={styles.priceContainer}>
+        <Text style={styles.priceLabel}>$0</Text>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={250}
+          value={priceRange}
+          onValueChange={setPriceRange}
+          minimumTrackTintColor={theme.colors.primary}
+          maximumTrackTintColor={theme.colors.border}
+          thumbTintColor={theme.colors.primary}
+        />
+        <Text style={styles.priceLabel}>${priceRange}</Text>
+      </View>
+
+      {/* Date Selection */}
+      <Text style={styles.label}>Date Range</Text>
+      <View style={styles.datePickersContainer}>
+        <DatePicker
+          label="Start Date"
+          value={startDate}
+          onChange={setStartDate}
+        />
+        <DatePicker
+          label="End Date"
+          value={endDate}
+          onChange={setEndDate}
         />
       </View>
 
-      <View style={[styles.section, { zIndex: 2000 }]}>
-        <CustomMultiSelect
-          label="Service Categories"
-          data={categories}
-          value={selectedServices}
-          onChange={(newValue) => {
-            setSelectedServices(newValue);
-            handleFilterChange('services', newValue);
-          }}
-          placeholder="Select services"
-          isOpen={isServiceDropdownOpen}
-          setIsOpen={setIsServiceDropdownOpen}
-          zIndex={3000}
-        />
+      {/* Verification Options */}
+      <View style={styles.checkboxContainer}>
+        <View style={styles.checkboxRow}>
+          <TouchableOpacity 
+            style={styles.checkbox} 
+            onPress={() => setVerifiedOnly(!verifiedOnly)}
+          >
+            {verifiedOnly && <MaterialCommunityIcons name="check" size={20} color={theme.colors.primary} />}
+          </TouchableOpacity>
+          <View style={styles.checkboxLabelContainer}>
+            <Text style={styles.checkboxLabel}>Verified Professionals Only</Text>
+            <Tooltip 
+              content="Verified professionals have completed our background check and identity verification process."
+              position="right"
+            >
+              <MaterialCommunityIcons name="help-circle-outline" size={20} color={theme.colors.text} />
+            </Tooltip>
+          </View>
       </View>
 
-      <View style={[styles.section, { zIndex: 1 }]}>
-        {renderDatePickers()}
+        <View style={styles.checkboxRow}>
+          <TouchableOpacity 
+            style={styles.checkbox} 
+            onPress={() => setInsuredOnly(!insuredOnly)}
+          >
+            {insuredOnly && <MaterialCommunityIcons name="check" size={20} color={theme.colors.primary} />}
+          </TouchableOpacity>
+          <View style={styles.checkboxLabelContainer}>
+            <Text style={styles.checkboxLabel}>Insured Service Providers</Text>
+            <Tooltip 
+              content="Insured providers maintain current liability insurance coverage for their services."
+              position="right"
+            >
+              <MaterialCommunityIcons name="help-circle-outline" size={20} color={theme.colors.text} />
+            </Tooltip>
+          </View>
+        </View>
       </View>
 
-      <View style={[styles.section, { zIndex: 1 }]}>
-        {renderPriceRange()}
-      </View>
-
+      {/* Search Button - Always show */}
       <TouchableOpacity 
-        style={styles.showProfessionalsButton}
+        style={styles.searchButton}
         onPress={onShowProfessionals}
       >
-        <Text style={styles.showProfessionalsText}>Show Professionals</Text>
+        <Text style={styles.searchButtonText}>Search</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -271,13 +296,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     height: '100%',
     width: '100%',
-    overflow: 'auto',
+    overflow: 'visible',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: theme.spacing.xlarge,
+    gap: theme.spacing.small,
   },
   title: {
     fontSize: theme.fontSizes.xlarge,
@@ -293,7 +319,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.medium,
     fontWeight: '500',
     color: theme.colors.text,
-    marginBottom: theme.spacing.small,
+    marginVertical: theme.spacing.small,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   dropdown: {
@@ -307,6 +333,7 @@ const styles = StyleSheet.create({
   locationInputWrapper: {
     position: 'relative',
     marginBottom: theme.spacing.small,
+    zIndex: 900,
   },
   locationInput: {
     height: 48,
@@ -327,7 +354,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: 8,
-    zIndex: 1000,
+    zIndex: 900,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -348,6 +375,7 @@ const styles = StyleSheet.create({
   datePickersContainer: {
     flexDirection: 'column',
     gap: theme.spacing.medium,
+    zIndex: 500,
   },
   datePickerWrapper: {
     width: '100%',
@@ -426,6 +454,7 @@ const styles = StyleSheet.create({
   personButton: {
     padding: theme.spacing.small,
     borderRadius: 8,
+    marginLeft: 'auto',
   },
   showProfessionalsButton: {
     backgroundColor: theme.colors.primary,
@@ -439,6 +468,136 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.medium,
     fontWeight: '600',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  locationContainer: {
+    flexDirection: 'column',
+    width: '100%',
+    gap: theme.spacing.small,
+    zIndex: 900,
+    position: 'relative',
+  },
+  useLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.small,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  useLocationText: {
+    color: theme.colors.text,
+    fontSize: theme.fontSizes.small,
+  },
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    paddingHorizontal: theme.spacing.medium,
+    backgroundColor: theme.colors.surface,
+  },
+  animalTypesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.small,
+    marginTop: theme.spacing.small,
+    marginBottom: theme.spacing.medium,
+    zIndex: 800,
+  },
+  animalTypeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.small,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    gap: 4,
+  },
+  animalTypeButtonSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  animalTypeLabel: {
+    color: theme.colors.text,
+    fontSize: theme.fontSizes.small,
+  },
+  animalTypeLabelSelected: {
+    color: theme.colors.whiteText,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: Platform.OS === 'web' ? 'space-between' : 'flex-start',
+    marginVertical: theme.spacing.small,
+    gap: theme.spacing.medium,
+    zIndex: 700,
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.small,
+    zIndex: 600,
+  },
+  priceLabel: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    minWidth: 50,
+  },
+  checkboxContainer: {
+    marginTop: theme.spacing.medium,
+    gap: theme.spacing.small,
+    zIndex: 400,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.small,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.small,
+  },
+  iconButton: {
+    padding: theme.spacing.small,
+    borderRadius: 8,
+  },
+  checkboxLabelContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: theme.spacing.small,
+  },
+  searchButton: {
+    backgroundColor: theme.colors.primary,
+    padding: theme.spacing.medium,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: theme.spacing.large,
+  },
+  searchButtonText: {
+    color: theme.colors.whiteText,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '600',
   },
 });
 

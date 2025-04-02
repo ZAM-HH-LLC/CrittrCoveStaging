@@ -17,14 +17,14 @@ const ProfessionalCard = ({ professional, index }) => {
     <TouchableOpacity style={styles.listItem} onPress={handlePress}>
       <View style={styles.cardContent}>
         <View style={styles.leftSection}>
-          <Image 
+      <Image 
             source={professional.profilePicture} 
-            style={styles.profileImage}
-          />
+        style={styles.profileImage}
+      />
         </View>
         
         <View style={styles.mainContent}>
-          <View style={styles.header}>
+        <View style={styles.header}>
             <View style={styles.nameSection}>
               <Text style={styles.name}>{index + 1}. {professional.name}</Text>
               <Text style={styles.location}>{professional.location}</Text>
@@ -43,7 +43,7 @@ const ProfessionalCard = ({ professional, index }) => {
             </View>
           </View>
         </View>
-      </View>
+          </View>
 
       <View style={styles.reviewSection}>
         <View style={styles.ratingContainer}>
@@ -59,7 +59,7 @@ const ProfessionalCard = ({ professional, index }) => {
             </>
           )}
         </View>
-
+        
         {professional.bestReview && (
           <View style={styles.bestReviewContainer}>
             <Image 
@@ -104,7 +104,7 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
       <FlatList
         data={professionals}
         renderItem={({ item, index }) => (
-          <ProfessionalCard
+          <ProfessionalCard 
             professional={item}
             index={index}
             onPress={() => onProfessionalSelect(item)}
