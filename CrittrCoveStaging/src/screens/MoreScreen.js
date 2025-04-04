@@ -23,7 +23,7 @@ const MoreScreen = ({ navigation }) => {
     const initializeRoutes = async () => {
       try {
         const initialRoute = isSignedIn 
-          ? (userRole === 'professional' ? 'ProfessionalDashboard' : 'Dashboard')
+          ? 'ProfessionalDashboard'
           : 'Home';
 
         if (Platform.OS === 'web') {
@@ -75,7 +75,7 @@ const MoreScreen = ({ navigation }) => {
       await switchRole();
       
       // Store new route before navigating
-      const newRoute = newRole === 'professional' ? 'ProfessionalDashboard' : 'Dashboard';
+      const newRoute = 'ProfessionalDashboard';
       if (Platform.OS === 'web') {
         sessionStorage.setItem('currentRoute', newRoute);
       } else {

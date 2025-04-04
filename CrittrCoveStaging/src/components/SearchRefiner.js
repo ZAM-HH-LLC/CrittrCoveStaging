@@ -141,7 +141,15 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
         </TouchableOpacity>
         {isMobile && (
           <View style={styles.headerButtons}>
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={() => {
+                if (onShowProfessionals) {
+                  // Pass a special parameter to indicate we want to switch to map view
+                  onShowProfessionals('map');
+                }
+              }}
+            >
               <MaterialCommunityIcons name="map" size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>

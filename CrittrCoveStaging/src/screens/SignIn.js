@@ -6,6 +6,7 @@ import { theme } from '../styles/theme';
 import CustomButton from '../components/CustomButton';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/config';
+import { navigateToFrom } from '../components/Navigation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -35,12 +36,7 @@ export default function SignIn() {
         const status = await signIn(mockAccess, mockRefresh);
         console.log('Sign in status (prototype):', status);
         
-        // Navigate based on status
-        if (status && status.userRole === 'professional') {
-          navigation.navigate('ProfessionalDashboard');
-        } else {
-          navigation.navigate('Dashboard');
-        }
+        navigateToFrom(navigation, 'ProfessionalDashboard', 'SignIn');
         return;
       }
 
@@ -55,12 +51,7 @@ export default function SignIn() {
       const status = await signIn(access, refresh);
       console.log('Sign in status:', status);
       
-      // Navigate based on status
-      if (status && status.userRole === 'professional') {
-        navigation.navigate('ProfessionalDashboard');
-      } else {
-        navigation.navigate('Dashboard');
-      }
+      navigateToFrom(navigation, 'ProfessionalDashboard', 'SignIn');
     } catch (error) {
       console.error('Login failed', error);
       const errorMessage = error.response && error.response.status === 401

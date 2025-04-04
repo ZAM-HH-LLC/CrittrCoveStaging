@@ -208,7 +208,7 @@ export default function Navigation({ navigation }) {
           const currentRoute = sessionStorage.getItem('currentRoute');
           if (!currentRoute) {
             const initialRoute = isSignedIn 
-              ? (userRole === 'professional' ? 'ProfessionalDashboard' : 'Dashboard')
+              ? 'ProfessionalDashboard'
               : 'Home';
             sessionStorage.setItem('currentRoute', initialRoute);
           }
@@ -217,7 +217,7 @@ export default function Navigation({ navigation }) {
           const currentRoute = await AsyncStorage.getItem('currentRoute');
           if (!currentRoute) {
             const initialRoute = isSignedIn 
-              ? (userRole === 'professional' ? 'ProfessionalDashboard' : 'Dashboard')
+              ? 'ProfessionalDashboard'
               : 'Home';
             await AsyncStorage.setItem('currentRoute', initialRoute);
           }

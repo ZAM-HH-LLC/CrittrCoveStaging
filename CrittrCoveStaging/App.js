@@ -23,8 +23,7 @@ import SignIn from './src/screens/SignIn';
 import SignUp from './src/screens/SignUp';
 import ResetPassword from './src/screens/ResetPassword';
 import ResetPasswordConfirm from './src/screens/ResetPasswordConfirm';
-import Dashboard from './src/screens/Dashboard';
-import SearchProfessionals from './src/screens/SearchProfessionals';
+// import Dashboard from './src/screens/Dashboard';
 import ProfessionalDashboard from './src/screens/ProfessionalDashboard';
 import BecomeProfessional from './src/screens/BecomeProfessional';
 import MoreScreen from './src/screens/MoreScreen';
@@ -65,12 +64,9 @@ const screens = [
   { name: 'SignUp', component: SignUp },
   { name: 'ResetPassword', component: ResetPassword },
   { name: 'ResetPasswordConfirm', component: ResetPasswordConfirm },
-  { name: 'Dashboard', component: Dashboard },
-  { name: 'SearchProfessionals', component: SearchProfessionals },
   { name: 'SearchProfessionalsListing', component: SearchProfessionalsListing },
   { name: 'ClientHistory', component: ClientHistory },
   { name: 'MessageHistory', component: MessageHistory },
-  // { name: 'Messages', component: Messages },
   { name: 'ProfessionalDashboard', component: ProfessionalDashboard },
   { name: 'BecomeProfessional', component: BecomeProfessional },
   { name: 'More', component: MoreScreen },
@@ -113,8 +109,6 @@ const linking = {
       SignUp: 'signup',
       ResetPassword: 'reset-password',
       ResetPasswordConfirm: 'reset-password/:uid/:token',
-      Dashboard: 'dashboard',
-      SearchProfessionals: 'search-professionals',
       SearchProfessionalsListing: 'search-professionals-listing',
       ClientHistory: 'client-history',
       MessageHistory: {
@@ -257,9 +251,7 @@ function AppContent() {
           if (is_DEBUG) {
             console.log('Auth status on init:', authStatus);
           }
-          route = authStatus.userRole === 'professional' && authStatus.isApprovedProfessional
-            ? 'ProfessionalDashboard'
-            : 'Dashboard';
+          route = 'ProfessionalDashboard'
         } else {
           route = 'Home';
         }

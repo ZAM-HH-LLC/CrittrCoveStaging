@@ -67,10 +67,14 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     setIsMapMinimized(!isMapMinimized);
   };
 
-  const handleShowProfessionals = () => {
+  const handleShowProfessionals = (view) => {
     setShowingSearch(false);
     if (isSingleView) {
-      setActiveView('list');
+      if (view === 'map') {
+        setActiveView('map');
+      } else {
+        setActiveView('list');
+      }
     }
   };
 
