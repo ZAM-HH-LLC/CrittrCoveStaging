@@ -24,7 +24,7 @@ import SignUp from './src/screens/SignUp';
 import ResetPassword from './src/screens/ResetPassword';
 import ResetPasswordConfirm from './src/screens/ResetPasswordConfirm';
 // import Dashboard from './src/screens/Dashboard';
-import ProfessionalDashboard from './src/screens/ProfessionalDashboard';
+import Dashboard from './src/screens/Dashboard';
 import BecomeProfessional from './src/screens/BecomeProfessional';
 import MoreScreen from './src/screens/MoreScreen';
 import AvailabilitySettings from './src/screens/AvailabilitySettings';
@@ -67,7 +67,7 @@ const screens = [
   { name: 'SearchProfessionalsListing', component: SearchProfessionalsListing },
   { name: 'ClientHistory', component: ClientHistory },
   { name: 'MessageHistory', component: MessageHistory },
-  { name: 'ProfessionalDashboard', component: ProfessionalDashboard },
+  { name: 'Dashboard', component: Dashboard },
   { name: 'BecomeProfessional', component: BecomeProfessional },
   { name: 'More', component: MoreScreen },
   { name: 'Clients', component: Clients },
@@ -118,7 +118,7 @@ const linking = {
           senderName: (senderName) => senderName || 'Unknown User'
         }
       },
-      ProfessionalDashboard: 'professional-dashboard',
+      Dashboard: 'Dashboard',
       BecomeProfessional: 'become-professional',
       More: 'more',
       Clients: 'clients',
@@ -251,7 +251,7 @@ function AppContent() {
           if (is_DEBUG) {
             console.log('Auth status on init:', authStatus);
           }
-          route = 'ProfessionalDashboard'
+          route = 'Dashboard'
         } else {
           route = 'Home';
         }

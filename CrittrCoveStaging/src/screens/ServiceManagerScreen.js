@@ -55,7 +55,7 @@ const ServiceManagerScreen = () => {
       }
 
       if (!previousRoute) {
-        previousRoute = 'ProfessionalDashboard';
+        previousRoute = 'Dashboard';
         if (Platform.OS === 'web') {
           sessionStorage.setItem('previousRoute', previousRoute || '');
           sessionStorage.setItem('currentRoute', currentRoute);

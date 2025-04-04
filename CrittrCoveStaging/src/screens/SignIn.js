@@ -36,7 +36,7 @@ export default function SignIn() {
         const status = await signIn(mockAccess, mockRefresh);
         console.log('Sign in status (prototype):', status);
         
-        navigateToFrom(navigation, 'ProfessionalDashboard', 'SignIn');
+        navigateToFrom(navigation, 'Dashboard', 'SignIn');
         return;
       }
 
@@ -51,7 +51,7 @@ export default function SignIn() {
       const status = await signIn(access, refresh);
       console.log('Sign in status:', status);
       
-      navigateToFrom(navigation, 'ProfessionalDashboard', 'SignIn');
+      navigateToFrom(navigation, 'Dashboard', 'SignIn');
     } catch (error) {
       console.error('Login failed', error);
       const errorMessage = error.response && error.response.status === 401

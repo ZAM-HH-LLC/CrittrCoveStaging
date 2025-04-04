@@ -208,7 +208,7 @@ export default function Navigation({ navigation }) {
           const currentRoute = sessionStorage.getItem('currentRoute');
           if (!currentRoute) {
             const initialRoute = isSignedIn 
-              ? 'ProfessionalDashboard'
+              ? 'Dashboard'
               : 'Home';
             sessionStorage.setItem('currentRoute', initialRoute);
           }
@@ -217,7 +217,7 @@ export default function Navigation({ navigation }) {
           const currentRoute = await AsyncStorage.getItem('currentRoute');
           if (!currentRoute) {
             const initialRoute = isSignedIn 
-              ? 'ProfessionalDashboard'
+              ? 'Dashboard'
               : 'Home';
             await AsyncStorage.setItem('currentRoute', initialRoute);
           }
@@ -248,7 +248,7 @@ export default function Navigation({ navigation }) {
       ];
     } else if (userRole === 'professional') {
       return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
         // { title: 'Availability', icon: 'clock-outline', route: 'AvailabilitySettings' },
@@ -257,7 +257,7 @@ export default function Navigation({ navigation }) {
       ];
     } else {
       return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'ProfessionalDashboard' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },

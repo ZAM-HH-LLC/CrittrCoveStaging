@@ -471,7 +471,7 @@ export const AuthProvider = ({ children }) => {
       // Navigate to professional dashboard after successful sign in
       if (navigation) {
         setTimeout(() => {
-          navigateToFrom(navigation, 'ProfessionalDashboard');
+          navigateToFrom(navigation, 'Dashboard');
         }, 0);
       }
 
