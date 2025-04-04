@@ -92,8 +92,8 @@ const SettingsPaymentsTab = ({
           id: 'dual_subscription',
           title: 'Dual Role Subscription',
           price: '$39.99/month',
-          description: 'No fees as pro or client',
-          features: ['Unlimited connections', 'Priority support', 'Advanced analytics', 'No commission fees', 'Use as both pro and client'],
+          description: 'No fees as pro or owner',
+          features: ['Unlimited connections', 'Priority support', 'Advanced analytics', 'No commission fees', 'Use as both pro and owner'],
           isPopular: false,
         }
       ];
@@ -130,8 +130,8 @@ const SettingsPaymentsTab = ({
           id: 'dual_subscription',
           title: 'Dual Role Subscription',
           price: '$39.99/month',
-          description: 'No fees as pro or client',
-          features: ['Unlimited connections', 'Priority support', 'Advanced analytics', 'No commission fees', 'Use as both pro and client'],
+          description: 'No fees as pro or owner',
+          features: ['Unlimited connections', 'Priority support', 'Advanced analytics', 'No commission fees', 'Use as both pro and owner'],
           isPopular: false,
         });
       }

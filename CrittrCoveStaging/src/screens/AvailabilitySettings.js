@@ -89,8 +89,8 @@ const AvailabilitySettings = () => {
             ...data.bookings[date].map(booking => ({
               startTime: booking.startTime,
               endTime: booking.endTime,
-              reason: ` Booked with ${booking.client_name}`,
-              clientId: booking.clientId // Assuming each booking has a clientId
+              reason: ` Booked with ${booking.owner_name}`,
+              ownerId: booking.ownerId // Assuming each booking has a ownerId
             }))
           ];
         });
@@ -372,11 +372,11 @@ const AvailabilitySettings = () => {
     setCurrentAvailability(newCurrentAvailability);
   };
 
-  //TODO: implement this in future for making clients on bookings clickable
-  // const handleClientPress = (clientId) => {
-  //   // Navigate to the client history page
+  //TODO: implement this in future for making owners on bookings clickable
+  // const handleOwnerPress = (ownerId) => {
+  //   // Navigate to the owner history page
   //   // You'll need to implement this navigation logic
-  //   console.log(`Navigating to client history for client ID: ${clientId}`);
+  //   console.log(`Navigating to owner history for owner ID: ${ownerId}`);
   // };
 
   const IconComponent = Platform.OS === 'web' ? MaterialCommunityIcons : Icon;

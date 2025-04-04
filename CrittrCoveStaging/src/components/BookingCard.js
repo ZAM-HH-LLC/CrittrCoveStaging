@@ -16,9 +16,9 @@ const getStatusInfo = (status) => {
         textColor: theme.colors.mybookings.secondary,
         icon: 'clock-outline'
       };
-    case 'Pending Client Approval':
+    case 'Pending Owner Approval':
       return {
-        text: 'Pending Client',
+        text: 'Pending Owner',
         bgColor: theme.colors.mybookings.main,
         textColor: theme.colors.mybookings.secondary,
         icon: 'clock-outline'
@@ -44,9 +44,9 @@ const getStatusInfo = (status) => {
         textColor: theme.colors.mybookings.confirmedText,
         icon: 'check-circle-outline'
       };
-    case 'Confirmed Pending Client Approval':
+    case 'Confirmed Pending Owner Approval':
       return {
-        text: 'Confirmed • Pending Client',
+        text: 'Confirmed • Pending Owner',
         bgColor: theme.colors.mybookings.confirmedBg,
         textColor: theme.colors.mybookings.confirmedText,
         icon: 'check-circle-outline'
@@ -63,7 +63,7 @@ const getStatusInfo = (status) => {
 
 const BookingCard = ({ booking, type, onViewDetails }) => {
   const { id, status, date, time, serviceName } = booking;
-  const name = type === 'professional' ? booking.clientName : booking.professionalName;
+  const name = type === 'professional' ? booking.ownerName : booking.professionalName;
   const statusInfo = getStatusInfo(status);
   const pets = booking.pets || [];
   const { screenWidth, timeSettings } = useContext(AuthContext);

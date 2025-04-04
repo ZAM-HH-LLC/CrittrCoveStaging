@@ -4,13 +4,13 @@ import { Card, Title, Paragraph, List, Button, useTheme } from 'react-native-pap
 import { theme } from '../styles/theme';
 import { navigateToFrom } from '../components/Navigation';
 
-const ClientHistory = ({ route, navigation }) => {
-  const { clientId } = route.params;
+const OwnerHistory = ({ route, navigation }) => {
+  const { ownerId } = route.params;
   const { colors } = useTheme();
 
   // Mock data - replace with actual data from your backend
-  const clientData = {
-    id: clientId,
+  const ownerData = {
+    id: ownerId,
     name: 'John Doe',
     email: 'john.doe@example.com',
     phone: '(123) 456-7890',
@@ -32,16 +32,16 @@ const ClientHistory = ({ route, navigation }) => {
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
       <Card style={styles.card}>
         <Card.Content>
-          <Title>{clientData.name}</Title>
-          <Paragraph>Email: {clientData.email}</Paragraph>
-          <Paragraph>Phone: {clientData.phone}</Paragraph>
+          <Title>{ownerData.name}</Title>
+          <Paragraph>Email: {ownerData.email}</Paragraph>
+          <Paragraph>Phone: {ownerData.phone}</Paragraph>
         </Card.Content>
       </Card>
 
       <Card style={styles.card}>
         <Card.Content>
           <Title>Upcoming Bookings</Title>
-          {clientData.upcomingBookings.map(booking => (
+          {ownerData.upcomingBookings.map(booking => (
             <List.Item
               key={booking.id}
               title={`Booking ${booking.id}`}
@@ -55,7 +55,7 @@ const ClientHistory = ({ route, navigation }) => {
       <Card style={styles.card}>
         <Card.Content>
           <Title>Contracts</Title>
-          {clientData.contracts.map(contract => (
+          {ownerData.contracts.map(contract => (
             <List.Item
               key={contract.id}
               title={`Contract ${contract.id}`}
@@ -65,14 +65,14 @@ const ClientHistory = ({ route, navigation }) => {
           ))}
         </Card.Content>
         <Card.Actions>
-          <Button onPress={() => navigateToFrom(navigation, 'Contracts', 'ClientHistory', { clientId })}>View All Contracts</Button>
+          <Button onPress={() => navigateToFrom(navigation, 'Contracts', 'OwnerHistory', { ownerId })}>View All Contracts</Button>
         </Card.Actions>
       </Card>
 
       <Card style={styles.card}>
         <Card.Content>
           <Title>Invoices</Title>
-          {clientData.invoices.map(invoice => (
+          {ownerData.invoices.map(invoice => (
             <List.Item
               key={invoice.id}
               title={`Invoice ${invoice.id}`}
@@ -82,14 +82,14 @@ const ClientHistory = ({ route, navigation }) => {
           ))}
         </Card.Content>
         <Card.Actions>
-          <Button onPress={() => navigateToFrom(navigation, 'Invoices', 'ClientHistory', { clientId })}>View All Invoices</Button>
+          <Button onPress={() => navigateToFrom(navigation, 'Invoices', 'OwnerHistory', { ownerId })}>View All Invoices</Button>
         </Card.Actions>
       </Card>
 
       <View style={styles.messageButtonContainer}>
         <Button 
           mode="contained" 
-          onPress={() => navigateToFrom(navigation, 'MessageHistory', 'ClientHistory', { clientId })}
+          onPress={() => navigateToFrom(navigation, 'MessageHistory', 'OwnerHistory', { ownerId })}
           style={styles.messageButton}
         >
           View Messages
@@ -151,4 +151,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ClientHistory;
+export default OwnerHistory;

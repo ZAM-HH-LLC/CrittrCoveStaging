@@ -102,10 +102,10 @@ const BookingMessageCard = ({
           <View style={styles.row}>
             <Text style={styles.label}>Total Cost:</Text>
             <Text style={styles.value}>
-              ${data.total_client_cost ? 
-                parseFloat(data.total_client_cost).toFixed(2) : 
-                typeof data.total_client_cost === 'number' ? 
-                  data.total_client_cost.toFixed(2) : 
+              ${data.total_owner_cost ? 
+                parseFloat(data.total_owner_cost).toFixed(2) : 
+                typeof data.total_owner_cost === 'number' ? 
+                  data.total_owner_cost.toFixed(2) : 
                 '0.00'}
             </Text>
           </View>

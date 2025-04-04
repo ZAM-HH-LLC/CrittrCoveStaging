@@ -17,7 +17,7 @@ const ChronicleSummary = ({ chronicles }) => {
       {chronicles.map((chronicle) => (
         <View key={chronicle.id} style={styles.card}>
           <Text style={styles.chronicleTitle}>{chronicle.title}</Text>
-          <Text style={styles.clientName}>Client: {chronicle.client}</Text>
+          <Text style={styles.ownerName}>Owner: {chronicle.owner}</Text>
           <Text style={styles.petName}>Pet: {chronicle.pets.join(', ')}</Text>
           <Text style={styles.summary}>{chronicle.summary}</Text>
           <View style={styles.buttonContainer}>
@@ -25,7 +25,7 @@ const ChronicleSummary = ({ chronicles }) => {
               <Text style={styles.buttonText}>Edit</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.button}>
-              <Text style={styles.buttonText}>Send to Client</Text>
+              <Text style={styles.buttonText}>Send to Owner</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: theme.colors.primary,
   },
-  clientName: {
+  ownerName: {
     fontSize: 14,
     color: theme.colors.text,
     marginTop: 4,

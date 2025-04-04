@@ -4,26 +4,26 @@ import { Chip, Card, Title, Paragraph, Button, Portal, Modal, useTheme } from 'r
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import SearchBar from '../components/SearchBar';
-import { mockClients } from '../data/mockData';
+import { mockOwners } from '../data/mockData';
 
-const Clients = ({ navigation }) => {
+const Owners = ({ navigation }) => {
   const { colors } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState([]);
   const [tempFilters, setTempFilters] = useState([]);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
-  const [clients, setClients] = useState([]);
+  const [owners, setOwners] = useState([]);
 
   useEffect(() => {
-    fetchClients();
+    fetchOwners();
   }, []);
 
-  const fetchClients = async () => {
+  const fetchOwners = async () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      setClients(mockClients);
+      setOwners(mockOwners);
     } catch (error) {
-      console.error('Error fetching clients:', error);
+      console.error('Error fetching owners:', error);
     }
   };
 
@@ -49,14 +49,14 @@ const Clients = ({ navigation }) => {
     setIsFilterModalVisible(false);
   }, [tempFilters]);
 
-  const filteredClients = useMemo(() => {
-    return clients.filter(client => {
-      const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredOwners = useMemo(() => {
+    return owners.filter(owner => {
+      const matchesSearch = owner.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesFilters = selectedFilters.length === 0 || selectedFilters.every(filter => {
         if (['Dog', 'Cat', 'Exotic'].includes(filter)) {
-          return client.pet_types.includes(filter);
+          return owner.pet_types.includes(filter);
         }
-        const lastBookingDate = new Date(client.last_booking);
+        const lastBookingDate = new Date(owner.last_booking);
         const currentDate = new Date();
         switch (filter) {
           case 'week':
@@ -77,11 +77,11 @@ const Clients = ({ navigation }) => {
       });
       return matchesSearch && matchesFilters;
     });
-  }, [clients, searchQuery, selectedFilters]);
+  }, [owners, searchQuery, selectedFilters]);
 
-  const renderClient = useCallback(({ item }) => (
-    <TouchableOpacity onPress={() => navigation.navigate('ClientHistory', { clientId: item.id })}>
-      <Card style={styles.clientCard}>
+  const renderOwner = useCallback(({ item }) => (
+    <TouchableOpacity onPress={() => navigation.navigate('OwnerHistory', { ownerId: item.id })}>
+      <Card style={styles.ownerCard}>
         <Card.Content>
           <Title>{item.name}</Title>
           <Paragraph>Last booking: {item.last_booking}</Paragraph>
@@ -104,7 +104,7 @@ const Clients = ({ navigation }) => {
       <View style={styles.searchAndFilterContainer}>
         <TouchableWithoutFeedback onPress={() => {}}>
           <SearchBar
-            placeholder="Search clients"
+            placeholder="Search owners"
             onChangeText={handleSearchChange}
             initialValue={searchQuery}
             style={styles.searchBar}
@@ -121,18 +121,18 @@ const Clients = ({ navigation }) => {
           Filters
         </Button>
       </View>
-      {filteredClients.length > 0 ? (
+      {filteredOwners.length > 0 ? (
         <FlatList
-          data={filteredClients}
-          renderItem={renderClient}
+          data={filteredOwners}
+          renderItem={renderOwner}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.clientList}
+          contentContainerStyle={styles.ownerList}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
         />
       ) : (
-        <View style={styles.noClientsContainer}>
-          <Paragraph>No clients match your search or filters.</Paragraph>
+        <View style={styles.noOwnersContainer}>
+          <Paragraph>No owners match your search or filters.</Paragraph>
         </View>
       )}
       <Portal>
@@ -167,7 +167,7 @@ const Clients = ({ navigation }) => {
       <View style={styles.searchAndFilterContainer}>
         <TouchableWithoutFeedback onPress={() => {}}>
           <SearchBar
-            placeholder="Search clients"
+            placeholder="Search owners"
             onChangeText={handleSearchChange}
             initialValue={searchQuery}
             style={styles.searchBar}
@@ -184,18 +184,18 @@ const Clients = ({ navigation }) => {
           Filters
         </Button>
       </View>
-      {filteredClients.length > 0 ? (
+      {filteredOwners.length > 0 ? (
         <FlatList
-          data={filteredClients}
-          renderItem={renderClient}
+          data={filteredOwners}
+          renderItem={renderOwner}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.clientList}
+          contentContainerStyle={styles.ownerList}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
         />
       ) : (
-        <View style={styles.noClientsContainer}>
-          <Paragraph>No clients match your search or filters.</Paragraph>
+        <View style={styles.noOwnersContainer}>
+          <Paragraph>No owners match your search or filters.</Paragraph>
         </View>
       )}
       <Portal>
@@ -253,10 +253,10 @@ const styles = StyleSheet.create({
     minWidth: 80,
     marginRight: Platform.OS === 'web' ? 0 : 8,
   },
-  clientList: {
+  ownerList: {
     padding: 16,
   },
-  clientCard: {
+  ownerCard: {
     marginBottom: 16,
     maxWidth: 600,
     alignSelf: 'center',
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   petChip: {
     marginRight: 8,
   },
-  noClientsContainer: {
+  noOwnersContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -309,4 +309,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Clients;
+export default Owners;

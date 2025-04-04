@@ -5,22 +5,22 @@ import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import QuestionInput from './QuestionInput';
-import ClientPicker from './ClientPicker';
+import OwnerPicker from './OwnerPicker';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 const ChronicleForm = ({ onCreateChronicle }) => {
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedClient, setSelectedClient] = useState('');
+  const [selectedOwner, setSelectedOwner] = useState('');
   const [selectedPets, setSelectedPets] = useState([]);
   const [questions, setQuestions] = useState([{ question: '', answer: '', isPreset: true }]);
   const [summary, setSummary] = useState('');
   const [photos, setPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [showClientPicker, setShowClientPicker] = useState(false);
+  const [showOwnerPicker, setShowOwnerPicker] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  const mockClients = [
+  const mockOwners = [
     { id: '1', name: 'John Doe', pets: [{ id: '1', name: 'Max' }, { id: '2', name: 'Bella' }] },
     { id: '2', name: 'Jane Smith', pets: [{ id: '3', name: 'Luna' }, { id: '4', name: 'Charlie' }] }
   ];
@@ -54,12 +54,12 @@ const ChronicleForm = ({ onCreateChronicle }) => {
     setIsCreating(true);
     const newChronicle = {
       id: Date.now(),
-      client: selectedClient,
+      owner: selectedOwner,
       pets: selectedPets,
       summary,
       questions,
       photos,
-      title: `Chronicle for ${selectedClient}`,
+      title: `Chronicle for ${selectedOwner}`,
     };
 
     setTimeout(() => {
@@ -72,7 +72,7 @@ const ChronicleForm = ({ onCreateChronicle }) => {
   };
 
   const resetForm = () => {
-    setSelectedClient('');
+    setSelectedOwner('');
     setSelectedPets([]);
     setSummary('');
     setQuestions([{ question: '', answer: '' }]);
@@ -83,17 +83,17 @@ const ChronicleForm = ({ onCreateChronicle }) => {
     setQuestions([...questions, { question: '', answer: '', isPreset: false }]);
   };
 
-  const renderClientSelection = () => {
+  const renderOwnerSelection = () => {
     if (Platform.OS === 'web') {
       return (
         <Picker
-          selectedValue={selectedClient}
-          onValueChange={(itemValue) => setSelectedClient(itemValue)}
+          selectedValue={selectedOwner}
+          onValueChange={(itemValue) => setSelectedOwner(itemValue)}
           style={styles.picker}
         >
-          <Picker.Item label="Select a client..." value="" />
-          {mockClients.map(client => (
-            <Picker.Item key={client.id} label={client.name} value={client.name} />
+          <Picker.Item label="Select a owner..." value="" />
+          {mockOwners.map(owner => (
+            <Picker.Item key={owner.id} label={owner.name} value={owner.name} />
           ))}
         </Picker>
       );
@@ -102,10 +102,10 @@ const ChronicleForm = ({ onCreateChronicle }) => {
         <View>
           <TouchableOpacity
             style={styles.dropdownButton}
-            onPress={() => setShowClientPicker(true)}
+            onPress={() => setShowOwnerPicker(true)}
           >
             <Text style={styles.dropdownButtonText}>
-              {selectedClient || "Select a client..."}
+              {selectedOwner || "Select a owner..."}
             </Text>
             <MaterialCommunityIcons 
               name="chevron-down" 
@@ -114,28 +114,28 @@ const ChronicleForm = ({ onCreateChronicle }) => {
             />
           </TouchableOpacity>
           <Modal
-            visible={showClientPicker}
+            visible={showOwnerPicker}
             transparent={true}
             animationType="slide"
           >
             <View style={styles.pickerModalContainer}>
               <View style={styles.pickerContainer}>
                 <Picker
-                  selectedValue={selectedClient}
+                  selectedValue={selectedOwner}
                   onValueChange={(itemValue) => {
-                    setSelectedClient(itemValue);
-                    setShowClientPicker(false);
+                    setSelectedOwner(itemValue);
+                    setShowOwnerPicker(false);
                   }}
                 >
-                  <Picker.Item label="Select a client..." value="" />
-                  {mockClients.map(client => (
-                    <Picker.Item key={client.id} label={client.name} value={client.name} />
+                  <Picker.Item label="Select a owner..." value="" />
+                  {mockOwners.map(owner => (
+                    <Picker.Item key={owner.id} label={owner.name} value={owner.name} />
                   ))}
                 </Picker>
               </View>
               <TouchableOpacity
                 style={styles.pickerCloseButton}
-                onPress={() => setShowClientPicker(false)}
+                onPress={() => setShowOwnerPicker(false)}
               >
                 <Text style={styles.pickerCloseButtonText}>Close</Text>
               </TouchableOpacity>
@@ -174,15 +174,15 @@ const ChronicleForm = ({ onCreateChronicle }) => {
             </View>
 
             <ScrollView>
-              <Text style={styles.label}>Select Client</Text>
-              <ClientPicker
-                clients={mockClients}
-                selectedClient={selectedClient}
-                onSelectClient={setSelectedClient}
+              <Text style={styles.label}>Select Owner</Text>
+              <OwnerPicker
+                owners={mockOwners}
+                selectedOwner={selectedOwner}
+                onSelectOwner={setSelectedOwner}
               />
 
               <Text style={styles.label}>Select Pets</Text>
-              {selectedClient && mockClients.find(c => c.name === selectedClient)?.pets.map(pet => (
+              {selectedOwner && mockOwners.find(c => c.name === selectedOwner)?.pets.map(pet => (
                 <TouchableOpacity
                   key={pet.id}
                   style={[

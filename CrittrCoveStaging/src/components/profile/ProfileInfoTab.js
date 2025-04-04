@@ -606,7 +606,7 @@ const ProfileInfoTab = ({
               <Text style={styles.bioText}>{bio || 'Tell us about yourself...'}</Text>
             </View>
 
-            {/* Show either Home & Facilities (for clients) or Insurance (for professionals) */}
+            {/* Show either Home & Facilities (for owners) or Insurance (for professionals) */}
             {isProfessional ? renderInsuranceSection() : renderFacilitiesSection()}
 
             {/* Portfolio Photos Section */}

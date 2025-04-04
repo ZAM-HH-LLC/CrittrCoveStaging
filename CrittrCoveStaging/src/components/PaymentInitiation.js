@@ -18,7 +18,7 @@ const PaymentInitiation = ({ amount, onPaymentComplete }) => {
         },
         body: JSON.stringify({ amount }),
       });
-      const { clientSecret } = await response.json();
+      const { ownerSecret } = await response.json();
 
       // 2. Confirm the payment (mock confirmation)
       // In a real implementation, you'd use a payment library here

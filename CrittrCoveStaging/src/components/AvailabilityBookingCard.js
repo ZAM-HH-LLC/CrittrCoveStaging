@@ -38,7 +38,7 @@ const AvailabilityBookingCard = ({ booking, onPress, onEdit }) => {
             {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
           </Text>
         </View>
-        <Text style={styles.clientName}>Booked with {booking.client_name}</Text>
+        <Text style={styles.ownerName}>Booked with {booking.owner_name}</Text>
       </View>
       <TouchableOpacity 
         style={styles.editButton} 
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontWeight: '500',
   },
-  clientName: {
+  ownerName: {
     fontSize: theme.fontSizes.small,
     color: theme.colors.textSecondary,
   },

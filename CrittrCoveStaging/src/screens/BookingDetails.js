@@ -23,7 +23,7 @@ const LAST_VIEWED_BOOKING_ID = 'last_viewed_booking_id';
 
 // Replace with Services that professional offers
 const SERVICE_OPTIONS = ['Dog Walking', 'Pet Sitting', 'House Sitting', 'Drop-In Visits'];
-// Replace with Animal types that the client owns
+// Replace with Animal types that the owner owns
 const ANIMAL_OPTIONS = ['Dog', 'Cat', 'Bird', 'Small Animal'];
 
 const calculateTimeUnits = (startDate, endDate, startTime, endTime, timeUnit) => {
@@ -244,7 +244,7 @@ const BookingDetails = () => {
         const transformedBooking = {
           ...response.data,
           id: response.data.booking_id,
-          clientName: response.data.client_name,
+          ownerName: response.data.owner_name,
           professionalName: response.data.professional_name,
           serviceType: response.data.service_details.service_type,
           animalType: response.data.service_details.animal_type,
@@ -749,9 +749,9 @@ const BookingDetails = () => {
       const additionalPetTotal = additionalPets * (editedBooking.rates.additionalPetRate || 0);
       
       const subtotal = baseTotal + extraServicesTotal + holidayFee + weekendFee + additionalPetTotal;
-      const clientFee = subtotal * 0.10;
+      const ownerFee = subtotal * 0.10;
       const taxes = subtotal * 0.09;
-      const totalClientCost = subtotal + clientFee + taxes;
+      const totalOwnerCost = subtotal + ownerFee + taxes;
       const professionalPayout = subtotal * 0.90;
 
       setEditedBooking(prev => ({
@@ -761,9 +761,9 @@ const BookingDetails = () => {
           extraServicesTotal,
           additionalPetTotal,
           subtotal,
-          clientFee,
+          ownerFee,
           taxes,
-          totalClientCost,
+          totalOwnerCost,
           professionalPayout
         }
       }));
@@ -777,14 +777,14 @@ const BookingDetails = () => {
       sum + parseFloat(occ.calculated_cost || 0), 0);
     const platformFee = subtotal * 0.10; // 10% platform fee
     const taxes = (subtotal + platformFee) * 0.09; // 9% tax
-    const totalClientCost = subtotal + platformFee + taxes;
+    const totalOwnerCost = subtotal + platformFee + taxes;
     const totalSitterPayout = subtotal * 0.90; // 90% of subtotal goes to sitter
     
     return {
       subtotal,
       platform_fee: platformFee,
       taxes,
-      total_client_cost: totalClientCost,
+      total_owner_cost: totalOwnerCost,
       total_sitter_payout: totalSitterPayout
     };
   };
@@ -1034,7 +1034,7 @@ const BookingDetails = () => {
       let newOccurrenceData;
       
       if (newOccurrence.startDateTime && newOccurrence.endDateTime) {
-        // Client-initiated format with DateTime objects
+        // Owner-initiated format with DateTime objects
         const startDate = format(newOccurrence.startDateTime, 'yyyy-MM-dd');
         const startTime = format(newOccurrence.startDateTime, 'HH:mm');
         const endDate = format(newOccurrence.endDateTime, 'yyyy-MM-dd');
@@ -1045,7 +1045,7 @@ const BookingDetails = () => {
         const endUTC = convertToUTC(endDate, endTime, userTimezone);
 
         if (is_DEBUG) {
-          console.log('MBA134njo0vh03 Converted client times to UTC:', {
+          console.log('MBA134njo0vh03 Converted owner times to UTC:', {
             local: {
               start: `${startDate} ${startTime}`,
               end: `${endDate} ${endTime}`
@@ -1505,9 +1505,9 @@ const BookingDetails = () => {
           <Text style={styles.summaryText}>${parseFloat(booking?.cost_summary?.taxes || 0).toFixed(2)}</Text>
         </View>
         <View style={[styles.summaryRow, styles.totalRow]}>
-          <Text style={styles.totalLabel}>Total Cost to Client:</Text>
+          <Text style={styles.totalLabel}>Total Cost to Owner:</Text>
           <Text style={styles.totalAmount}>
-            ${parseFloat(booking?.cost_summary?.total_client_cost || 0).toFixed(2)}
+            ${parseFloat(booking?.cost_summary?.total_owner_cost || 0).toFixed(2)}
           </Text>
         </View>
         <View style={[styles.summaryRow, styles.payoutRow]}>
@@ -1565,7 +1565,7 @@ const BookingDetails = () => {
             startTime: occ.start_time,
             endTime: occ.end_time
           })),
-          totalCost: booking.costs.totalClientCost,
+          totalCost: booking.costs.totalOwnerCost,
           status: booking.status
         },
         timestamp: new Date().toISOString(),
@@ -1607,7 +1607,7 @@ const BookingDetails = () => {
       if (newStatus === BOOKING_STATES.PENDING_CLIENT_APPROVAL) {
         const messageSent = await sendBookingMessage(
           booking.id,
-          booking.clientId || 'client123',
+          booking.ownerId || 'owner123',
           'professional_changes'
         );
         if (!messageSent) {
@@ -1679,7 +1679,7 @@ const BookingDetails = () => {
     if (is_DEBUG) {
       console.log('MBA12345 Action button clicked:', action, additionalData);
     }
-    if (action === 'Send to Client') {
+    if (action === 'Send to Owner') {
       try {
         setConfirmationModal(prev => ({ ...prev, isLoading: true }));
         
@@ -1689,7 +1689,7 @@ const BookingDetails = () => {
         }
 
         if (is_DEBUG) {
-          console.log('MBA12345 Sending booking update to client for booking:', booking.booking_id);
+          console.log('MBA12345 Sending booking update to owner for booking:', booking.booking_id);
         }
 
         // Call the update endpoint
@@ -1711,7 +1711,7 @@ const BookingDetails = () => {
         // Show success message
         setSnackBar({
           visible: true,
-          message: response.data.message || 'Booking sent to client successfully',
+          message: response.data.message || 'Booking sent to owner successfully',
           type: 'success'
         });
 
@@ -1834,7 +1834,7 @@ const BookingDetails = () => {
         );
       }
 
-      // Send to Client button - Professional Only
+      // Send to Owner button - Professional Only
       if ([
         BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
         BOOKING_STATES.PENDING_PROFESSIONAL_CHANGES,
@@ -1845,17 +1845,17 @@ const BookingDetails = () => {
             key="send"
             style={[styles.button, styles.primaryButton]}
             onPress={() => showConfirmation(
-              'send these changes to the client',
-              () => handleActionButtonClick('Send to Client')
+              'send these changes to the owner',
+              () => handleActionButtonClick('Send to Owner')
             )}
           >
-            <Text style={styles.buttonText}>Send to Client</Text>
+            <Text style={styles.buttonText}>Send to Owner</Text>
           </TouchableOpacity>
         );
       }
     }
 
-    // Cancel button - Both Professional and Client
+    // Cancel button - Both Professional and Owner
     if ([
       BOOKING_STATES.PENDING_PROFESSIONAL_CHANGES,
       BOOKING_STATES.CONFIRMED,
@@ -1876,9 +1876,9 @@ const BookingDetails = () => {
       );
     }
 
-    // Client-specific buttons
+    // Owner-specific buttons
     if (!isProfessionalView) {
-      // Approve button - Client Only
+      // Approve button - Owner Only
       if ([
         BOOKING_STATES.PENDING_CLIENT_APPROVAL,
         BOOKING_STATES.CONFIRMED_PENDING_CLIENT_APPROVAL
@@ -2196,8 +2196,8 @@ const BookingDetails = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Booking Parties</Text>
             <View style={styles.serviceDetailRow}>
-              <Text style={styles.label}>Client: </Text>
-              <Text style={styles.value}>{getDisplayValue(booking?.clientName)}</Text>
+              <Text style={styles.label}>Owner: </Text>
+              <Text style={styles.value}>{getDisplayValue(booking?.ownerName)}</Text>
             </View>
             <View style={styles.serviceDetailRow}>
               <Text style={styles.label}>Professional:  </Text>
@@ -3075,7 +3075,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.success,
   },
-  clientName: {
+  ownerName: {
     fontSize: 18,
     fontWeight: 'normal',
     marginBottom: 4,

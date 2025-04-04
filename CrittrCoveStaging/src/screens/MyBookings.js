@@ -16,7 +16,7 @@ const MyBookings = () => {
   const { isApprovedProfessional, userRole, is_DEBUG, isCollapsed, screenWidth } = useContext(AuthContext);
   const [isMobile, setIsMobile] = useState(screenWidth < 900);
   const [isWideScreen, setIsWideScreen] = useState(screenWidth >= 1200);
-  const [activeTab, setActiveTab] = useState(userRole === 'professional' ? 'professional' : 'client');
+  const [activeTab, setActiveTab] = useState(userRole === 'professional' ? 'professional' : 'owner');
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ const MyBookings = () => {
 
       const newBookings = activeTab === 'professional' 
         ? response.data.bookings.professional_bookings || []
-        : response.data.bookings.client_bookings || [];
+        : response.data.bookings.owner_bookings || [];
 
       if (isLoadMore) {
         setBookings(prev => [...prev, ...newBookings]);
@@ -134,7 +134,7 @@ const MyBookings = () => {
       if (activeTab === 'professional') {
         return (
           booking.id.toLowerCase().includes(searchLower) ||
-          booking.clientName.toLowerCase().includes(searchLower)
+          booking.ownerName.toLowerCase().includes(searchLower)
         );
       } else {
         return (
@@ -177,7 +177,7 @@ const MyBookings = () => {
     <BookingCard
       booking={{
         id: item.booking_id || item.id,
-        clientName: item.client_name || item.clientName,
+        ownerName: item.owner_name || item.ownerName,
         professionalName: item.professional_name || item.professionalName,
         serviceName: item.service_type || item.serviceName,
         date: item.start_date || item.date,
@@ -271,11 +271,11 @@ const MyBookings = () => {
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.tab, activeTab === 'client' && styles.activeTab]}
-                  onPress={() => setActiveTab('client')}
+                  style={[styles.tab, activeTab === 'owner' && styles.activeTab]}
+                  onPress={() => setActiveTab('owner')}
                 >
-                  <Text style={[styles.tabText, activeTab === 'client' && styles.activeTabText]}>
-                    Client Bookings
+                  <Text style={[styles.tabText, activeTab === 'owner' && styles.activeTabText]}>
+                    Owner Bookings
                   </Text>
                 </TouchableOpacity>
               </View>

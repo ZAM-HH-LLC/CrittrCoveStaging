@@ -6,12 +6,12 @@ export const BOOKING_STATES = {
     
   // # Review States
   PENDING_PROFESSIONAL_CHANGES: 'Pending Professional Changes',
-  PENDING_CLIENT_APPROVAL: 'Pending Client Approval',
+  PENDING_CLIENT_APPROVAL: 'Pending Owner Approval',
     
   // # Active States
   CONFIRMED: 'Confirmed',
   CONFIRMED_PENDING_PROFESSIONAL_CHANGES: 'Confirmed Pending Professional Changes',
-  CONFIRMED_PENDING_CLIENT_APPROVAL: 'Confirmed Pending Client Approval',
+  CONFIRMED_PENDING_CLIENT_APPROVAL: 'Confirmed Pending Owner Approval',
     
   // # Terminal States
   COMPLETED: 'Completed',
@@ -31,7 +31,7 @@ export const BOOKING_STATES = {
 export const ALL_SERVICES = "All Services";
 export const SERVICE_TYPES = [
   ALL_SERVICES,
-  "Overnight Cat Sitting (Client's Home)",
+  "Overnight Cat Sitting (Owner's Home)",
   "Cat Boarding",
   "Drop-In Visits (30 min)",
   "Drop-In Visits (60 min)",
@@ -254,7 +254,7 @@ export const mockProfessionals = [
     services: ["Dog Walking", "Pet Sitting", "Grooming"],
     experience: "5 years",
     description: "Professional pet sitter with extensive experience in dog walking and pet sitting. Certified in pet first aid and CPR.",
-    repeat_clients: 18,
+    repeat_owners: 18,
     verified: true,
     bestReview: "Benny's stay with Mike was outstanding! I would not hesitate to have Benny stay with them again. I would highly recommend Mike to anyone needing pet care services."
   },
@@ -414,7 +414,7 @@ export const mockProfessionals = [
   }
 ];
 
-export const mockClients = [
+export const mockOwners = [
   {
     id: '1',
     name: 'Alice Johnson',
@@ -485,13 +485,13 @@ export const fetchAvailabilityData = () => {
         },
         bookings: {
           '2025-02-06': [
-            { id: 'bk1', startTime: '14:00', endTime: '16:00', client_name: 'Charlie', service_type: 'Dog Walking' },
-            { id: 'bk2', startTime: '16:00', endTime: '18:00', client_name: 'Bob', service_type: 'Dog Walking' },
-            { id: 'bk3', startTime: '18:00', endTime: '20:00', client_name: 'Nick', service_type: 'Pet Boarding' },
-            { id: 'bk4', startTime: '20:00', endTime: '22:00', client_name: 'Alfred', service_type: 'Drop-In Visits (30 min)' }
+            { id: 'bk1', startTime: '14:00', endTime: '16:00', owner_name: 'Charlie', service_type: 'Dog Walking' },
+            { id: 'bk2', startTime: '16:00', endTime: '18:00', owner_name: 'Bob', service_type: 'Dog Walking' },
+            { id: 'bk3', startTime: '18:00', endTime: '20:00', owner_name: 'Nick', service_type: 'Pet Boarding' },
+            { id: 'bk4', startTime: '20:00', endTime: '22:00', owner_name: 'Alfred', service_type: 'Drop-In Visits (30 min)' }
           ],
           '2025-02-07': [
-            { id: 'bk5', startTime: '10:00', endTime: '12:00', client_name: 'Uhtred', service_type: 'Dog Walking' }
+            { id: 'bk5', startTime: '10:00', endTime: '12:00', owner_name: 'Uhtred', service_type: 'Dog Walking' }
           ],
         },
       });
@@ -521,7 +521,7 @@ export const updateBooking = (bookingData) => {
 const sharedBookingDetails = {
   booking_id: 'bk1',
   status: 'Confirmed',
-  client_name: 'matt aertker',
+  owner_name: 'matt aertker',
   professional_name: 'matt2 aertker2',
   service_details: {
     service_type: 'Ferrier'
@@ -610,7 +610,7 @@ const sharedBookingDetails = {
     subtotal: 181.12,
     platform_fee: 18.11,
     taxes: 15.94,
-    total_client_cost: 215.17,
+    total_owner_cost: 215.17,
     total_sitter_payout: 163.01,
     is_prorated: true
   }
@@ -621,7 +621,7 @@ const mockBookingDetails = {
   '1234': {
     ...sharedBookingDetails,
     id: '1234',
-    clientName: 'John Doe',
+    ownerName: 'John Doe',
     status: BOOKING_STATES.CONFIRMED,
     startDate: '2024-02-20',
     startTime: '14:00',
@@ -629,7 +629,7 @@ const mockBookingDetails = {
   '5678': {
     ...sharedBookingDetails,
     id: '5678',
-    clientName: 'Margarett Laporte',
+    ownerName: 'Margarett Laporte',
     status: BOOKING_STATES.CANCELLED,
     startDate: '2024-02-21',
     startTime: '15:30',
@@ -637,7 +637,7 @@ const mockBookingDetails = {
   '56782': {
     ...sharedBookingDetails,
     id: '56782',
-    clientName: 'Zoe Aerial',
+    ownerName: 'Zoe Aerial',
     status: BOOKING_STATES.DENIED,
     startDate: '2024-02-21',
     startTime: '15:30',
@@ -645,7 +645,7 @@ const mockBookingDetails = {
   '5673': {
     ...sharedBookingDetails,
     id: '5673',
-    clientName: 'Matt Clark',
+    ownerName: 'Matt Clark',
     status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
     startDate: '2024-02-21',
     startTime: '15:30',
@@ -653,7 +653,7 @@ const mockBookingDetails = {
   '5674': {
     ...sharedBookingDetails,
     id: '5674',
-    clientName: 'Mark Smith',
+    ownerName: 'Mark Smith',
     status: BOOKING_STATES.PENDING_CLIENT_APPROVAL,
     startDate: '2024-02-21',
     startTime: '15:30',
@@ -661,7 +661,7 @@ const mockBookingDetails = {
   '5675': {
     ...sharedBookingDetails,
     id: '5675',
-    clientName: 'Lauren Smith',
+    ownerName: 'Lauren Smith',
     status: BOOKING_STATES.PENDING_PROFESSIONAL_CHANGES,
     startDate: '2024-02-21',
     startTime: '15:30',
@@ -669,7 +669,7 @@ const mockBookingDetails = {
   '5675': {
     ...sharedBookingDetails,
     id: '56712',
-    clientName: 'Matt Smith',
+    ownerName: 'Matt Smith',
     status: BOOKING_STATES.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
     startDate: '2024-02-21',
     startTime: '15:30',
@@ -677,14 +677,14 @@ const mockBookingDetails = {
   '56713': {
     ...sharedBookingDetails,
     id: '567123',
-    clientName: 'Albert Einstein',
+    ownerName: 'Albert Einstein',
     status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
     startDate: '2025-02-21',
     startTime: '15:30',
   },
   '3749': {...sharedBookingDetails,
     id: '567132',
-    clientName: 'Dr. Mike Johnson',
+    ownerName: 'Dr. Mike Johnson',
     status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
     startDate: '2025-02-21',
     startTime: '15:30',
@@ -692,7 +692,7 @@ const mockBookingDetails = {
   '91011': {
     ...sharedBookingDetails,
     id: '91011',
-    clientName: 'Dr. Bla Johnson',
+    ownerName: 'Dr. Bla Johnson',
     status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
     startDate: '2025-02-21',
     startTime: '15:30',
@@ -700,7 +700,7 @@ const mockBookingDetails = {
   '91012': {
     ...sharedBookingDetails,
     id: '91012',
-    clientName: 'Dr. Blabla Johnson',
+    ownerName: 'Dr. Blabla Johnson',
     status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
     startDate: '2025-02-21',
     startTime: '15:30',
@@ -711,26 +711,26 @@ const mockBookingDetails = {
 export const mockProfessionalBookings = Object.values(mockBookingDetails)
   .map(booking => ({
     id: booking.id,
-    clientName: booking.clientName,
+    ownerName: booking.ownerName,
     status: booking.status,
     date: booking.startDate,
     time: booking.startTime,
     serviceType: booking.serviceType,
     numberOfPets: booking.numberOfPets || 1,
-    totalCost: booking.costs?.totalClientCost || 0,
+    totalCost: booking.costs?.totalOwnerCost || 0,
     professionalPayout: booking.costs?.professionalPayout || 0
   }));
 
 // Add the createBooking function
-export const createBooking = async (clientId, freelancerId, initialData = {}) => {
+export const createBooking = async (ownerId, freelancerId, initialData = {}) => {
   const newBookingId = `booking_${Date.now()}`;
   
   const newBooking = {
     id: newBookingId,
-    clientId: clientId,
+    ownerId: ownerId,
     freelancerId: freelancerId,
     status: BOOKING_STATES.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-    clientName: initialData.clientName || 'TBD',
+    ownerName: initialData.ownerName || 'TBD',
     professionalName: initialData.professionalName || 'TBD',
     serviceType: initialData.serviceType || 'TBD',
     animalType: initialData.animalType || 'TBD',
@@ -747,9 +747,9 @@ export const createBooking = async (clientId, freelancerId, initialData = {}) =>
       additionalPetTotal: 0,
       extraServicesTotal: 0,
       subtotal: 0,
-      clientFee: 0,
+      ownerFee: 0,
       taxes: 0,
-      totalClientCost: 0,
+      totalOwnerCost: 0,
       professionalPayout: 0
     },
     created_at: new Date().toISOString(),
@@ -833,7 +833,7 @@ export const updateBookingStatus = async (bookingId, newStatus, reason = '', met
 };
 
 // Make sure to update MyBookings.js to use the same BOOKING_STATES constant
-export const mockClientBookings = [
+export const mockOwnerBookings = [
   {
     id: '91011',
     professionalName: 'Sarah Wilson',
@@ -866,7 +866,7 @@ export const mockConversations = [
     participant2_id: 202,
     name: "Dr. Sarah Smith",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "I'd be happy to help! What kind of pet do you have?",
@@ -879,7 +879,7 @@ export const mockConversations = [
     participant2_id: CURRENT_USER_ID,
     name: "Dr. Mike Johnson",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "I'm available! Let's set up a booking",
@@ -892,7 +892,7 @@ export const mockConversations = [
     participant2_id: 204,
     name: "Dr. Emily Wilson",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Your cat's checkup is scheduled",
@@ -905,7 +905,7 @@ export const mockConversations = [
     participant2_id: 205,
     name: "Dr. James Anderson",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "See you tomorrow at 2 PM",
@@ -918,7 +918,7 @@ export const mockConversations = [
     participant2_id: 206,
     name: "Dr. Lisa Brown",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "How is Max doing today?",
@@ -931,7 +931,7 @@ export const mockConversations = [
     participant2_id: 207,
     name: "Dr. Robert Taylor",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "The medication has been prescribed",
@@ -944,7 +944,7 @@ export const mockConversations = [
     participant2_id: 208,
     name: "Dr. Maria Garcia",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Your appointment is confirmed",
@@ -957,7 +957,7 @@ export const mockConversations = [
     participant2_id: 209,
     name: "Dr. David Lee",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Let's schedule a follow-up",
@@ -970,7 +970,7 @@ export const mockConversations = [
     participant2_id: 210,
     name: "Dr. Sarah Martinez",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "The test results are ready",
@@ -983,7 +983,7 @@ export const mockConversations = [
     participant2_id: 211,
     name: "Dr. John White",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "How's the new diet working?",
@@ -996,7 +996,7 @@ export const mockConversations = [
     participant2_id: 212,
     name: "Dr. Anna Clark",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Vaccination reminder",
@@ -1009,7 +1009,7 @@ export const mockConversations = [
     participant2_id: 213,
     name: "Dr. Thomas Wright",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Surgery scheduled for next week",
@@ -1022,7 +1022,7 @@ export const mockConversations = [
     participant2_id: 214,
     name: "Dr. Patricia Moore",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Emergency consultation available",
@@ -1035,7 +1035,7 @@ export const mockConversations = [
     participant2_id: 215,
     name: "Dr. Kevin Hall",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Treatment plan updated",
@@ -1048,7 +1048,7 @@ export const mockConversations = [
     participant2_id: 216,
     name: "Dr. Rachel Green",
     role_map: {
-      participant1_role: "client",
+      participant1_role: "owner",
       participant2_role: "professional"
     },
     lastMessage: "Prescription ready for pickup",
@@ -1065,7 +1065,7 @@ export const mockMessages = {
       participant2_id: 202,
       sender: CURRENT_USER_ID,
       role_map: {
-        participant1_role: "client",
+        participant1_role: "owner",
         participant2_role: "professional"
       },
       content: "Hi, I'm interested in your pet sitting services",
@@ -1081,7 +1081,7 @@ export const mockMessages = {
       participant2_id: 202,
       sender: 202,
       role_map: {
-        participant1_role: "client",
+        participant1_role: "owner",
         participant2_role: "professional"
       },
       content: "I'd be happy to help! What kind of pet do you have?",
@@ -1099,7 +1099,7 @@ export const mockMessages = {
       participant2_id: CURRENT_USER_ID,
       sender: 303,
       role_map: {
-        participant1_role: "client",
+        participant1_role: "owner",
         participant2_role: "professional"
       },
       content: "Looking for a dog walker next week",
@@ -1115,7 +1115,7 @@ export const mockMessages = {
       participant2_id: CURRENT_USER_ID,
       sender: 303,
       role_map: {
-        participant1_role: "client",
+        participant1_role: "owner",
         participant2_role: "professional"
       },
       type: 'booking_request',
@@ -1144,7 +1144,7 @@ export const mockMessages = {
       participant2_id: CURRENT_USER_ID,
       sender: CURRENT_USER_ID,
       role_map: {
-        participant1_role: "client",
+        participant1_role: "owner",
         participant2_role: "professional"
       },
       content: "I'll take a look!",
@@ -1158,17 +1158,17 @@ export const mockMessages = {
 };
 
 // Helper function to create a new conversation
-export const createNewConversation = (professionalId, professionalName, clientId, clientName) => {
+export const createNewConversation = (professionalId, professionalName, ownerId, ownerName) => {
   const conversationId = `conv_${Date.now()}`;
-  const isCurrentUserClient = clientId === CURRENT_USER_ID;
+  const isCurrentUserOwner = ownerId === CURRENT_USER_ID;
   
   return {
     id: conversationId,
-    participant1_id: isCurrentUserClient ? clientId : professionalId,
-    participant2_id: isCurrentUserClient ? professionalId : clientId,
+    participant1_id: isCurrentUserOwner ? ownerId : professionalId,
+    participant2_id: isCurrentUserOwner ? professionalId : ownerId,
     role_map: {
-      participant1_role: isCurrentUserClient ? "client" : "professional",
-      participant2_role: isCurrentUserClient ? "professional" : "client"
+      participant1_role: isCurrentUserOwner ? "owner" : "professional",
+      participant2_role: isCurrentUserOwner ? "professional" : "owner"
     },
     lastMessage: "",
     timestamp: new Date().toISOString(),
@@ -1199,7 +1199,7 @@ export const DEFAULT_SERVICES = [
 ];
 
 export const SERVICE_TYPE_SUGGESTIONS = [
-  "Overnight Cat Sitting (Client's Home)",
+  "Overnight Cat Sitting (Owner's Home)",
   "Cat Boarding",
   "Drop-In Visits (30 min)",
   "Drop-In Visits (60 min)",

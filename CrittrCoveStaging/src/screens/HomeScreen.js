@@ -183,7 +183,7 @@ export default function HomeScreen({ navigation }) {
           />
           <View>
             <Text style={styles.reviewAuthorName}>{review.author}</Text>
-            <Text style={styles.reviewAuthorTitle}>Client Review</Text>
+            <Text style={styles.reviewAuthorTitle}>Owner Review</Text>
             <View style={styles.starsContainer}>
               {[1, 2, 3, 4, 5].map((_, index) => (
                 <MaterialCommunityIcons 
@@ -390,7 +390,7 @@ export default function HomeScreen({ navigation }) {
                     <FontAwesome6 name="handshake-simple" size={24} color="white" />
                   </View>
                   <View style={featureContentStyle}>
-                    <Text style={styles.featureTitle}>Get Matched with Clients</Text>
+                    <Text style={styles.featureTitle}>Get Matched with Owners</Text>
                     <Text style={styles.featureText}>Pet owners in your area will reach out to you for yourservices.</Text>
                   </View>
                 </View>

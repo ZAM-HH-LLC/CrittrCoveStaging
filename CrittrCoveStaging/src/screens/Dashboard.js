@@ -50,7 +50,7 @@ const Dashboard = ({ navigation }) => {
     }
   });
 
-  // Limit bookings for client view
+  // Limit bookings for owner view
   const displayedBookings = !isProfessional ? filteredBookings.slice(0, 3) : filteredBookings;
 
   // Dynamic styles based on screen size
@@ -113,8 +113,8 @@ const Dashboard = ({ navigation }) => {
 
   // Prototype data
   const prototypeBookings = [
-    { id: '56782', client: 'John Doe', pet: 'Max (Dog)', date: '2023-05-15', time: '14:00', status: 'upcoming' },
-    { id: '5678', client: 'Jane Smith', pet: 'Whiskers (Cat)', date: '2023-05-17', time: '10:00', status: 'active' },
+    { id: '56782', owner: 'John Doe', pet: 'Max (Dog)', date: '2023-05-15', time: '14:00', status: 'upcoming' },
+    { id: '5678', owner: 'Jane Smith', pet: 'Whiskers (Cat)', date: '2023-05-17', time: '10:00', status: 'active' },
   ];
 
   const prototypeServices = [
@@ -149,7 +149,7 @@ const Dashboard = ({ navigation }) => {
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       
       // Fetch bookings based on user role
-      const endpoint = isProfessional ? 'professionals' : 'clients';
+      const endpoint = isProfessional ? 'professionals' : 'owners';
       const response = await axios.get(
         `${API_BASE_URL}/api/${endpoint}/v1/dashboard/`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -183,7 +183,7 @@ const Dashboard = ({ navigation }) => {
           try {
             // Retry fetching data with new token
             const response = await axios.get(
-              `${API_BASE_URL}/api/${isProfessional ? 'professionals' : 'clients'}/v1/dashboard/`,
+              `${API_BASE_URL}/api/${isProfessional ? 'professionals' : 'owners'}/v1/dashboard/`,
               { headers: { Authorization: `Bearer ${newToken}` } }
             );
             setBookings(response.data.upcoming_bookings || []);
@@ -209,10 +209,10 @@ const Dashboard = ({ navigation }) => {
     fetchDashboardData();
   }, [userRole, is_prototype]);
 
-  // TODO: Fetch client requests from the backend
-  const clientRequests = [
-    { id: '1', client: 'Alice Johnson', pet: 'Fluffy (Rabbit)', date: '2023-05-20', time: '09:00' },
-    { id: '2', client: 'Bob Williams', pet: 'Spike (Iguana)', date: '2023-05-22', time: '16:00' },
+  // TODO: Fetch owner requests from the backend
+  const ownerRequests = [
+    { id: '1', owner: 'Alice Johnson', pet: 'Fluffy (Rabbit)', date: '2023-05-20', time: '09:00' },
+    { id: '2', owner: 'Bob Williams', pet: 'Spike (Iguana)', date: '2023-05-22', time: '16:00' },
   ];
 
   const IconComponent = Platform.OS === 'web'
@@ -345,7 +345,7 @@ const Dashboard = ({ navigation }) => {
             </TouchableOpacity>
           </>
         ) : (
-          // Client onboarding cards
+          // Owner onboarding cards
           <>
             <TouchableOpacity 
               style={styles.statCard}
@@ -459,7 +459,7 @@ const Dashboard = ({ navigation }) => {
             key={is_prototype ? booking.id : booking.booking_id}
             booking={{
               id: is_prototype ? booking.id : booking.booking_id,
-              clientName: is_prototype ? booking.client : booking.client_name,
+              ownerName: is_prototype ? booking.owner : booking.owner_name,
               serviceName: is_prototype ? booking.service : booking.service_type,
               date: is_prototype ? booking.date : booking.start_date,
               time: is_prototype ? booking.time : booking.start_time,
@@ -478,7 +478,7 @@ const Dashboard = ({ navigation }) => {
           <Text style={styles.emptyStateTitle}>No {activeFilter} bookings</Text>
           <Text style={styles.emptyStateText}>
             {isProfessional 
-              ? 'Create services to start receiving bookings from clients.'
+              ? 'Create services to start receiving bookings from owners.'
               : 'Find professional services to book your first appointment.'}
           </Text>
           <TouchableOpacity

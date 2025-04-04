@@ -151,7 +151,7 @@ const MyProfile = () => {
   }, []);
 
   const tabs = [
-    { id: 'profile_info', label: userRole === 'professional' ? 'Professional Profile Info' : 'Client Profile Info' },
+    { id: 'profile_info', label: userRole === 'professional' ? 'Professional Profile Info' : 'Owner Profile Info' },
     ...(userRole === 'professional' ? [{ id: 'services_availability', label: 'Services & Availability' }] : []),
     { id: 'pets_preferences', label: 'Pets & Preferences' },
     { id: 'settings_payments', label: 'Settings & Payments' }
@@ -300,7 +300,7 @@ const MyProfile = () => {
               {
                 id: 'profile_visibility',
                 title: 'Profile Visibility',
-                description: 'Make your profile visible to potential clients',
+                description: 'Make your profile visible to potential owners',
                 icon: 'eye',
                 type: 'toggle',
                 value: true,

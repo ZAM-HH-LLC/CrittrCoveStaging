@@ -17,7 +17,7 @@ import { navigateToFrom } from './src/components/Navigation';
 // Import all your screen components
 import HomeScreen from './src/screens/HomeScreen';
 import AboutScreen from './src/screens/AboutScreen';
-import ClientProfile from './src/screens/ClientProfile';
+import OwnerProfile from './src/screens/OwnerProfile';
 import MyProfile from './src/screens/MyProfile';
 import SignIn from './src/screens/SignIn';
 import SignUp from './src/screens/SignUp';
@@ -30,7 +30,7 @@ import MoreScreen from './src/screens/MoreScreen';
 import AvailabilitySettings from './src/screens/AvailabilitySettings';
 // import Messages from './src/screens/Messages';
 import MyPets from './src/screens/MyPets';
-import ClientHistory from './src/screens/ClientHistory';
+import OwnerHistory from './src/screens/OwnerHistory';
 import MessageHistory from './src/screens/MessageHistory';
 import PaymentMethods from './src/screens/PaymentMethods';
 import Settings from './src/screens/Settings';
@@ -39,7 +39,7 @@ import ProfessionalSettings from './src/screens/ProfessionalSettings';
 import TermsOfService from './src/screens/TermsOfService';
 import HelpFAQ from './src/screens/HelpFAQ';
 import ContactUs from './src/screens/ContactUs';
-import Clients from './src/screens/Clients';
+import Owners from './src/screens/Owners';
 import ProfessionalProfile from './src/screens/ProfessionalProfile';
 import MyContracts from './src/screens/MyContracts';
 import ChangePassword from './src/screens/ChangePassword';
@@ -58,19 +58,19 @@ const Tab = createBottomTabNavigator();
 const screens = [
   { name: 'Home', component: HomeScreen },
   { name: 'About', component: AboutScreen },
-  { name: 'ClientProfile', component: ClientProfile },
+  { name: 'OwnerProfile', component: OwnerProfile },
   { name: 'MyProfile', component: MyProfile },  
   { name: 'SignIn', component: SignIn },
   { name: 'SignUp', component: SignUp },
   { name: 'ResetPassword', component: ResetPassword },
   { name: 'ResetPasswordConfirm', component: ResetPasswordConfirm },
   { name: 'SearchProfessionalsListing', component: SearchProfessionalsListing },
-  { name: 'ClientHistory', component: ClientHistory },
+  { name: 'OwnerHistory', component: OwnerHistory },
   { name: 'MessageHistory', component: MessageHistory },
   { name: 'Dashboard', component: Dashboard },
   { name: 'BecomeProfessional', component: BecomeProfessional },
   { name: 'More', component: MoreScreen },
-  { name: 'Clients', component: Clients },
+  { name: 'Owners', component: Owners },
   { name: 'AvailabilitySettings', component: AvailabilitySettings },
   { name: 'MyPets', component: MyPets },
   { name: 'PaymentMethods', component: PaymentMethods },
@@ -103,14 +103,14 @@ const linking = {
     screens: {
       Home: '*',  // This will catch all unmatched routes
       About: 'about',
-      ClientProfile: 'client-profile',
+      OwnerProfile: 'owner-profile',
       MyProfile: 'my-profile',
       SignIn: 'signin',
       SignUp: 'signup',
       ResetPassword: 'reset-password',
       ResetPasswordConfirm: 'reset-password/:uid/:token',
       SearchProfessionalsListing: 'search-professionals-listing',
-      ClientHistory: 'client-history',
+      OwnerHistory: 'owner-history',
       MessageHistory: {
         path: 'message-history',
         parse: {
@@ -121,7 +121,7 @@ const linking = {
       Dashboard: 'Dashboard',
       BecomeProfessional: 'become-professional',
       More: 'more',
-      Clients: 'clients',
+      Owners: 'owners',
       AvailabilitySettings: 'availability-settings',
       MyPets: 'my-pets',
       PaymentMethods: 'payment-methods',

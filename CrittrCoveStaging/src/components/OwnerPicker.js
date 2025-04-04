@@ -4,19 +4,19 @@ import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 
-const ClientPicker = ({ clients, selectedClient, onSelectClient }) => {
-  const [showClientPicker, setShowClientPicker] = useState(false);
+const OwnerPicker = ({ owners, selectedOwner, onSelectOwner }) => {
+  const [showOwnerPicker, setShowOwnerPicker] = useState(false);
 
   if (Platform.OS === 'web') {
     return (
       <Picker
-        selectedValue={selectedClient}
-        onValueChange={(itemValue) => onSelectClient(itemValue)}
+        selectedValue={selectedOwner}
+        onValueChange={(itemValue) => onSelectOwner(itemValue)}
         style={styles.picker}
       >
-        <Picker.Item label="Select a client..." value="" />
-        {clients.map(client => (
-          <Picker.Item key={client.id} label={client.name} value={client.name} />
+        <Picker.Item label="Select a owner..." value="" />
+        {owners.map(owner => (
+          <Picker.Item key={owner.id} label={owner.name} value={owner.name} />
         ))}
       </Picker>
     );
@@ -25,10 +25,10 @@ const ClientPicker = ({ clients, selectedClient, onSelectClient }) => {
       <View>
         <TouchableOpacity
           style={styles.dropdownButton}
-          onPress={() => setShowClientPicker(true)}
+          onPress={() => setShowOwnerPicker(true)}
         >
           <Text style={styles.dropdownButtonText}>
-            {selectedClient || "Select a client..."}
+            {selectedOwner || "Select a owner..."}
           </Text>
           <MaterialCommunityIcons 
             name="chevron-down" 
@@ -37,30 +37,30 @@ const ClientPicker = ({ clients, selectedClient, onSelectClient }) => {
           />
         </TouchableOpacity>
         <Modal
-          visible={showClientPicker}
+          visible={showOwnerPicker}
           transparent={true}
           animationType="slide"
-          onRequestClose={() => setShowClientPicker(false)}
+          onRequestClose={() => setShowOwnerPicker(false)}
         >
           <View style={styles.pickerModalContainer}>
             <View style={styles.pickerContainer}>
               <Picker
-                selectedValue={selectedClient}
+                selectedValue={selectedOwner}
                 onValueChange={(itemValue) => {
-                  onSelectClient(itemValue);
-                  setShowClientPicker(false);
+                  onSelectOwner(itemValue);
+                  setShowOwnerPicker(false);
                 }}
                 style={styles.modalPicker}
               >
-                <Picker.Item label="Select a client..." value="" />
-                {clients.map(client => (
-                  <Picker.Item key={client.id} label={client.name} value={client.name} />
+                <Picker.Item label="Select a owner..." value="" />
+                {owners.map(owner => (
+                  <Picker.Item key={owner.id} label={owner.name} value={owner.name} />
                 ))}
               </Picker>
             </View>
             <TouchableOpacity
               style={styles.pickerCloseButton}
-              onPress={() => setShowClientPicker(false)}
+              onPress={() => setShowOwnerPicker(false)}
             >
               <Text style={styles.pickerCloseButtonText}>Close</Text>
             </TouchableOpacity>
@@ -118,4 +118,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ClientPicker;
+export default OwnerPicker;

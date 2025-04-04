@@ -86,9 +86,9 @@ const UnavailableTimesModal = ({
             date,
             startTime: booking.startTime,
             endTime: booking.endTime,
-            reason: `${booking.service_type}\nBooked with ${booking.client_name}`,
+            reason: `${booking.service_type}\nBooked with ${booking.owner_name}`,
             isBooking: true,
-            clientId: booking.clientId
+            ownerId: booking.ownerId
           });
           processedTimes.add(timeKey);
         }
@@ -97,7 +97,7 @@ const UnavailableTimesModal = ({
       // Add personal unavailable times, excluding any that overlap with bookings
       if (dateAvailability?.unavailableTimes) {
         dateAvailability.unavailableTimes
-          .filter(time => !time.clientId) // Only include non-booking unavailable times
+          .filter(time => !time.ownerId) // Only include non-booking unavailable times
           .forEach(time => {
             const timeKey = `${date}-${time.startTime}-${time.endTime}`;
             if (!processedTimes.has(timeKey)) {
@@ -126,7 +126,7 @@ const UnavailableTimesModal = ({
       return (
         <TouchableOpacity
           style={styles.bookingButton}
-          onPress={() => handleBookingPress(item.clientId)}
+          onPress={() => handleBookingPress(item.ownerId)}
         >
           <MaterialCommunityIcons name="arrow-right" size={24} color={theme.colors.primary} />
         </TouchableOpacity>

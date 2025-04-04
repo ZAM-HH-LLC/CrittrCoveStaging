@@ -51,7 +51,7 @@ const ContractList = () => {
         contracts.map((contract) => (
           <View key={contract.id} style={styles.card}>
             <Text style={styles.contractTitle}>{contract.title}</Text>
-            <Text style={styles.clientName}>Client: {contract.client_name}</Text>
+            <Text style={styles.ownerName}>Owner: {contract.owner_name}</Text>
             <View style={styles.buttonContainer}>
               <TouchableOpacity style={styles.button}>
                 <Text style={styles.buttonText}>Share</Text>
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: theme.colors.primary,
   },
-  clientName: {
+  ownerName: {
     fontSize: theme.fontSizes.medium,
     color: theme.colors.text,
     marginTop: 4,

@@ -29,14 +29,14 @@ const MyContracts = () => {
       {
         id: 1,
         title: 'Fluffy\'s Adventure',
-        client: 'John Doe',
+        owner: 'John Doe',
         pets: ['Fluffy'],
         summary: 'Fluffy had a great time at the park today!',
       },
       {
         id: 2,
         title: 'Max\'s Playdate',
-        client: 'Jane Smith',
+        owner: 'Jane Smith',
         pets: ['Max'],
         summary: 'Max enjoyed playing with other dogs at the beach.',
       },

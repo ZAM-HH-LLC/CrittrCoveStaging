@@ -1027,7 +1027,7 @@ const MessageHistory = ({ navigation, route }) => {
         await createNewDraft();
       }
     } else {
-      console.log('MBA98765 User is client - showing request modal');
+      console.log('MBA98765 User is owner - showing request modal');
       setShowRequestModal(true);
     }
   };
@@ -1124,16 +1124,16 @@ const MessageHistory = ({ navigation, route }) => {
         item.type_of_message === 'send_approved_message') {
       const isFromMe = !item.sent_by_other_user;
 
-      // Safely get total client cost
-      const totalClientCost = item.metadata?.cost_summary?.total_client_cost || 
-                            item.metadata?.total_client_cost || 
+      // Safely get total owner cost
+      const totalOwnerCost = item.metadata?.cost_summary?.total_owner_cost || 
+                            item.metadata?.total_owner_cost || 
                             0;
 
       if (is_DEBUG) {
         console.log('MBA9876i2ghv93 Message data:', {
           type: item.type_of_message,
           metadata: item.metadata,
-          totalClientCost,
+          totalOwnerCost,
           userTimezone: timeSettings.timezone,
           occurrences: item.metadata.occurrences
         });
@@ -1199,7 +1199,7 @@ const MessageHistory = ({ navigation, route }) => {
           data={{
             ...item.metadata,
             occurrences: formattedOccurrences,
-            totalClientCost
+            totalOwnerCost
           }}
           isFromMe={isFromMe}
           onEditDraft={() => handleEditDraft(item.metadata.draft_id)}
@@ -1685,7 +1685,7 @@ const MessageHistory = ({ navigation, route }) => {
         textAlign: 'center'
       }}>
         {userRole === 'professional' ? 
-          'Create services to start getting bookings and messages from clients' :
+          'Create services to start getting bookings and messages from owners' :
           'Search professionals to find services and start messaging'}
       </Text>
       <Button

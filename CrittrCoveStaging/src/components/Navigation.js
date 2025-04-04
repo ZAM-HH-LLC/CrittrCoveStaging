@@ -308,7 +308,7 @@ export default function Navigation({ navigation }) {
     const menuItems = renderMenuItems();
     const sidebarWidth = isCollapsed ? 70 : 250;
     const isProfessionalRole = userRole === 'professional';
-    const isClientRole = userRole === 'petOwner';
+    const isOwnerRole = userRole === 'petOwner';
 
     if (is_DEBUG) {
       console.log('MBA98386196v Rendering Sidebar:', {
@@ -316,7 +316,7 @@ export default function Navigation({ navigation }) {
         isApprovedProfessional,
         currentRoute,
         isProfessionalRole,
-        isClientRole
+        isOwnerRole
       });
     }
 
@@ -349,11 +349,11 @@ export default function Navigation({ navigation }) {
                 <TouchableOpacity
                   style={[
                     styles.roleButton,
-                    isClientRole && styles.roleButtonActive
+                    isOwnerRole && styles.roleButtonActive
                   ]}
                   onPress={() => {
                     if (is_DEBUG) {
-                      console.log('MBA98386196v Client Role Button Press:', {
+                      console.log('MBA98386196v Owner Role Button Press:', {
                         currentRole: userRole,
                         isApprovedProfessional
                       });
@@ -366,8 +366,8 @@ export default function Navigation({ navigation }) {
                 >
                   <Text style={[
                     styles.roleButtonText,
-                    isClientRole && styles.roleButtonTextActive
-                  ]}>Client</Text>
+                    isOwnerRole && styles.roleButtonTextActive
+                  ]}>Owner</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -382,7 +382,7 @@ export default function Navigation({ navigation }) {
                         isApprovedProfessional
                       });
                     }
-                    if (isClientRole && isApprovedProfessional) {
+                    if (isOwnerRole && isApprovedProfessional) {
                       switchRole();
                     }
                   }}
@@ -461,7 +461,7 @@ export default function Navigation({ navigation }) {
   const renderMobileHeader = () => {
     const logoSize = screenWidth <= 470 ? { width: 100, height: 30 } : { width: 150, height: 40 };
     const isProfessionalRole = userRole === 'professional';
-    const isClientRole = userRole === 'petOwner';
+    const isOwnerRole = userRole === 'petOwner';
     
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
@@ -502,11 +502,11 @@ export default function Navigation({ navigation }) {
                   <TouchableOpacity
                     style={[
                       styles.mobileRoleButton,
-                      isClientRole && styles.mobileRoleButtonActive
+                      isOwnerRole && styles.mobileRoleButtonActive
                     ]}
                     onPress={() => {
                       if (is_DEBUG) {
-                        console.log('MBA98386196v Mobile Client Role Button Press:', {
+                        console.log('MBA98386196v Mobile Owner Role Button Press:', {
                           currentRole: userRole,
                           isApprovedProfessional
                         });
@@ -520,8 +520,8 @@ export default function Navigation({ navigation }) {
                   >
                     <Text style={[
                       styles.mobileRoleButtonText,
-                      isClientRole && styles.mobileRoleButtonTextActive
-                    ]}>Client</Text>
+                      isOwnerRole && styles.mobileRoleButtonTextActive
+                    ]}>Owner</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -536,7 +536,7 @@ export default function Navigation({ navigation }) {
                           isApprovedProfessional
                         });
                       }
-                      if (isClientRole && isApprovedProfessional) {
+                      if (isOwnerRole && isApprovedProfessional) {
                         switchRole();
                         setIsMenuOpen(false);
                       }

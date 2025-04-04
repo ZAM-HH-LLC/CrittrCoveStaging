@@ -4,35 +4,35 @@ import { theme } from '../styles/theme';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/config';
-import ClientPicker from './ClientPicker'; // Import the new component
+import OwnerPicker from './OwnerPicker'; // Import the new component
 
 const ContractTemplate = ({ templates }) => {
   const [isTemplateModalVisible, setTemplateModalVisible] = useState(false);
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [contractContent, setContractContent] = useState('');
-  const [clients, setClients] = useState([]);
-  const [selectedClient, setSelectedClient] = useState('');
+  const [owners, setOwners] = useState([]);
+  const [selectedOwner, setSelectedOwner] = useState('');
 
   useEffect(() => {
-    fetchClients();
+    fetchOwners();
   }, []);
 
-  const fetchClients = async () => {
+  const fetchOwners = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         console.error('No token found');
         return;
       }
-      const response = await axios.get(`${API_BASE_URL}/api/clients/`, {
+      const response = await axios.get(`${API_BASE_URL}/api/owners/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      setClients(response.data);
+      setOwners(response.data);
     } catch (error) {
-      console.error('Error fetching clients:', error);
+      console.error('Error fetching owners:', error);
     }
   };
 
@@ -59,7 +59,7 @@ const ContractTemplate = ({ templates }) => {
         {
           template: selectedTemplate.id,
           content: contractContent,
-          client: selectedClient,
+          owner: selectedOwner,
         },
         {
           headers: {
@@ -123,12 +123,12 @@ const ContractTemplate = ({ templates }) => {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Contract</Text>
-            <View style={styles.clientPickerContainer}>
-              <Text style={styles.sectionTitle}>Select a Client</Text>
-              <ClientPicker
-                clients={clients}
-                selectedClient={selectedClient}
-                onSelectClient={setSelectedClient}
+            <View style={styles.ownerPickerContainer}>
+              <Text style={styles.sectionTitle}>Select a Owner</Text>
+              <OwnerPicker
+                owners={owners}
+                selectedOwner={selectedOwner}
+                onSelectOwner={setSelectedOwner}
               />
             </View>
             <TextInput
@@ -239,8 +239,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlignVertical: 'top',
   },
-  clientPickerContainer: {
-    width: '100%', // Ensure the client picker container takes full width
+  ownerPickerContainer: {
+    width: '100%', // Ensure the owner picker container takes full width
     marginBottom: 10,
   },
   pickerModalContainer: {

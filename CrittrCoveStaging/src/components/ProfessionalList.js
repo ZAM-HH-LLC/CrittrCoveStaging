@@ -51,11 +51,11 @@ const ProfessionalCard = ({ professional, index }) => {
           <Text style={styles.ratingText}>{professional.rating}</Text>
           <Text style={styles.dot}> • </Text>
           <Text style={styles.reviews}>{professional.reviewCount} reviews</Text>
-          {professional.repeat_clients && (
+          {professional.repeat_owners && (
             <>
               <Text style={styles.dot}> • </Text>
               <MaterialCommunityIcons name="sync" size={16} color={theme.colors.text} />
-              <Text style={styles.repeatClients}> {professional.repeat_clients} repeat clients</Text>
+              <Text style={styles.repeatOwners}> {professional.repeat_owners} repeat owners</Text>
             </>
           )}
         </View>
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.medium,
     color: theme.colors.textSecondary,
   },
-  repeatClients: {
+  repeatOwners: {
     fontSize: theme.fontSizes.medium,
     color: theme.colors.textSecondary,
   },

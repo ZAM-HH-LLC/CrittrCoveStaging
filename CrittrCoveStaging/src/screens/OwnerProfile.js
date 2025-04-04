@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
 
-const fetchClientProfileData = () => {
+const fetchOwnerProfileData = () => {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
@@ -37,7 +37,7 @@ const fetchClientProfileData = () => {
   });
 };
 
-const ClientProfile = () => {
+const OwnerProfile = () => {
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
   const [profilePhoto, setProfilePhoto] = useState(null);
@@ -64,7 +64,7 @@ const ClientProfile = () => {
   const [localIsApprovedProfessional, setLocalIsApprovedProfessional] = useState(false);
 
   useEffect(() => {
-    fetchClientProfileData().then((data) => {
+    fetchOwnerProfileData().then((data) => {
       setName(data.name);
       setEmail(data.email);
       setPhone(data.phone);
@@ -261,7 +261,7 @@ const ClientProfile = () => {
           <TouchableOpacity onPress={() => navigation.navigate('More')} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerText}>Client Profile</Text>
+          <Text style={styles.headerText}>Owner Profile</Text>
         </View>
         {showSwitchToProfessionalButton && (
           <Button 
@@ -628,4 +628,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ClientProfile;
+export default OwnerProfile;

@@ -103,7 +103,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         // Get the button's DOM element
         const element = ref.current;
         // Get the button's bounding rectangle relative to the viewport
-        const rect = element.getBoundingClientRect();
+        const rect = element.getBoundingOwnerRect();
         
         
         setPosition({

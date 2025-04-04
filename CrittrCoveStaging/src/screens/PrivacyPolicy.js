@@ -16,7 +16,7 @@ const privacy_policy_info = [
                 listItem: "Payment Information: Card type, expiration date, and the last four digits of your payment card. Complete payment details are managed by third-party processors, and we do not store full card numbers.",
                 listItem: "Health Data: Medical information about your pets (e.g., medical history, medications, vaccinations, behavioral traits). By using this service, you consent to our use of this health data as we deem necessary for analytics, research, marketing, or any other purpose related to improving our services.",
                 listItem: "Device Data: We collect information about your device, including IP address, browser type, operating system, and other usage data.",
-                listItem: "Location Data: With your permission, we collect location information to match professionals and clients more effectively. Disabling location services may limit certain app features.",
+                listItem: "Location Data: With your permission, we collect location information to match professionals and owners more effectively. Disabling location services may limit certain app features.",
                 listItem: "Payment Information: Card type, expiration date, and the last four digits of your payment card. Complete payment details are managed by third-party processors, and we do not store full card numbers.",
                 listItem: "Payment Information: Card type, expiration date, and the last four digits of your payment card. Complete payment details are managed by third-party processors, and we do not store full card numbers.",
                 listItem: "Payment Information: Card type, expiration date, and the last four digits of your payment card. Complete payment details are managed by third-party processors, and we do not store full card numbers.",
@@ -57,16 +57,16 @@ const PrivacyPolicy = () => {
         <Text style={styles.listItem}>• Payment Information: Card type, expiration date, and the last four digits of your payment card. Complete payment details are managed by third-party processors, and we do not store full card numbers.</Text>
         <Text style={styles.listItem}>• Health Data: Medical information about your pets (e.g., medical history, medications, vaccinations, behavioral traits). By using this service, you consent to our use of this health data as we deem necessary for analytics, research, marketing, or any other purpose related to improving our services.</Text>
         <Text style={styles.listItem}>• Device Data: We collect information about your device, including IP address, browser type, operating system, and other usage data.</Text>
-        <Text style={styles.listItem}>• Location Data: With your permission, we collect location information to match professionals and clients more effectively. Disabling location services may limit certain app features.</Text>
+        <Text style={styles.listItem}>• Location Data: With your permission, we collect location information to match professionals and owners more effectively. Disabling location services may limit certain app features.</Text>
         <Text style={styles.listItem}>• Cookies and Tracking: We use cookies and tracking technologies to improve user experience and monitor traffic patterns. You can disable cookies in your browser settings.</Text>
 
         <Text style={styles.sectionTitle}>How We Use Your Data</Text>
         <Text style={styles.paragraph}>We use the data we collect to:</Text>
-        <Text style={styles.listItem}>• Facilitate bookings and transactions between professionals and clients.</Text>
+        <Text style={styles.listItem}>• Facilitate bookings and transactions between professionals and owners.</Text>
         <Text style={styles.listItem}>• Verify professional eligibility through background checks.</Text>
         <Text style={styles.listItem}>• Provide customer support and resolve disputes between users.</Text>
         <Text style={styles.listItem}>• Improve app functionality through analytics and feedback.</Text>
-        <Text style={styles.listItem}>• Manage communications between professionals and clients.</Text>
+        <Text style={styles.listItem}>• Manage communications between professionals and owners.</Text>
         <Text style={styles.listItem}>• Use health data for internal analysis and marketing purposes. We retain control over how this data is used.</Text>
 
         <Text style={styles.sectionTitle}>Sharing of Information</Text>

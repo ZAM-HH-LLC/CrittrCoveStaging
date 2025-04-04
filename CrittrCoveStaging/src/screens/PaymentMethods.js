@@ -607,7 +607,7 @@ const PaymentMethods = () => {
 
       // Confirm the SetupIntent with Stripe
       const result = await cardElement.stripe.confirmCardSetup(
-        setupIntent.client_secret,
+        setupIntent.owner_secret,
         {
           payment_method: method.id
         }
