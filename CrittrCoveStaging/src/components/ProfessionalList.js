@@ -92,9 +92,25 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
           ))}
         </View>
       </View>
-      <TouchableOpacity style={styles.filterButton} onPress={onFilterPress}>
-        <MaterialCommunityIcons name="filter" size={24} color={theme.colors.text} />
-      </TouchableOpacity>
+      <View style={styles.headerButtons}>
+        <TouchableOpacity style={styles.filterButton} onPress={onFilterPress}>
+          <MaterialCommunityIcons name="filter" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+        {isMobile && (
+          <TouchableOpacity 
+            style={styles.filterButton} 
+            onPress={() => {
+              // Navigate to the map view
+              if (onFilterPress) {
+                // Pass a special parameter to indicate we want to switch to map view
+                onFilterPress('map');
+              }
+            }}
+          >
+            <MaterialCommunityIcons name="map" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
@@ -266,6 +282,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceContrast,
     
   },
+  mobileHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   headerContent: {
     flex: 1,
     marginRight: theme.spacing.medium,
@@ -296,6 +316,10 @@ const styles = StyleSheet.create({
   filterButton: {
     padding: theme.spacing.small,
     borderRadius: 8,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.small,
   },
 });
 

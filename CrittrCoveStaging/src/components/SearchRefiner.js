@@ -221,8 +221,9 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
           minimumTrackTintColor={theme.colors.primary}
           maximumTrackTintColor={theme.colors.border}
           thumbTintColor={theme.colors.primary}
+          step={1}
         />
-        <Text style={styles.priceLabel}>${priceRange}</Text>
+        <Text style={styles.priceLabel}>${Math.round(priceRange)}</Text>
       </View>
 
       {/* Date Selection */}
@@ -282,7 +283,15 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
       {/* Search Button - Always show */}
       <TouchableOpacity 
         style={styles.searchButton}
-        onPress={onShowProfessionals}
+        onPress={() => {
+          if (isMobile) {
+            // For mobile, we need to switch to the list view
+            onShowProfessionals();
+          } else {
+            // For desktop, just show professionals
+            onShowProfessionals();
+          }
+        }}
       >
         <Text style={styles.searchButtonText}>Search</Text>
       </TouchableOpacity>
@@ -375,6 +384,7 @@ const styles = StyleSheet.create({
   datePickersContainer: {
     flexDirection: 'column',
     gap: theme.spacing.medium,
+    marginRight: 16,
     zIndex: 500,
   },
   datePickerWrapper: {
@@ -593,6 +603,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: theme.spacing.large,
+    marginBottom: theme.spacing.large,
   },
   searchButtonText: {
     color: theme.colors.whiteText,

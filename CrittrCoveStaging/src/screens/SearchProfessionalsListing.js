@@ -69,6 +69,9 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
 
   const handleShowProfessionals = () => {
     setShowingSearch(false);
+    if (isSingleView) {
+      setActiveView('list');
+    }
   };
 
   const toggleLeftColumn = () => {
@@ -188,10 +191,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       fontWeight: '500',
       fontFamily: theme.fonts.header.fontFamily,
     },
-    mobileHeaderRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
+    
     headerIcon: {
       padding: 8,
       marginLeft: 16,
@@ -259,7 +259,13 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
               onProfessionalSelect={handleProfessionalSelect}
                 isMobile={isMobile}
                 filters={activeFilters}
-                onFilterPress={() => setShowingSearch(true)}
+                onFilterPress={(view) => {
+                  if (view === 'map') {
+                    setActiveView('map');
+                  } else {
+                    setActiveView('filters');
+                  }
+                }}
             />
             )}
           </View>
@@ -290,36 +296,29 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       <View style={styles.containerMobile}>
         {activeView === 'filters' && (
           <>
-            <SearchRefiner onFiltersChange={handleFiltersChange} />
-            <TouchableOpacity 
-              style={styles.searchButton}
-              onPress={() => setActiveView('list')}
-            >
-              <Text style={styles.searchButtonText}>Search</Text>
-            </TouchableOpacity>
+            <SearchRefiner 
+              onFiltersChange={handleFiltersChange} 
+              onShowProfessionals={handleShowProfessionals}
+              isMobile={isSingleView}
+            />
           </>
         )}
         
         {activeView === 'list' && (
           <>
-            <View style={styles.mobileHeader}>
-              <Text style={styles.mobileHeaderText}>Professionals</Text>
-              <View style={styles.mobileHeaderRight}>
-                <TouchableOpacity onPress={() => setActiveView('filters')} style={styles.headerIcon}>
-                  <MaterialCommunityIcons name="filter" size={24} color={theme.colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setActiveView('map')} style={styles.headerIcon}>
-                  <MaterialCommunityIcons name="map" size={24} color={theme.colors.primary} />
-                </TouchableOpacity>
-              </View>
-            </View>
             <ProfessionalList
               professionals={professionals}
               onLoadMore={handleLoadMore}
               onProfessionalSelect={handleProfessionalSelect}
               isMobile={isSingleView}
               filters={activeFilters}
-              onFilterPress={() => setActiveView('filters')}
+              onFilterPress={(view) => {
+                if (view === 'map') {
+                  setActiveView('map');
+                } else {
+                  setActiveView('filters');
+                }
+              }}
             />
           </>
         )}
