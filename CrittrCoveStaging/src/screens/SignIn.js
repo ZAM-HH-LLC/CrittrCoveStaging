@@ -7,26 +7,51 @@ import CustomButton from '../components/CustomButton';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/config';
 import { navigateToFrom } from '../components/Navigation';
+import { validateEmail, validatePassword } from '../validation/validation';
+import { debugLog } from '../context/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isEmailValid, setIsEmailValid] = useState(true);
-  const [isPasswordValid, setIsPasswordValid] = useState(true);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const navigation = useNavigation();
-  const { signIn, is_prototype } = useContext(AuthContext);
+  const { signIn, is_prototype, is_DEBUG } = useContext(AuthContext);
+
+  const validateForm = () => {
+    let isValid = true;
+    
+    // Validate email
+    const emailValidation = validateEmail(email);
+    setEmailError(emailValidation.message);
+    if (!emailValidation.isValid) isValid = false;
+    
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    setPasswordError(passwordValidation.message);
+    if (!passwordValidation.isValid) isValid = false;
+    
+    return isValid;
+  };
 
   const handleLogin = async () => {
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
       Keyboard.dismiss();
     }
 
+    // Validate form before proceeding
+    if (!validateForm()) {
+      return;
+    }
+
     setLoading(true);
     try {
+      debugLog('MBA67890 Starting login process');
+      
       if (is_prototype) {
         // Mock tokens for prototype mode
         const mockAccess = 'mock_access_token';
@@ -34,12 +59,14 @@ export default function SignIn() {
         
         // Pass mock tokens to signIn and get the status
         const status = await signIn(mockAccess, mockRefresh);
-        console.log('Sign in status (prototype):', status);
+        debugLog('MBA67890 Sign in status (prototype):', status);
         
         navigateToFrom(navigation, 'Dashboard', 'SignIn');
         return;
       }
 
+      debugLog('MBA67890 Attempting to authenticate with backend');
+      
       const response = await axios.post(`${API_BASE_URL}/api/token/`, {
         email: email.toLowerCase(),
         password: password,
@@ -47,13 +74,16 @@ export default function SignIn() {
 
       const { access, refresh } = response.data;
       
+      debugLog('MBA67890 Authentication successful, received tokens');
+      
       // Pass both tokens to signIn and get the status
       const status = await signIn(access, refresh);
-      console.log('Sign in status:', status);
+      debugLog('MBA67890 Sign in status:', status);
       
       navigateToFrom(navigation, 'Dashboard', 'SignIn');
     } catch (error) {
-      console.error('Login failed', error);
+      debugLog('MBA67890 Login failed', error.response?.data || error.message);
+      
       const errorMessage = error.response && error.response.status === 401
         ? 'Invalid credentials. Please try again.'
         : 'An unexpected error occurred.';
@@ -64,8 +94,8 @@ export default function SignIn() {
         setSuccessMessage(`Login Failed: ${errorMessage}`);
       }
 
-      setIsEmailValid(false);
-      setIsPasswordValid(false);
+      setEmailError('Invalid email or password');
+      setPasswordError('Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -104,28 +134,36 @@ export default function SignIn() {
           Prototype Mode: You can sign in with anything for email and password
         </Text>
       )}
-      <TextInput
-        style={[styles.input, !isEmailValid && styles.invalidInput]}
-        placeholder="Email"
-        value={email}
-        onChangeText={(text) => {
-          setEmail(text);
-          setIsEmailValid(true);
-        }}
-        autoCapitalize="none"
-        onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
-      />
-      <TextInput
-        style={[styles.input, !isPasswordValid && styles.invalidInput]}
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={(text) => {
-          setPassword(text);
-          setIsPasswordValid(true);
-        }}
-        onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
-      />
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, emailError ? styles.errorInput : null]}
+          placeholder="Email"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            setEmailError('');
+          }}
+          autoCapitalize="none"
+          onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
+        />
+        {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+      </View>
+      
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, passwordError ? styles.errorInput : null]}
+          placeholder="Password"
+          secureTextEntry
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setPasswordError('');
+          }}
+          onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
+        />
+        {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+      </View>
+      
       <CustomButton title="Login" onPress={handleLogin} />
       {loading && <ActivityIndicator size="large" color={theme.colors.primary} />}
       {successMessage ? <Text style={styles.message}>{successMessage}</Text> : null}
@@ -152,17 +190,26 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     marginBottom: theme.spacing.medium,
   },
-  input: {
+  inputContainer: {
     width: screenWidth > 600 ? 600 : '100%',
     maxWidth: 600,
+    marginBottom: theme.spacing.small,
+  },
+  input: {
+    width: '100%',
     height: 40,
     borderColor: 'gray',
     borderWidth: 1,
-    marginBottom: theme.spacing.small,
     paddingHorizontal: theme.spacing.small,
+    borderRadius: 4,
   },
-  invalidInput: {
+  errorInput: {
     borderColor: 'red',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 12,
+    marginTop: 4,
   },
   link: {
     color: theme.colors.primary,
