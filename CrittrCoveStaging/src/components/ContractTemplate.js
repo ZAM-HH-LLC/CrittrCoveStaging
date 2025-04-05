@@ -25,7 +25,7 @@ const ContractTemplate = ({ templates }) => {
         console.error('No token found');
         return;
       }
-      const response = await axios.get(`${API_BASE_URL}/api/owners/`, {
+      const response = await axios.get(`${API_BASE_URL}/api/clients/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

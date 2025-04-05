@@ -149,7 +149,7 @@ const Dashboard = ({ navigation }) => {
       let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       
       // Fetch bookings based on user role
-      const endpoint = isProfessional ? 'professionals' : 'owners';
+      const endpoint = isProfessional ? 'professionals' : 'clients';
       const response = await axios.get(
         `${API_BASE_URL}/api/${endpoint}/v1/dashboard/`,
         { headers: { Authorization: `Bearer ${token}` } }
