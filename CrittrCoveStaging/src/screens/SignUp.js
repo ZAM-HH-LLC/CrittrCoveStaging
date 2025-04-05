@@ -6,12 +6,13 @@ import { theme } from '../styles/theme';
 import CustomButton from '../components/CustomButton';
 import { API_BASE_URL } from '../config/config';
 import { AuthContext } from '../context/AuthContext'; // Import AuthContext
+import { debugLog } from '../context/AuthContext'; // Import debugLog
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function SignUp() {
   const navigation = useNavigation();
-  const { setIsSignedIn } = useContext(AuthContext); // Use AuthContext to update auth state
+  const { signIn, is_DEBUG } = useContext(AuthContext); // Use AuthContext to update auth state
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -42,19 +43,42 @@ export default function SignUp() {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/users/v1/register/`, userData);
+      debugLog('MBA12345 Starting user registration process');
+      
+      // First register the user
+      const registerResponse = await axios.post(`${API_BASE_URL}/api/users/v1/register/`, userData);
+      
+      debugLog('MBA12345 User registration successful', registerResponse.data);
+      
+      // After successful registration, log the user in to get authentication tokens
+      debugLog('MBA12345 Attempting to log in with new credentials');
+      
+      const loginResponse = await axios.post(`${API_BASE_URL}/api/token/`, {
+        email: email.toLowerCase(),
+        password: password,
+      });
+      
+      debugLog('MBA12345 Login successful, received tokens');
+      
+      const { access, refresh } = loginResponse.data;
+      
+      // Use the signIn function from AuthContext to properly set up authentication
+      debugLog('MBA12345 Calling signIn function from AuthContext');
+      
+      await signIn(access, refresh);
+      
+      debugLog('MBA12345 Authentication setup complete');
+      
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         Alert.alert('Success', 'Account created successfully!', [
           { text: 'OK', onPress: () => navigation.navigate('MyProfile') }
         ]);
       } else {
-        setSuccessMessage('Account created successfully!');
-        setTimeout(() => {
-          navigation.navigate('MyProfile');
-        }, 1500);
+        navigation.navigate('MyProfile');
       }
-      setIsSignedIn(true);
     } catch (error) {
+      debugLog('MBA12345 Error during signup process', error.response?.data || error.message);
+      
       let errorMessage = 'Signup Failed: An error occurred during signup.';
       if (error.response) {
         const errorData = error.response.data;
