@@ -486,10 +486,14 @@ export default function Navigation({ navigation }) {
               )}
             </TouchableOpacity>
             <TouchableOpacity onPress={toggleMenu} style={styles.profileContainer}>
-              <Avatar.Image 
-                size={40} 
-                source={require('../../assets/default-profile.png')} 
-              />
+              {isSignedIn ? (
+                <Avatar.Image 
+                  size={40} 
+                  source={require('../../assets/default-profile.png')} 
+                />
+              ) : (
+                <MaterialCommunityIcons name="menu" size={28} color={theme.colors.text} />
+              )}
             </TouchableOpacity>
           </View>
         </View>
