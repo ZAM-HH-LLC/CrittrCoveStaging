@@ -7,6 +7,7 @@ import CustomButton from '../components/CustomButton';
 import { API_BASE_URL } from '../config/config';
 import { AuthContext } from '../context/AuthContext'; // Import AuthContext
 import { debugLog } from '../context/AuthContext'; // Import debugLog
+import { validateEmail, validateName, validatePassword, validatePasswordMatch } from '../validation/validation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -21,25 +22,50 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // Validation states
+  const [firstNameError, setFirstNameError] = useState('');
+  const [lastNameError, setLastNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+
+  const validateForm = () => {
+    let isValid = true;
+    
+    // Validate first name
+    const firstNameValidation = validateName(firstName);
+    setFirstNameError(firstNameValidation.message);
+    if (!firstNameValidation.isValid) isValid = false;
+    
+    // Validate last name
+    const lastNameValidation = validateName(lastName);
+    setLastNameError(lastNameValidation.message);
+    if (!lastNameValidation.isValid) isValid = false;
+    
+    // Validate email
+    const emailValidation = validateEmail(email);
+    setEmailError(emailValidation.message);
+    if (!emailValidation.isValid) isValid = false;
+    
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    setPasswordError(passwordValidation.message);
+    if (!passwordValidation.isValid) isValid = false;
+    
+    // Validate password match
+    const passwordMatchValidation = validatePasswordMatch(password, confirmPassword);
+    setConfirmPasswordError(passwordMatchValidation.message);
+    if (!passwordMatchValidation.isValid) isValid = false;
+    
+    return isValid;
+  };
 
   const handleSignUp = async () => {
-    if (password !== confirmPassword) {
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        Alert.alert('Error', 'Passwords do not match.');
-      } else {
-        setSuccessMessage('Passwords do not match.');
-      }
+    // Validate form before proceeding
+    if (!validateForm()) {
       return;
     }
-
-    // Updated data structure to match new backend expectations
-    const userData = {
-      name: `${firstName.trim().charAt(0).toUpperCase() + firstName.trim().slice(1).toLowerCase()} ${lastName.trim().charAt(0).toUpperCase() + lastName.trim().slice(1).toLowerCase()}`, // Combine first and last name with first letter capitalized and all other letters lowercase
-      email: email.trim().toLowerCase(),
-      password: password,
-      password2: confirmPassword, // Add confirmation password
-      phone_number: '', // Add empty phone number for now
-    };
 
     setLoading(true);
     try {
@@ -101,6 +127,15 @@ export default function SignUp() {
     }
   };
 
+  // Updated data structure to match new backend expectations
+  const userData = {
+    name: `${firstName.trim().charAt(0).toUpperCase() + firstName.trim().slice(1).toLowerCase()} ${lastName.trim().charAt(0).toUpperCase() + lastName.trim().slice(1).toLowerCase()}`, // Combine first and last name with first letter capitalized and all other letters lowercase
+    email: email.trim().toLowerCase(),
+    password: password,
+    password2: confirmPassword, // Add confirmation password
+    phone_number: '', // Add empty phone number for now
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -109,24 +144,75 @@ export default function SignUp() {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <Text style={styles.title}>Sign Up</Text>
-        {[
-          { placeholder: "First Name", value: firstName, onChangeText: setFirstName },
-          { placeholder: "Last Name", value: lastName, onChangeText: setLastName },
-          { placeholder: "Email", value: email, onChangeText: setEmail, keyboardType: "email-address", autoCapitalize: "none" },
-          { placeholder: "Password", value: password, onChangeText: setPassword, secureTextEntry: true },
-          { placeholder: "Confirm Password", value: confirmPassword, onChangeText: setConfirmPassword, secureTextEntry: true }
-        ].map((input, index) => (
+        <View style={styles.inputContainer}>
           <TextInput
-            key={index}
-            style={styles.input}
-            placeholder={input.placeholder}
-            value={input.value}
-            onChangeText={input.onChangeText}
-            keyboardType={input.keyboardType}
-            autoCapitalize={input.autoCapitalize}
-            secureTextEntry={input.secureTextEntry}
+            style={[styles.input, firstNameError ? styles.errorInput : null]}
+            placeholder="First Name"
+            value={firstName}
+            onChangeText={(text) => {
+              setFirstName(text);
+              setFirstNameError('');
+            }}
           />
-        ))}
+          {firstNameError ? <Text style={styles.errorText}>{firstNameError}</Text> : null}
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[styles.input, lastNameError ? styles.errorInput : null]}
+            placeholder="Last Name"
+            value={lastName}
+            onChangeText={(text) => {
+              setLastName(text);
+              setLastNameError('');
+            }}
+          />
+          {lastNameError ? <Text style={styles.errorText}>{lastNameError}</Text> : null}
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[styles.input, emailError ? styles.errorInput : null]}
+            placeholder="Email"
+            value={email}
+            onChangeText={(text) => {
+              setEmail(text);
+              setEmailError('');
+            }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[styles.input, passwordError ? styles.errorInput : null]}
+            placeholder="Password"
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              setPasswordError('');
+            }}
+            secureTextEntry
+          />
+          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[styles.input, confirmPasswordError ? styles.errorInput : null]}
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              setConfirmPasswordError('');
+            }}
+            secureTextEntry
+          />
+          {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
+        </View>
+        
         <CustomButton title="Sign Up" onPress={handleSignUp} />
         {loading && <ActivityIndicator size="large" color={theme.colors.primary} />}
         {successMessage ? <Text style={styles.message}>{successMessage}</Text> : null}
@@ -151,14 +237,26 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     marginBottom: theme.spacing.medium,
   },
-  input: {
+  inputContainer: {
     width: screenWidth > 600 ? 600 : '100%',
     maxWidth: 600,
+    marginBottom: theme.spacing.small,
+  },
+  input: {
+    width: '100%',
     height: 40,
     borderColor: 'gray',
     borderWidth: 1,
-    marginBottom: theme.spacing.small,
     paddingHorizontal: theme.spacing.small,
+    borderRadius: 4,
+  },
+  errorInput: {
+    borderColor: 'red',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 12,
+    marginTop: 4,
   },
   message: {
     marginTop: theme.spacing.small,

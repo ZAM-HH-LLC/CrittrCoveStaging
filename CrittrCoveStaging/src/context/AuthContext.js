@@ -198,6 +198,14 @@ export const getStorage = async (key) => {
   }
 };
 
+// Add is_PRODUCTION variable for use outside of context
+// Set this to true for production, false for development
+const is_PRODUCTION = false;
+
+export const IsProduction = () => {
+  return is_PRODUCTION;
+};
+
 export const AuthProvider = ({ children }) => {
   const authService = useRef(new AuthService());
   const isInitializedRef = useRef(false);
@@ -639,6 +647,7 @@ export const AuthProvider = ({ children }) => {
         firstName,
         is_prototype,
         is_DEBUG,
+        is_PRODUCTION,
         timeSettings,
         isCollapsed,
         setIsCollapsed,
