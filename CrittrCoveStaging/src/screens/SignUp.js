@@ -33,7 +33,7 @@ export default function SignUp() {
 
     // Updated data structure to match new backend expectations
     const userData = {
-      name: `${firstName.trim()} ${lastName.trim()}`, // Combine first and last name
+      name: `${firstName.trim().charAt(0).toUpperCase() + firstName.trim().slice(1).toLowerCase()} ${lastName.trim().charAt(0).toUpperCase() + lastName.trim().slice(1).toLowerCase()}`, // Combine first and last name with first letter capitalized and all other letters lowercase
       email: email.trim().toLowerCase(),
       password: password,
       password2: confirmPassword, // Add confirmation password
