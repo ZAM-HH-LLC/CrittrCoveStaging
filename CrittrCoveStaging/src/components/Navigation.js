@@ -5,6 +5,7 @@ import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appbar, Menu, useTheme, Avatar } from 'react-native-paper';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 let previousRoute, currentRoute;
 
@@ -103,7 +104,7 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
   }
 };
 
-export default function Navigation({ navigation }) {
+export default function Navigation({ state, descriptors, navigation }) {
   const [visible, setVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -230,6 +231,42 @@ export default function Navigation({ navigation }) {
     initializeRouteTracking();
   }, [isSignedIn, userRole]);
 
+  const handleRoleSwitch = async (newRole) => {
+    try {
+      await switchRole(newRole);
+      if (Platform.OS === 'web') {
+        sessionStorage.setItem('userRole', newRole);
+      } else {
+        await AsyncStorage.setItem('userRole', newRole);
+      }
+      handleNavigation('Dashboard');
+    } catch (error) {
+      console.error('Error switching role:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (is_DEBUG) {
+        console.log('MBA98386196v Logging out user');
+      }
+      await signOut();
+      if (Platform.OS === 'web') {
+        sessionStorage.removeItem('currentRoute');
+        sessionStorage.removeItem('previousRoute');
+        sessionStorage.removeItem('userRole');
+      } else {
+        await AsyncStorage.removeItem('currentRoute');
+        await AsyncStorage.removeItem('previousRoute');
+        await AsyncStorage.removeItem('userRole');
+      }
+      setCurrentRoute('');
+      navigation.navigate('SignIn');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
   const renderMenuItems = () => {
     if (!isSignedIn) {
       if (isMobile) {
@@ -264,18 +301,6 @@ export default function Navigation({ navigation }) {
         { title: 'Profile', icon: 'account', route: 'MyProfile' },
         ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
       ];
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      if (is_DEBUG) {
-        console.log('MBA98386196v Logging out user');
-      }
-      await signOut();
-      navigation.navigate('SignIn');
-    } catch (error) {
-      console.error('Error during logout:', error);
     }
   };
 
@@ -359,7 +384,7 @@ export default function Navigation({ navigation }) {
                       });
                     }
                     if (isProfessionalRole) {
-                      switchRole();
+                      handleRoleSwitch('owner');
                     }
                   }}
                   activeOpacity={0.7}
@@ -383,7 +408,7 @@ export default function Navigation({ navigation }) {
                       });
                     }
                     if (isOwnerRole && isApprovedProfessional) {
-                      switchRole();
+                      handleRoleSwitch('professional');
                     }
                   }}
                   disabled={!isApprovedProfessional}
@@ -516,7 +541,7 @@ export default function Navigation({ navigation }) {
                         });
                       }
                       if (isProfessionalRole) {
-                        switchRole();
+                        handleRoleSwitch('owner');
                         setIsMenuOpen(false);
                       }
                     }}
@@ -541,7 +566,7 @@ export default function Navigation({ navigation }) {
                         });
                       }
                       if (isOwnerRole && isApprovedProfessional) {
-                        switchRole();
+                        handleRoleSwitch('professional');
                         setIsMenuOpen(false);
                       }
                     }}

@@ -1,5 +1,11 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from ..views import TutorialStatusViewSet
 from . import views
+
+# Create a router for the TutorialStatusViewSet
+tutorial_router = DefaultRouter()
+tutorial_router.register(r'tutorial-status', TutorialStatusViewSet, basename='tutorial-status')
 
 urlpatterns = [
     path('register/', views.RegisterView.as_view(), name='register'),
@@ -11,4 +17,7 @@ urlpatterns = [
     path('change-password/', views.ChangePasswordView.as_view(), name='change_password'),
     path('get-info/', views.get_user_info, name='get_user_info'),
     path('time-settings/', views.get_time_settings, name='time_settings'),
-] 
+]
+
+# Add the tutorial router URLs
+urlpatterns += tutorial_router.urls 

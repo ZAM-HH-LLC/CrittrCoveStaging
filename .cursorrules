@@ -19,6 +19,10 @@ Time and Date Format Rules:
 4. The same thing needs to happen with military time conversion. The database should always store times in military, but the user will be making the request to the backend always in military time as the frontend should convert the non-military times (if non-military) to military times using the time_utils.js file on the frontend.
 5. When converting times from the backend to the user's timezone/military time preferences, use the formatDateTimeRangeFromUTC function in time_utils.js if it is a date range (just a single start/end time returned for one occurrence), or if it is multiple occurrences, then we will need to use formatFromUTC or maybe formatDateTimeRangeFromUTC if it can handle a date time range between the same days. 
 
+Backend Instructions:
+1. When creating or searching for endpoints, all of my endpoints will be structured like this: /api/<app_name>/v1/<bunch of unique extra stuff in urls past this point>.
+
+
 Extra instructions:
 1. Try to reduce server load where it makes sense. For example, on the bookingstepmodal's first step: the service and pets editor shouldn't call the backend if the backend got a service and pet, unless and changes were done to it. Only call the backend when needed, or in the above example, when it has changes from the data recieved from the backend. 
 2. When adding any frontend call to the backend, these should be done inside of CrittrCoveStaging/src/api/API.js with a sufficient comment above them with what the function is doing/sending and what it is responding with

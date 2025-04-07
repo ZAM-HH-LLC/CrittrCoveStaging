@@ -6,18 +6,30 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
+import { TutorialContext } from '../context/TutorialContext';
 import CrossPlatformView from '../components/CrossPlatformView';
 import { theme } from '../styles/theme';
 import { navigateToFrom } from '../components/Navigation';
 import ProfessionalServiceCard from '../components/ProfessionalServiceCard';
 import { getProfessionalServices } from '../api/API';
 import BookingCard from '../components/BookingCard';
+import TutorialModal from '../components/TutorialModal';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const Dashboard = ({ navigation }) => {
   const { colors } = useTheme();
   const { signOut, firstName, is_prototype, screenWidth, is_DEBUG, isSignedIn, isCollapsed, userRole } = useContext(AuthContext);
+  const { 
+    isVisible: isTutorialVisible,
+    currentStep,
+    totalSteps,
+    stepData,
+    handleNext,
+    handlePrevious,
+    handleSkip,
+    completeTutorial,
+  } = useContext(TutorialContext);
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -580,6 +592,20 @@ const Dashboard = ({ navigation }) => {
         {renderBookings()}
         {renderServices()}
       </ScrollView>
+      
+      {isTutorialVisible && stepData?.screen === 'Dashboard' && (
+        <TutorialModal
+          step={currentStep}
+          totalSteps={totalSteps}
+          title={stepData.title}
+          description={stepData.description}
+          position={stepData.position}
+          onNext={() => handleNext(navigation)}
+          onPrevious={handlePrevious}
+          onSkip={handleSkip}
+          onClose={completeTutorial}
+        />
+      )}
     </View>
   );
 };

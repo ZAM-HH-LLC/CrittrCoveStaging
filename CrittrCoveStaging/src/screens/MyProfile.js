@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { theme } from '../styles/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
+import { TutorialContext } from '../context/TutorialContext';
 import FloatingSaveButton from '../components/FloatingSaveButton';
 import ServiceManager from '../components/ServiceManager';
 import ProfessionalTab from '../components/ProfessionalTab';
@@ -15,6 +16,7 @@ import EditableSection from '../components/EditableSection';
 import DatePicker from '../components/DatePicker';
 import BackHeader from '../components/BackHeader';
 import CrossPlatformView from '../components/CrossPlatformView';
+import TutorialModal from '../components/TutorialModal';
 import { DEFAULT_SERVICES } from '../data/mockData';
 import ProfileInfoTab from '../components/profile/ProfileInfoTab';
 import ServicesAvailabilityTab from '../components/profile/ServicesAvailabilityTab';
@@ -67,13 +69,26 @@ const MyProfile = () => {
     connections: { used: 0, total: 'Unlimited' }
   });
 
+  const { 
+    isVisible: isTutorialVisible,
+    currentStep,
+    totalSteps,
+    stepData,
+    handleNext,
+    handlePrevious,
+    handleSkip,
+    completeTutorial,
+  } = useContext(TutorialContext);
+
   // Get initialTab from navigation params
   useEffect(() => {
     const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
     if (params?.initialTab) {
       setActiveTab(params.initialTab);
+    } else if (stepData?.tab) {
+      setActiveTab(stepData.tab);
     }
-  }, [navigation]);
+  }, [navigation, stepData]);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -406,6 +421,20 @@ const MyProfile = () => {
           onSave={handleSaveChanges}
           btnText="Save Changes"
         />
+
+        {isTutorialVisible && stepData?.screen === 'MyProfile' && (
+          <TutorialModal
+            step={currentStep}
+            totalSteps={totalSteps}
+            title={stepData.title}
+            description={stepData.description}
+            position={stepData.position}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            onSkip={handleSkip}
+            onClose={completeTutorial}
+          />
+        )}
       </SafeAreaView>
     </View>
   );

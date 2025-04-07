@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
+from .models import User, Waitlister, TutorialStatus
 
 User = get_user_model()
 
@@ -44,3 +45,20 @@ class UserSerializer(serializers.ModelSerializer):
             'email', 'name', 'is_sitter', 'is_client',
             'approved_for_dogs', 'approved_for_cats', 'approved_for_exotics'
         ]
+
+class TutorialStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TutorialStatus
+        fields = [
+            'status_id',
+            'first_time_logging_in',
+            'first_time_logging_in_after_signup',
+            'done_pro_profile_tutorial',
+            'done_client_profile_tutorial',
+            'done_client_dashboard_tutorial',
+            'done_pets_preferences_tutorial',
+            'done_settings_payments_tutorial',
+            'done_search_pros_tutorial',
+            'done_become_pro_tutorial',
+        ]
+        read_only_fields = ['status_id']

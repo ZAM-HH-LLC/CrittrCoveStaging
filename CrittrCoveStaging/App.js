@@ -13,6 +13,7 @@ import { createNavigationContainerRef } from '@react-navigation/native';
 import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { navigateToFrom } from './src/components/Navigation';
+import { TutorialProvider } from './src/context/TutorialContext';
 
 // Import all your screen components
 import HomeScreen from './src/screens/HomeScreen';
@@ -247,37 +248,8 @@ function AppContent() {
         let route = 'Home';
 
         // Only change route if user is authenticated
-        if (authStatus.isSignedIn) {
-          if (is_DEBUG) {
-            console.log('Auth status on init:', authStatus);
-          }
-          route = 'Dashboard'
-        } else {
-          route = 'Home';
-        }
-
-        // For web platform
-        if (Platform.OS === 'web') {
-          const path = window.location.pathname;
-          
-          // If we're at the root path, use the route based on auth status
-          if (path === '/' || path === '') {
-            // route is already set based on auth status above
-          } else {
-            // Extract the route from the path
-            const routePath = path.slice(1).split('/')[0].toLowerCase();
-            if (routePath === 'home') {
-              // Use the route based on auth status
-            } else {
-              // Find the matching screen for the current path
-              const matchingScreen = screens.find(screen => 
-                screen.name.toLowerCase() === routePath
-              );
-              if (matchingScreen) {
-                route = matchingScreen.name;
-              }
-            }
-          }
+        if (authStatus.isAuthenticated) {
+          route = authStatus.userRole === 'professional' ? 'Dashboard' : 'Home';
         }
 
         setInitialRoute(route);
@@ -420,9 +392,11 @@ const styles = StyleSheet.create({
 export default function App() {
   return (
     <AuthProvider>
-      <PaperProvider theme={theme}>
-        <AppContent />
-      </PaperProvider>
+      <TutorialProvider>
+        <PaperProvider theme={theme}>
+          <AppContent />
+        </PaperProvider>
+      </TutorialProvider>
     </AuthProvider>
   );
 }

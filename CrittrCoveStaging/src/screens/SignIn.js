@@ -80,7 +80,28 @@ export default function SignIn() {
       const status = await signIn(access, refresh);
       debugLog('MBA67890 Sign in status:', status);
       
-      navigateToFrom(navigation, 'Dashboard', 'SignIn');
+      // Check if user needs to complete tutorial
+      try {
+        const tutorialResponse = await axios.get(`${API_BASE_URL}/api/users/v1/tutorial-status/current/`);
+        const needsTutorial = tutorialResponse.data.first_time_logging_in || 
+                             tutorialResponse.data.first_time_logging_in_after_signup;
+        
+        debugLog('MBA67890 Tutorial status:', tutorialResponse.data);
+        debugLog('MBA67890 Needs tutorial:', needsTutorial);
+        
+        // Navigate based on tutorial status
+        if (needsTutorial) {
+          debugLog('MBA67890 Navigating to MyProfile for tutorial');
+          navigateToFrom(navigation, 'MyProfile', 'SignIn');
+        } else {
+          debugLog('MBA67890 Navigating to Dashboard');
+          navigateToFrom(navigation, 'Dashboard', 'SignIn');
+        }
+      } catch (tutorialError) {
+        debugLog('MBA67890 Error checking tutorial status:', tutorialError);
+        // Default to Dashboard if tutorial check fails
+        navigateToFrom(navigation, 'Dashboard', 'SignIn');
+      }
     } catch (error) {
       debugLog('MBA67890 Login failed', error.response?.data || error.message);
       

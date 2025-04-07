@@ -20,9 +20,9 @@ export const setDebugEnabled = (enabled) => {
 export const debugLog = (message, data = null) => {
   if (debugEnabled) {
     if (data) {
-      console.log(message, data);
+      console.log(`MBA98386196v ${message}:`, data);
     } else {
-      console.log(message);
+      console.log(`MBA98386196v ${message}`);
     }
   }
 };
@@ -252,14 +252,17 @@ export const AuthProvider = ({ children }) => {
       async (error) => {
         const originalRequest = error.config;
         
-        if (error.response?.status === 401 && !originalRequest._retry && !is_prototype) {
+        if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           
           try {
             const newToken = await authService.current.refreshTokens();
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            return axios(originalRequest);
+            if (newToken) {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              return axios(originalRequest);
+            }
           } catch (refreshError) {
+            console.error('MBA98765 Token refresh failed:', refreshError);
             await signOut();
             return Promise.reject(refreshError);
           }
@@ -270,92 +273,42 @@ export const AuthProvider = ({ children }) => {
     );
 
     return () => {
-      console.log('MBA98765 Cleaning up axios interceptors');
       axios.interceptors.request.eject(requestInterceptor);
       axios.interceptors.response.eject(responseInterceptor);
     };
   }, [is_prototype]);
 
-  // Initialize auth
+  // Initialize auth state
   useEffect(() => {
-    console.log('MBA98765 Starting auth initialization');
     const init = async () => {
-      if (isInitializedRef.current) {
-        console.log('MBA98765 Already initialized, skipping');
-        setLoading(false);
-        return;
-      }
-
+      if (isInitializedRef.current) return;
+      
       try {
-        if (is_prototype) {
-          console.log('MBA98765 Prototype mode detected');
-          setIsSignedIn(true);
-          setUserRole('professional');
-          setIsApprovedProfessional(true);
-          setFirstName('John');
-          isInitializedRef.current = true;
-          setLoading(false);
-          return;
-        }
-
-        console.log('MBA98765 Initializing auth service');
+        console.log('MBA98765 Initializing auth state');
         const { hasAccessToken, hasRefreshToken } = await authService.current.initialize();
         
-        console.log('MBA98765 Auth initialization result:', { hasAccessToken, hasRefreshToken });
-        
-        if (hasAccessToken && hasRefreshToken) {
-          console.log('MBA98765 Validating token');
-          const isValid = await authService.current.validateToken(authService.current.accessToken);
-          
-          if (!isValid) {
-            console.log('MBA98765 Token invalid, attempting refresh');
-            await authService.current.refreshTokens();
-          }
-          
-          setIsSignedIn(true);
-          
-          // Get stored role
-          let storedRole = null;
-          if (Platform.OS === 'web') {
-            storedRole = sessionStorage.getItem('userRole');
-          } else {
-            storedRole = await AsyncStorage.getItem('userRole');
-          }
-          
-          console.log('MBA98765 Stored role:', storedRole);
-          
-          // Always get professional status
-          const status = await getProfessionalStatus(authService.current.accessToken);
-          setIsApprovedProfessional(status.isApprovedProfessional);
-          
-          if (storedRole) {
-            setUserRole(storedRole);
-          } else {
-            setUserRole(status.suggestedRole);
-            // Store the role
-            if (Platform.OS === 'web') {
-              sessionStorage.setItem('userRole', status.suggestedRole);
+        if (hasAccessToken || hasRefreshToken) {
+          const token = await authService.current.getAccessToken();
+          if (token) {
+            const isValid = await authService.current.validateToken(token);
+            if (isValid) {
+              setIsSignedIn(true);
+              await fetchUserName();
+              await getProfessionalStatus(token);
+              await fetchTimeSettings();
             } else {
-              await AsyncStorage.setItem('userRole', status.suggestedRole);
+              await signOut();
             }
           }
-          
-          await fetchUserName();
         } else {
-          console.log('MBA98765 No valid tokens found');
-          setIsSignedIn(false);
-          setUserRole(null);
-          setIsApprovedProfessional(false);
+          await signOut();
         }
       } catch (error) {
-        console.error('MBA98765 Error in auth initialization:', error);
-        setIsSignedIn(false);
-        setUserRole(null);
-        setIsApprovedProfessional(false);
+        console.error('MBA98765 Error initializing auth state:', error);
+        await signOut();
       } finally {
-        console.log('MBA98765 Finishing auth initialization');
-        isInitializedRef.current = true;
         setLoading(false);
+        isInitializedRef.current = true;
       }
     };
 
@@ -368,6 +321,7 @@ export const AuthProvider = ({ children }) => {
       initStripe();
     }
   }, [isSignedIn, is_prototype]);
+  
 
   // Separate screen width handling from auth
   useEffect(() => {
@@ -417,12 +371,12 @@ export const AuthProvider = ({ children }) => {
       if (is_DEBUG) {
         debugLog('MBA98765 Professional status response:', response.data);
       }
-      
+
       const { is_approved } = response.data;
       
       setIsApprovedProfessional(is_approved);
       await AsyncStorage.setItem('isApprovedProfessional', String(is_approved));
-      
+
       return {
         isApprovedProfessional: is_approved,
         suggestedRole: is_approved ? 'professional' : 'petOwner'
@@ -570,69 +524,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Add effect to fetch time settings when user signs in
-  useEffect(() => {
-    if (isSignedIn && !is_prototype) {
-      fetchTimeSettings();
-    }
-  }, [isSignedIn, is_prototype]);
-
   const checkAuthStatus = async () => {
     try {
-      if (is_prototype) {
-        return {
-          isSignedIn: true,
-          userRole: 'professional',
-          isApprovedProfessional: true
-        };
+      const token = await authService.current.getAccessToken();
+      if (!token) {
+        return { isAuthenticated: false };
       }
 
-      const { hasAccessToken, hasRefreshToken } = await authService.current.initialize();
-      
-      if (hasAccessToken && hasRefreshToken) {
-        const isValid = await authService.current.validateToken(authService.current.accessToken);
-        
-        if (!isValid) {
-          await authService.current.refreshTokens();
-        }
-
-        // Get stored role
-        let storedRole = null;
-        if (Platform.OS === 'web') {
-          storedRole = sessionStorage.getItem('userRole');
-        } else {
-          storedRole = await AsyncStorage.getItem('userRole');
-        }
-
-        if (storedRole) {
-          return {
-            isSignedIn: true,
-            userRole: storedRole,
-            isApprovedProfessional: storedRole === 'professional'
-          };
-        } else {
-          // If no stored role, get it from the backend
-          const status = await getProfessionalStatus(authService.current.accessToken);
-          return {
-            isSignedIn: true,
-            userRole: status.suggestedRole,
-            isApprovedProfessional: status.isApprovedProfessional
-          };
-        }
+      const isValid = await authService.current.validateToken(token);
+      if (!isValid) {
+        await signOut();
+        return { isAuthenticated: false };
       }
 
       return {
-        isSignedIn: false,
-        userRole: null,
-        isApprovedProfessional: false
+        isAuthenticated: true,
+        userRole: userRole,
+        isApprovedProfessional: isApprovedProfessional
       };
     } catch (error) {
-      console.error('Error checking auth status:', error);
-      return {
-        isSignedIn: false,
-        userRole: null,
-        isApprovedProfessional: false
-      };
+      console.error('MBA98765 Error checking auth status:', error);
+      return { isAuthenticated: false };
     }
   };
 

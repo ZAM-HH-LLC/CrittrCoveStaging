@@ -17,6 +17,10 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
 from professional_status.models import ProfessionalStatus
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from .models import TutorialStatus
+from .serializers import TutorialStatusSerializer
 
 
 logger = logging.getLogger(__name__)
@@ -217,3 +221,42 @@ def get_user_info(request):
             'phone_number': '',
             'error': str(e)
         }, status=status.HTTP_200_OK)  # Return 200 even with error to prevent logout
+
+class TutorialStatusViewSet(viewsets.ModelViewSet):
+    serializer_class = TutorialStatusSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return TutorialStatus.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['GET'])
+    def current(self, request):
+        """Get current user's tutorial status"""
+        tutorial_status, created = TutorialStatus.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'first_time_logging_in': True,
+                'first_time_logging_in_after_signup': True,
+                'done_pro_profile_tutorial': False,
+                'done_client_profile_tutorial': False,
+                'done_client_dashboard_tutorial': False,
+                'done_pets_preferences_tutorial': False,
+                'done_settings_payments_tutorial': False,
+                'done_search_pros_tutorial': False,
+                'done_become_pro_tutorial': False,
+            }
+        )
+        serializer = self.get_serializer(tutorial_status)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['PATCH'])
+    def update_status(self, request):
+        """Update specific tutorial status fields"""
+        tutorial_status = TutorialStatus.objects.get(user=request.user)
+        serializer = self.get_serializer(tutorial_status, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
