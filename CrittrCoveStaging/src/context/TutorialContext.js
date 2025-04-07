@@ -56,7 +56,7 @@ const tutorialSteps = {
       }
     },
     {
-      screen: 'SearchProfessionals',
+      screen: 'SearchProfessionalsListing',
       title: 'Find Professionals',
       description: 'Search for qualified professionals in your area. Filter by service type, availability, and more.',
       position: 'bottomRight',
@@ -135,7 +135,7 @@ export const TutorialProvider = ({ children }) => {
     } else {
       setIsLoading(false);
     }
-  }, [isSignedIn]);
+  }, [isSignedIn, userRole]);
 
   const fetchTutorialStatus = async () => {
     try {
@@ -152,7 +152,7 @@ export const TutorialProvider = ({ children }) => {
       if (response.data.first_time_logging_in || 
           response.data.first_time_logging_in_after_signup || 
           (userRole === 'professional' && !response.data.done_pro_profile_tutorial) ||
-          (userRole !== 'professional' && !response.data.done_client_profile_tutorial)) {
+          (userRole === 'petOwner' && !response.data.done_client_profile_tutorial)) {
         setIsVisible(true);
         
         // Redirect new users to MyProfile screen
@@ -182,6 +182,7 @@ export const TutorialProvider = ({ children }) => {
         if (is_DEBUG) {
           debugLog('MBA54321 Tutorial should NOT be visible');
         }
+        setIsVisible(false);
       }
     } catch (error) {
       console.error('Error fetching tutorial status:', error);
@@ -244,62 +245,83 @@ export const TutorialProvider = ({ children }) => {
     return stepData;
   };
 
-  const handleNext = () => {
-    console.log('MBA54321 handleNext called with currentStep:', currentStep);
-    
-    const roleKey = userRole === 'professional' ? 'professional' : 
-                   (userRole === 'petOwner' || userRole === 'client') ? 'client' : 'default';
-    const steps = tutorialSteps[roleKey] || tutorialSteps.default;
+  const handleNext = async () => {
+    debugLog("MBA54321 handleNext called", { currentStep, userRole });
     
     // Check if we're at the last step
+    const roleKey = userRole === 'professional' ? 'professional' : 'client';
+    const steps = tutorialSteps[roleKey];
+    
     if (currentStep >= steps.length) {
-      console.log('MBA54321 At last step, completing tutorial');
-      completeTutorial();
+      debugLog("MBA54321 At last step, completing tutorial", { currentStep, totalSteps: steps.length });
+      await completeTutorial();
       return;
     }
     
-    // Get current and next step data
+    // Get the next step data before incrementing the step counter
+    const nextStep = steps[currentStep];
     const currentStepData = steps[currentStep - 1];
-    const nextStepData = steps[currentStep];
     
-    console.log('MBA54321 Current step data:', currentStepData);
-    console.log('MBA54321 Next step data:', nextStepData);
+    debugLog("MBA54321 Current step data", currentStepData);
+    debugLog("MBA54321 Next step data", nextStep);
     
-    // Increment the current step
-    setCurrentStep(currentStep + 1);
+    // Increment the step counter first
+    setCurrentStep(prevStep => prevStep + 1);
     
-    // Handle navigation based on the next step
-    if (navigation) {
-      // Case 1: Different screen
-      if (nextStepData.screen !== currentStepData.screen) {
-        console.log('MBA54321 Navigating to different screen:', nextStepData.screen);
-        
-        // Simple direct navigation
-        navigation.navigate(nextStepData.screen);
-      } 
-      // Case 2: Same screen, different tab
-      else if (nextStepData.tab && nextStepData.tab !== currentStepData.tab) {
-        console.log('MBA54321 Navigating to same screen, different tab:', nextStepData.tab);
-        
-        // For MyProfile screen, use the tab parameter
-        if (nextStepData.screen === 'MyProfile') {
-          console.log('MBA54321 Navigating to MyProfile with tab:', nextStepData.tab);
-          navigation.navigate('MyProfile', { screen: nextStepData.tab });
-        } else {
-          navigation.navigate(nextStepData.screen);
+    // If we're navigating to a different screen or tab
+    if (nextStep.screen !== currentStepData.screen || (nextStep.tab && nextStep.tab !== currentStepData.tab)) {
+      debugLog("MBA54321 Navigating to different screen/tab", { 
+        from: currentStepData.screen, 
+        to: nextStep.screen,
+        fromTab: currentStepData.tab,
+        toTab: nextStep.tab
+      });
+      
+      // Special handling for MyProfile tabs
+      if (nextStep.screen === 'MyProfile') {
+        // First navigate to MyProfile if we're not already there
+        if (currentStepData.screen !== 'MyProfile') {
+          debugLog("MBA54321 Navigating to MyProfile first", { currentScreen: currentStepData.screen });
+          navigation.navigate('MyProfile');
         }
-      }
-      // Case 3: Same screen and tab (no navigation needed)
-      else {
-        console.log('MBA54321 Same screen and tab, no navigation needed');
+        
+        // Then set the active tab
+        debugLog("MBA54321 Setting active tab", { tab: nextStep.tab });
+        // Use a small timeout to ensure the screen is mounted before changing tabs
+        setTimeout(() => {
+          // Use reset to ensure the navigation state is clean
+          navigation.reset({
+            index: 0,
+            routes: [
+              { 
+                name: 'MyProfile', 
+                params: { screen: nextStep.tab } 
+              }
+            ],
+          });
+        }, 0);
+      } else {
+        // For non-MyProfile screens, just navigate directly
+        debugLog("MBA54321 Navigating to screen", { screen: nextStep.screen });
+        navigation.navigate(nextStep.screen);
       }
       
-      // Ensure tutorial stays visible after navigation
+      // Keep the tutorial visible after navigation
       setTimeout(() => {
         setIsVisible(true);
-      }, 100);
-    } else {
-      console.log('MBA54321 Navigation object is undefined');
+      }, 700);
+    }
+    
+    // Update the tutorial status in the backend
+    try {
+      const stepKey = `tutorial_${currentStep}_completed`;
+      await axios.patch(`${API_BASE_URL}/api/users/v1/tutorial-status/update_status/`, {
+        [stepKey]: true
+      });
+      debugLog("MBA54321 Updated tutorial status", { stepKey });
+    } catch (error) {
+      debugLog("MBA54321 Error updating tutorial status", { error: error.message });
+      console.error('Error updating tutorial status:', error);
     }
   };
 
@@ -314,54 +336,31 @@ export const TutorialProvider = ({ children }) => {
   };
 
   const completeTutorial = async () => {
+    debugLog("MBA54321 Completing tutorial", { userRole });
+    
     try {
       // Update the tutorial status in the backend
-      const updates = {};
+      await axios.patch(`${API_BASE_URL}/api/users/v1/tutorial-status/update_status/`, {
+        tutorial_completed: true,
+        first_time_logging_in: false,
+        first_time_logging_in_after_signup: false
+      });
       
-      // Determine which tutorial to mark as completed based on user role
-      if (userRole === 'professional') {
-        updates.done_pro_profile_tutorial = true;
-      } else {
-        updates.done_client_profile_tutorial = true;
-      }
+      debugLog("MBA54321 Tutorial status updated in backend");
       
-      // Also update first_time_logging_in flags
-      updates.first_time_logging_in = false;
-      updates.first_time_logging_in_after_signup = false;
-      
-      if (is_DEBUG) {
-        debugLog('MBA54321 Completing tutorial with updates:', updates);
-      }
-      
-      // Update the tutorial status in the backend
-      await axios.patch(`${API_BASE_URL}/api/users/v1/tutorial-status/update_status/`, updates);
-      
-      // Update local state
-      setTutorialStatus(prev => ({
-        ...prev,
-        ...updates
-      }));
-      
-      // Hide the tutorial
+      // Hide the tutorial modal
       setIsVisible(false);
       
-      // Navigate to the dashboard
-      if (navigation) {
-        navigation.navigate('Dashboard');
-      }
+      // Navigate to the Dashboard
+      debugLog("MBA54321 Navigating to Dashboard");
+      navigation.navigate('Dashboard');
+      
     } catch (error) {
+      debugLog("MBA54321 Error completing tutorial", { error: error.message });
       console.error('Error completing tutorial:', error);
-      if (is_DEBUG) {
-        debugLog('MBA54321 Error completing tutorial:', error);
-      }
       
-      // Still hide the tutorial even if there's an error
-      setIsVisible(false);
-      
-      // Navigate to the dashboard
-      if (navigation) {
-        navigation.navigate('Dashboard');
-      }
+      // Even if there's an error, try to navigate to Dashboard
+      navigation.navigate('Dashboard');
     }
   };
 
@@ -390,11 +389,6 @@ export const TutorialProvider = ({ children }) => {
     );
   }
 
-  const currentStepData = getCurrentStepData();
-  const steps = tutorialSteps[userRole === 'professional' ? 'professional' : 
-               (userRole === 'petOwner' || userRole === 'client') ? 'client' : 'default'] || 
-               tutorialSteps.default;
-
   return (
     <TutorialContext.Provider
       value={{
@@ -410,17 +404,18 @@ export const TutorialProvider = ({ children }) => {
       }}
     >
       {children}
-      {isVisible && currentStepData && (
+      {isVisible && getCurrentStepData() && (
         <TutorialModal
           step={currentStep}
-          totalSteps={steps.length}
-          title={currentStepData.title}
-          description={currentStepData.description}
+          totalSteps={tutorialSteps[userRole === 'professional' ? 'professional' : 
+                     (userRole === 'petOwner' || userRole === 'client') ? 'client' : 'default'].length}
+          title={getCurrentStepData().title}
+          description={getCurrentStepData().description}
           onNext={handleNext}
           onPrevious={handlePrevious}
           onSkip={handleSkip}
           onClose={() => setIsVisible(false)}
-          position={currentStepData.position}
+          position={getCurrentStepData().position}
           userRole={userRole}
           is_DEBUG={is_DEBUG}
         />

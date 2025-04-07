@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { theme } from '../styles/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import { TutorialContext } from '../context/TutorialContext';
 import FloatingSaveButton from '../components/FloatingSaveButton';
 import ServiceManager from '../components/ServiceManager';
@@ -83,12 +83,43 @@ const MyProfile = () => {
   // Get initialTab from navigation params
   useEffect(() => {
     const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-    if (params?.initialTab) {
+    if (params?.screen) {
+      debugLog('MBA54321 MyProfile received screen param', { screen: params.screen });
+      setActiveTab(params.screen);
+    } else if (params?.initialTab) {
+      debugLog('MBA54321 MyProfile received initialTab param', { initialTab: params.initialTab });
       setActiveTab(params.initialTab);
     } else if (stepData?.tab) {
+      debugLog('MBA54321 MyProfile received tab from stepData', { tab: stepData.tab });
       setActiveTab(stepData.tab);
     }
   }, [navigation, stepData]);
+
+  // Add a new useEffect to handle tab changes from the tutorial
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+      if (params?.screen) {
+        debugLog('MBA54321 MyProfile focus event - setting active tab', { screen: params.screen });
+        setActiveTab(params.screen);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  // Add a new useEffect to handle tab changes from the tutorial
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('state', () => {
+      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+      if (params?.screen) {
+        debugLog('MBA54321 MyProfile state change - setting active tab', { screen: params.screen });
+        setActiveTab(params.screen);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   useEffect(() => {
     const updateLayout = () => {

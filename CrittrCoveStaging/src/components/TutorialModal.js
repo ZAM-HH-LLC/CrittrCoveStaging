@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { debugLog } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 
 const TutorialModal = ({
   step,
@@ -21,10 +22,11 @@ const TutorialModal = ({
   const isLastStep = step === totalSteps;
   const [isVisible, setIsVisible] = useState(true);
   const [currentScreen, setCurrentScreen] = useState(null);
+  const navigation = useNavigation();
 
   useEffect(() => {
     if (is_DEBUG) {
-      debugLog('MBA54321 TutorialModal mounted/updated:', {
+      debugLog('MBA54321 TutorialModal mounted/updated', {
         isVisible,
         currentStep: step,
         userRole,
@@ -34,17 +36,55 @@ const TutorialModal = ({
   }, [isVisible, step, userRole, currentScreen]);
 
   useEffect(() => {
-    // Ensure tutorial stays visible when navigating between screens
+    // Ensure the tutorial stays visible during screen changes
     if (isVisible) {
-      if (is_DEBUG) {
-        debugLog('MBA54321 Tutorial is visible, ensuring it stays visible on screen change');
-      }
+      debugLog('MBA54321 Tutorial is visible, ensuring it stays visible on screen change');
       const timer = setTimeout(() => {
         setIsVisible(true);
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [currentScreen]);
+  }, [isVisible]);
+
+  // Add a focus listener to ensure the tutorial stays visible when the screen changes
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (isVisible) {
+        debugLog('MBA54321 Screen focused, ensuring tutorial stays visible');
+        setIsVisible(true);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, isVisible]);
+
+  const handleNext = () => {
+    if (is_DEBUG) {
+      debugLog('MBA54321 TutorialModal handleNext called', { step, totalSteps });
+    }
+    onNext();
+  };
+
+  const handlePrevious = () => {
+    if (is_DEBUG) {
+      debugLog('MBA54321 TutorialModal handlePrevious called', { step, totalSteps });
+    }
+    onPrevious();
+  };
+
+  const handleSkip = () => {
+    if (is_DEBUG) {
+      debugLog('MBA54321 TutorialModal handleSkip called');
+    }
+    onSkip();
+  };
+
+  const handleClose = () => {
+    if (is_DEBUG) {
+      debugLog('MBA54321 TutorialModal handleClose called');
+    }
+    onClose();
+  };
 
   const getPositionStyles = () => {
     switch (position) {
@@ -78,7 +118,7 @@ const TutorialModal = ({
 
   return (
     <View style={[styles.container, getPositionStyles()]}>
-      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+      <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
         <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
       </TouchableOpacity>
 
@@ -89,11 +129,11 @@ const TutorialModal = ({
         <View style={styles.footer}>
           <View style={styles.leftButtons}>
             {isFirstStep ? (
-              <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
+              <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                 <Text style={styles.skipText}>Skip Tutorial</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.navigationButton} onPress={onPrevious}>
+              <TouchableOpacity style={styles.navigationButton} onPress={handlePrevious}>
                 <MaterialCommunityIcons name="chevron-left" size={20} color={theme.colors.primary} />
                 <Text style={styles.navigationText}>Previous</Text>
               </TouchableOpacity>
@@ -105,7 +145,7 @@ const TutorialModal = ({
           </View>
 
           {!isLastStep && (
-            <TouchableOpacity style={styles.navigationButton} onPress={onNext}>
+            <TouchableOpacity style={styles.navigationButton} onPress={handleNext}>
               <Text style={styles.navigationText}>Next</Text>
               <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.primary} />
             </TouchableOpacity>
