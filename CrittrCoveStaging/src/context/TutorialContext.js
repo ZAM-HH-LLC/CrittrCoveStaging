@@ -326,8 +326,68 @@ export const TutorialProvider = ({ children }) => {
   };
 
   const handlePrevious = () => {
+    debugLog("MBA54321 handlePrevious called", { currentStep, userRole });
+    
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      // Get the previous step data before decrementing the step counter
+      const roleKey = userRole === 'professional' ? 'professional' : 'client';
+      const steps = tutorialSteps[roleKey];
+      const previousStep = steps[currentStep - 2]; // -2 because currentStep is 1-indexed
+      const currentStepData = steps[currentStep - 1];
+      
+      debugLog("MBA54321 Previous step data", previousStep);
+      debugLog("MBA54321 Current step data", currentStepData);
+      
+      // Decrement the step counter
+      setCurrentStep(prevStep => prevStep - 1);
+      
+      // If we're navigating to a different screen or tab
+      if (previousStep.screen !== currentStepData.screen || (previousStep.tab && previousStep.tab !== currentStepData.tab)) {
+        debugLog("MBA54321 Navigating back to different screen/tab", { 
+          from: currentStepData.screen, 
+          to: previousStep.screen,
+          fromTab: currentStepData.tab,
+          toTab: previousStep.tab
+        });
+        
+        // Special handling for MyProfile tabs
+        if (previousStep.screen === 'MyProfile') {
+          // First navigate to MyProfile if we're not already there
+          if (currentStepData.screen !== 'MyProfile') {
+            debugLog("MBA54321 Navigating to MyProfile first", { currentScreen: currentStepData.screen });
+            navigation.navigate('MyProfile');
+          }
+          
+          // Then set the active tab
+          debugLog("MBA54321 Setting active tab", { tab: previousStep.tab });
+          // Use a small timeout to ensure the screen is mounted before changing tabs
+          setTimeout(() => {
+            // Use reset to ensure the navigation state is clean
+            navigation.reset({
+              index: 0,
+              routes: [
+                { 
+                  name: 'MyProfile', 
+                  params: { screen: previousStep.tab } 
+                }
+              ],
+            });
+          }, 0);
+        } else if (previousStep.screen === 'SearchProfessionalsListing') {
+          // Special handling for SearchProfessionalsListing
+          debugLog("MBA54321 Navigating to SearchProfessionalsListing", { screen: previousStep.screen });
+          navigation.navigate('SearchProfessionalsListing');
+        } else {
+          // For non-MyProfile screens, just navigate directly
+          debugLog("MBA54321 Navigating to screen", { screen: previousStep.screen });
+          navigation.navigate(previousStep.screen);
+        }
+        
+        // Keep the tutorial visible after navigation
+        setTimeout(() => {
+          setIsVisible(true);
+        }, 700);
+      }
     }
   };
 
