@@ -325,19 +325,19 @@ export default function Navigation({ state, descriptors, navigation }) {
       ];
     } else if (userRole === 'professional') {
       return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard', tab: 'Overview' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
-        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'Profile' },
+        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
       ];
     } else {
       return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard', tab: 'Overview' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
-        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'Profile' },
+        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
         ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
       ];
     }
