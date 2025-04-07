@@ -294,7 +294,9 @@ export const AuthProvider = ({ children }) => {
             if (isValid) {
               setIsSignedIn(true);
               await fetchUserName();
-              await getProfessionalStatus(token);
+              const status = await getProfessionalStatus(token);
+              setUserRole(status.suggestedRole);
+              setIsApprovedProfessional(status.isApprovedProfessional);
               await fetchTimeSettings();
             } else {
               await signOut();
@@ -392,23 +394,7 @@ export const AuthProvider = ({ children }) => {
 
   const signIn = async (token, refreshTokenValue, navigation) => {
     try {
-      if (is_DEBUG) {
-        debugLog('MBA98765 Starting sign in process');
-      }
-
-      if (is_prototype) {
-        if (is_DEBUG) {
-          debugLog('MBA98765 Signing in with prototype mode');
-        }
-        setIsSignedIn(true);
-        setUserRole('professional');
-        setIsApprovedProfessional(true);
-        setFirstName('John');
-        return {
-          userRole: 'professional',
-          isApprovedProfessional: true
-        };
-      }
+      debugLog('MBA98765 Starting sign in process');
 
       await authService.current.setTokens(token, refreshTokenValue);
       setIsSignedIn(true);
@@ -426,11 +412,9 @@ export const AuthProvider = ({ children }) => {
         await AsyncStorage.setItem('userRole', initialRole);
       }
 
-      if (is_DEBUG) {
-        debugLog('MBA98765 Sign in successful:', { initialRole, isApprovedProfessional: status.isApprovedProfessional });
-      }
+      debugLog('MBA98765 Sign in successful:', { initialRole, isApprovedProfessional: status.isApprovedProfessional });
 
-      // Navigate to professional dashboard after successful sign in
+      // Navigate to dashboard after successful sign in
       if (navigation) {
         setTimeout(() => {
           navigateToFrom(navigation, 'Dashboard');
@@ -536,6 +520,8 @@ export const AuthProvider = ({ children }) => {
         await signOut();
         return { isAuthenticated: false };
       }
+
+      debugLog('MBA54321 checkAuthStatus', { isAuthenticated: true, userRole, isApprovedProfessional });
 
       return {
         isAuthenticated: true,

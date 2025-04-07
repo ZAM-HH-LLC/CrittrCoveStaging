@@ -64,7 +64,7 @@ const tutorialSteps = {
     {
       screen: 'BecomeProfessional',
       title: 'Become a Professional',
-      description: 'Want to offer your services? You can switch to a professional account anytime.',
+      description: 'Want to offer your services? You can apply to become a professional anytime.',
       position: 'bottomRight',
     },
   ],
@@ -130,9 +130,11 @@ export const TutorialProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (isSignedIn) {
+    if (isSignedIn && userRole) {
+      debugLog("MBA54321 Both isSignedIn and userRole are available, fetching tutorial status", { isSignedIn, userRole });
       fetchTutorialStatus();
     } else {
+      debugLog("MBA54321 Waiting for auth data", { isSignedIn, userRole });
       setIsLoading(false);
     }
   }, [isSignedIn, userRole]);
