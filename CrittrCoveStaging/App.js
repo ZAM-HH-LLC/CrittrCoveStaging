@@ -285,20 +285,8 @@ function AppContent() {
     setIsVisible(false);
   };
 
-  
-
   return (
-    <NavigationContainer 
-      ref={navigationRef}
-      linking={linking}
-      onStateChange={async (state) => {
-        if (Platform.OS !== 'web' && state?.routes?.length > 0) {
-          const currentRoute = state.routes[state.routes.length - 1].name;
-          await AsyncStorage.setItem('lastRoute', currentRoute)
-            .catch(error => console.error('Error storing route:', error));
-        }
-      }}
-    >
+    <>
       {isVisible && <MVPWarning />}
       {Platform.OS === 'web' ? (
         <Stack.Navigator
@@ -326,7 +314,7 @@ function AppContent() {
       ) : (
         <TabNavigator />
       )}
-    </NavigationContainer>
+    </>
   );
 }
 
@@ -391,13 +379,25 @@ const styles = StyleSheet.create({
 
 export default function App() {
   return (
-    <AuthProvider>
-      <TutorialProvider>
-        <PaperProvider theme={theme}>
-          <AppContent />
-        </PaperProvider>
-      </TutorialProvider>
-    </AuthProvider>
+    <NavigationContainer
+      ref={navigationRef}
+      linking={linking}
+      onStateChange={async (state) => {
+        if (Platform.OS !== 'web' && state?.routes?.length > 0) {
+          const currentRoute = state.routes[state.routes.length - 1].name;
+          await AsyncStorage.setItem('lastRoute', currentRoute)
+            .catch(error => console.error('Error storing route:', error));
+        }
+      }}
+    >
+      <AuthProvider>
+        <TutorialProvider>
+          <PaperProvider theme={theme}>
+            <AppContent />
+          </PaperProvider>
+        </TutorialProvider>
+      </AuthProvider>
+    </NavigationContainer>
   );
 }
 

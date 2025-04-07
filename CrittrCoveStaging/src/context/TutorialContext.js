@@ -5,6 +5,7 @@ import { AuthContext } from './AuthContext';
 import { debugLog } from './AuthContext';
 import { navigateToFrom } from '../components/Navigation';
 import TutorialModal from '../components/TutorialModal';
+import { useNavigation } from '@react-navigation/native';
 
 export const TutorialContext = createContext();
 
@@ -49,7 +50,9 @@ const tutorialSteps = {
       description: 'Here you can view your upcoming bookings, track ongoing services, and manage your account.',
       position: 'bottomRight',
       onStepEnter: (navigation) => {
-        navigateToFrom(navigation, 'Dashboard', 'MyProfile');
+        if (navigation) {
+          navigation.navigate('Dashboard');
+        }
       }
     },
     {
@@ -93,7 +96,9 @@ const tutorialSteps = {
       description: 'Here you can view your upcoming bookings, track ongoing services, and manage your account.',
       position: 'bottomRight',
       onStepEnter: (navigation) => {
-        navigateToFrom(navigation, 'Dashboard', 'MyProfile');
+        if (navigation) {
+          navigation.navigate('Dashboard');
+        }
       }
     },
     {
@@ -115,7 +120,8 @@ const tutorialSteps = {
 };
 
 export const TutorialProvider = ({ children }) => {
-  const { isSignedIn, userRole, is_DEBUG, navigation } = useContext(AuthContext);
+  const { isSignedIn, userRole, is_DEBUG } = useContext(AuthContext);
+  const navigation = useNavigation();
   const [tutorialStatus, setTutorialStatus] = useState(defaultTutorialStatus);
   const [currentStep, setCurrentStep] = useState(1);
   const [isVisible, setIsVisible] = useState(false);
@@ -239,57 +245,61 @@ export const TutorialProvider = ({ children }) => {
   };
 
   const handleNext = () => {
+    console.log('MBA54321 handleNext called with currentStep:', currentStep);
+    
     const roleKey = userRole === 'professional' ? 'professional' : 
                    (userRole === 'petOwner' || userRole === 'client') ? 'client' : 'default';
     const steps = tutorialSteps[roleKey] || tutorialSteps.default;
-    const currentStepData = steps[currentStep - 1];
     
-    if (is_DEBUG) {
-      debugLog('MBA54321 Handling next step:', {
-        currentStep,
-        totalSteps: steps.length,
-        nextScreen: currentStep < steps.length ? steps[currentStep].screen : 'none',
-        currentScreen: currentStepData.screen
-      });
-    }
-    
-    // Execute onStepEnter if it exists
-    if (currentStepData && currentStepData.onStepEnter) {
-      if (is_DEBUG) {
-        debugLog('MBA54321 Executing onStepEnter for screen:', currentStepData.screen);
-      }
-      currentStepData.onStepEnter(navigation);
-    }
-    
-    if (currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
-      
-      // If the next step is on a different screen, we need to navigate
-      const nextStepData = steps[currentStep];
-      if (nextStepData && nextStepData.screen !== currentStepData.screen) {
-        if (is_DEBUG) {
-          debugLog('MBA54321 Next step is on a different screen:', {
-            currentScreen: currentStepData.screen,
-            nextScreen: nextStepData.screen
-          });
-        }
-        
-        // Navigate to the next screen
-        if (navigation) {
-          if (nextStepData.tab) {
-            navigateToFrom(navigation, nextStepData.screen, currentStepData.screen);
-          } else {
-            navigateToFrom(navigation, nextStepData.screen, currentStepData.screen);
-          }
-          
-          // Ensure tutorial stays visible when changing screens
-          setTimeout(() => {
-            setIsVisible(true);
-          }, 100);
-        }
-      }
-    } else {
+    // Check if we're at the last step
+    if (currentStep >= steps.length) {
+      console.log('MBA54321 At last step, completing tutorial');
       completeTutorial();
+      return;
+    }
+    
+    // Get current and next step data
+    const currentStepData = steps[currentStep - 1];
+    const nextStepData = steps[currentStep];
+    
+    console.log('MBA54321 Current step data:', currentStepData);
+    console.log('MBA54321 Next step data:', nextStepData);
+    
+    // Increment the current step
+    setCurrentStep(currentStep + 1);
+    
+    // Handle navigation based on the next step
+    if (navigation) {
+      // Case 1: Different screen
+      if (nextStepData.screen !== currentStepData.screen) {
+        console.log('MBA54321 Navigating to different screen:', nextStepData.screen);
+        
+        // Simple direct navigation
+        navigation.navigate(nextStepData.screen);
+      } 
+      // Case 2: Same screen, different tab
+      else if (nextStepData.tab && nextStepData.tab !== currentStepData.tab) {
+        console.log('MBA54321 Navigating to same screen, different tab:', nextStepData.tab);
+        
+        // For MyProfile screen, use the tab parameter
+        if (nextStepData.screen === 'MyProfile') {
+          console.log('MBA54321 Navigating to MyProfile with tab:', nextStepData.tab);
+          navigation.navigate('MyProfile', { screen: nextStepData.tab });
+        } else {
+          navigation.navigate(nextStepData.screen);
+        }
+      }
+      // Case 3: Same screen and tab (no navigation needed)
+      else {
+        console.log('MBA54321 Same screen and tab, no navigation needed');
+      }
+      
+      // Ensure tutorial stays visible after navigation
+      setTimeout(() => {
+        setIsVisible(true);
+      }, 100);
+    } else {
+      console.log('MBA54321 Navigation object is undefined');
     }
   };
 
@@ -337,7 +347,7 @@ export const TutorialProvider = ({ children }) => {
       
       // Navigate to the dashboard
       if (navigation) {
-        navigateToFrom(navigation, 'Dashboard', 'Tutorial');
+        navigation.navigate('Dashboard');
       }
     } catch (error) {
       console.error('Error completing tutorial:', error);
@@ -350,7 +360,7 @@ export const TutorialProvider = ({ children }) => {
       
       // Navigate to the dashboard
       if (navigation) {
-        navigateToFrom(navigation, 'Dashboard', 'Tutorial');
+        navigation.navigate('Dashboard');
       }
     }
   };
