@@ -10,15 +10,8 @@ import { useNavigation } from '@react-navigation/native';
 export const TutorialContext = createContext();
 
 const defaultTutorialStatus = {
-  first_time_logging_in: true,
-  first_time_logging_in_after_signup: true,
-  done_pro_profile_tutorial: false,
-  done_client_profile_tutorial: false,
-  done_client_dashboard_tutorial: false,
-  done_pets_preferences_tutorial: false,
-  done_settings_payments_tutorial: false,
-  done_search_pros_tutorial: false,
-  done_become_pro_tutorial: false,
+  done_client_tutorial: false,
+  done_pro_tutorial: false,
 };
 
 const tutorialSteps = {
@@ -150,30 +143,23 @@ export const TutorialProvider = ({ children }) => {
       setHasError(false);
       setErrorMessage('');
       
-      // Show tutorial if it's first time or not completed
-      if (response.data.first_time_logging_in || 
-          response.data.first_time_logging_in_after_signup || 
-          (userRole === 'professional' && !response.data.done_pro_profile_tutorial) ||
-          (userRole === 'petOwner' && !response.data.done_client_profile_tutorial)) {
+      // Show tutorial if it's not completed
+      if ((userRole === 'professional' && !response.data.done_pro_tutorial) ||
+          (userRole === 'petOwner' && !response.data.done_client_tutorial)) {
         setIsVisible(true);
         
         // Redirect new users to MyProfile screen
-        if (response.data.first_time_logging_in || 
-            response.data.first_time_logging_in_after_signup) {
-          if (is_DEBUG) {
-            debugLog('MBA54321 Redirecting new user to MyProfile screen');
-          }
-          // Use navigateToFrom instead of navigation.navigate to ensure proper tab highlighting
-          navigateToFrom(navigation, 'MyProfile', 'Dashboard', { screen: 'profile_info' });
+        if (is_DEBUG) {
+          debugLog('MBA54321 Redirecting new user to MyProfile screen');
         }
+        // Use navigateToFrom instead of navigation.navigate to ensure proper tab highlighting
+        navigateToFrom(navigation, 'MyProfile', 'Dashboard', { screen: 'profile_info' });
         
         if (is_DEBUG) {
           debugLog('MBA54321 Tutorial should be visible:', {
-            first_time_logging_in: response.data.first_time_logging_in,
-            first_time_logging_in_after_signup: response.data.first_time_logging_in_after_signup,
             userRole,
-            done_client_profile_tutorial: response.data.done_client_profile_tutorial,
-            done_pro_profile_tutorial: response.data.done_pro_profile_tutorial
+            done_client_tutorial: response.data.done_client_tutorial,
+            done_pro_tutorial: response.data.done_pro_tutorial
           });
         }
       } else {
@@ -252,7 +238,8 @@ export const TutorialProvider = ({ children }) => {
     
     if (currentStep >= steps.length) {
       debugLog("MBA54321 At last step, completing tutorial", { currentStep, totalSteps: steps.length });
-      await completeTutorial();
+      // Don't complete the tutorial here, just move to the next step
+      // The tutorial will be completed when the user clicks the "Finish Tutorial" button
       return;
     }
     
@@ -288,18 +275,6 @@ export const TutorialProvider = ({ children }) => {
       setTimeout(() => {
         setIsVisible(true);
       }, 700);
-    }
-    
-    // Update the tutorial status in the backend
-    try {
-      const stepKey = `tutorial_${currentStep}_completed`;
-      await axios.patch(`${API_BASE_URL}/api/users/v1/tutorial-status/update_status/`, {
-        [stepKey]: true
-      });
-      debugLog("MBA54321 Updated tutorial status", { stepKey });
-    } catch (error) {
-      debugLog("MBA54321 Error updating tutorial status", { error: error.message });
-      console.error('Error updating tutorial status:', error);
     }
   };
 
@@ -346,19 +321,28 @@ export const TutorialProvider = ({ children }) => {
   };
 
   const handleSkip = () => {
-    completeTutorial();
+    // Show confirmation modal before skipping
+    if (window.confirm("Are you sure you want to skip the tutorial? You can always access it later from your profile.")) {
+      completeTutorial();
+    }
   };
 
   const completeTutorial = async () => {
     debugLog("MBA54321 Completing tutorial", { userRole });
     
     try {
+      // Update the tutorial status in the backend based on user role
+      const updates = {};
+      
+      // Set the appropriate tutorial completion flag based on user role
+      if (userRole === 'professional') {
+        updates.done_pro_tutorial = true;
+      } else if (userRole === 'petOwner' || userRole === 'client') {
+        updates.done_client_tutorial = true;
+      }
+      
       // Update the tutorial status in the backend
-      await axios.patch(`${API_BASE_URL}/api/users/v1/tutorial-status/update_status/`, {
-        tutorial_completed: true,
-        first_time_logging_in: false,
-        first_time_logging_in_after_signup: false
-      });
+      await axios.patch(`${API_BASE_URL}/api/users/v1/tutorial-status/update_status/`, updates);
       
       debugLog("MBA54321 Tutorial status updated in backend");
       
@@ -428,7 +412,13 @@ export const TutorialProvider = ({ children }) => {
           onNext={handleNext}
           onPrevious={handlePrevious}
           onSkip={handleSkip}
-          onClose={() => setIsVisible(false)}
+          onClose={() => {
+            // Show confirmation dialog before closing
+            if (window.confirm("Are you sure you want to close the tutorial? You can always access it later from your profile.")) {
+              completeTutorial();
+            }
+          }}
+          onFinish={completeTutorial}
           position={getCurrentStepData().position}
           userRole={userRole}
           is_DEBUG={is_DEBUG}

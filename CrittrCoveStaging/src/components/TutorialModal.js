@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { debugLog } from '../context/AuthContext';
@@ -14,6 +14,7 @@ const TutorialModal = ({
   onPrevious,
   onSkip,
   onClose,
+  onFinish,
   position = 'bottomRight', // bottomRight, bottomLeft, topRight, topLeft
   userRole,
   is_DEBUG = false
@@ -86,6 +87,13 @@ const TutorialModal = ({
     onClose();
   };
 
+  const handleFinish = () => {
+    if (is_DEBUG) {
+      debugLog('MBA54321 TutorialModal handleFinish called');
+    }
+    onFinish();
+  };
+
   const getPositionStyles = () => {
     switch (position) {
       case 'bottomRight':
@@ -144,7 +152,11 @@ const TutorialModal = ({
             <Text style={styles.stepText}>{step}/{totalSteps}</Text>
           </View>
 
-          {!isLastStep && (
+          {isLastStep ? (
+            <TouchableOpacity style={styles.finishButton} onPress={handleFinish}>
+              <Text style={styles.finishText}>Finish Tutorial</Text>
+            </TouchableOpacity>
+          ) : (
             <TouchableOpacity style={styles.navigationButton} onPress={handleNext}>
               <Text style={styles.navigationText}>Next</Text>
               <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.primary} />
@@ -223,6 +235,18 @@ const styles = StyleSheet.create({
   },
   navigationText: {
     color: theme.colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  finishButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+  },
+  finishText: {
+    color: theme.colors.surface,
     fontSize: 14,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,

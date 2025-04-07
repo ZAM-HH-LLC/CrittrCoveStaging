@@ -51,14 +51,7 @@ class TutorialStatusSerializer(serializers.ModelSerializer):
         model = TutorialStatus
         fields = [
             'status_id',
-            'first_time_logging_in',
-            'first_time_logging_in_after_signup',
-            'done_pro_profile_tutorial',
-            'done_client_profile_tutorial',
-            'done_client_dashboard_tutorial',
-            'done_pets_preferences_tutorial',
-            'done_settings_payments_tutorial',
-            'done_search_pros_tutorial',
-            'done_become_pro_tutorial',
+            'done_client_tutorial',
+            'done_pro_tutorial',
         ]
         read_only_fields = ['status_id']

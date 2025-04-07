@@ -238,15 +238,8 @@ class TutorialStatusViewSet(viewsets.ModelViewSet):
         tutorial_status, created = TutorialStatus.objects.get_or_create(
             user=request.user,
             defaults={
-                'first_time_logging_in': True,
-                'first_time_logging_in_after_signup': True,
-                'done_pro_profile_tutorial': False,
-                'done_client_profile_tutorial': False,
-                'done_client_dashboard_tutorial': False,
-                'done_pets_preferences_tutorial': False,
-                'done_settings_payments_tutorial': False,
-                'done_search_pros_tutorial': False,
-                'done_become_pro_tutorial': False,
+                'done_client_tutorial': False,
+                'done_pro_tutorial': False,
             }
         )
         serializer = self.get_serializer(tutorial_status)

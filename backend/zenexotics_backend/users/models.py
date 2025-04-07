@@ -145,16 +145,8 @@ class Waitlister(models.Model):
 class TutorialStatus(models.Model):
     status_id = models.AutoField(primary_key=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='tutorial_status')
-    first_time_logging_in = models.BooleanField(default=True)
-    first_time_logging_in_after_signup = models.BooleanField(default=True)
-    done_pro_profile_tutorial = models.BooleanField(default=False)
-    done_client_profile_tutorial = models.BooleanField(default=False)
-    done_client_dashboard_tutorial = models.BooleanField(default=False)
-    # Additional tutorial steps
-    done_pets_preferences_tutorial = models.BooleanField(default=False)
-    done_settings_payments_tutorial = models.BooleanField(default=False)
-    done_search_pros_tutorial = models.BooleanField(default=False)
-    done_become_pro_tutorial = models.BooleanField(default=False)
+    done_client_tutorial = models.BooleanField(default=False)
+    done_pro_tutorial = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
