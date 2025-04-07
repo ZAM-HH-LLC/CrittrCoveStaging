@@ -95,9 +95,43 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
       console.log('MBA98386196v Mobile - Set previousRoute:', fromLocation);
       console.log('MBA98386196v Mobile - Set currentRoute:', toLocation);
     }
-    setTimeout(() => {
+    
+    // Check if we're navigating to a tab within a screen
+    if (params.screen) {
+      console.log('MBA98386196v Navigating to tab:', params.screen, 'within screen:', toLocation);
+      
+      // Special handling for MyProfile screen to ensure tab is highlighted
+      if (toLocation === 'MyProfile') {
+        console.log('MBA98386196v Special handling for MyProfile screen');
+        // Use reset to ensure the navigation state is clean and the tab is highlighted
+        navigation.reset({
+          index: 0,
+          routes: [
+            { 
+              name: toLocation, 
+              params: {
+                ...params,
+                initialTab: params.screen // Add initialTab parameter for MyProfile
+              } 
+            }
+          ],
+        });
+      } else {
+        // For other screens with tabs
+        navigation.reset({
+          index: 0,
+          routes: [
+            { 
+              name: toLocation, 
+              params: params 
+            }
+          ],
+        });
+      }
+    } else {
+      // Regular navigation
       navigation.navigate(toLocation, params);
-    }, 50);
+    }
   } catch (error) {
     console.error('Error navigating:', error);
     navigation.navigate(toLocation, params);
@@ -172,10 +206,10 @@ export default function Navigation({ state, descriptors, navigation }) {
 
   const professionalsTitle = Platform.OS === 'web' ? 'Search Pros' : 'Professionals';
 
-  const handleNavigation = async (screenName) => {
+  const handleNavigation = async (screenName, tabName = null) => {
     closeMenu();
     if (is_DEBUG) {
-      console.log('MBA98386196v Navigating to:', screenName);
+      console.log('MBA98386196v Navigating to:', screenName, tabName ? `with tab: ${tabName}` : '');
       console.log('MBA98386196v Current route before:', currentRoute);
     }
     
@@ -189,7 +223,13 @@ export default function Navigation({ state, descriptors, navigation }) {
       }
       
       setCurrentRoute(screenName);
-      navigateToFrom(navigation, screenName, currentRoute);
+      
+      // If we have a tab parameter, pass it in the params
+      if (tabName) {
+        navigateToFrom(navigation, screenName, currentRoute, { screen: tabName });
+      } else {
+        navigateToFrom(navigation, screenName, currentRoute);
+      }
       
       if (is_DEBUG) {
         console.log('MBA98386196v Current route after:', screenName);
@@ -285,20 +325,19 @@ export default function Navigation({ state, descriptors, navigation }) {
       ];
     } else if (userRole === 'professional') {
       return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard', tab: 'Overview' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
-        // { title: 'Availability', icon: 'clock-outline', route: 'AvailabilitySettings' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
-        { title: 'Profile', icon: 'account', route: 'MyProfile' },
+        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'Profile' },
       ];
     } else {
       return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
+        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard', tab: 'Overview' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
-        { title: 'Profile', icon: 'account', route: 'MyProfile' },
+        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'Profile' },
         ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
       ];
     }
@@ -313,7 +352,7 @@ export default function Navigation({ state, descriptors, navigation }) {
           <TouchableOpacity
             key={index}
             style={[styles.navButton, { width: itemWidth }]}
-            onPress={() => handleNavigation(item.route)}
+            onPress={() => handleNavigation(item.route, item.tab)}
           >
             <MaterialCommunityIcons 
               name={item.icon} 
@@ -348,7 +387,7 @@ export default function Navigation({ state, descriptors, navigation }) {
     return (
       <View style={[styles.sidebarContainer, { width: sidebarWidth }]}>
         <View style={styles.sidebarLogoContainer}>
-          <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.logoButton}>
+          <TouchableOpacity onPress={() => handleNavigation('Home', 'Overview')} style={styles.logoButton}>
             <Image 
               source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')}
               style={[styles.sidebarLogo, { width: isCollapsed ? 40 : 150, tintColor: theme.colors.primary }]}
@@ -434,7 +473,7 @@ export default function Navigation({ state, descriptors, navigation }) {
                   styles.sidebarItem,
                   isActive && styles.activeItem
                 ]}
-                onPress={() => handleNavigation(item.route)}
+                onPress={() => handleNavigation(item.route, item.tab || 'Overview')}
               >
                 <MaterialCommunityIcons 
                   name={item.icon} 
@@ -491,7 +530,7 @@ export default function Navigation({ state, descriptors, navigation }) {
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.mobileHeaderContent}>
-          <TouchableOpacity onPress={() => handleNavigation('Home')}>
+          <TouchableOpacity onPress={() => handleNavigation('Home', 'Overview')} style={styles.logoButton}>
             <Image 
               source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')} 
               style={[
@@ -502,7 +541,7 @@ export default function Navigation({ state, descriptors, navigation }) {
             />
           </TouchableOpacity>
           <View style={styles.mobileRightContent}>
-            <TouchableOpacity onPress={() => handleNavigation('Notifications')} style={styles.iconButton}>
+            <TouchableOpacity onPress={() => handleNavigation('Notifications', 'Overview')} style={styles.iconButton}>
               <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge}>
@@ -587,7 +626,7 @@ export default function Navigation({ state, descriptors, navigation }) {
                 key={index}
                 style={styles.mobileMenuItem}
                 onPress={() => {
-                  handleNavigation(item.route);
+                  handleNavigation(item.route, item.tab || 'Overview');
                   setIsMenuOpen(false);
                 }}
               >

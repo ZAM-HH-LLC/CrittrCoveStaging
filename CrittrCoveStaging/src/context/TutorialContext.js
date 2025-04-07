@@ -163,12 +163,8 @@ export const TutorialProvider = ({ children }) => {
           if (is_DEBUG) {
             debugLog('MBA54321 Redirecting new user to MyProfile screen');
           }
-          // Use setTimeout to ensure navigation happens after render
-          setTimeout(() => {
-            if (navigation) {
-              navigation.navigate('MyProfile', { screen: 'profile_info' });
-            }
-          }, 100);
+          // Use navigateToFrom instead of navigation.navigate to ensure proper tab highlighting
+          navigateToFrom(navigation, 'MyProfile', 'Dashboard', { screen: 'profile_info' });
         }
         
         if (is_DEBUG) {
@@ -279,33 +275,13 @@ export const TutorialProvider = ({ children }) => {
         toTab: nextStep.tab
       });
       
-      // Special handling for MyProfile tabs
-      if (nextStep.screen === 'MyProfile') {
-        // First navigate to MyProfile if we're not already there
-        if (currentStepData.screen !== 'MyProfile') {
-          debugLog("MBA54321 Navigating to MyProfile first", { currentScreen: currentStepData.screen });
-          navigation.navigate('MyProfile');
-        }
-        
-        // Then set the active tab
-        debugLog("MBA54321 Setting active tab", { tab: nextStep.tab });
-        // Use a small timeout to ensure the screen is mounted before changing tabs
-        setTimeout(() => {
-          // Use reset to ensure the navigation state is clean
-          navigation.reset({
-            index: 0,
-            routes: [
-              { 
-                name: 'MyProfile', 
-                params: { screen: nextStep.tab } 
-              }
-            ],
-          });
-        }, 0);
+      // Use navigateToFrom for consistent navigation behavior
+      if (nextStep.tab) {
+        // If we have a tab parameter, pass it in the params
+        navigateToFrom(navigation, nextStep.screen, currentStepData.screen, { screen: nextStep.tab });
       } else {
-        // For non-MyProfile screens, just navigate directly
-        debugLog("MBA54321 Navigating to screen", { screen: nextStep.screen });
-        navigation.navigate(nextStep.screen);
+        // For screens without tabs
+        navigateToFrom(navigation, nextStep.screen, currentStepData.screen);
       }
       
       // Keep the tutorial visible after navigation
@@ -352,37 +328,13 @@ export const TutorialProvider = ({ children }) => {
           toTab: previousStep.tab
         });
         
-        // Special handling for MyProfile tabs
-        if (previousStep.screen === 'MyProfile') {
-          // First navigate to MyProfile if we're not already there
-          if (currentStepData.screen !== 'MyProfile') {
-            debugLog("MBA54321 Navigating to MyProfile first", { currentScreen: currentStepData.screen });
-            navigation.navigate('MyProfile');
-          }
-          
-          // Then set the active tab
-          debugLog("MBA54321 Setting active tab", { tab: previousStep.tab });
-          // Use a small timeout to ensure the screen is mounted before changing tabs
-          setTimeout(() => {
-            // Use reset to ensure the navigation state is clean
-            navigation.reset({
-              index: 0,
-              routes: [
-                { 
-                  name: 'MyProfile', 
-                  params: { screen: previousStep.tab } 
-                }
-              ],
-            });
-          }, 0);
-        } else if (previousStep.screen === 'SearchProfessionalsListing') {
-          // Special handling for SearchProfessionalsListing
-          debugLog("MBA54321 Navigating to SearchProfessionalsListing", { screen: previousStep.screen });
-          navigation.navigate('SearchProfessionalsListing');
+        // Use navigateToFrom for consistent navigation behavior
+        if (previousStep.tab) {
+          // If we have a tab parameter, pass it in the params
+          navigateToFrom(navigation, previousStep.screen, currentStepData.screen, { screen: previousStep.tab });
         } else {
-          // For non-MyProfile screens, just navigate directly
-          debugLog("MBA54321 Navigating to screen", { screen: previousStep.screen });
-          navigation.navigate(previousStep.screen);
+          // For screens without tabs
+          navigateToFrom(navigation, previousStep.screen, currentStepData.screen);
         }
         
         // Keep the tutorial visible after navigation
@@ -415,14 +367,14 @@ export const TutorialProvider = ({ children }) => {
       
       // Navigate to the Dashboard
       debugLog("MBA54321 Navigating to Dashboard");
-      navigation.navigate('Dashboard');
+      navigateToFrom(navigation, 'Dashboard', getCurrentStepData().screen);
       
     } catch (error) {
       debugLog("MBA54321 Error completing tutorial", { error: error.message });
       console.error('Error completing tutorial:', error);
       
       // Even if there's an error, try to navigate to Dashboard
-      navigation.navigate('Dashboard');
+      navigateToFrom(navigation, 'Dashboard', getCurrentStepData().screen);
     }
   };
 

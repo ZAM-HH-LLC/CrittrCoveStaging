@@ -8,8 +8,8 @@ const Footer = ({ navigation }) => {
     Linking.openURL(url);
   };
 
-  const handleNavigation = (route) => {
-    navigation.navigate(route);
+  const handleNavigation = (route, tab) => {
+    navigation.navigate(route, { tab });
   };
 
   return (
@@ -17,13 +17,13 @@ const Footer = ({ navigation }) => {
       <View style={styles.footerContent}>
         <View style={styles.footerSection}>
           <Text style={styles.footerTitle}>Legal</Text>
-          <TouchableOpacity onPress={() => handleNavigation('PrivacyPolicy')}>
+          <TouchableOpacity onPress={() => handleNavigation('PrivacyPolicy', 'Overview')}>
             <Text style={styles.footerLink}>Privacy Policy</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleNavigation('TermsOfService')}>
+          <TouchableOpacity onPress={() => handleNavigation('TermsOfService', 'Overview')}>
             <Text style={styles.footerLink}>Terms of Service</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleNavigation('ContactUs')}>
+          <TouchableOpacity onPress={() => handleNavigation('ContactUs', 'Overview')}>
             <Text style={styles.footerLink}>Contact Us</Text>
           </TouchableOpacity>
         </View>

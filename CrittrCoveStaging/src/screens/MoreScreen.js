@@ -41,9 +41,9 @@ const MoreScreen = ({ navigation }) => {
     initializeRoutes();
   }, [isSignedIn, userRole]);
 
-  const handleNavigation = async (route) => {
+  const handleNavigation = async (route, tab) => {
     try {
-      await navigateToFrom(navigation, route, 'More');
+      await navigateToFrom(navigation, route, 'More', tab);
     } catch (error) {
       console.error('Error handling navigation:', error);
       navigation.navigate(route);
@@ -88,7 +88,7 @@ const MoreScreen = ({ navigation }) => {
       }, 0);
     } else {
       Alert.alert('Not Approved', 'You are not approved as a professional yet.');
-      handleNavigation('BecomeProfessional');
+      handleNavigation('BecomeProfessional', 'Overview');
     }
   };
 
@@ -147,7 +147,7 @@ const MoreScreen = ({ navigation }) => {
                 />
               : <List.Icon {...props} icon={item.icon} />
           }
-          onPress={() => handleNavigation(item.route)}
+          onPress={() => handleNavigation(item.route, item.tab || 'Overview')}
           style={[
             styles.webListItem,
             { paddingHorizontal: screenWidth <= 900 ? 8 : 16 }

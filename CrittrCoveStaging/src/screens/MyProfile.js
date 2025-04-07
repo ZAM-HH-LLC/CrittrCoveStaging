@@ -83,12 +83,14 @@ const MyProfile = () => {
   // Get initialTab from navigation params
   useEffect(() => {
     const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-    if (params?.screen) {
-      debugLog('MBA54321 MyProfile received screen param', { screen: params.screen });
-      setActiveTab(params.screen);
-    } else if (params?.initialTab) {
+    debugLog('MBA54321 MyProfile navigation params', params);
+    
+    if (params?.initialTab) {
       debugLog('MBA54321 MyProfile received initialTab param', { initialTab: params.initialTab });
       setActiveTab(params.initialTab);
+    } else if (params?.screen) {
+      debugLog('MBA54321 MyProfile received screen param', { screen: params.screen });
+      setActiveTab(params.screen);
     } else if (stepData?.tab) {
       debugLog('MBA54321 MyProfile received tab from stepData', { tab: stepData.tab });
       setActiveTab(stepData.tab);

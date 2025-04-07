@@ -26,7 +26,7 @@ Backend Instructions:
 Extra instructions:
 1. Try to reduce server load where it makes sense. For example, on the bookingstepmodal's first step: the service and pets editor shouldn't call the backend if the backend got a service and pet, unless and changes were done to it. Only call the backend when needed, or in the above example, when it has changes from the data recieved from the backend. 
 2. When adding any frontend call to the backend, these should be done inside of CrittrCoveStaging/src/api/API.js with a sufficient comment above them with what the function is doing/sending and what it is responding with
-3. When adding new debug messages with console.log on the frontend, make sure to use the authContext.js's debugLog function to print the message to the log if the is_DEBUG in authContext is true. The function is working for logging, so anytime cursor ai wants to add a console log, instead of console.log("message"), use debugLog("Message", dataForMessage); 
+3. When adding new debug messages with console.log on the frontend, make sure to use the authContext.js's debugLog function to print the message to the log, DO NOT USE THE is_DEBUG from AuthContext.js as the debugLog already accounts for this. The function is working for logging, so anytime cursor ai wants to add a console log, instead of console.log("message"), use debugLog("Message", dataForMessage); 
 4. when adding error messages or anything of the sort, NEVER use alerts. Use modals instead for a more friendly user experience, and compatibility across platforms.
 5. Anytime i ask you a question about anything, your job is to respond and think about the architecture like a senior software engineer would. 
 
