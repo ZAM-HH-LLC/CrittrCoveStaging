@@ -566,9 +566,19 @@ const ProfileInfoTab = ({
                     <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.text} />
                   </TouchableOpacity>
                 </View>
+                <View style={styles.emailContainer}>
+                  <MaterialCommunityIcons name="email" size={16} color={theme.colors.secondary} />
+                  <Text style={styles.email}>{email || 'No email provided'}</Text>
+                  <TouchableOpacity 
+                    style={styles.editIcon}
+                    onPress={() => handleEdit('email', email)}
+                  >
+                    <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.text} />
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.locationContainer}>
                   <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.secondary} />
-                  <Text style={styles.location}>{location}</Text>
+                  <Text style={styles.location}>{location ? location : 'Select Location'}</Text>
                   <TouchableOpacity 
                     style={styles.editIcon}
                     onPress={() => handleEdit('location', location)}
@@ -726,14 +736,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
   },
+  emailContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  email: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
+  },
+  location: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+  },
   roleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 4,
+    marginBottom: 4,
   },
   role: {
-    fontSize: 16,
+    fontSize: 14,
     color: theme.colors.secondary,
   },
   editIcon: {
@@ -835,80 +865,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
     marginTop: 16,
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 12,
-  },
-  location: {
-    fontSize: 14,
-    color: theme.colors.secondary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 8,
-    padding: 16,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    position: 'relative',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-    flex: 1,
-  },
-  modalTitleCentered: {
-    textAlign: 'center',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    position: 'absolute',
-    left: 0,
-    padding: 8,
-    zIndex: 1,
-  },
-  backButtonText: {
-    color: theme.colors.primary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  modalInput: {
-    backgroundColor: theme.colors.background,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  modalCloseButton: {
-    alignSelf: 'flex-end',
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  modalCloseText: {
-    color: theme.colors.background,
-    fontSize: 14,
-    fontWeight: '500',
   },
   reviewsContainer: {
     marginBottom: 12,
@@ -1152,6 +1108,70 @@ const styles = StyleSheet.create({
   },
   selectedInsuranceOption: {
     backgroundColor: theme.colors.primary + '20',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    padding: 16,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    position: 'relative',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    flex: 1,
+  },
+  modalTitleCentered: {
+    textAlign: 'center',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    position: 'absolute',
+    left: 0,
+    padding: 8,
+    zIndex: 1,
+  },
+  backButtonText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modalInput: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: theme.colors.text,
+    marginBottom: 16,
+  },
+  modalCloseButton: {
+    alignSelf: 'flex-end',
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  modalCloseText: {
+    color: theme.colors.background,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 
