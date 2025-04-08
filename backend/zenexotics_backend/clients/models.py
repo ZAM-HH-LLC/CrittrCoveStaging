@@ -24,6 +24,11 @@ class Client(models.Model):
         blank=True,
         help_text='List of people authorized to interact with the pet'
     )
+    home_environment = models.JSONField(
+        default=default_list,
+        blank=True,
+        help_text='List of home environment features'
+    )
     last_booking = models.DateField(null=True, blank=True)
     verified_payment_method = models.BooleanField(
         default=False,
@@ -43,7 +48,9 @@ class Client(models.Model):
                                    self.emergency_contact.get('name') and 
                                    self.emergency_contact.get('phone')),
             'authorized_household_members': bool(self.authorized_household_members and 
-                                              len(self.authorized_household_members) > 0)
+                                              len(self.authorized_household_members) > 0),
+            'home_environment': bool(self.home_environment and 
+                                   len(self.home_environment) > 0)
         }
         
         completed_fields = sum(1 for completed in required_fields.values() if completed)

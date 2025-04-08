@@ -117,6 +117,9 @@ class UserSettings(models.Model):
         default=False,
         help_text=_('Whether to use 24-hour time format')
     )
+    push_notifications = models.BooleanField(default=True)
+    email_updates = models.BooleanField(default=True)
+    privacy_settings = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

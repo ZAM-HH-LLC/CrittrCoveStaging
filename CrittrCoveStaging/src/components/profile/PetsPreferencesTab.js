@@ -279,10 +279,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.secondary,
   },
-  detailSection: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
   preferencesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -227,3 +227,33 @@ export const getUserName = async () => {
     throw error;
   }
 };
+
+/**
+ * Get or update user profile data
+ * @param {Object} data - Optional data for updating profile
+ * @returns {Promise<Object>} - User profile data
+ */
+export const userProfile = async (data = null) => {
+  const url = `${API_BASE_URL}/api/users/v1/profile/`;
+  const method = data ? 'PUT' : 'GET';
+  
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getStorage('userToken')}`,
+      },
+      ...(data && { body: JSON.stringify(data) }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in userProfile:', error);
+    throw error;
+  }
+};

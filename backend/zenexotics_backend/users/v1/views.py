@@ -20,6 +20,8 @@ from professional_status.models import ProfessionalStatus
 import pytz
 from datetime import datetime
 from ..models import UserSettings
+from ..serializers import UserProfileSerializer
+from clients.models import Client
 
 logger = logging.getLogger(__name__)
 
@@ -275,4 +277,26 @@ def update_time_settings(request):
         return Response(
             {'error': 'Failed to update time settings'},
             status=status.HTTP_400_BAD_REQUEST
-        ) 
+        )
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def user_profile(request):
+    try:
+        client = Client.objects.get(user=request.user)
+    except Client.DoesNotExist:
+        return Response(
+            {'error': 'Client profile not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if request.method == 'GET':
+        serializer = UserProfileSerializer(client)
+        return Response(serializer.data)
+
+    elif request.method == 'PUT':
+        serializer = UserProfileSerializer(client, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST) 

@@ -47,6 +47,7 @@ class Service(models.Model):
     applies_after = models.IntegerField(default=1, help_text='Additional animal rate applies after this many animals')
     unit_of_time = models.CharField(max_length=50, choices=UNIT_OF_TIME_CHOICES)
     is_overnight = models.BooleanField(default=False, help_text='Indicates if this service requires overnight stay')
+    is_active = models.BooleanField(default=True, help_text='Indicates if this service is active')
     moderation_status = models.CharField(
         max_length=50, 
         choices=MODERATION_STATUS_CHOICES,

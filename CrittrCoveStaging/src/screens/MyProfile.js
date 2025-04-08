@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { View, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Image, Platform, StatusBar, Alert, useWindowDimensions, SafeAreaView } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Image, Platform, StatusBar, Alert, useWindowDimensions, SafeAreaView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { Button, Portal, Dialog, Paragraph } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -23,11 +23,12 @@ import ServicesAvailabilityTab from '../components/profile/ServicesAvailabilityT
 import PetsPreferencesTab from '../components/profile/PetsPreferencesTab';
 import SettingsPaymentsTab from '../components/profile/SettingsPaymentsTab';
 import TabBar from '../components/TabBar';
+import { userProfile } from '../api/API';
 
 const MyProfile = () => {
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
-  const { screenWidth, isCollapsed, is_DEBUG, userRole, isApprovedProfessional } = useContext(AuthContext);
+  const { screenWidth, isCollapsed, is_DEBUG, userRole, isApprovedProfessional, user, logout } = useContext(AuthContext);
   const [isMobile, setIsMobile] = useState(screenWidth <= 900);
   const [isWideScreen, setIsWideScreen] = useState(screenWidth >= 1200);
   const styles = createStyles(screenWidth, isCollapsed);
@@ -35,30 +36,9 @@ const MyProfile = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   // Profile state
-  const [profileData, setProfileData] = useState({
-    profilePhoto: null,
-    name: '',
-    email: '',
-    phone: '',
-    age: '',
-    address: '',
-    city: '',
-    state: '',
-    zip: '',
-    country: '',
-    bio: '',
-    emergencyContact: { name: '', phone: '' },
-    authorizedHouseholdMembers: [''],
-    pets: [],
-    services: [],
-    preferences: {
-      homeEnvironment: [],
-      petCare: [],
-      specialRequirements: []
-    },
-    settings: [],
-    paymentMethods: []
-  });
+  const [profileData, setProfileData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [editMode, setEditMode] = useState({});
 
@@ -132,71 +112,30 @@ const MyProfile = () => {
   }, [screenWidth]);
 
   useEffect(() => {
-    const fetchProfileData = async () => {
-      // TODO: Replace with actual API call
-      const mockData = {
-        name: 'Alice Johnson',
-        email: 'alice@example.com',
-        phone: '(555) 123-4567',
-        age: '32',
-        address: '123 Main St',
-        city: 'San Francisco',
-        state: 'CA',
-        zip: '94122',
-        country: 'USA',
-        bio: "I'm a proud pet parent of two dogs and a cat. I love animals and am always looking for the best care for my furry friends!",
-        emergencyContact: {
-          name: 'John Smith',
-          phone: '(555) 987-6543'
-        },
-        authorizedHouseholdMembers: ['Sarah Johnson', 'Mike Johnson'],
-        pets: [
-          { id: '1', name: 'Max', type: 'Dog', breed: 'Golden Retriever', age: 5 },
-          { id: '2', name: 'Luna', type: 'Cat', breed: 'Siamese', age: 3 }
-        ],
-        services: [
-          { id: '1', name: 'Dog Walking', price: 25, unit: 'walk', isActive: true },
-          { id: '2', name: 'Pet Sitting', price: 35, unit: 'visit', isActive: true },
-          { id: '3', name: 'Overnight Care', price: 85, unit: 'night', isActive: true, isOvernight: true }
-        ],
-        preferences: {
-          homeEnvironment: [
-            'yard',           // Fenced yard
-            'ac',            // Air conditioned
-            'roam',          // Free roam of house
-            'furniture',     // Allowed on furniture
-            'bed',          // Allowed on bed
-            'pool',         // Pool
-            'crate',        // Crate available
-            'pet_door',     // Pet door
-            'toys',         // Pet toy collection
-            'first_aid',    // Pet first aid kit
-          ],
-          petCare: [
-            { id: 'walks', label: 'Regular Walks', icon: 'walk', selected: true },
-            { id: 'training', label: 'Basic Training', icon: 'school', selected: false }
-          ],
-          specialRequirements: [
-            { id: 'meds', label: 'Medication Administration', icon: 'pill', selected: false },
-            { id: 'special_diet', label: 'Special Diet', icon: 'food', selected: true }
-          ]
-        },
-        settings: [
-          { id: 'notifications', title: 'Push Notifications', type: 'toggle', value: true, icon: 'bell' },
-          { id: 'email_updates', title: 'Email Updates', type: 'toggle', value: false, icon: 'email' },
-          { id: 'privacy', title: 'Privacy Settings', type: 'link', icon: 'shield-account' }
-        ],
-        paymentMethods: [
-          { id: '1', type: 'card', last4: '4242', expiry: '12/24', isDefault: true },
-          { id: '2', type: 'bank', bankName: 'Chase', last4: '9876', isDefault: false }
-        ]
-      };
-
-      setProfileData(mockData);
-    };
-
-    fetchProfileData();
+    loadProfileData();
   }, []);
+
+  const loadProfileData = async () => {
+    try {
+      setLoading(true);
+      const data = await userProfile();
+      setProfileData(data);
+      debugLog('MBA1234', 'Profile data loaded:', data);
+    } catch (err) {
+      setError('Failed to load profile data');
+      debugLog('MBA1234', 'Error loading profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (err) {
+      debugLog('MBA1234', 'Error during logout:', err);
+    }
+  };
 
   const tabs = [
     { id: 'profile_info', label: userRole === 'professional' ? 'Professional Profile Info' : 'Owner Profile Info' },
@@ -244,38 +183,38 @@ const MyProfile = () => {
       case 'profile_info':
         return (
           <ProfileInfoTab
-            profilePhoto={profileData.profilePhoto}
-            email={profileData.email}
-            phone={profileData.phone}
-            age={profileData.age}
-            address={profileData.address}
-            city={profileData.city}
-            state={profileData.state}
-            zip={profileData.zip}
-            country={profileData.country}
-            bio={profileData.bio}
-            emergencyContact={profileData.emergencyContact}
-            authorizedHouseholdMembers={profileData.authorizedHouseholdMembers}
+            profilePhoto={profileData?.profilePhoto}
+            email={profileData?.email}
+            phone={profileData?.phone}
+            age={profileData?.age}
+            address={profileData?.address}
+            city={profileData?.city}
+            state={profileData?.state}
+            zip={profileData?.zip}
+            country={profileData?.country}
+            bio={profileData?.bio}
+            emergencyContact={profileData?.emergency_contact}
+            authorizedHouseholdMembers={profileData?.authorized_household_members}
             editMode={editMode}
             toggleEditMode={toggleEditMode}
             onChangeText={handleUpdateField}
             pickImage={handlePickImage}
             setHasUnsavedChanges={setHasUnsavedChanges}
             isMobile={isMobile}
-            rating={profileData.rating}
-            reviews={profileData.reviews}
+            rating={profileData?.rating}
+            reviews={profileData?.reviews}
             role={userRole}
             isProfessional={userRole === 'professional'}
-            insurance={profileData.insurance}
+            insurance={profileData?.insurance}
             onNavigateToTab={setActiveTab}
           />
         );
       case 'services_availability':
         return (
           <ServicesAvailabilityTab
-            services={profileData.services}
+            services={profileData?.services}
             onToggleService={(id) => {
-              const updatedServices = profileData.services.map(s => 
+              const updatedServices = profileData?.services.map(s => 
                 s.id === id ? { ...s, isActive: !s.isActive } : s
               );
               handleUpdateField('services', updatedServices);
@@ -289,13 +228,13 @@ const MyProfile = () => {
       case 'pets_preferences':
         return (
           <PetsPreferencesTab
-            pets={profileData.pets}
+            pets={profileData?.pets}
             onAddPet={() => navigation.navigate('AddPet')}
             onEditPet={(id) => navigation.navigate('EditPet', { petId: id })}
             onDeletePet={() => {}}
-            preferences={profileData.preferences}
+            preferences={profileData?.preferences}
             onUpdatePreferences={(section, id) => {
-              const updatedPreferences = { ...profileData.preferences };
+              const updatedPreferences = { ...profileData?.preferences };
               if (section === 'homeEnvironment') {
                 if (updatedPreferences[section].includes(id)) {
                   updatedPreferences[section] = updatedPreferences[section].filter(item => item !== id);
@@ -385,7 +324,7 @@ const MyProfile = () => {
               debugLog('Updating setting:', { id, value });
               // TODO: Implement API call to update settings
             }}
-            paymentMethods={profileData.paymentMethods}
+            paymentMethods={profileData?.paymentMethods || []}
             onAddPaymentMethod={() => navigation.navigate('AddPaymentMethod')}
             onRemovePaymentMethod={(id) => {
               debugLog('Removing payment method:', id);
@@ -406,6 +345,22 @@ const MyProfile = () => {
         return null;
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.mainContainer}>
@@ -543,6 +498,11 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     flex: 1,
     padding: screenWidth <= 900 ? 10 : 24,
     backgroundColor: theme.colors.surface,
+  },
+  errorText: {
+    color: 'red',
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
 
