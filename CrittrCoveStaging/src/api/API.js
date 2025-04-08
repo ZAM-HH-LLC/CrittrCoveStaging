@@ -139,3 +139,64 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
         throw error;
     }
 };
+
+/**
+ * Get user's time settings (timezone and military time preference)
+ * @returns {Promise<Object>} Object containing timezone and use_military_time
+ */
+export const getTimeSettings = async () => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await axios.get(
+      `${API_BASE_URL}/api/users/v1/time-settings/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    debugLog('MBA12345 Error fetching time settings', error);
+    throw error;
+  }
+};
+
+/**
+ * Update user's time settings
+ * @param {Object} settings - Object containing timezone and/or use_military_time
+ * @returns {Promise<Object>} Updated time settings
+ */
+export const updateTimeSettings = async (settings) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    // Ensure settings is an object
+    const data = typeof settings === 'object' ? settings : { timezone: settings };
+    
+    debugLog('MBA12345 Sending time settings update', data);
+
+    const response = await axios.post(
+      `${API_BASE_URL}/api/users/v1/update-time-settings/`,
+      data,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    debugLog('MBA12345 Error updating time settings', error);
+    throw error;
+  }
+};

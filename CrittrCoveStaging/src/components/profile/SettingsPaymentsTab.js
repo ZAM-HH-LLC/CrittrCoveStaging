@@ -1,7 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Modal, FlatList } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
+import { getTimeSettings, updateTimeSettings } from '../../api/API';
+import { debugLog } from '../../context/AuthContext';
+import TimezoneSettings from './TimezoneSettings';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -53,6 +56,135 @@ const SettingsPaymentsTab = ({
   userRole,
   isApprovedProfessional,
 }) => {
+  const [timezone, setTimezone] = useState('UTC');
+  const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
+  const [timezones, setTimezones] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Fetch user's time settings when component mounts
+    const fetchTimeSettings = async () => {
+      try {
+        setLoading(true);
+        const timeSettings = await getTimeSettings();
+        setTimezone(timeSettings.timezone);
+        debugLog('MBA12345 Fetched time settings:', timeSettings);
+      } catch (error) {
+        debugLog('MBA12345 Error fetching time settings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTimeSettings();
+  }, []);
+
+  const handleTimezoneChange = async (newTimezone) => {
+    try {
+      setLoading(true);
+      await updateTimeSettings(newTimezone);
+      setTimezone(newTimezone);
+      setTimezoneModalVisible(false);
+      debugLog('MBA12345 Updated timezone to:', newTimezone);
+    } catch (error) {
+      debugLog('MBA12345 Error updating timezone:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openTimezoneModal = () => {
+    // Use the same timezone list as in TimezoneSettings.js
+    const COMMON_TIMEZONES = [
+      'America/New_York',
+      'America/Chicago',
+      'America/Denver',
+      'America/Los_Angeles',
+      'America/Anchorage',
+      'America/Adak',
+      'Pacific/Honolulu',
+      'America/Phoenix',
+      'America/Boise',
+      'America/Detroit',
+      'America/Indiana/Indianapolis',
+      'America/Indiana/Knox',
+      'America/Indiana/Marengo',
+      'America/Indiana/Petersburg',
+      'America/Indiana/Tell_City',
+      'America/Indiana/Vevay',
+      'America/Indiana/Vincennes',
+      'America/Indiana/Winamac',
+      'America/Kentucky/Louisville',
+      'America/Kentucky/Monticello',
+      'America/Menominee',
+      'America/North_Dakota/Beulah',
+      'America/North_Dakota/Center',
+      'America/North_Dakota/New_Salem',
+      'America/Sitka',
+      'America/Yakutat',
+      'Europe/London',
+      'Europe/Paris',
+      'Europe/Berlin',
+      'Europe/Moscow',
+      'Asia/Tokyo',
+      'Asia/Shanghai',
+      'Asia/Dubai',
+      'Australia/Sydney',
+      'Pacific/Auckland',
+      'UTC'
+    ];
+    
+    setTimezones(COMMON_TIMEZONES);
+    setTimezoneModalVisible(true);
+  };
+
+  const renderTimezoneModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={timezoneModalVisible}
+      onRequestClose={() => setTimezoneModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Timezone</Text>
+            <TouchableOpacity onPress={() => setTimezoneModalVisible(false)}>
+              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <FlatList
+            data={timezones}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.timezoneItem,
+                  item === timezone && styles.selectedTimezoneItem
+                ]}
+                onPress={() => handleTimezoneChange(item)}
+              >
+                <Text style={[
+                  styles.timezoneText,
+                  item === timezone && styles.selectedTimezoneText
+                ]}>
+                  {item}
+                </Text>
+                {item === timezone && (
+                  <MaterialCommunityIcons name="check" size={20} color={theme.colors.primary} />
+                )}
+              </TouchableOpacity>
+            )}
+            initialNumToRender={20}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+
   const getSubscriptionPlans = () => {
     if (userRole === 'professional') {
       return [
@@ -201,6 +333,26 @@ const SettingsPaymentsTab = ({
           <Text style={styles.sectionTitle}>Security</Text>
           {settings.filter(s => s.category === 'security').map(renderSettingItem)}
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Time Settings</Text>
+          <View style={styles.settingItem}>
+            <View style={styles.settingContent}>
+              <MaterialCommunityIcons name="clock-outline" size={24} color={theme.colors.primary} />
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Timezone</Text>
+                <Text style={styles.settingDescription}>Set your local timezone for accurate time display</Text>
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={styles.timezoneButton}
+              onPress={openTimezoneModal}
+            >
+              <Text style={styles.timezoneButtonText}>{timezone}</Text>
+              <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       <View style={styles.rightColumn}>
@@ -260,6 +412,26 @@ const SettingsPaymentsTab = ({
         <Text style={styles.sectionTitle}>Security</Text>
         {settings.filter(s => s.category === 'security').map(renderSettingItem)}
       </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Time Settings</Text>
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="clock-outline" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Timezone</Text>
+              <Text style={styles.settingDescription}>Set your local timezone for accurate time display</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.timezoneButton}
+            onPress={openTimezoneModal}
+          >
+            <Text style={styles.timezoneButtonText}>{timezone}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
+      </View>
     </ScrollView>
   );
 
@@ -280,6 +452,14 @@ const SettingsPaymentsTab = ({
           onValueChange={(value) => onUpdateSetting(setting.id, value)}
           trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
         />
+      ) : setting.type === 'timezone' ? (
+        <TouchableOpacity 
+          style={styles.timezoneButton}
+          onPress={openTimezoneModal}
+        >
+          <Text style={styles.timezoneButtonText}>{timezone}</Text>
+          <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
+        </TouchableOpacity>
       ) : (
         <TouchableOpacity 
           style={styles.actionButton}
@@ -327,7 +507,13 @@ const SettingsPaymentsTab = ({
     </View>
   );
 
-  return isMobile ? renderMobileLayout() : renderDesktopLayout();
+  return (
+    <View style={styles.container}>
+      <TimezoneSettings />
+      {isMobile ? renderMobileLayout() : renderDesktopLayout()}
+      {renderTimezoneModal()}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -589,6 +775,67 @@ const styles = StyleSheet.create({
   viewAllText: {
     color: theme.colors.primary,
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 10,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+  },
+  timezoneItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  selectedTimezoneItem: {
+    backgroundColor: theme.colors.primaryLight,
+  },
+  timezoneText: {
+    fontSize: 16,
+    color: theme.colors.text,
+  },
+  selectedTimezoneText: {
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+  },
+  timezoneButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  timezoneButtonText: {
+    color: theme.colors.primary,
+    fontWeight: '500',
+    marginRight: 5,
   },
 });
 

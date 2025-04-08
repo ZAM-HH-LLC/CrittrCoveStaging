@@ -19,6 +19,7 @@ from django.contrib.auth import authenticate
 from professional_status.models import ProfessionalStatus
 import pytz
 from datetime import datetime
+from ..models import UserSettings
 
 logger = logging.getLogger(__name__)
 
@@ -207,25 +208,71 @@ def get_user_info(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_time_settings(request):
-    """Get user's time settings including timezone and military time preference."""
+    """Get user's time settings"""
     try:
         user = request.user
-        user_settings = user.settings
         
-        # Get timezone abbreviation
-        tz = pytz.timezone(user_settings.timezone)
-        current_time = datetime.now(tz)
-        tz_abbrev = current_time.tzname()
+        # Get or create user settings
+        user_settings, created = UserSettings.objects.get_or_create(
+            user=user,
+            defaults={
+                'timezone': 'UTC',
+                'use_military_time': False
+            }
+        )
         
         return Response({
             'timezone': user_settings.timezone,
-            'timezone_abbrev': tz_abbrev,
             'use_military_time': user_settings.use_military_time
         })
     except Exception as e:
-        logger.error(f"Error getting time settings for user {request.user.id}: {str(e)}")
+        logger.error(f"Error getting time settings for user {user.id}: {str(e)}")
+        return Response(
+            {'error': 'Failed to get time settings'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_time_settings(request):
+    """Update user's time settings"""
+    try:
+        user = request.user
+        
+        # Check if request.data is a string (which would cause the error)
+        if isinstance(request.data, str):
+            return Response(
+                {'error': 'Invalid request format. Expected JSON object.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        timezone = request.data.get('timezone')
+        use_military_time = request.data.get('use_military_time')
+        
+        # Get or create user settings
+        user_settings, created = UserSettings.objects.get_or_create(
+            user=user,
+            defaults={
+                'timezone': timezone or 'UTC',
+                'use_military_time': use_military_time if use_military_time is not None else False
+            }
+        )
+        
+        # Update settings if they already exist
+        if not created:
+            if timezone is not None:
+                user_settings.timezone = timezone
+            if use_military_time is not None:
+                user_settings.use_military_time = use_military_time
+            user_settings.save()
+        
         return Response({
-            'timezone': 'UTC',
-            'timezone_abbrev': 'UTC',
-            'use_military_time': False
-        }) 
+            'timezone': user_settings.timezone,
+            'use_military_time': user_settings.use_military_time
+        })
+    except Exception as e:
+        logger.error(f"Error updating time settings for user {user.id}: {str(e)}")
+        return Response(
+            {'error': 'Failed to update time settings'},
+            status=status.HTTP_400_BAD_REQUEST
+        ) 

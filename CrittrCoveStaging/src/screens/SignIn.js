@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Platform, Keyboard } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Platform, Keyboard, SafeAreaView, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { theme } from '../styles/theme';
@@ -9,6 +9,8 @@ import { API_BASE_URL } from '../config/config';
 import { navigateToFrom } from '../components/Navigation';
 import { validateEmail, validatePassword } from '../validation/validation';
 import { debugLog } from '../context/AuthContext';
+import { updateTimeSettings } from '../api/API';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -51,19 +53,6 @@ export default function SignIn() {
     setLoading(true);
     try {
       debugLog('MBA67890 Starting login process');
-      
-      if (is_prototype) {
-        // Mock tokens for prototype mode
-        const mockAccess = 'mock_access_token';
-        const mockRefresh = 'mock_refresh_token';
-        
-        // Pass mock tokens to signIn and get the status
-        const status = await signIn(mockAccess, mockRefresh);
-        debugLog('MBA67890 Sign in status (prototype):', status);
-        
-        navigateToFrom(navigation, 'Dashboard', 'SignIn');
-        return;
-      }
 
       debugLog('MBA67890 Attempting to authenticate with backend');
       
@@ -79,6 +68,19 @@ export default function SignIn() {
       // Pass both tokens to signIn and get the status
       const status = await signIn(access, refresh);
       debugLog('MBA67890 Sign in status:', status);
+      
+      // After successful login, detect and send timezone to backend
+      try {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        debugLog('MBA67890 Detected timezone:', timezone);
+        console.log('MBA67890 Detected timezone:', timezone);
+        // Pass only the timezone parameter, useMilitaryTime is optional
+        await updateTimeSettings(timezone);
+        debugLog('MBA67890 Successfully updated timezone in backend');
+      } catch (timezoneError) {
+        debugLog('MBA67890 Error updating timezone:', timezoneError);
+        // Continue with login process even if timezone update fails
+      }
       
       // Check if user needs to complete tutorial
       try {

@@ -321,6 +321,7 @@ export const TutorialProvider = ({ children }) => {
   };
 
   const handleSkip = () => {
+    debugLog('MBA54321 handleSkip called through the later');
     // Show confirmation modal before skipping
     if (window.confirm("Are you sure you want to skip the tutorial? You can always access it later from your profile.")) {
       completeTutorial();

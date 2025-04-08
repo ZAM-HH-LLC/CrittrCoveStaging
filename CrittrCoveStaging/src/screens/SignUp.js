@@ -71,8 +71,31 @@ export default function SignUp() {
     try {
       debugLog('MBA12345 Starting user registration process');
       
+      // Get user's timezone and time format preferences
+      let userTimezone = 'UTC';
+      try {
+        // Try to get the timezone using Intl API
+        userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        debugLog('MBA12345 User timezone detected using Intl API', { userTimezone });
+      } catch (error) {
+        debugLog('MBA12345 Error detecting timezone using Intl API', error);
+        // Fallback to a default timezone
+        userTimezone = 'UTC';
+      }
+      
+      const useMilitaryTime = false; // Default to non-military time
+      
+      debugLog('MBA12345 User timezone and preferences', { userTimezone, useMilitaryTime });
+      
+      // Prepare user data with time settings
+      const registrationData = {
+        ...userData,
+        timezone: userTimezone,
+        use_military_time: useMilitaryTime
+      };
+      
       // First register the user
-      const registerResponse = await axios.post(`${API_BASE_URL}/api/users/v1/register/`, userData);
+      const registerResponse = await axios.post(`${API_BASE_URL}/api/users/v1/register/`, registrationData);
       
       debugLog('MBA12345 User registration successful', registerResponse.data);
       
