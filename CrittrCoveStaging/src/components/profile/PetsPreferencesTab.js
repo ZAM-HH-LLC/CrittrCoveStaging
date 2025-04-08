@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
+import { debugLog } from '../../context/AuthContext';
 
 const PetsPreferencesTab = ({
   pets = [],
   preferences = {
-    homeEnvironment: []
+    homeEnvironment: [],
+    emergencyContacts: [],
+    authorizedHouseholdMembers: []
   },
   onAddPet,
   onEditPet,
@@ -16,6 +19,10 @@ const PetsPreferencesTab = ({
   isMobile,
 }) => {
   const [expandedPetIds, setExpandedPetIds] = useState(new Set());
+  const [newEmergencyContact, setNewEmergencyContact] = useState({ name: '', phone: '' });
+  const [newHouseholdMember, setNewHouseholdMember] = useState({ name: '', phone: '' });
+  const [isAddingEmergencyContact, setIsAddingEmergencyContact] = useState(false);
+  const [isAddingHouseholdMember, setIsAddingHouseholdMember] = useState(false);
 
   // Define all available facilities
   const allFacilities = [
@@ -112,8 +119,193 @@ const PetsPreferencesTab = ({
     );
   };
 
+  const handleAddEmergencyContact = () => {
+    if (newEmergencyContact.name && newEmergencyContact.phone) {
+      debugLog("MBA123", "Adding emergency contact", newEmergencyContact);
+      const updatedContacts = [...(preferences.emergencyContacts || []), newEmergencyContact];
+      onUpdatePreferences('emergencyContacts', updatedContacts);
+      setNewEmergencyContact({ name: '', phone: '' });
+      setIsAddingEmergencyContact(false);
+    }
+  };
+
+  const handleAddHouseholdMember = () => {
+    if (newHouseholdMember.name && newHouseholdMember.phone) {
+      debugLog("MBA123", "Adding household member", newHouseholdMember);
+      const updatedMembers = [...(preferences.authorizedHouseholdMembers || []), newHouseholdMember];
+      onUpdatePreferences('authorizedHouseholdMembers', updatedMembers);
+      setNewHouseholdMember({ name: '', phone: '' });
+      setIsAddingHouseholdMember(false);
+    }
+  };
+
+  const handleRemoveEmergencyContact = (index) => {
+    debugLog("MBA123", "Removing emergency contact", index);
+    const updatedContacts = [...(preferences.emergencyContacts || [])];
+    updatedContacts.splice(index, 1);
+    onUpdatePreferences('emergencyContacts', updatedContacts);
+  };
+
+  const handleRemoveHouseholdMember = (index) => {
+    debugLog("MBA123", "Removing household member", index);
+    const updatedMembers = [...(preferences.authorizedHouseholdMembers || [])];
+    updatedMembers.splice(index, 1);
+    onUpdatePreferences('authorizedHouseholdMembers', updatedMembers);
+  };
+
+  const handleAddAsHouseholdMember = (contact) => {
+    debugLog("MBA123", "Adding emergency contact as household member", contact);
+    const updatedMembers = [...(preferences.authorizedHouseholdMembers || [])];
+    
+    // Check if already exists
+    const exists = updatedMembers.some(member => 
+      member.name === contact.name && member.phone === contact.phone
+    );
+    
+    if (!exists) {
+      updatedMembers.push(contact);
+      onUpdatePreferences('authorizedHouseholdMembers', updatedMembers);
+    }
+  };
+
+  const renderEmergencyContactsSection = () => {
+    if (userRole !== 'petOwner') return null;
+
+    return (
+      <View style={[styles.section, { backgroundColor: theme.colors.surfaceContrast }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => setIsAddingEmergencyContact(!isAddingEmergencyContact)}
+          >
+            <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
+            <Text style={styles.addButtonText}>Add Contact</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {isAddingEmergencyContact && (
+          <View style={styles.addContactForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Contact Name"
+              value={newEmergencyContact.name}
+              onChangeText={(text) => setNewEmergencyContact({...newEmergencyContact, name: text})}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Phone Number"
+              value={newEmergencyContact.phone}
+              onChangeText={(text) => setNewEmergencyContact({...newEmergencyContact, phone: text})}
+              keyboardType="phone-pad"
+            />
+            <TouchableOpacity 
+              style={styles.submitButton}
+              onPress={handleAddEmergencyContact}
+            >
+              <Text style={styles.submitButtonText}>Save Contact</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        <View style={styles.contactsList}>
+          {(preferences.emergencyContacts || []).map((contact, index) => (
+            <View key={index} style={styles.contactCard}>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactName}>{contact.name}</Text>
+                <Text style={styles.contactPhone}>{contact.phone}</Text>
+              </View>
+              <View style={styles.contactActions}>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleAddAsHouseholdMember(contact)}
+                >
+                  <MaterialCommunityIcons name="account-plus" size={20} color={theme.colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleRemoveEmergencyContact(index)}
+                >
+                  <MaterialCommunityIcons name="delete" size={20} color={theme.colors.error} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+          {(preferences.emergencyContacts || []).length === 0 && !isAddingEmergencyContact && (
+            <Text style={styles.emptyListText}>No emergency contacts added yet</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderHouseholdMembersSection = () => {
+    if (userRole !== 'petOwner') return null;
+
+    return (
+      <View style={[styles.section, { backgroundColor: theme.colors.surfaceContrast }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Authorized Household Members</Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => setIsAddingHouseholdMember(!isAddingHouseholdMember)}
+          >
+            <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
+            <Text style={styles.addButtonText}>Add Member</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {isAddingHouseholdMember && (
+          <View style={styles.addContactForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Member Name"
+              value={newHouseholdMember.name}
+              onChangeText={(text) => setNewHouseholdMember({...newHouseholdMember, name: text})}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Phone Number"
+              value={newHouseholdMember.phone}
+              onChangeText={(text) => setNewHouseholdMember({...newHouseholdMember, phone: text})}
+              keyboardType="phone-pad"
+            />
+            <TouchableOpacity 
+              style={styles.submitButton}
+              onPress={handleAddHouseholdMember}
+            >
+              <Text style={styles.submitButtonText}>Save Member</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        <View style={styles.contactsList}>
+          {(preferences.authorizedHouseholdMembers || []).map((member, index) => (
+            <View key={index} style={styles.contactCard}>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactName}>{member.name}</Text>
+                <Text style={styles.contactPhone}>{member.phone}</Text>
+              </View>
+              <View style={styles.contactActions}>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleRemoveHouseholdMember(index)}
+                >
+                  <MaterialCommunityIcons name="delete" size={20} color={theme.colors.error} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+          {(preferences.authorizedHouseholdMembers || []).length === 0 && !isAddingHouseholdMember && (
+            <Text style={styles.emptyListText}>No household members added yet</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <View style={[styles.section, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Pets</Text>
@@ -176,7 +368,10 @@ const PetsPreferencesTab = ({
           })}
         </View>
       </View>
-    </View>
+
+      {renderEmergencyContactsSection()}
+      {renderHouseholdMembersSection()}
+    </ScrollView>
   );
 };
 
@@ -188,6 +383,7 @@ const styles = StyleSheet.create({
   section: {
     borderRadius: 12,
     padding: 24,
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -318,6 +514,69 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 4,
+  },
+  // New styles for emergency contacts and household members
+  addContactForm: {
+    marginBottom: 16,
+    gap: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 6,
+    padding: 12,
+    fontSize: 14,
+    color: theme.colors.text,
+  },
+  submitButton: {
+    backgroundColor: theme.colors.primary,
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    color: theme.colors.background,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  contactsList: {
+    gap: 12,
+  },
+  contactCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  contactPhone: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+  },
+  contactActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+  },
+  emptyListText: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    padding: 12,
   },
 });
 
