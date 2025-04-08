@@ -235,11 +235,10 @@ export const getUserName = async () => {
  */
 export const userProfile = async (data = null) => {
   const url = `${API_BASE_URL}/api/users/v1/profile/`;
-  const method = data ? 'PUT' : 'GET';
   
   try {
     const response = await fetch(url, {
-      method,
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${await getStorage('userToken')}`,

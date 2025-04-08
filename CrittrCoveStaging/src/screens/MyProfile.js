@@ -179,6 +179,12 @@ const MyProfile = () => {
   };
 
   const renderActiveTab = () => {
+    debugLog('MBA1234sx2xfdg', 'Rendering active tab:', activeTab);
+    debugLog('MBA1234sx2xfdg', 'Profile data:', profileData);
+    debugLog('MBA1234sx2xfdg', 'User role:', userRole);
+    debugLog('MBA1234sx2xfdg', 'Edit mode:', editMode);
+    debugLog('MBA1234sx2xfdg', 'Has unsaved changes:', hasUnsavedChanges);
+    
     switch (activeTab) {
       case 'profile_info':
         return (
@@ -193,6 +199,7 @@ const MyProfile = () => {
             zip={profileData?.zip}
             country={profileData?.country}
             bio={profileData?.bio}
+            about_me={profileData?.about_me}
             emergencyContact={profileData?.emergency_contact}
             authorizedHouseholdMembers={profileData?.authorized_household_members}
             editMode={editMode}

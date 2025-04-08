@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext, debugLog } from '../../context/AuthContext';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -368,6 +368,7 @@ const ProfileInfoTab = ({
   zip,
   country,
   bio,
+  about_me,
   emergencyContact,
   authorizedHouseholdMembers,
   editMode,
@@ -388,6 +389,29 @@ const ProfileInfoTab = ({
   const [editValue, setEditValue] = useState('');
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [selectedInsurance, setSelectedInsurance] = useState(insurance);
+
+  // Add logging to see what data we're receiving
+  useEffect(() => {
+    debugLog('MBA1234', 'ProfileInfoTab received data:', {
+      profilePhoto,
+      email,
+      phone,
+      age,
+      address,
+      city,
+      state,
+      zip,
+      country,
+      bio,
+      about_me,
+      emergencyContact,
+      authorizedHouseholdMembers,
+      editMode,
+      role,
+      isProfessional,
+      insurance
+    });
+  }, [profilePhoto, email, phone, age, address, city, state, zip, country, bio, about_me, emergencyContact, authorizedHouseholdMembers, editMode, role, isProfessional, insurance]);
 
   const handleEdit = (field, currentValue) => {
     setEditValue(currentValue);
@@ -609,12 +633,14 @@ const ProfileInfoTab = ({
                 <Text style={styles.sectionTitle}>About Me</Text>
                 <TouchableOpacity 
                   style={styles.editButton}
-                  onPress={() => handleEdit('bio', bio)}
+                  onPress={() => handleEdit(isProfessional ? 'bio' : 'about_me', isProfessional ? bio : about_me)}
                 >
                   <Text style={styles.editButtonText}>Edit Bio</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.bioText}>{bio || 'Tell us about yourself...'}</Text>
+              <Text style={styles.bioText}>
+                {isProfessional ? (bio || 'Tell us about yourself...') : (about_me || 'Tell us about yourself...')}
+              </Text>
             </View>
 
             {/* Show either Home & Facilities (for owners) or Insurance (for professionals) */}
