@@ -5,6 +5,7 @@ import { AuthContext } from './AuthContext';
 import { debugLog } from './AuthContext';
 import { navigateToFrom } from '../components/Navigation';
 import TutorialModal from '../components/TutorialModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { useNavigation } from '@react-navigation/native';
 
 export const TutorialContext = createContext();
@@ -121,6 +122,8 @@ export const TutorialProvider = ({ children }) => {
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [skipConfirmationVisible, setSkipConfirmationVisible] = useState(false);
+  const [closeConfirmationVisible, setCloseConfirmationVisible] = useState(false);
 
   useEffect(() => {
     if (isSignedIn && userRole) {
@@ -323,9 +326,34 @@ export const TutorialProvider = ({ children }) => {
   const handleSkip = () => {
     debugLog('MBA54321 handleSkip called through the later');
     // Show confirmation modal before skipping
-    if (window.confirm("Are you sure you want to skip the tutorial? You can always access it later from your profile.")) {
-      completeTutorial();
-    }
+    setSkipConfirmationVisible(true);
+  };
+
+  const handleSkipConfirm = () => {
+    debugLog('MBA54321 handleSkipConfirm called');
+    setSkipConfirmationVisible(false);
+    completeTutorial();
+  };
+
+  const handleSkipCancel = () => {
+    debugLog('MBA54321 handleSkipCancel called');
+    setSkipConfirmationVisible(false);
+  };
+
+  const handleClose = () => {
+    debugLog('MBA54321 handleClose called');
+    setCloseConfirmationVisible(true);
+  };
+
+  const handleCloseConfirm = () => {
+    debugLog('MBA54321 handleCloseConfirm called');
+    setCloseConfirmationVisible(false);
+    completeTutorial();
+  };
+
+  const handleCloseCancel = () => {
+    debugLog('MBA54321 handleCloseCancel called');
+    setCloseConfirmationVisible(false);
   };
 
   const completeTutorial = async () => {
@@ -413,18 +441,27 @@ export const TutorialProvider = ({ children }) => {
           onNext={handleNext}
           onPrevious={handlePrevious}
           onSkip={handleSkip}
-          onClose={() => {
-            // Show confirmation dialog before closing
-            if (window.confirm("Are you sure you want to close the tutorial? You can always access it later from your profile.")) {
-              completeTutorial();
-            }
-          }}
+          onClose={handleClose}
           onFinish={completeTutorial}
           position={getCurrentStepData().position}
           userRole={userRole}
           is_DEBUG={is_DEBUG}
         />
       )}
+      <ConfirmationModal
+        visible={skipConfirmationVisible}
+        onClose={handleSkipCancel}
+        onConfirm={handleSkipConfirm}
+        actionText="skip the tutorial"
+        isLoading={false}
+      />
+      <ConfirmationModal
+        visible={closeConfirmationVisible}
+        onClose={handleCloseCancel}
+        onConfirm={handleCloseConfirm}
+        actionText="close the tutorial"
+        isLoading={false}
+      />
     </TutorialContext.Provider>
   );
 }; 

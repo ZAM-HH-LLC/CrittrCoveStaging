@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, UserSettings
+from .models import User, UserSettings, TutorialStatus
 
 class CustomUserAdmin(UserAdmin):
     model = User
@@ -35,6 +35,32 @@ class UserSettingsAdmin(admin.ModelAdmin):
         }),
         ('Time Settings', {
             'fields': ('timezone', 'use_military_time')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user')
+        
+    def user_id_display(self, obj):
+        return obj.user.user_id if obj.user else None
+    user_id_display.short_description = 'User ID'
+
+@admin.register(TutorialStatus)
+class TutorialStatusAdmin(admin.ModelAdmin):
+    list_display = ('user_id_display', 'user', 'done_client_tutorial', 'done_pro_tutorial', 'created_at', 'updated_at')
+    list_filter = ('done_client_tutorial', 'done_pro_tutorial')
+    search_fields = ('user__email', 'user__name', 'user__user_id')
+    readonly_fields = ('created_at', 'updated_at', 'user_id_display')
+    fieldsets = (
+        ('User Information', {
+            'fields': ('user_id_display', 'user',)
+        }),
+        ('Tutorial Status', {
+            'fields': ('done_client_tutorial', 'done_pro_tutorial')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
