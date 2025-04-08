@@ -78,7 +78,7 @@ const PetsPreferencesTab = ({
             <View style={styles.petInfo}>
               <Text style={styles.petName}>{pet.name}</Text>
               <Text style={styles.petDetails}>
-                {pet.breed} • {pet.age} years • {pet.size}
+                {pet.breed} • {pet.age} • {pet.type}
               </Text>
             </View>
           </View>

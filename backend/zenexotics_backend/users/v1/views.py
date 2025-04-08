@@ -318,6 +318,7 @@ def user_profile(request):
         logger.debug(f"MBA1234sx2xfdg: Added client fields to response")
         
         # Fetch professional data if it exists
+        professional = None
         try:
             professional = Professional.objects.get(user=user)
             logger.debug(f"MBA1234sx2xfdg: Found professional profile for user {user.id}")
@@ -330,30 +331,55 @@ def user_profile(request):
             logger.debug(f"MBA1234sx2xfdg: No professional profile found for user {user.id}")
             response_data['bio'] = ""  # Empty string if no professional profile
         
-        # Fetch pets (from the logged response, there's one pet "Soleil")
+        # Fetch pets - Important: The Pet model links to User, not Client
         from pets.models import Pet
         try:
-            pets = Pet.objects.filter(owner=client)
-            pet_data = [{'id': pet.id, 'name': pet.name, 'type': pet.type, 'breed': pet.breed, 'age': f"{pet.age} years"} for pet in pets]
-            logger.debug(f"MBA1234sx2xfdg: Found {len(pet_data)} pets for client")
+            # Query pets by user, not client
+            pets = Pet.objects.filter(owner=user)
+            logger.debug(f"MBA1234sx2xfdg: Found {len(pets)} pets for user {user.id}")
+            
+            pet_data = []
+            for pet in pets:
+                pet_data.append({
+                    'id': pet.pet_id,
+                    'name': pet.name,
+                    'type': pet.species,
+                    'breed': pet.breed,
+                    'age': f"{pet.age_years or 0} years {pet.age_months or 0} months",
+                    'weight': pet.weight,
+                    'profile_photo': pet.profile_photo.url if pet.profile_photo else None,
+                    'description': pet.pet_description
+                })
+            logger.debug(f"MBA1234sx2xfdg: Processed pet data: {pet_data}")
         except Exception as e:
             logger.error(f"MBA1234sx2xfdg: Error fetching pets: {str(e)}")
             pet_data = []
         response_data['pets'] = pet_data
         
-        # Fetch services (from the logged response, there are 4 services)
+        # Fetch services from the Service model if user is also a professional
         from services.models import Service
         try:
-            if hasattr(professional, 'services'):
-                services = professional.services.all()
-                service_data = [{'id': service.id, 'name': service.name, 
-                                'price': service.price, 'unit': service.unit, 
-                                'isActive': service.is_active if hasattr(service, 'is_active') else True,
-                                'isOvernight': service.is_overnight if hasattr(service, 'is_overnight') else False} 
-                               for service in services]
-                logger.debug(f"MBA1234sx2xfdg: Found {len(service_data)} services")
+            if professional:
+                # Get services for this professional
+                services = Service.objects.filter(professional=professional)
+                logger.debug(f"MBA1234sx2xfdg: Found {len(services)} services for professional {professional.professional_id}")
+                
+                service_data = []
+                for service in services:
+                    service_data.append({
+                        'id': service.service_id,
+                        'name': service.service_name,
+                        'description': service.description,
+                        'price': float(service.base_rate),
+                        'unit': service.unit_of_time,
+                        'isActive': service.is_active,
+                        'isOvernight': service.is_overnight,
+                        'animal_type': service.animal_type
+                    })
+                logger.debug(f"MBA1234sx2xfdg: Processed service data: {service_data}")
             else:
                 service_data = []
+                logger.debug(f"MBA1234sx2xfdg: No professional profile, so no services")
         except Exception as e:
             logger.error(f"MBA1234sx2xfdg: Error fetching services: {str(e)}")
             service_data = []
@@ -387,6 +413,8 @@ def user_profile(request):
         logger.debug(f"MBA1234sx2xfdg: Final response data: {response_data}")
         logger.debug(f"MBA1234sx2xfdg: Response contains bio: '{response_data.get('bio', 'MISSING')}'")
         logger.debug(f"MBA1234sx2xfdg: Response contains about_me: '{response_data.get('about_me', 'MISSING')}'")
+        logger.debug(f"MBA1234sx2xfdg: Response contains {len(response_data.get('pets', []))} pets")
+        logger.debug(f"MBA1234sx2xfdg: Response contains {len(response_data.get('services', []))} services")
         
         return Response(response_data)
         
