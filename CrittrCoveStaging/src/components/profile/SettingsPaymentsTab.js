@@ -4,7 +4,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { getTimeSettings, updateTimeSettings } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
-import TimezoneSettings from './TimezoneSettings';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -509,7 +508,6 @@ const SettingsPaymentsTab = ({
 
   return (
     <View style={styles.container}>
-      <TimezoneSettings />
       {isMobile ? renderMobileLayout() : renderDesktopLayout()}
       {renderTimezoneModal()}
     </View>
