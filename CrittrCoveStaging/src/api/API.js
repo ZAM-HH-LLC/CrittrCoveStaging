@@ -200,3 +200,30 @@ export const updateTimeSettings = async (settings) => {
     throw error;
   }
 };
+
+/**
+ * Get user's name from the backend
+ * @returns {Promise<Object>} Object containing name and first_name
+ */
+export const getUserName = async () => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await axios.get(
+      `${API_BASE_URL}/api/users/v1/get-name/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    debugLog('MBA12345 Error fetching user name', error);
+    throw error;
+  }
+};

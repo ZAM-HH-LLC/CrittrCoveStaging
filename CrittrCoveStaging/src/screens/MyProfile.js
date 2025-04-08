@@ -245,7 +245,6 @@ const MyProfile = () => {
         return (
           <ProfileInfoTab
             profilePhoto={profileData.profilePhoto}
-            name={profileData.name}
             email={profileData.email}
             phone={profileData.phone}
             age={profileData.age}

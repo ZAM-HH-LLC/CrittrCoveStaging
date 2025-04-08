@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import { AuthContext } from '../../context/AuthContext';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -358,7 +359,6 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
 
 const ProfileInfoTab = ({
   profilePhoto,
-  name,
   email,
   phone,
   age,
@@ -383,6 +383,7 @@ const ProfileInfoTab = ({
   insurance = { type: 'none', card: null },
   onNavigateToTab,
 }) => {
+  const { name } = useContext(AuthContext);
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);

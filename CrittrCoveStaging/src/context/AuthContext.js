@@ -6,6 +6,7 @@ import { Dimensions, Platform } from 'react-native';
 import { navigate } from '../../App';
 import { navigateToFrom } from '../components/Navigation';
 import { initStripe } from '../utils/StripeService';
+import { getUserName } from '../api/API';
 
 export const SCREEN_WIDTH = Dimensions.get('window').width;
 export const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -216,6 +217,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const [firstName, setFirstName] = useState('');
+  const [name, setName] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [timeSettings, setTimeSettings] = useState({
     timezone: 'UTC',
@@ -341,26 +343,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const fetchUserName = async () => {
-    if (is_prototype) {
-      setFirstName('John');
-      return;
-    }
     try {
-      console.log('MBA98765 Fetching user name');
-      const token = await authService.current.getAccessToken();
-      if (!token) {
-        console.log('MBA98765 No token found for user name');
-        return;
-      }
-      console.log('MBA98765 Making request to get user name');
-      const response = await axios.get(`${API_BASE_URL}/api/users/v1/get-name/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('MBA98765 User name response:', response.data);
-      setFirstName(response.data.first_name);
+      debugLog('MBA98765 Fetching user name');
+      const userData = await getUserName();
+      debugLog('MBA98765 User name response:', userData);
+      setFirstName(userData.first_name);
+      setName(userData.name);
     } catch (error) {
       console.error('MBA98765 Error fetching user name:', error.response ? error.response.data : error.message);
       setFirstName(''); // Reset firstName on error
+      setName(''); // Reset name on error
     }
   };
 
@@ -448,6 +440,7 @@ export const AuthProvider = ({ children }) => {
     setIsApprovedProfessional(false);
     setUserRole(null);
     setFirstName('');
+    setName('');
 
     setTimeout(() => {
       if (Platform.OS === 'web') {
@@ -543,6 +536,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         screenWidth,
         firstName,
+        name,
         is_prototype,
         is_DEBUG,
         is_PRODUCTION,
