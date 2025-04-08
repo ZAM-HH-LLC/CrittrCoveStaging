@@ -27,15 +27,15 @@ const tutorialSteps = {
     {
       screen: 'MyProfile',
       tab: 'pets_preferences',
-      title: 'Add Your Pets',
-      description: 'Add/Edit information about your pets and their care preferences. This helps professionals provide the best care possible.',
+      title: 'Add Pets & Home Info',
+      description: 'Add information about your pets and their care preferences along with your home information. This helps professionals provide the best care possible.',
       position: 'bottomRight',
     },
     {
       screen: 'MyProfile',
       tab: 'settings_payments',
-      title: 'Payment Settings',
-      description: 'Set up your payment methods and subscription preferences to easily book services.',
+      title: 'Payment & Settings',
+      description: 'Set up your settings, payment methods, and subscription preferences to easily book services.',
       position: 'bottomRight',
     },
     {

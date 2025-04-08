@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, Animated, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { debugLog } from '../context/AuthContext';
@@ -24,6 +24,12 @@ const TutorialModal = ({
   const [isVisible, setIsVisible] = useState(true);
   const [currentScreen, setCurrentScreen] = useState(null);
   const navigation = useNavigation();
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const overlayAnim = useRef(new Animated.Value(1)).current;
+  const { width, height } = Dimensions.get('window');
 
   useEffect(() => {
     if (is_DEBUG) {
@@ -58,6 +64,30 @@ const TutorialModal = ({
 
     return unsubscribe;
   }, [navigation, isVisible]);
+
+  // Animation effect
+  useEffect(() => {
+    // Fade in animation for modal
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+
+    // Animate from center to final position
+    Animated.timing(slideAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+
+    // Fade out the overlay as the modal slides
+    Animated.timing(overlayAnim, {
+      toValue: 0,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const handleNext = () => {
     if (is_DEBUG) {
@@ -124,51 +154,104 @@ const TutorialModal = ({
     }
   };
 
+  // Calculate the initial position (center of screen)
+  const initialPosition = {
+    top: (height + 60) / 2 - 150,
+    left: (width - 15) / 2 - 160,
+  };
+
+  // Get the final position
+  const finalPosition = getPositionStyles();
+
+  // Calculate the slide animation values
+  const slideStyle = {
+    transform: [
+      {
+        translateX: slideAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, finalPosition.right ? width/2 - 160 : -width/2 + 160],
+        }),
+      },
+      {
+        translateY: slideAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, finalPosition.bottom ? height/2 - 150 : -height/2 + 150],
+        }),
+      },
+    ],
+  };
+
   return (
-    <View style={[styles.container, getPositionStyles()]}>
-      <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-        <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
-      </TouchableOpacity>
+    <>
+      <Animated.View 
+        style={[
+          styles.overlay,
+          { opacity: overlayAnim }
+        ]}
+        pointerEvents="none"
+      />
+      <Animated.View 
+        style={[
+          styles.container, 
+          initialPosition,
+          { opacity: fadeAnim },
+          slideStyle
+        ]}
+      >
+        <View style={styles.pulseBorder} />
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
+        </TouchableOpacity>
 
-      <View style={styles.content}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.description}>{description}</Text>
+        <View style={styles.content}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.description}>{description}</Text>
 
-        <View style={styles.footer}>
-          <View style={styles.leftButtons}>
-            {isFirstStep ? (
-              <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-                <Text style={styles.skipText}>Skip Tutorial</Text>
+          <View style={styles.footer}>
+            <View style={styles.leftButtons}>
+              {isFirstStep ? (
+                <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+                  <Text style={styles.skipText}>Skip Tutorial</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.navigationButton} onPress={handlePrevious}>
+                  <MaterialCommunityIcons name="chevron-left" size={20} color={theme.colors.primary} />
+                  <Text style={styles.navigationText}>Previous</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.stepIndicator}>
+              <Text style={styles.stepText}>{step}/{totalSteps}</Text>
+            </View>
+
+            {isLastStep ? (
+              <TouchableOpacity style={styles.finishButton} onPress={handleFinish}>
+                <Text style={styles.finishText}>Finish Tutorial</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.navigationButton} onPress={handlePrevious}>
-                <MaterialCommunityIcons name="chevron-left" size={20} color={theme.colors.primary} />
-                <Text style={styles.navigationText}>Previous</Text>
+              <TouchableOpacity style={styles.navigationButton} onPress={handleNext}>
+                <Text style={styles.navigationText}>Next</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.primary} />
               </TouchableOpacity>
             )}
           </View>
-
-          <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>{step}/{totalSteps}</Text>
-          </View>
-
-          {isLastStep ? (
-            <TouchableOpacity style={styles.finishButton} onPress={handleFinish}>
-              <Text style={styles.finishText}>Finish Tutorial</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.navigationButton} onPress={handleNext}>
-              <Text style={styles.navigationText}>Next</Text>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.primary} />
-            </TouchableOpacity>
-          )}
         </View>
-      </View>
-    </View>
+      </Animated.View>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
+  overlay: {
+    position: Platform.OS === 'web' ? 'fixed' : 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 999,
+  },
   container: {
     position: Platform.OS === 'web' ? 'fixed' : 'absolute',
     backgroundColor: theme.colors.surface,
@@ -178,12 +261,23 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
     zIndex: 1000,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+  },
+  pulseBorder: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 14,
+    opacity: 0.7,
   },
   closeButton: {
     position: 'absolute',
@@ -196,17 +290,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.primary,
     marginBottom: 8,
     fontFamily: theme.fonts.header.fontFamily,
   },
   description: {
-    fontSize: 14,
-    color: theme.colors.secondary,
+    fontSize: 16,
+    color: theme.colors.text,
     marginBottom: 20,
-    lineHeight: 20,
+    lineHeight: 22,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   footer: {
