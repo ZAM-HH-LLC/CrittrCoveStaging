@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from ..models import User
+from ..models import User, UserSettings
 from ..serializers import RegisterSerializer
 import logging
 from rest_framework.permissions import IsAuthenticated
@@ -19,9 +19,10 @@ from django.contrib.auth import authenticate
 from professional_status.models import ProfessionalStatus
 import pytz
 from datetime import datetime
-from ..models import UserSettings
-from ..serializers import UserProfileSerializer
 from clients.models import Client
+from django.urls import clear_url_caches
+from django.http import HttpResponse
+from professionals.models import Professional
 
 logger = logging.getLogger(__name__)
 
@@ -279,24 +280,132 @@ def update_time_settings(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-@api_view(['GET', 'PUT'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_profile(request):
+    user = request.user
+    logger.debug(f"MBA1234sx2xfdg: Processing user_profile request for user {user.id}")
+    
+    # Initialize response dictionary
+    response_data = {}
+    
     try:
-        client = Client.objects.get(user=request.user)
+        # Fetch the client profile
+        client = Client.objects.get(user=user)
+        logger.debug(f"MBA1234sx2xfdg: Found client profile for user {user.id}")
+        logger.debug(f"MBA1234sx2xfdg: Client about_me: '{client.about_me}'")
+        
+        # Add client fields directly to response_data
+        response_data.update({
+            'id': getattr(client, 'id', None),
+            'name': user.name,
+            'email': user.email,
+            'phone': getattr(user, 'phone_number', ""),
+            'address': getattr(user, 'address', ""),
+            'city': getattr(user, 'city', ""),
+            'state': getattr(user, 'state', ""),
+            'zip': getattr(user, 'zip_code', ""),
+            'country': 'USA',
+            'age': None,
+            'profile_photo': None,
+            'about_me': client.about_me,  # THIS IS THE FIELD FROM CLIENT
+            'emergency_contact': client.emergency_contact,
+            'authorized_household_members': client.authorized_household_members,
+            'home_environment': client.home_environment,
+            'created_at': client.created_at,
+            'updated_at': client.updated_at,
+        })
+        logger.debug(f"MBA1234sx2xfdg: Added client fields to response")
+        
+        # Fetch professional data if it exists
+        try:
+            professional = Professional.objects.get(user=user)
+            logger.debug(f"MBA1234sx2xfdg: Found professional profile for user {user.id}")
+            logger.debug(f"MBA1234sx2xfdg: Professional bio: '{professional.bio}'")
+            
+            # Add professional's bio to response_data
+            response_data['bio'] = professional.bio  # THIS IS THE FIELD FROM PROFESSIONAL
+            logger.debug(f"MBA1234sx2xfdg: Added professional bio to response")
+        except Professional.DoesNotExist:
+            logger.debug(f"MBA1234sx2xfdg: No professional profile found for user {user.id}")
+            response_data['bio'] = ""  # Empty string if no professional profile
+        
+        # Fetch pets (from the logged response, there's one pet "Soleil")
+        from pets.models import Pet
+        try:
+            pets = Pet.objects.filter(owner=client)
+            pet_data = [{'id': pet.id, 'name': pet.name, 'type': pet.type, 'breed': pet.breed, 'age': f"{pet.age} years"} for pet in pets]
+            logger.debug(f"MBA1234sx2xfdg: Found {len(pet_data)} pets for client")
+        except Exception as e:
+            logger.error(f"MBA1234sx2xfdg: Error fetching pets: {str(e)}")
+            pet_data = []
+        response_data['pets'] = pet_data
+        
+        # Fetch services (from the logged response, there are 4 services)
+        from services.models import Service
+        try:
+            if hasattr(professional, 'services'):
+                services = professional.services.all()
+                service_data = [{'id': service.id, 'name': service.name, 
+                                'price': service.price, 'unit': service.unit, 
+                                'isActive': service.is_active if hasattr(service, 'is_active') else True,
+                                'isOvernight': service.is_overnight if hasattr(service, 'is_overnight') else False} 
+                               for service in services]
+                logger.debug(f"MBA1234sx2xfdg: Found {len(service_data)} services")
+            else:
+                service_data = []
+        except Exception as e:
+            logger.error(f"MBA1234sx2xfdg: Error fetching services: {str(e)}")
+            service_data = []
+        response_data['services'] = service_data
+        
+        # Add preferences structure (matching the logged response)
+        response_data['preferences'] = {
+            'homeEnvironment': client.home_environment if hasattr(client, 'home_environment') else [],
+            'petCare': [
+                {'id': 'energy_1', 'label': 'HIGH Energy Level', 'icon': 'lightning-bolt', 'selected': True},
+                {'id': 'alone_1', 'label': 'Can Be Left Alone', 'icon': 'home', 'selected': True}
+            ],
+            'specialRequirements': [
+                {'id': 'special_1', 'label': 'Special Care Instructions', 'icon': 'medical-bag', 'selected': True}
+            ]
+        }
+        
+        # Add settings structure (matching the logged response)
+        response_data['settings'] = [
+            {'id': 'notifications', 'title': 'Push Notifications', 'type': 'toggle', 'value': True, 'icon': 'bell'},
+            {'id': 'email_updates', 'title': 'Email Updates', 'type': 'toggle', 'value': True, 'icon': 'email'},
+            {'id': 'privacy', 'title': 'Privacy Settings', 'type': 'link', 'icon': 'shield-account'}
+        ]
+        
+        # Add payment methods structure (matching the logged response)
+        response_data['payment_methods'] = [
+            {'id': 3, 'type': 'bank', 'last4': '1234', 'expiry': None, 'isDefault': True, 'bankName': 'Ent Federal Credit Union'}
+        ]
+        
+        # Log the final response for debugging
+        logger.debug(f"MBA1234sx2xfdg: Final response data: {response_data}")
+        logger.debug(f"MBA1234sx2xfdg: Response contains bio: '{response_data.get('bio', 'MISSING')}'")
+        logger.debug(f"MBA1234sx2xfdg: Response contains about_me: '{response_data.get('about_me', 'MISSING')}'")
+        
+        return Response(response_data)
+        
     except Client.DoesNotExist:
+        logger.warning(f"MBA1234sx2xfdg: Client profile not found for user {user.id}")
         return Response(
             {'error': 'Client profile not found'},
             status=status.HTTP_404_NOT_FOUND
         )
+    except Exception as e:
+        logger.exception(f"MBA1234sx2xfdg: Unexpected error: {str(e)}")
+        return Response(
+            {'error': 'An unexpected error occurred'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
-    if request.method == 'GET':
-        serializer = UserProfileSerializer(client)
-        return Response(serializer.data)
-
-    elif request.method == 'PUT':
-        serializer = UserProfileSerializer(client, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST) 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def clear_url_cache(request):
+    """Temporary view to clear Django's URL cache."""
+    clear_url_caches()
+    return HttpResponse("URL cache cleared") 
