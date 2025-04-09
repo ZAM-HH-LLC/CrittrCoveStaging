@@ -78,6 +78,10 @@ const SettingsPaymentsTab = ({
     fetchTimeSettings();
   }, []);
 
+  useEffect(() => {
+    debugLog('MBA54321 SettingsPaymentsTab received paymentMethods:', paymentMethods);
+  }, [paymentMethods]);
+
   const handleTimezoneChange = async (newTimezone) => {
     try {
       setLoading(true);
@@ -313,6 +317,25 @@ const SettingsPaymentsTab = ({
     </View>
   );
 
+  const renderPaymentMethodsSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{userRole === 'professional' ? 'Payout Methods' : 'Payment Methods' }</Text>
+        <TouchableOpacity style={styles.addButton} onPress={onAddPaymentMethod}>
+          <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
+          <Text style={styles.addButtonText}>Add New</Text>
+        </TouchableOpacity>
+      </View>
+      {paymentMethods && paymentMethods.length > 0 ? (
+        paymentMethods.map(renderPaymentMethod)
+      ) : (
+        <View style={styles.noPaymentMethodsContainer}>
+          <Text style={styles.noPaymentMethodsText}>No payment methods added yet</Text>
+        </View>
+      )}
+    </View>
+  );
+
   const renderDesktopLayout = () => (
     <View style={styles.desktopContainer}>
       <View style={styles.leftColumn}>
@@ -360,16 +383,7 @@ const SettingsPaymentsTab = ({
           {renderCurrentPlanInfo()}
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Payment Methods</Text>
-            <TouchableOpacity style={styles.addButton} onPress={onAddPaymentMethod}>
-              <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
-              <Text style={styles.addButtonText}>Add New</Text>
-            </TouchableOpacity>
-          </View>
-          {paymentMethods.map(renderPaymentMethod)}
-        </View>
+        {renderPaymentMethodsSection()}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Billing History</Text>
@@ -385,17 +399,7 @@ const SettingsPaymentsTab = ({
   const renderMobileLayout = () => (
     <ScrollView style={styles.mobileContainer}>
       {renderPlansSection()}
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Payment Methods</Text>
-          <TouchableOpacity style={styles.addButton} onPress={onAddPaymentMethod}>
-            <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
-            <Text style={styles.addButtonText}>Add New</Text>
-          </TouchableOpacity>
-        </View>
-        {paymentMethods.map(renderPaymentMethod)}
-      </View>
+      {renderPaymentMethodsSection()}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notification Settings</Text>
@@ -834,6 +838,16 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '500',
     marginRight: 5,
+  },
+  noPaymentMethodsContainer: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+  },
+  noPaymentMethodsText: {
+    color: theme.colors.secondary,
+    fontSize: 16,
   },
 });
 

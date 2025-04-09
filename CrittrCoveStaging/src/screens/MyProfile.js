@@ -119,11 +119,14 @@ const MyProfile = () => {
     try {
       setLoading(true);
       const data = await userProfile();
+      debugLog('MBA54321 Profile data loaded with payment methods:', {
+        paymentMethods: data?.payment_methods,
+        fullData: data
+      });
       setProfileData(data);
-      debugLog('MBA1234', 'Profile data loaded:', data);
     } catch (err) {
       setError('Failed to load profile data');
-      debugLog('MBA1234', 'Error loading profile:', err);
+      debugLog('MBA54321 Error loading profile:', err);
     } finally {
       setLoading(false);
     }
@@ -141,7 +144,7 @@ const MyProfile = () => {
     { id: 'profile_info', label: userRole === 'professional' ? 'Professional Profile Info' : 'Owner Profile Info' },
     ...(userRole === 'professional' ? [{ id: 'services_availability', label: 'Services & Availability' }] : []),
     { id: 'pets_preferences', label: 'Pets & Preferences' },
-    { id: 'settings_payments', label: 'Settings & Payments' }
+    { id: 'settings_payments', label: userRole === 'professional' ? 'Settings & Payout Methods' : 'Settings & Payment Methods' }
   ];
 
   const handlePickImage = async () => {
@@ -179,7 +182,11 @@ const MyProfile = () => {
   };
 
   const renderActiveTab = () => {
-    debugLog('MBA1234sx2xfdg', 'Rendering active tab:', activeTab);
+    debugLog('MBA54321 Rendering active tab with profile data:', {
+      activeTab,
+      paymentMethods: profileData?.payment_methods,
+      profileData
+    });
     debugLog('MBA1234sx2xfdg', 'Profile data:', profileData);
     debugLog('MBA1234sx2xfdg', 'User role:', userRole);
     debugLog('MBA1234sx2xfdg', 'Edit mode:', editMode);
@@ -260,6 +267,9 @@ const MyProfile = () => {
           />
         );
       case 'settings_payments':
+        debugLog('MBA54321 Rendering settings_payments tab with payment methods:', {
+          paymentMethods: profileData?.payment_methods
+        });
         return (
           <SettingsPaymentsTab
             settings={[
@@ -331,7 +341,7 @@ const MyProfile = () => {
               debugLog('Updating setting:', { id, value });
               // TODO: Implement API call to update settings
             }}
-            paymentMethods={profileData?.paymentMethods || []}
+            paymentMethods={profileData?.payment_methods || []}
             onAddPaymentMethod={() => navigation.navigate('AddPaymentMethod')}
             onRemovePaymentMethod={(id) => {
               debugLog('Removing payment method:', id);
