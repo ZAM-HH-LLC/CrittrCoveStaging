@@ -273,13 +273,98 @@ export default function Navigation({ state, descriptors, navigation }) {
 
   const handleRoleSwitch = async (newRole) => {
     try {
+      // Get current screen before switching
+      const currentScreen = currentRoute;
+      
+      if (is_DEBUG) {
+        console.log('MBA98386196v Role switch initiated:', {
+          from: userRole,
+          to: newRole,
+          currentScreen
+        });
+      }
+      
       await switchRole(newRole);
       if (Platform.OS === 'web') {
         sessionStorage.setItem('userRole', newRole);
       } else {
         await AsyncStorage.setItem('userRole', newRole);
       }
-      handleNavigation('Dashboard');
+      
+      // Handle different screens according to requirements
+      switch (currentScreen) {
+        case 'MyProfile':
+          // For MyProfile, preserve the tab if it's common between roles
+          const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+          const currentTab = params?.screen || params?.initialTab || 'profile_info';
+          
+          if (is_DEBUG) {
+            console.log('MBA98386196v MyProfile tab preservation:', {
+              currentTab,
+              newRole
+            });
+          }
+          
+          // Check if we need to change the tab
+          let newTab = currentTab;
+          
+          // If switching to owner and current tab is professional-only, switch to profile_info
+          if (newRole === 'owner' && currentTab === 'services_availability') {
+            newTab = 'profile_info';
+          }
+          
+          // Navigate back to MyProfile with the appropriate tab
+          navigateToFrom(navigation, 'MyProfile', currentScreen, { screen: newTab });
+          break;
+          
+        case 'MessageHistory':
+          // For MessageHistory, just stay on the same screen without reload
+          navigateToFrom(navigation, 'MessageHistory', currentScreen);
+          break;
+          
+        case 'MyBookings':
+          // For MyBookings, stay on the same screen but switch tabs based on the new role
+          const activeTab = newRole === 'professional' ? 'professional' : 'owner';
+          if (is_DEBUG) {
+            console.log('MBA98386196v MyBookings tab switch:', {
+              newRole,
+              activeTab
+            });
+          }
+          // Pass the appropriate tab parameter
+          navigateToFrom(navigation, 'MyBookings', currentScreen, { screen: activeTab });
+          break;
+          
+        case 'Dashboard':
+          // For Dashboard, stay on the same screen
+          navigateToFrom(navigation, 'Dashboard', currentScreen);
+          break;
+          
+        case 'SearchProfessionalsListing':
+          // When client is on search pros and switches to pro, go to pro dashboard
+          if (newRole === 'professional') {
+            navigateToFrom(navigation, 'Dashboard', currentScreen);
+          } else {
+            // If somehow a pro is on this screen and switches to client, stay here
+            navigateToFrom(navigation, currentScreen, currentScreen);
+          }
+          break;
+          
+        case 'ServiceManager':
+          // When professional is on services and switches to client, go to client dashboard
+          if (newRole === 'owner') {
+            navigateToFrom(navigation, 'Dashboard', currentScreen);
+          } else {
+            // Should never happen, but if somehow client is on this screen and switches to pro, stay here
+            navigateToFrom(navigation, currentScreen, currentScreen);
+          }
+          break;
+          
+        default:
+          // For any other screen, navigate to the same screen
+          // This maintains the current behavior for unspecified screens
+          navigateToFrom(navigation, currentScreen, currentScreen);
+      }
     } catch (error) {
       console.error('Error switching role:', error);
     }
