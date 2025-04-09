@@ -162,7 +162,23 @@ const MyProfile = () => {
   };
 
   const handleUpdateField = (field, value) => {
-    setProfileData(prev => ({ ...prev, [field]: value }));
+    debugLog('MBA9876', `Updating field ${field} to:`, value);
+    
+    if (field === 'name') {
+      debugLog('MBA9876', 'Name update detected:', {
+        oldName: profileData?.name,
+        newName: value
+      });
+    }
+    
+    setProfileData(prev => {
+      const newData = { ...prev, [field]: value };
+      debugLog('MBA9876', `After updating ${field}, profileData:`, {
+        [field]: newData[field]
+      });
+      return newData;
+    });
+    
     setHasUnsavedChanges(true);
   };
 
@@ -172,7 +188,10 @@ const MyProfile = () => {
 
   const handleSaveChanges = async () => {
     try {
-      debugLog('MBA9876', 'MyProfile.js saving changes to profile data');
+      debugLog('MBA9876', 'MyProfile.js saving changes to profile data:', {
+        currentName: profileData.name,
+        currentEmail: profileData.email
+      });
       setLoading(true);
       
       // Create a profile data object with only the fields that need to be updated
@@ -190,15 +209,37 @@ const MyProfile = () => {
         insurance: profileData.insurance
       };
       
+      debugLog('MBA9876', 'Sending to backend:', updatedProfileData);
+      
       // Send the updated profile data to the backend
       const response = await updateProfileInfo(updatedProfileData);
+      debugLog('MBA9876', 'Got response from updateProfileInfo:', {
+        responseName: response.name,
+        responseEmail: response.email
+      });
       
-      // After successful API call, just reset the state
-      setHasUnsavedChanges(false);
+      // Update the profileData state with the response and force re-render
+      debugLog('MBA9876', 'Before updating profileData:', {
+        oldName: profileData.name,
+        newName: response.name
+      });
+      
+      const newProfileData = { ...profileData, ...response };
+      debugLog('MBA9876', 'After merging profileData:', {
+        mergedName: newProfileData.name
+      });
+      
+      setProfileData(newProfileData);
+      debugLog('MBA9876', 'After setProfileData called');
+      
+      // Force re-render of the component
       setEditMode({});
       
+      // Reset states after successful update
+      setHasUnsavedChanges(false);
+      
       // Show success message
-      debugLog('MBA5678', 'Changes saved successfully', response);
+      debugLog('MBA5678', 'Changes saved successfully');
     } catch (error) {
       debugLog('MBA5678', 'Error saving profile changes:', error);
       // Show error message to user 
@@ -214,15 +255,11 @@ const MyProfile = () => {
   };
 
   const renderActiveTab = () => {
-    debugLog('MBA54321 Rendering active tab with profile data:', {
+    debugLog('MBA54321', 'Rendering active tab with profile data:', {
       activeTab,
-      paymentMethods: profileData?.payment_methods,
-      profileData
+      profileName: profileData?.name,
+      paymentMethods: profileData?.payment_methods
     });
-    debugLog('MBA1234sx2xfdg', 'Profile data:', profileData);
-    debugLog('MBA1234sx2xfdg', 'User role:', userRole);
-    debugLog('MBA1234sx2xfdg', 'Edit mode:', editMode);
-    debugLog('MBA1234sx2xfdg', 'Has unsaved changes:', hasUnsavedChanges);
     
     switch (activeTab) {
       case 'profile_info':
@@ -239,6 +276,7 @@ const MyProfile = () => {
             country={profileData?.country}
             bio={profileData?.bio}
             about_me={profileData?.about_me}
+            name={profileData?.name}
             emergencyContact={profileData?.emergency_contact}
             authorizedHouseholdMembers={profileData?.authorized_household_members}
             editMode={editMode}

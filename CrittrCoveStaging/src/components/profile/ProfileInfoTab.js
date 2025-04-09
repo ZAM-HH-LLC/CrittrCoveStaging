@@ -385,6 +385,7 @@ const ProfileInfoTab = ({
   isProfessional,
   insurance = { type: 'none', card: null },
   onNavigateToTab,
+  name,
 }) => {
   const { name: authName } = useContext(AuthContext);
   
@@ -396,7 +397,7 @@ const ProfileInfoTab = ({
   const [selectedInsurance, setSelectedInsurance] = useState(insurance);
   // Add state to track edited values that should display in the UI
   const [displayValues, setDisplayValues] = useState({
-    name: authName || "Your Name",
+    name: name || authName || "Your Name",
     email: email || "",
     bio: isProfessional ? bio : about_me,
     location: `${city}${state ? `, ${state}` : ''}`,
@@ -405,13 +406,63 @@ const ProfileInfoTab = ({
   // Log initial props
   useEffect(() => {
     debugLog('MBA230uvj0834h9', 'ProfileInfoTab mounted with props:', { 
-      name: authName, email, address, bio, about_me, profilePhoto 
+      propName: name,
+      authName, 
+      email, 
+      address, 
+      bio, 
+      about_me, 
+      profilePhoto 
     });
     
     // Initialize location once
     const locationText = `${city}${state ? `, ${state}` : ''}`;
     setDisplayValues(prev => ({ ...prev, location: locationText }));
   }, []);
+  
+  // Update displayValues when props change
+  useEffect(() => {
+    debugLog('MBA230uvj0834h9', 'Props updated in ProfileInfoTab:', { 
+      receivedNameProp: name,
+      authNameFromContext: authName,
+      email, 
+      bio, 
+      about_me, 
+      city, 
+      state,
+      isProfessional,
+      hasEdits
+    });
+    
+    // Don't reset name if we're in editing mode to avoid losing edits
+    if (!hasEdits) {
+      // Update the display values with the new props
+      // Prioritize the name prop over authName
+      setDisplayValues(prev => ({
+        ...prev,
+        name: name || authName || "Your Name",
+        email: email || "",
+        bio: isProfessional ? bio : about_me,
+        location: `${city}${state ? `, ${state}` : ''}`
+      }));
+      
+      debugLog('MBA230uvj0834h9', 'DisplayValues updated:', {
+        name: name || authName || "Your Name",
+        email: email || "",
+        bio: isProfessional ? bio : about_me,
+        location: `${city}${state ? `, ${state}` : ''}`
+      });
+    } else {
+      debugLog('MBA230uvj0834h9', 'Not updating displayValues name because hasEdits is true');
+    }
+  }, [name, authName, email, bio, about_me, city, state, isProfessional, hasEdits]);
+  
+  // Track hasEdits changes
+  useEffect(() => {
+    debugLog('MBA230uvj0834h9', `hasEdits changed to: ${hasEdits}`, {
+      currentDisplayValues: displayValues
+    });
+  }, [hasEdits]);
   
   // Handle edit field
   const handleEdit = (field, currentValue) => {
@@ -450,8 +501,26 @@ const ProfileInfoTab = ({
       
       onChangeText('location', value);
       onChangeText('address', value);
+    } else if (editingField === 'name') {
+      debugLog('MBA230uvj0834h9', 'Before updating displayValues name:', {
+        oldName: displayValues.name,
+        newName: value
+      });
+
+      // For name field, update displayValues and pass to parent
+      setDisplayValues(prev => {
+        const newValues = { ...prev, name: value };
+        debugLog('MBA230uvj0834h9', 'New displayValues:', newValues);
+        return newValues;
+      });
+      
+      // Also pass to parent component
+      debugLog('MBA230uvj0834h9', 'Calling onChangeText with name:', value);
+      onChangeText('name', value);
+      
+      debugLog('MBA230uvj0834h9', `Updated name to "${value}"`);
     } else {
-      // For text fields, update displayValues to show changes immediately
+      // For other text fields, update displayValues to show changes immediately
       setDisplayValues(prev => ({
         ...prev,
         [editingField]: value
@@ -524,6 +593,11 @@ const ProfileInfoTab = ({
   const handleSaveAllChanges = () => {
     debugLog('MBA230uvj0834h9', 'Saving all changes', displayValues);
     
+    // Make sure the parent has all current display values
+    onChangeText('name', displayValues.name);
+    onChangeText('email', displayValues.email);
+    onChangeText(isProfessional ? 'bio' : 'about_me', displayValues.bio);
+    
     // Call parent's save function
     onSaveChanges();
     
@@ -542,8 +616,8 @@ const ProfileInfoTab = ({
 
   const location = `${city}${state ? `, ${state}` : ''}`;
   
-  // Display name (use context value if available)
-  const displayName = authName || "Your Name";
+  // Display name (use display values instead of context)
+  const displayName = displayValues.name || "Your Name";
   
   const renderFacilitiesSection = () => {
     if (isProfessional) return null;
