@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext, debugLog } from '../../context/AuthContext';
 import FloatingSaveButton from '../../components/FloatingSaveButton';
+import { updateProfileInfo } from '../../api/API';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -377,7 +378,7 @@ const ProfileInfoTab = ({
   onChangeText,
   pickImage,
   setHasUnsavedChanges,
-  onSaveChanges,
+  onSaveComplete,
   isMobile,
   rating,
   reviews,
@@ -395,6 +396,8 @@ const ProfileInfoTab = ({
   const [editValue, setEditValue] = useState('');
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [selectedInsurance, setSelectedInsurance] = useState(insurance);
+  const [isSaving, setIsSaving] = useState(false);
+  
   // Add state to track edited values that should display in the UI
   const [displayValues, setDisplayValues] = useState({
     name: name || authName || "Your Name",
@@ -434,8 +437,8 @@ const ProfileInfoTab = ({
       hasEdits
     });
     
-    // Don't reset name if we're in editing mode to avoid losing edits
-    if (!hasEdits) {
+    // Only update if we're not in editing mode
+    if (!hasEdits && !isSaving) {
       // Update the display values with the new props
       // Prioritize the name prop over authName
       setDisplayValues(prev => ({
@@ -453,9 +456,9 @@ const ProfileInfoTab = ({
         location: `${city}${state ? `, ${state}` : ''}`
       });
     } else {
-      debugLog('MBA230uvj0834h9', 'Not updating displayValues name because hasEdits is true');
+      debugLog('MBA230uvj0834h9', 'Not updating displayValues because we have unsaved edits');
     }
-  }, [name, authName, email, bio, about_me, city, state, isProfessional, hasEdits]);
+  }, [name, authName, email, bio, about_me, city, state, isProfessional, hasEdits, isSaving]);
   
   // Track hasEdits changes
   useEffect(() => {
@@ -490,7 +493,6 @@ const ProfileInfoTab = ({
     
     if (editingField === 'insurance') {
       setSelectedInsurance(value);
-      onChangeText('insurance', value);
     } else if (editingField === 'location') {
       // Format location
       const formattedLocation = formatLocation(value);
@@ -498,25 +500,18 @@ const ProfileInfoTab = ({
         ...prev,
         location: formattedLocation
       }));
-      
-      onChangeText('location', value);
-      onChangeText('address', value);
     } else if (editingField === 'name') {
       debugLog('MBA230uvj0834h9', 'Before updating displayValues name:', {
         oldName: displayValues.name,
         newName: value
       });
 
-      // For name field, update displayValues and pass to parent
+      // For name field, update displayValues directly
       setDisplayValues(prev => {
         const newValues = { ...prev, name: value };
         debugLog('MBA230uvj0834h9', 'New displayValues:', newValues);
         return newValues;
       });
-      
-      // Also pass to parent component
-      debugLog('MBA230uvj0834h9', 'Calling onChangeText with name:', value);
-      onChangeText('name', value);
       
       debugLog('MBA230uvj0834h9', `Updated name to "${value}"`);
     } else {
@@ -525,8 +520,6 @@ const ProfileInfoTab = ({
         ...prev,
         [editingField]: value
       }));
-      
-      onChangeText(editingField, value);
     }
     
     // Mark that user has made an edit
@@ -535,83 +528,77 @@ const ProfileInfoTab = ({
     setEditingField(null);
   };
 
-  // Handle profile photo change
-  const handleProfilePhotoUpdate = async () => {
-    const result = await pickImage();
-    if (result) {
-      debugLog('MBA230uvj0834h9', 'Profile photo updated');
-      setHasEdits(true);
-      setHasUnsavedChanges(true);
-    }
+  // Extract address components from location string
+  const extractAddressComponents = (locationStr) => {
+    const components = locationStr.split(',').map(part => part.trim());
+    return {
+      city: components[0] || '',
+      state: components[1] || '',
+      zip: components[2] || '',
+      country: components[3] || 'USA'
+    };
   };
-  
-  // Handle portfolio photo addition
-  const handleAddPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
 
-    if (!result.canceled) {
-      const newPhotos = [...portfolioPhotos, result.assets[0].uri];
-      setPortfolioPhotos(newPhotos);
-      onChangeText('portfolioPhotos', newPhotos);
-      setHasEdits(true);
-      setHasUnsavedChanges(true);
-    }
-  };
-  
-  // Handle insurance change
-  const handleInsuranceChange = async (insuranceType) => {
-    if (insuranceType === 'custom') {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 1,
-      });
-
-      if (!result.canceled) {
-        const newInsurance = { type: 'custom', card: result.assets[0].uri };
-        setSelectedInsurance(newInsurance);
-        onChangeText('insurance', newInsurance);
-        setHasEdits(true);
-        setHasUnsavedChanges(true);
-      }
-    } else {
-      const newInsurance = { type: insuranceType, card: null };
-      setSelectedInsurance(newInsurance);
-      onChangeText('insurance', newInsurance);
-      setHasEdits(true);
-      setHasUnsavedChanges(true);
-    }
-  };
-  
-  // Handle save all changes
-  const handleSaveAllChanges = () => {
+  // Handle save all changes - now calls API directly
+  const handleSaveAllChanges = async () => {
     debugLog('MBA230uvj0834h9', 'Saving all changes', displayValues);
     
-    // Make sure the parent has all current display values
-    onChangeText('name', displayValues.name);
-    onChangeText('email', displayValues.email);
-    onChangeText(isProfessional ? 'bio' : 'about_me', displayValues.bio);
-    
-    // Call parent's save function
-    onSaveChanges();
-    
-    // Reset flags for edits
-    setHasEdits(false);
-    setHasUnsavedChanges(false);
-    
-    // Log saved values for verification
-    debugLog('MBA230uvj0834h9', 'Changes saved. Current values:', {
-      name: displayValues.name,
-      email: displayValues.email,
-      bio: displayValues.bio,
-      location: displayValues.location
-    });
+    try {
+      setIsSaving(true);
+      
+      // Extract location components
+      const locationComponents = extractAddressComponents(displayValues.location);
+      
+      // Create profile data object to send to API
+      const profileData = {
+        name: displayValues.name,
+        email: displayValues.email,
+        bio: isProfessional ? displayValues.bio : undefined,
+        about_me: !isProfessional ? displayValues.bio : undefined,
+        city: locationComponents.city,
+        state: locationComponents.state,
+        zip: locationComponents.zip,
+        country: locationComponents.country,
+        insurance: selectedInsurance
+      };
+      
+      // Call API directly
+      debugLog('MBA230uvj0834h9', 'Calling updateProfileInfo with:', profileData);
+      const updatedProfile = await updateProfileInfo(profileData);
+      debugLog('MBA230uvj0834h9', 'Received updated profile:', updatedProfile);
+      
+      // Update displayValues with response
+      setDisplayValues({
+        name: updatedProfile.name || displayValues.name,
+        email: updatedProfile.email || displayValues.email,
+        bio: isProfessional ? 
+          updatedProfile.bio || displayValues.bio : 
+          updatedProfile.about_me || displayValues.bio,
+        location: `${updatedProfile.city || ''}${updatedProfile.state ? `, ${updatedProfile.state}` : ''}`
+      });
+      
+      // Reset flags for edits
+      setHasEdits(false);
+      setHasUnsavedChanges(false);
+      
+      // Notify parent component that save is complete
+      if (onSaveComplete) {
+        onSaveComplete(updatedProfile);
+      }
+      
+      // Log saved values for verification
+      debugLog('MBA230uvj0834h9', 'Changes saved. Current values:', {
+        name: displayValues.name,
+        email: displayValues.email,
+        bio: displayValues.bio,
+        location: displayValues.location
+      });
+    } catch (error) {
+      debugLog('MBA230uvj0834h9', 'Error saving profile changes:', error);
+      Alert.alert('Error', 'Failed to save profile changes. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const location = `${city}${state ? `, ${state}` : ''}`;
@@ -719,7 +706,7 @@ const ProfileInfoTab = ({
           {/* Profile Photo Section */}
           <View style={[styles.profileSection, !isMobile && styles.profileSectionDesktop]}>
             <View style={styles.profileCard}>
-              <TouchableOpacity onPress={handleProfilePhotoUpdate} style={styles.profilePhotoContainer}>
+              <TouchableOpacity onPress={pickImage} style={styles.profilePhotoContainer}>
                 {profilePhoto ? (
                   <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
                 ) : (
@@ -803,7 +790,7 @@ const ProfileInfoTab = ({
                 <Text style={styles.sectionTitle}>Portfolio Photos</Text>
                 <TouchableOpacity 
                   style={styles.addPhotoButton}
-                  onPress={handleAddPhoto}
+                  onPress={pickImage}
                 >
                   <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
                   <Text style={styles.addPhotoText}>Add Photos</Text>
@@ -844,7 +831,7 @@ const ProfileInfoTab = ({
         isProfessional={isProfessional}
         isInsurance={editingField === 'insurance'}
         selectedInsurance={selectedInsurance}
-        onInsuranceChange={handleInsuranceChange}
+        onInsuranceChange={setSelectedInsurance}
       />
     </View>
   );

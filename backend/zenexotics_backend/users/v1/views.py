@@ -283,149 +283,32 @@ def update_time_settings(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_profile(request):
-    user = request.user
-    logger.debug(f"MBA1234sx2xfdg: Processing user_profile request for user {user.id}")
+    """
+    Get the complete user profile data.
     
-    # Initialize response dictionary
-    response_data = {}
+    This endpoint returns all profile-related information for the currently 
+    authenticated user, including personal details, pets, services, etc.
+    """
+    user = request.user
+    logger.debug(f"user_profile: Processing request for user {user.id}")
     
     try:
-        # Fetch the client profile
-        client = Client.objects.get(user=user)
-        logger.debug(f"MBA1234sx2xfdg: Found client profile for user {user.id}")
-        logger.debug(f"MBA1234sx2xfdg: Client about_me: '{client.about_me}'")
+        # Use the helper function to get profile data
+        from ..helpers import get_user_profile_data
+        response_data = get_user_profile_data(user)
         
-        # Add client fields directly to response_data
-        response_data.update({
-            'id': getattr(client, 'id', None),
-            'name': user.name,
-            'email': user.email,
-            'phone': getattr(user, 'phone_number', ""),
-            'address': getattr(user, 'address', ""),
-            'city': getattr(user, 'city', ""),
-            'state': getattr(user, 'state', ""),
-            'zip': getattr(user, 'zip_code', ""),
-            'country': 'USA',
-            'age': None,
-            'profile_photo': None,
-            'about_me': client.about_me,  # THIS IS THE FIELD FROM CLIENT
-            'emergency_contact': client.emergency_contact,
-            'authorized_household_members': client.authorized_household_members,
-            'home_environment': client.home_environment,
-            'created_at': client.created_at,
-            'updated_at': client.updated_at,
-        })
-        logger.debug(f"MBA1234sx2xfdg: Added client fields to response")
-        
-        # Fetch professional data if it exists
-        professional = None
-        try:
-            professional = Professional.objects.get(user=user)
-            logger.debug(f"MBA1234sx2xfdg: Found professional profile for user {user.id}")
-            logger.debug(f"MBA1234sx2xfdg: Professional bio: '{professional.bio}'")
-            
-            # Add professional's bio to response_data
-            response_data['bio'] = professional.bio  # THIS IS THE FIELD FROM PROFESSIONAL
-            logger.debug(f"MBA1234sx2xfdg: Added professional bio to response")
-        except Professional.DoesNotExist:
-            logger.debug(f"MBA1234sx2xfdg: No professional profile found for user {user.id}")
-            response_data['bio'] = ""  # Empty string if no professional profile
-        
-        # Fetch pets - Important: The Pet model links to User, not Client
-        from pets.models import Pet
-        try:
-            # Query pets by user, not client
-            pets = Pet.objects.filter(owner=user)
-            logger.debug(f"MBA1234sx2xfdg: Found {len(pets)} pets for user {user.id}")
-            
-            pet_data = []
-            for pet in pets:
-                pet_data.append({
-                    'id': pet.pet_id,
-                    'name': pet.name,
-                    'type': pet.species,
-                    'breed': pet.breed,
-                    'age': f"{pet.age_years or 0} years {pet.age_months or 0} months",
-                    'weight': pet.weight,
-                    'profile_photo': pet.profile_photo.url if pet.profile_photo else None,
-                    'description': pet.pet_description
-                })
-            logger.debug(f"MBA1234sx2xfdg: Processed pet data: {pet_data}")
-        except Exception as e:
-            logger.error(f"MBA1234sx2xfdg: Error fetching pets: {str(e)}")
-            pet_data = []
-        response_data['pets'] = pet_data
-        
-        # Fetch services from the Service model if user is also a professional
-        from services.models import Service
-        try:
-            if professional:
-                # Get services for this professional
-                services = Service.objects.filter(professional=professional)
-                logger.debug(f"MBA1234sx2xfdg: Found {len(services)} services for professional {professional.professional_id}")
-                
-                service_data = []
-                for service in services:
-                    service_data.append({
-                        'id': service.service_id,
-                        'name': service.service_name,
-                        'description': service.description,
-                        'price': float(service.base_rate),
-                        'unit': service.unit_of_time,
-                        'isActive': service.is_active,
-                        'isOvernight': service.is_overnight,
-                        'animal_type': service.animal_type
-                    })
-                logger.debug(f"MBA1234sx2xfdg: Processed service data: {service_data}")
-            else:
-                service_data = []
-                logger.debug(f"MBA1234sx2xfdg: No professional profile, so no services")
-        except Exception as e:
-            logger.error(f"MBA1234sx2xfdg: Error fetching services: {str(e)}")
-            service_data = []
-        response_data['services'] = service_data
-        
-        # Add preferences structure (matching the logged response)
-        response_data['preferences'] = {
-            'homeEnvironment': client.home_environment if hasattr(client, 'home_environment') else [],
-            'petCare': [
-                {'id': 'energy_1', 'label': 'HIGH Energy Level', 'icon': 'lightning-bolt', 'selected': True},
-                {'id': 'alone_1', 'label': 'Can Be Left Alone', 'icon': 'home', 'selected': True}
-            ],
-            'specialRequirements': [
-                {'id': 'special_1', 'label': 'Special Care Instructions', 'icon': 'medical-bag', 'selected': True}
-            ]
-        }
-        
-        # Add settings structure (matching the logged response)
-        response_data['settings'] = [
-            {'id': 'notifications', 'title': 'Push Notifications', 'type': 'toggle', 'value': True, 'icon': 'bell'},
-            {'id': 'email_updates', 'title': 'Email Updates', 'type': 'toggle', 'value': True, 'icon': 'email'},
-            {'id': 'privacy', 'title': 'Privacy Settings', 'type': 'link', 'icon': 'shield-account'}
-        ]
-        
-        # Add payment methods structure (matching the logged response)
-        response_data['payment_methods'] = [
-            {'id': 3, 'type': 'bank', 'last4': '1234', 'expiry': None, 'isDefault': True, 'bankName': 'Ent Federal Credit Union'}
-        ]
-        
-        # Log the final response for debugging
-        logger.debug(f"MBA1234sx2xfdg: Final response data: {response_data}")
-        logger.debug(f"MBA1234sx2xfdg: Response contains bio: '{response_data.get('bio', 'MISSING')}'")
-        logger.debug(f"MBA1234sx2xfdg: Response contains about_me: '{response_data.get('about_me', 'MISSING')}'")
-        logger.debug(f"MBA1234sx2xfdg: Response contains {len(response_data.get('pets', []))} pets")
-        logger.debug(f"MBA1234sx2xfdg: Response contains {len(response_data.get('services', []))} services")
+        # If the helper function returned an error, return it with the appropriate status
+        if 'error' in response_data:
+            return Response(
+                response_data,
+                status=status.HTTP_404_NOT_FOUND if response_data['error'] == 'Client profile not found' 
+                else status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         return Response(response_data)
         
-    except Client.DoesNotExist:
-        logger.warning(f"MBA1234sx2xfdg: Client profile not found for user {user.id}")
-        return Response(
-            {'error': 'Client profile not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
     except Exception as e:
-        logger.exception(f"MBA1234sx2xfdg: Unexpected error: {str(e)}")
+        logger.exception(f"user_profile: Unexpected error: {str(e)}")
         return Response(
             {'error': 'An unexpected error occurred'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -441,197 +324,29 @@ def clear_url_cache(request):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_profile_info(request):
-    """Update user profile information including both user and client/professional data."""
+    """
+    Update user profile information including both user and client/professional data.
+    
+    This endpoint handles updating various user profile fields and returns
+    only the fields that were updated, not the entire profile.
+    """
     user = request.user
-    logger.debug(f"MBA76543: Processing profile update request for user {user.id}")
+    logger.debug(f"update_profile_info: Processing request for user {user.id}")
     
     try:
         # Get data from request
         data = request.data
-        logger.debug(f"MBA76543: Profile update data received: {data}")
+        logger.debug(f"update_profile_info: Data received: {data}")
         
-        # Update User model fields
-        if 'name' in data and data['name']:
-            user.name = data['name']
-        if 'email' in data and data['email']:
-            user.email = data['email']
-        if 'phone' in data and data['phone']:
-            user.phone_number = data['phone']
-        if 'address' in data:
-            user.address = data['address']
-        if 'city' in data:
-            user.city = data['city']
-        if 'state' in data:
-            user.state = data['state']
-        if 'zip' in data:
-            user.zip_code = data['zip']
+        # Use the helper function to update profile data
+        from ..helpers import update_user_profile
+        updated_fields = update_user_profile(user, data)
         
-        # Save user model changes
-        user.save()
-        logger.debug(f"MBA76543: Updated user details: {user.name}, {user.email}")
-        
-        # Update Client model if it exists
-        try:
-            client = Client.objects.get(user=user)
-            
-            if 'about_me' in data:
-                client.about_me = data['about_me']
-            if 'emergency_contact' in data:
-                client.emergency_contact = data['emergency_contact']
-            if 'authorized_household_members' in data:
-                client.authorized_household_members = data['authorized_household_members']
-            if 'home_environment' in data:
-                client.home_environment = data['home_environment']
-                
-            client.save()
-            logger.debug(f"MBA76543: Updated client profile with about_me: '{client.about_me}'")
-        except Client.DoesNotExist:
-            logger.debug(f"MBA76543: No client profile found for user {user.id}")
-            
-        # Update Professional model if it exists
-        try:
-            professional = Professional.objects.get(user=user)
-            
-            if 'bio' in data:
-                professional.bio = data['bio']
-            if 'insurance' in data and isinstance(data['insurance'], dict):
-                professional.insurance_info = data['insurance']
-                
-            professional.save()
-            logger.debug(f"MBA76543: Updated professional profile with bio: '{professional.bio}'")
-        except Professional.DoesNotExist:
-            logger.debug(f"MBA76543: No professional profile found for user {user.id}")
-        
-        # Handle profile photo upload if included
-        if 'profilePhoto' in data and data['profilePhoto']:
-            # The actual upload handling would depend on your media storage configuration
-            # This is a placeholder for that implementation
-            logger.debug(f"MBA76543: Profile photo update requested but not implemented")
-            # You would typically save the photo to the user model or a related profile model
-        
-        # Instead of directly calling user_profile, build the response like user_profile does
-        response_data = {}
-        
-        # Basic user info
-        response_data.update({
-            'name': user.name,
-            'email': user.email,
-            'phone': getattr(user, 'phone_number', ""),
-            'address': getattr(user, 'address', ""),
-            'city': getattr(user, 'city', ""),
-            'state': getattr(user, 'state', ""),
-            'zip': getattr(user, 'zip_code', ""),
-            'country': 'USA',
-        })
-        
-        # Client data
-        try:
-            client = Client.objects.get(user=user)
-            response_data.update({
-                'id': getattr(client, 'id', None),
-                'about_me': client.about_me,
-                'emergency_contact': client.emergency_contact,
-                'authorized_household_members': client.authorized_household_members,
-                'home_environment': client.home_environment,
-                'created_at': client.created_at,
-                'updated_at': client.updated_at,
-            })
-        except Client.DoesNotExist:
-            response_data['about_me'] = ""
-        
-        # Professional data
-        try:
-            professional = Professional.objects.get(user=user)
-            response_data['bio'] = professional.bio
-        except Professional.DoesNotExist:
-            response_data['bio'] = ""
-        
-        # Fetch pets - Important: The Pet model links to User, not Client
-        from pets.models import Pet
-        try:
-            # Query pets by user, not client
-            pets = Pet.objects.filter(owner=user)
-            
-            pet_data = []
-            for pet in pets:
-                pet_data.append({
-                    'id': pet.pet_id,
-                    'name': pet.name,
-                    'type': pet.species,
-                    'breed': pet.breed,
-                    'age': f"{pet.age_years or 0} years {pet.age_months or 0} months",
-                    'weight': pet.weight,
-                    'profile_photo': pet.profile_photo.url if pet.profile_photo else None,
-                    'description': pet.pet_description
-                })
-        except Exception as e:
-            logger.error(f"MBA76543: Error fetching pets: {str(e)}")
-            pet_data = []
-        response_data['pets'] = pet_data
-        
-        # Fetch services if professional
-        from services.models import Service
-        try:
-            if professional:
-                # Get services for this professional
-                services = Service.objects.filter(professional=professional)
-                
-                service_data = []
-                for service in services:
-                    service_data.append({
-                        'id': service.service_id,
-                        'name': service.service_name,
-                        'description': service.description,
-                        'price': float(service.base_rate),
-                        'unit': service.unit_of_time,
-                        'isActive': service.is_active,
-                        'isOvernight': service.is_overnight,
-                        'animal_type': service.animal_type
-                    })
-            else:
-                service_data = []
-        except Exception as e:
-            logger.error(f"MBA76543: Error fetching services: {str(e)}")
-            service_data = []
-        response_data['services'] = service_data
-        
-        # Add preferences structure
-        try:
-            client = Client.objects.get(user=user)
-            response_data['preferences'] = {
-                'homeEnvironment': client.home_environment if hasattr(client, 'home_environment') else [],
-                'petCare': [
-                    {'id': 'energy_1', 'label': 'HIGH Energy Level', 'icon': 'lightning-bolt', 'selected': True},
-                    {'id': 'alone_1', 'label': 'Can Be Left Alone', 'icon': 'home', 'selected': True}
-                ],
-                'specialRequirements': [
-                    {'id': 'special_1', 'label': 'Special Care Instructions', 'icon': 'medical-bag', 'selected': True}
-                ]
-            }
-        except Client.DoesNotExist:
-            response_data['preferences'] = {
-                'homeEnvironment': [],
-                'petCare': [],
-                'specialRequirements': []
-            }
-        
-        # Add settings structure
-        response_data['settings'] = [
-            {'id': 'notifications', 'title': 'Push Notifications', 'type': 'toggle', 'value': True, 'icon': 'bell'},
-            {'id': 'email_updates', 'title': 'Email Updates', 'type': 'toggle', 'value': True, 'icon': 'email'},
-            {'id': 'privacy', 'title': 'Privacy Settings', 'type': 'link', 'icon': 'shield-account'}
-        ]
-        
-        # Add payment methods structure
-        response_data['payment_methods'] = [
-            {'id': 3, 'type': 'bank', 'last4': '1234', 'expiry': None, 'isDefault': True, 'bankName': 'Ent Federal Credit Union'}
-        ]
-        
-        logger.debug(f"MBA76543: Profile updated successfully")
-        return Response(response_data)
+        # Return only the updated fields
+        return Response(updated_fields)
         
     except Exception as e:
-        logger.exception(f"MBA76543: Error updating profile: {str(e)}")
+        logger.exception(f"update_profile_info: Error updating profile: {str(e)}")
         return Response(
             {'error': f'Failed to update profile: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST

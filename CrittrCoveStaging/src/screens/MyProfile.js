@@ -161,92 +161,43 @@ const MyProfile = () => {
     }
   };
 
-  const handleUpdateField = (field, value) => {
-    debugLog('MBA9876', `Updating field ${field} to:`, value);
-    
-    if (field === 'name') {
-      debugLog('MBA9876', 'Name update detected:', {
-        oldName: profileData?.name,
-        newName: value
-      });
-    }
-    
-    setProfileData(prev => {
-      const newData = { ...prev, [field]: value };
-      debugLog('MBA9876', `After updating ${field}, profileData:`, {
-        [field]: newData[field]
-      });
-      return newData;
+  // Handle save completion from child components
+  const handleSaveComplete = (updatedProfile) => {
+    debugLog('MBA9876', 'Save completed with updated profile:', {
+      updatedName: updatedProfile.name,
+      updatedEmail: updatedProfile.email
     });
     
+    // Update the profileData with the saved data
+    setProfileData(prev => ({
+      ...prev,
+      ...updatedProfile
+    }));
+    
+    // Reset state flags
+    setHasUnsavedChanges(false);
+    setEditMode({});
+    
+    // Show success indicator if needed
+    debugLog('MBA5678', 'Changes saved successfully');
+  };
+
+  // Handle field updates before saving
+  const handleUpdateField = (field, value) => {
+    debugLog('MBA9876', `Updating field ${field} locally, will be saved later:`, value);
+    
+    // Only update local state, actual save will happen in the child component
+    setProfileData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Mark that we have unsaved changes
     setHasUnsavedChanges(true);
   };
 
   const toggleEditMode = (section) => {
     setEditMode(prev => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const handleSaveChanges = async () => {
-    try {
-      debugLog('MBA9876', 'MyProfile.js saving changes to profile data:', {
-        currentName: profileData.name,
-        currentEmail: profileData.email
-      });
-      setLoading(true);
-      
-      // Create a profile data object with only the fields that need to be updated
-      const updatedProfileData = {
-        name: profileData.name,
-        email: profileData.email,
-        bio: profileData.bio,
-        about_me: profileData.about_me,
-        address: profileData.address,
-        city: profileData.city,
-        state: profileData.state,
-        zip: profileData.zip,
-        country: profileData.country,
-        profilePhoto: profileData.profilePhoto,
-        insurance: profileData.insurance
-      };
-      
-      debugLog('MBA9876', 'Sending to backend:', updatedProfileData);
-      
-      // Send the updated profile data to the backend
-      const response = await updateProfileInfo(updatedProfileData);
-      debugLog('MBA9876', 'Got response from updateProfileInfo:', {
-        responseName: response.name,
-        responseEmail: response.email
-      });
-      
-      // Update the profileData state with the response and force re-render
-      debugLog('MBA9876', 'Before updating profileData:', {
-        oldName: profileData.name,
-        newName: response.name
-      });
-      
-      const newProfileData = { ...profileData, ...response };
-      debugLog('MBA9876', 'After merging profileData:', {
-        mergedName: newProfileData.name
-      });
-      
-      setProfileData(newProfileData);
-      debugLog('MBA9876', 'After setProfileData called');
-      
-      // Force re-render of the component
-      setEditMode({});
-      
-      // Reset states after successful update
-      setHasUnsavedChanges(false);
-      
-      // Show success message
-      debugLog('MBA5678', 'Changes saved successfully');
-    } catch (error) {
-      debugLog('MBA5678', 'Error saving profile changes:', error);
-      // Show error message to user 
-      Alert.alert('Error', 'Failed to save profile changes. Please try again.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleSwitchPlan = (planId) => {
@@ -284,11 +235,10 @@ const MyProfile = () => {
             onChangeText={handleUpdateField}
             pickImage={handlePickImage}
             setHasUnsavedChanges={(hasChanges) => {
-              // Just for debugging
               debugLog('MBA9876', 'ProfileInfoTab setting hasUnsavedChanges:', hasChanges);
               setHasUnsavedChanges(hasChanges);
             }}
-            onSaveChanges={handleSaveChanges}
+            onSaveComplete={handleSaveComplete}
             isMobile={isMobile}
             rating={profileData?.rating}
             reviews={profileData?.reviews}

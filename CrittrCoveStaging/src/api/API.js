@@ -260,7 +260,7 @@ export const userProfile = async (data = null) => {
 /**
  * Update user profile information
  * @param {Object} profileData - Data to update in the user profile
- * @returns {Promise<Object>} - Updated user profile data
+ * @returns {Promise<Object>} - Only the updated fields, not the entire profile data
  */
 export const updateProfileInfo = async (profileData) => {
   try {
@@ -282,11 +282,11 @@ export const updateProfileInfo = async (profileData) => {
       }
     );
     
-    // The backend already returns the complete updated profile
-    const updatedProfile = response.data;
-    debugLog('MBA76543', 'Updated profile data:', updatedProfile);
+    // The backend now returns only the updated fields, not the complete profile
+    const updatedFields = response.data;
+    debugLog('MBA76543', 'Updated fields received:', updatedFields);
     
-    return updatedProfile;
+    return updatedFields;
   } catch (error) {
     debugLog('MBA76543', 'Error updating profile info:', error);
     throw error;
