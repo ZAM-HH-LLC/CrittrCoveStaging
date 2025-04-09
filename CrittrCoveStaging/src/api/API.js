@@ -256,3 +256,39 @@ export const userProfile = async (data = null) => {
     throw error;
   }
 };
+
+/**
+ * Update user profile information
+ * @param {Object} profileData - Data to update in the user profile
+ * @returns {Promise<Object>} - Updated user profile data
+ */
+export const updateProfileInfo = async (profileData) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    debugLog('MBA76543', 'Updating profile info with data:', profileData);
+    
+    const response = await axios.patch(
+      `${API_BASE_URL}/api/users/v1/update_profile_info/`,
+      profileData,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    // The backend already returns the complete updated profile
+    const updatedProfile = response.data;
+    debugLog('MBA76543', 'Updated profile data:', updatedProfile);
+    
+    return updatedProfile;
+  } catch (error) {
+    debugLog('MBA76543', 'Error updating profile info:', error);
+    throw error;
+  }
+};

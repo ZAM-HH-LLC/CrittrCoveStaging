@@ -23,7 +23,7 @@ import ServicesAvailabilityTab from '../components/profile/ServicesAvailabilityT
 import PetsPreferencesTab from '../components/profile/PetsPreferencesTab';
 import SettingsPaymentsTab from '../components/profile/SettingsPaymentsTab';
 import TabBar from '../components/TabBar';
-import { userProfile } from '../api/API';
+import { userProfile, updateProfileInfo } from '../api/API';
 
 const MyProfile = () => {
   const navigation = useNavigation();
@@ -171,15 +171,41 @@ const MyProfile = () => {
   };
 
   const handleSaveChanges = async () => {
-    // TODO: Implement API call to save changes
-    debugLog('MBA9876', 'MyProfile.js saving changes to profile data');
-    
-    // After successful API call, just reset the state
-    setHasUnsavedChanges(false);
-    setEditMode({});
-    
-    // Show success message
-    debugLog('MBA5678', 'Changes saved successfully');
+    try {
+      debugLog('MBA9876', 'MyProfile.js saving changes to profile data');
+      setLoading(true);
+      
+      // Create a profile data object with only the fields that need to be updated
+      const updatedProfileData = {
+        name: profileData.name,
+        email: profileData.email,
+        bio: profileData.bio,
+        about_me: profileData.about_me,
+        address: profileData.address,
+        city: profileData.city,
+        state: profileData.state,
+        zip: profileData.zip,
+        country: profileData.country,
+        profilePhoto: profileData.profilePhoto,
+        insurance: profileData.insurance
+      };
+      
+      // Send the updated profile data to the backend
+      const response = await updateProfileInfo(updatedProfileData);
+      
+      // After successful API call, just reset the state
+      setHasUnsavedChanges(false);
+      setEditMode({});
+      
+      // Show success message
+      debugLog('MBA5678', 'Changes saved successfully', response);
+    } catch (error) {
+      debugLog('MBA5678', 'Error saving profile changes:', error);
+      // Show error message to user 
+      Alert.alert('Error', 'Failed to save profile changes. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSwitchPlan = (planId) => {
@@ -222,6 +248,7 @@ const MyProfile = () => {
             setHasUnsavedChanges={(hasChanges) => {
               // Just for debugging
               debugLog('MBA9876', 'ProfileInfoTab setting hasUnsavedChanges:', hasChanges);
+              setHasUnsavedChanges(hasChanges);
             }}
             onSaveChanges={handleSaveChanges}
             isMobile={isMobile}

@@ -20,6 +20,7 @@ urlpatterns = [
     path('time-settings/', views.get_time_settings, name='time_settings'),
     path('update-time-settings/', views.update_time_settings, name='update_time_settings'),
     path('profile/', views.user_profile, name='user-profile'),
+    path('update_profile_info/', views.update_profile_info, name='update-profile-info'),
     path('clear-url-cache/', clear_url_cache, name='clear-url-cache'),
 ]
 
