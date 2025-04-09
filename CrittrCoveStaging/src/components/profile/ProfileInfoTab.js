@@ -5,6 +5,7 @@ import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext, debugLog } from '../../context/AuthContext';
+import FloatingSaveButton from '../../components/FloatingSaveButton';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -348,7 +349,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
               onPress={handleSave}
               disabled={isLocation && !addressForm.street}
             >
-              <Text style={styles.modalSaveText}>Save</Text>
+              <Text style={styles.modalSaveText}>Continue Editing</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -376,6 +377,7 @@ const ProfileInfoTab = ({
   onChangeText,
   pickImage,
   setHasUnsavedChanges,
+  onSaveChanges,
   isMobile,
   rating,
   reviews,
@@ -384,51 +386,115 @@ const ProfileInfoTab = ({
   insurance = { type: 'none', card: null },
   onNavigateToTab,
 }) => {
-  const { name } = useContext(AuthContext);
+  const { name: authName } = useContext(AuthContext);
+  
+  // Track direct user edits
+  const [hasEdits, setHasEdits] = useState(false);
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [selectedInsurance, setSelectedInsurance] = useState(insurance);
-
-  // Add logging to see what data we're receiving
+  // Add state to track edited values that should display in the UI
+  const [displayValues, setDisplayValues] = useState({
+    name: authName || "Your Name",
+    email: email || "",
+    bio: isProfessional ? bio : about_me,
+    location: `${city}${state ? `, ${state}` : ''}`,
+  });
+  
+  // Log initial props
   useEffect(() => {
-    debugLog('MBA1234', 'ProfileInfoTab received data:', {
-      profilePhoto,
-      email,
-      phone,
-      age,
-      address,
-      city,
-      state,
-      zip,
-      country,
-      bio,
-      about_me,
-      emergencyContact,
-      authorizedHouseholdMembers,
-      editMode,
-      role,
-      isProfessional,
-      insurance
+    debugLog('MBA230uvj0834h9', 'ProfileInfoTab mounted with props:', { 
+      name: authName, email, address, bio, about_me, profilePhoto 
     });
-  }, [profilePhoto, email, phone, age, address, city, state, zip, country, bio, about_me, emergencyContact, authorizedHouseholdMembers, editMode, role, isProfessional, insurance]);
-
+    
+    // Initialize location once
+    const locationText = `${city}${state ? `, ${state}` : ''}`;
+    setDisplayValues(prev => ({ ...prev, location: locationText }));
+  }, []);
+  
+  // Handle edit field
   const handleEdit = (field, currentValue) => {
+    debugLog('MBA230uvj0834h9', `Edit ${field}:`, currentValue);
     setEditValue(currentValue);
     setEditingField(field);
   };
 
+  // Handle location save specifically
+  const formatLocation = (locationValue) => {
+    if (!locationValue || locationValue.trim() === '') return '';
+    
+    // Parse the parts
+    const parts = locationValue.split(',').map(part => part.trim());
+    const city = parts[0] || '';
+    const state = parts[1] || '';
+    
+    // Format according to our standard
+    return `${city}${state ? `, ${state}` : ''}`;
+  };
+
+  // Handle save of edited field
   const handleSave = (value) => {
+    debugLog('MBA230uvj0834h9', `Save ${editingField} from ${editValue} to:`, value);
+    
     if (editingField === 'insurance') {
       setSelectedInsurance(value);
       onChangeText('insurance', value);
+    } else if (editingField === 'location') {
+      // Format location
+      const formattedLocation = formatLocation(value);
+      setDisplayValues(prev => ({
+        ...prev,
+        location: formattedLocation
+      }));
+      
+      onChangeText('location', value);
+      onChangeText('address', value);
     } else {
+      // For text fields, update displayValues to show changes immediately
+      setDisplayValues(prev => ({
+        ...prev,
+        [editingField]: value
+      }));
+      
       onChangeText(editingField, value);
     }
+    
+    // Mark that user has made an edit
+    setHasEdits(true);
     setHasUnsavedChanges(true);
     setEditingField(null);
   };
 
+  // Handle profile photo change
+  const handleProfilePhotoUpdate = async () => {
+    const result = await pickImage();
+    if (result) {
+      debugLog('MBA230uvj0834h9', 'Profile photo updated');
+      setHasEdits(true);
+      setHasUnsavedChanges(true);
+    }
+  };
+  
+  // Handle portfolio photo addition
+  const handleAddPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      const newPhotos = [...portfolioPhotos, result.assets[0].uri];
+      setPortfolioPhotos(newPhotos);
+      onChangeText('portfolioPhotos', newPhotos);
+      setHasEdits(true);
+      setHasUnsavedChanges(true);
+    }
+  };
+  
+  // Handle insurance change
   const handleInsuranceChange = async (insuranceType) => {
     if (insuranceType === 'custom') {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -442,32 +508,43 @@ const ProfileInfoTab = ({
         const newInsurance = { type: 'custom', card: result.assets[0].uri };
         setSelectedInsurance(newInsurance);
         onChangeText('insurance', newInsurance);
+        setHasEdits(true);
         setHasUnsavedChanges(true);
       }
     } else {
       const newInsurance = { type: insuranceType, card: null };
       setSelectedInsurance(newInsurance);
       onChangeText('insurance', newInsurance);
+      setHasEdits(true);
       setHasUnsavedChanges(true);
     }
   };
-
-  const handleAddPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
+  
+  // Handle save all changes
+  const handleSaveAllChanges = () => {
+    debugLog('MBA230uvj0834h9', 'Saving all changes', displayValues);
+    
+    // Call parent's save function
+    onSaveChanges();
+    
+    // Reset flags for edits
+    setHasEdits(false);
+    setHasUnsavedChanges(false);
+    
+    // Log saved values for verification
+    debugLog('MBA230uvj0834h9', 'Changes saved. Current values:', {
+      name: displayValues.name,
+      email: displayValues.email,
+      bio: displayValues.bio,
+      location: displayValues.location
     });
-
-    if (!result.canceled) {
-      setPortfolioPhotos([...portfolioPhotos, result.assets[0].uri]);
-      setHasUnsavedChanges(true);
-    }
   };
 
   const location = `${city}${state ? `, ${state}` : ''}`;
-
+  
+  // Display name (use context value if available)
+  const displayName = authName || "Your Name";
+  
   const renderFacilitiesSection = () => {
     if (isProfessional) return null;
 
@@ -568,7 +645,7 @@ const ProfileInfoTab = ({
           {/* Profile Photo Section */}
           <View style={[styles.profileSection, !isMobile && styles.profileSectionDesktop]}>
             <View style={styles.profileCard}>
-              <TouchableOpacity onPress={pickImage} style={styles.profilePhotoContainer}>
+              <TouchableOpacity onPress={handleProfilePhotoUpdate} style={styles.profilePhotoContainer}>
                 {profilePhoto ? (
                   <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
                 ) : (
@@ -582,30 +659,30 @@ const ProfileInfoTab = ({
               </TouchableOpacity>
               <View style={styles.profileInfo}>
                 <View style={styles.nameContainer}>
-                  <Text style={styles.name}>{name}</Text>
+                  <Text style={styles.name}>{displayValues.name}</Text>
                   <TouchableOpacity 
                     style={styles.editIcon}
-                    onPress={() => handleEdit('name', name)}
+                    onPress={() => handleEdit('name', displayValues.name)}
                   >
                     <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.text} />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.emailContainer}>
                   <MaterialCommunityIcons name="email" size={16} color={theme.colors.secondary} />
-                  <Text style={styles.email}>{email || 'No email provided'}</Text>
+                  <Text style={styles.email}>{displayValues.email || 'No email provided'}</Text>
                   <TouchableOpacity 
                     style={styles.editIcon}
-                    onPress={() => handleEdit('email', email)}
+                    onPress={() => handleEdit('email', displayValues.email)}
                   >
                     <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.text} />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.locationContainer}>
                   <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.secondary} />
-                  <Text style={styles.location}>{location ? location : 'Select Location'}</Text>
+                  <Text style={styles.location}>{displayValues.location || 'Select Location'}</Text>
                   <TouchableOpacity 
                     style={styles.editIcon}
-                    onPress={() => handleEdit('location', location)}
+                    onPress={() => handleEdit('location', displayValues.location)}
                   >
                     <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.text} />
                   </TouchableOpacity>
@@ -633,13 +710,13 @@ const ProfileInfoTab = ({
                 <Text style={styles.sectionTitle}>About Me</Text>
                 <TouchableOpacity 
                   style={styles.editButton}
-                  onPress={() => handleEdit(isProfessional ? 'bio' : 'about_me', isProfessional ? bio : about_me)}
+                  onPress={() => handleEdit('bio', displayValues.bio)}
                 >
                   <Text style={styles.editButtonText}>Edit Bio</Text>
                 </TouchableOpacity>
               </View>
               <Text style={styles.bioText}>
-                {isProfessional ? (bio || 'Tell us about yourself...') : (about_me || 'Tell us about yourself...')}
+                {displayValues.bio || 'Tell us about yourself...'}
               </Text>
             </View>
 
@@ -675,6 +752,13 @@ const ProfileInfoTab = ({
         </View>
       </View>
 
+      {/* Profile FloatingSaveButton - simple approach with direct visibility */}
+      <FloatingSaveButton 
+        visible={hasEdits}
+        onSave={handleSaveAllChanges}
+        btnText="Save Changes"
+      />
+
       <EditOverlay
         visible={!!editingField}
         onClose={() => setEditingField(null)}
@@ -682,7 +766,7 @@ const ProfileInfoTab = ({
         value={editValue}
         onSave={handleSave}
         isLocation={editingField === 'location'}
-        isMultiline={editingField === 'bio'}
+        isMultiline={editingField === 'bio' || editingField === 'about_me'}
         isProfessional={isProfessional}
         isInsurance={editingField === 'insurance'}
         selectedInsurance={selectedInsurance}

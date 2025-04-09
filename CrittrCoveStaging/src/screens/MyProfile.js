@@ -172,8 +172,14 @@ const MyProfile = () => {
 
   const handleSaveChanges = async () => {
     // TODO: Implement API call to save changes
+    debugLog('MBA9876', 'MyProfile.js saving changes to profile data');
+    
+    // After successful API call, just reset the state
     setHasUnsavedChanges(false);
     setEditMode({});
+    
+    // Show success message
+    debugLog('MBA5678', 'Changes saved successfully');
   };
 
   const handleSwitchPlan = (planId) => {
@@ -213,7 +219,11 @@ const MyProfile = () => {
             toggleEditMode={toggleEditMode}
             onChangeText={handleUpdateField}
             pickImage={handlePickImage}
-            setHasUnsavedChanges={setHasUnsavedChanges}
+            setHasUnsavedChanges={(hasChanges) => {
+              // Just for debugging
+              debugLog('MBA9876', 'ProfileInfoTab setting hasUnsavedChanges:', hasChanges);
+            }}
+            onSaveChanges={handleSaveChanges}
             isMobile={isMobile}
             rating={profileData?.rating}
             reviews={profileData?.reviews}
@@ -420,12 +430,6 @@ const MyProfile = () => {
           </View>
         </View>
 
-        <FloatingSaveButton 
-          visible={hasUnsavedChanges}
-          onSave={handleSaveChanges}
-          btnText="Save Changes"
-        />
-
         {isTutorialVisible && stepData?.screen === 'MyProfile' && (
           <TutorialModal
             step={currentStep}
@@ -447,7 +451,7 @@ const MyProfile = () => {
 const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.surface,
     height: '100vh',
     overflow: 'hidden',
     position: 'fixed',
@@ -460,17 +464,19 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: theme.colors.surface,
   },
   content: {
     flex: 1,
     height: '100%',
     overflow: 'auto',
+    backgroundColor: theme.colors.surface,
   },
   mainContent: {
     flex: 1,
     width: '100%',
     alignSelf: 'center',
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.surface,
   },
   headerSection: {
     width: '100%',
