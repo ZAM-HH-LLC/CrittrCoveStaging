@@ -4,6 +4,9 @@ from clients.models import Client
 from professionals.models import Professional
 from pets.models import Pet
 from services.models import Service
+from user_addresses.models import Address, AddressType
+import requests
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +39,6 @@ def get_user_profile_data(user):
             'name': user.name,
             'email': user.email,
             'phone': getattr(user, 'phone_number', ""),
-            'address': getattr(user, 'address', ""),
-            'city': getattr(user, 'city', ""),
-            'state': getattr(user, 'state', ""),
-            'zip': getattr(user, 'zip_code', ""),
-            'country': 'USA',
             'age': None,
             'profile_photo': None,
             'about_me': client.about_me,
@@ -50,6 +48,32 @@ def get_user_profile_data(user):
             'created_at': client.created_at,
             'updated_at': client.updated_at,
         })
+        
+        # Get address information from Address model
+        try:
+            address = Address.objects.get(user=user, address_type=AddressType.SERVICE)
+            response_data.update({
+                'address': address.address_line_1,
+                'apartment': address.address_line_2,
+                'city': address.city,
+                'state': address.state,
+                'zip': address.zip,
+                'country': address.country,
+                'coordinates': address.coordinates
+            })
+            logger.debug(f"helpers.py: Found address for user {user.id}")
+        except Address.DoesNotExist:
+            # Default empty address if not found
+            response_data.update({
+                'address': '',
+                'apartment': '',
+                'city': '',
+                'state': '',
+                'zip': '',
+                'country': 'USA',
+                'coordinates': None
+            })
+            logger.debug(f"helpers.py: No address found for user {user.id}")
         
         # Fetch professional data if it exists
         try:
@@ -162,6 +186,63 @@ def get_user_payment_methods(user):
         {'id': 3, 'type': 'bank', 'last4': '1234', 'expiry': None, 'isDefault': True, 'bankName': 'Ent Federal Credit Union'}
     ]
 
+def geocode_address(address_str, city, state, zip_code, country="USA"):
+    """
+    Convert an address to latitude and longitude coordinates using a geocoding service.
+    
+    Args:
+        address_str: Street address
+        city: City name
+        state: State name
+        zip_code: ZIP/Postal code
+        country: Country name (default: USA)
+        
+    Returns:
+        dict: A dictionary with 'lat' and 'lng' keys, or None if geocoding failed
+    """
+    try:
+        # Format the complete address
+        full_address = f"{address_str}, {city}, {state} {zip_code}, {country}"
+        logger.debug(f"helpers.py: Geocoding address: {full_address}")
+        
+        # Check if we're using Google Maps API for geocoding
+        if hasattr(settings, 'GOOGLE_MAPS_API_KEY') and settings.GOOGLE_MAPS_API_KEY:
+            url = "https://maps.googleapis.com/maps/api/geocode/json"
+            params = {
+                "address": full_address,
+                "key": settings.GOOGLE_MAPS_API_KEY
+            }
+            
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            if data["status"] == "OK" and data["results"]:
+                location = data["results"][0]["geometry"]["location"]
+                return {
+                    "lat": location["lat"],
+                    "lng": location["lng"]
+                }
+        
+        # Fallback to a simple mock geocoding for development 
+        # (you'd want to replace this with a real geocoding service in production)
+        logger.warning("helpers.py: Using mock geocoding - replace with actual geocoding service in production")
+        import hashlib
+        
+        # Generate deterministic but fake coordinates based on the address
+        # This is just for development - DO NOT use in production
+        address_hash = hashlib.md5(full_address.encode()).hexdigest()
+        fake_lat = 30 + (int(address_hash[:8], 16) % 10000) / 10000.0
+        fake_lng = -90 + (int(address_hash[8:16], 16) % 20000) / 10000.0
+        
+        return {
+            "lat": fake_lat,
+            "lng": fake_lng
+        }
+        
+    except Exception as e:
+        logger.error(f"helpers.py: Geocoding error: {str(e)}")
+        return None
+
 def update_user_profile(user, data):
     """
     Update user profile with the provided data.
@@ -189,20 +270,78 @@ def update_user_profile(user, data):
         if 'phone' in data:
             user.phone_number = data['phone']
             response_data['phone'] = data['phone']
-        if 'address' in data:
-            user.address = data['address']
-            response_data['address'] = data['address']
-        if 'city' in data:
-            user.city = data['city']
-            response_data['city'] = data['city']
-        if 'state' in data:
-            user.state = data['state']
-            response_data['state'] = data['state']
-        if 'zip' in data:
-            user.zip_code = data['zip']
-            response_data['zip'] = data['zip']
-        if 'country' in data:
-            response_data['country'] = data['country']
+        
+        # Handle address fields - update or create Address record
+        address_fields = ['address', 'apartment', 'city', 'state', 'zip', 'country']
+        has_address_data = any(field in data for field in address_fields)
+        
+        if has_address_data:
+            # Try to get existing service address
+            try:
+                address = Address.objects.get(user=user, address_type=AddressType.SERVICE)
+            except Address.DoesNotExist:
+                # Create new address if one doesn't exist
+                address = Address(
+                    user=user, 
+                    address_type=AddressType.SERVICE,
+                    address_line_1='',
+                    address_line_2='',
+                    city='',
+                    state='',
+                    zip='',
+                    country='USA'
+                )
+            
+            # Update address fields if provided
+            address_updated = False
+            
+            if 'address' in data:
+                address.address_line_1 = data['address']
+                response_data['address'] = data['address']
+                address_updated = True
+            
+            if 'apartment' in data:
+                address.address_line_2 = data['apartment']
+                response_data['apartment'] = data['apartment']
+                address_updated = True
+            
+            if 'city' in data:
+                address.city = data['city']
+                response_data['city'] = data['city']
+                address_updated = True
+            
+            if 'state' in data:
+                address.state = data['state']
+                response_data['state'] = data['state']
+                address_updated = True
+            
+            if 'zip' in data:
+                address.zip = data['zip']
+                response_data['zip'] = data['zip']
+                address_updated = True
+            
+            if 'country' in data:
+                address.country = data['country']
+                response_data['country'] = data['country']
+                address_updated = True
+            
+            # If address components changed, update coordinates through geocoding
+            if address_updated and address.address_line_1 and address.city and address.state:
+                coordinates = geocode_address(
+                    address.address_line_1,
+                    address.city,
+                    address.state,
+                    address.zip,
+                    address.country
+                )
+                
+                if coordinates:
+                    address.coordinates = coordinates
+                    logger.debug(f"helpers.py: Updated coordinates for user {user.id}: {coordinates}")
+            
+            # Save the address
+            address.save()
+            logger.debug(f"helpers.py: Updated address record for user {user.id}")
         
         # Handle profile photo upload if included - check for either key name
         if 'profile_picture' in data:

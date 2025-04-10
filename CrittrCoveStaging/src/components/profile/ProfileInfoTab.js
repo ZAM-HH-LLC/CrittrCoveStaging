@@ -134,6 +134,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
       onSave(localInsurance);
     } else if (isLocation) {
       // Pass the entire addressForm object, not a formatted string
+      debugLog('MBA12345', 'Saving location with addressForm:', addressForm);
       onSave(addressForm);
     } else {
       onSave(localValue);
@@ -413,7 +414,7 @@ const ProfileInfoTab = ({
     name: name || authName || "Your Name",
     email: email || "",
     bio: isProfessional ? bio : about_me,
-    location: `${city}${state ? `, ${state}` : ''}`,
+    location: `${address || ''}${city ? `, ${city}` : ''}${state ? `, ${state}` : ''}`,
   });
   
   const showToast = useToast();
@@ -451,7 +452,7 @@ const ProfileInfoTab = ({
       name: name || authName || "Your Name",
       email: email || "",
       bio: isProfessional ? bio : about_me,
-      location: `${city}${state ? `, ${state}` : ''}`
+      location: `${address || ''}${city ? `, ${city}` : ''}${state ? `, ${state}` : ''}`
     });
   }, []); // Empty dependency array - only run on mount
 
@@ -479,11 +480,30 @@ const ProfileInfoTab = ({
     
     // For location, we can use a simpler comparison
     if (field === 'location') {
-      // If it's an object, check city and state only
+      // If it's an object, check all address fields
       if (typeof value === 'object') {
-        // Only checking city and state to simplify
-        return value.city !== originalValues.city || 
-               value.state !== originalValues.state;
+        debugLog('MBA12345', 'Checking location changes:', {
+          originalAddress: originalValues.address,
+          newAddress: value.street || value.address,
+          originalApartment: originalValues.apartment,
+          newApartment: value.apartment,
+          originalCity: originalValues.city,
+          newCity: value.city,
+          originalState: originalValues.state,
+          newState: value.state,
+          originalZip: originalValues.zip,
+          newZip: value.zip,
+          originalCountry: originalValues.country,
+          newCountry: value.country
+        });
+        
+        // Check all fields that could have changed
+        return (value.street || value.address || '') !== originalValues.address ||
+               (value.apartment || '') !== originalValues.apartment ||
+               (value.city || '') !== originalValues.city ||
+               (value.state || '') !== originalValues.state ||
+               (value.zip || '') !== originalValues.zip ||
+               (value.country || 'USA') !== originalValues.country;
       }
     }
     
@@ -603,6 +623,7 @@ const ProfileInfoTab = ({
       return;
     }
 
+    debugLog('MBA12345', `Changes detected for ${field}, proceeding with save.`, { value });
     setIsSaving(true);
     
     try {
@@ -626,9 +647,9 @@ const ProfileInfoTab = ({
           }
           break;
         case 'location':
-          debugLog('MBA4928', 'Extracting address components from:', value);
+          debugLog('MBA12345', 'Extracting address components from:', value);
           const locationComponents = extractAddressComponents(value);
-          debugLog('MBA4928', 'Extracted components:', locationComponents);
+          debugLog('MBA12345', 'Extracted components:', locationComponents);
           
           profileData = {
             address: locationComponents.address,
@@ -963,10 +984,12 @@ const ProfileInfoTab = ({
                   </TouchableOpacity>
                 </View>
                 <View style={styles.locationContainer}>
-                  <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.secondary} />
+                  <View style={styles.locationIconWrapper}>
+                    <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.secondary} />
+                  </View>
                   <Text style={styles.location}>{displayValues.location || 'Set Location'}</Text>
                   <TouchableOpacity 
-                    style={styles.editIcon}
+                    style={styles.locationEditIcon}
                     onPress={() => handleEdit('location', displayValues.location)}
                   >
                     <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.text} />
@@ -1008,7 +1031,8 @@ const ProfileInfoTab = ({
             {/* Show either Home & Facilities (for owners) or Insurance (for professionals) */}
             {isProfessional ? renderInsuranceSection() : renderFacilitiesSection()}
 
-            {/* Portfolio Photos Section */}
+            {/* TODO: UNCOMMONT THIS SECTION
+            Portfolio Photos Section - comment this out for now
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Portfolio Photos</Text>
@@ -1032,7 +1056,7 @@ const ProfileInfoTab = ({
                   <Text style={styles.noPhotosText}>No photos added yet</Text>
                 )}
               </View>
-            </View>
+            </View> */}
           </View>
         </View>
       </View>
@@ -1138,14 +1162,28 @@ const styles = StyleSheet.create({
   },
   locationContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     marginBottom: 12,
+    width: '100%',
+    position: 'relative',
+    paddingHorizontal: 20,
+  },
+  locationIconWrapper: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
   },
   location: {
     fontSize: 14,
     color: theme.colors.secondary,
     fontFamily: theme.fonts?.regular?.fontFamily,
+    textAlign: 'center',
+    flex: 1,
+  },
+  locationEditIcon: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    padding: 4,
   },
   roleContainer: {
     flexDirection: 'row',
