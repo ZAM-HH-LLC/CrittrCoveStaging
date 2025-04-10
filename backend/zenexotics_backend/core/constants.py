@@ -16,6 +16,28 @@ class UnitOfTime:
     PER_VISIT = 'Per Visit'
     WEEK = 'Week'
 
+
+class Facility:
+    YARD = 'yard'
+    ROAM = 'roam'
+    AC = 'ac'
+    FURNITURE = 'furniture'
+    BED = 'bed'
+    CRATE = 'crate'
+    PET_DOOR = 'pet_door'
+    TOYS = 'toys'
+    FIRST_AID = 'first_aid'
+    CAMERAS = 'cameras'
+    COVERED_PATIO = 'covered_patio'
+    GARDEN = 'garden'
+    HEATING = 'heating'
+    FEEDING_STATION = 'feeding_station'
+    WATER_FOUNTAIN = 'water_fountain'
+    SCRATCHING_POST = 'scratching_post'
+    LITTER_AREA = 'litter_area'
+
+
+
 # This class is also defined in the bookings/constants.py file. remove in future.
 class BookingStates:
     """

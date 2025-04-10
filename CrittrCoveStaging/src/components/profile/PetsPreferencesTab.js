@@ -31,7 +31,6 @@ const PetsPreferencesTab = ({
     { id: 'ac', label: 'Air Conditioned', icon: 'snowflake' },
     { id: 'furniture', label: 'Allowed on furniture', icon: 'sofa' },
     { id: 'bed', label: 'Allowed on bed', icon: 'bed' },
-    { id: 'pool', label: 'Pool', icon: 'pool' },
     { id: 'crate', label: 'Crate Available', icon: 'gate' },
     { id: 'pet_door', label: 'Pet Door', icon: 'door' },
     { id: 'toys', label: 'Pet Toy Collection', icon: 'handball' },

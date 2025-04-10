@@ -142,7 +142,7 @@ const MyProfile = () => {
 
   const tabs = [
     { id: 'profile_info', label: userRole === 'professional' ? 'Professional Profile Info' : 'Owner Profile Info' },
-    ...(userRole === 'professional' ? [{ id: 'services_availability', label: 'Services & Availability' }] : []),
+    // ...(userRole === 'professional' ? [{ id: 'services_availability', label: 'Services & Availability' }] : []), TODO: Add back in after MVP
     { id: 'pets_preferences', label: 'Pets & Preferences' },
     { id: 'settings_payments', label: userRole === 'professional' ? 'Settings & Payout Methods' : 'Settings & Payment Methods' }
   ];
