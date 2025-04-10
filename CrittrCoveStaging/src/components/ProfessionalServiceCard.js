@@ -91,13 +91,13 @@ const ProfessionalServiceCard = ({
       )}
       
       <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={() => onEdit(index)} style={styles.editButton}>
-          <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.textSecondary} />
-          <Text style={styles.buttonText}>Edit</Text>
-        </TouchableOpacity>
         <TouchableOpacity onPress={() => onDelete(index)} style={styles.deleteButton}>
           <MaterialCommunityIcons name="trash-can" size={20} color={theme.colors.textSecondary} />
           <Text style={styles.deleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onEdit(index)} style={styles.editButton}>
+          <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.textSecondary} />
+          <Text style={styles.buttonText}>Edit</Text>
         </TouchableOpacity>
       </View>
     </View>

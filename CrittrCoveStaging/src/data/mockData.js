@@ -61,6 +61,32 @@ export const TIME_OPTIONS = [
   'Week'
 ];
 
+// Mapping of user-friendly time unit labels to backend constants
+export const TIME_UNIT_MAPPING = {
+  // User-friendly labels mapped to backend constants
+  'Per Visit': 'Per Visit',
+  'Per Day': 'Per Day',
+  'Per Night': 'Per Night',
+  'Every 15 Minutes': '15 Min',
+  'Every 30 Minutes': '30 Min',
+  'Every 45 Minutes': '45 Min',
+  'Per Hour': '1 Hour',
+  'Every 2 Hours': '2 Hour',
+  'Every 3 Hours': '3 Hour',
+  'Every 4 Hours': '4 Hour',
+  'Every 5 Hours': '5 Hour',
+  'Every 6 Hours': '6 Hour',
+  'Every 7 Hours': '7 Hour',
+  'Every 8 Hours': '8 Hour',
+  'Per Week': 'Week'
+};
+
+// Reverse mapping for display purposes
+export const BACKEND_TO_FRONTEND_TIME_UNIT = Object.entries(TIME_UNIT_MAPPING).reduce((acc, [key, value]) => {
+  acc[value] = key;
+  return acc;
+}, {});
+
 export const mockAdditionalRates = {
   'Fish Tank Cleaning': [
     { title: 'Extended Stay (7+ days)', amount: 15 },

@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
+import { TIME_UNIT_MAPPING, BACKEND_TO_FRONTEND_TIME_UNIT } from '../../data/mockData';
 
-const TIME_UNITS = ['per hour', 'per visit', 'per night'];
+const TIME_UNITS = Object.keys(TIME_UNIT_MAPPING);
 const ANIMAL_THRESHOLDS = ['1', '2', '3', '4', '5'];
 
 const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
@@ -24,6 +25,31 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
     rate: '',
     description: ''
   });
+
+  // Check if we need to convert existing data on component mount
+  useEffect(() => {
+    // If we have a base_rate_unit from backend but it's not in our mapping, initialize with default
+    if (serviceData.rates?.base_rate_unit && !BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit]) {
+      console.log('MBA5931 - Converting initial base_rate_unit to mapped value');
+      const frontendKey = Object.keys(TIME_UNIT_MAPPING).find(
+        key => TIME_UNIT_MAPPING[key] === serviceData.rates.base_rate_unit
+      );
+      
+      if (!frontendKey && serviceData.rates.base_rate_unit) {
+        // If we don't have a mapping for this value, keep the backend value
+        console.log('MBA5931 - No mapping found for:', serviceData.rates.base_rate_unit);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    console.log('MBA5931 - Available TIME_UNITS:', TIME_UNITS);
+    console.log('MBA5931 - TIME_UNIT_MAPPING:', TIME_UNIT_MAPPING);
+    console.log('MBA5931 - Current base_rate_unit:', serviceData.rates?.base_rate_unit);
+    console.log('MBA5931 - Displayed unit text:', serviceData.rates?.base_rate_unit ? 
+      (BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit] || serviceData.rates.base_rate_unit) : 
+      TIME_UNITS[0]);
+  }, [serviceData.rates?.base_rate_unit]);
 
   // Close dropdowns when clicking outside
   const handlePressOutside = () => {
@@ -65,7 +91,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
       ...prev,
       rates: {
         ...prev.rates,
-        base_rate_unit: unit
+        base_rate_unit: TIME_UNIT_MAPPING[unit]
       }
     }));
     setShowTimeUnitDropdown(false);
@@ -199,7 +225,9 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
                 }}
               >
                 <Text style={styles.unitText}>
-                  {serviceData.rates?.base_rate_unit || TIME_UNITS[0]}
+                  {serviceData.rates?.base_rate_unit ? 
+                    (BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit] || serviceData.rates.base_rate_unit) : 
+                    TIME_UNITS[0]}
                 </Text>
                 <MaterialCommunityIcons
                   name={showTimeUnitDropdown ? 'chevron-up' : 'chevron-down'}

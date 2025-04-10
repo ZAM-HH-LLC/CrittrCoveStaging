@@ -12,6 +12,7 @@ class UnitOfTime:
     EIGHT_HOURS = '8 Hour'
     TWENTY_FOUR_HOURS = '24 Hour'
     PER_DAY = 'Per Day'
+    PER_NIGHT = 'Per Night'
     PER_VISIT = 'Per Visit'
     WEEK = 'Week'
 

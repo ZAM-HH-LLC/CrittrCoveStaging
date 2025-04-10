@@ -48,7 +48,7 @@ const ServiceCreationModal = ({
     serviceDescription: '',
     rates: {
       base_rate: '',
-      base_rate_unit: 'per hour',
+      base_rate_unit: 'Per Visit',
       additionalAnimalRate: '',
       additionalAnimalThreshold: '1',
       hasHolidayRate: false,
@@ -69,7 +69,7 @@ const ServiceCreationModal = ({
         serviceDescription: '',
         rates: {
           base_rate: '',
-          base_rate_unit: 'per hour',
+          base_rate_unit: 'Per Visit',
           additionalAnimalRate: '',
           additionalAnimalThreshold: '1',
           hasHolidayRate: false,
