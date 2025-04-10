@@ -549,6 +549,48 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       textAlign: 'center',
       width: '80%',
     },
+    selectedAnimalsSection: {
+      marginTop: 24,
+      marginBottom: 16,
+      padding: 16,
+      backgroundColor: theme.colors.backgroundContrast,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    selectedAnimalsTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.colors.text,
+      marginBottom: 12,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    selectedAnimalsList: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    animalBubble: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.surface,
+      borderRadius: 20,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginBottom: 8,
+      marginRight: 8,
+    },
+    animalBubbleText: {
+      fontSize: 14,
+      color: theme.colors.text,
+      marginRight: 6,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    removeAnimalButton: {
+      padding: 2,
+    },
   });
 
   return (
@@ -593,6 +635,29 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
         </TouchableOpacity>
       </View>
       {renderAnimalTypes()}
+
+      {serviceData.animalTypes.length > 0 && (
+        <View style={styles.selectedAnimalsSection}>
+          <Text style={styles.selectedAnimalsTitle}>Selected Animals:</Text>
+          <View style={styles.selectedAnimalsList}>
+            {serviceData.animalTypes.map((animal, index) => (
+              <View key={index} style={styles.animalBubble}>
+                <Text style={styles.animalBubbleText}>{animal.name}</Text>
+                <TouchableOpacity 
+                  onPress={() => handleAnimalTypeSelect(animal.name, animal.categoryId)}
+                  style={styles.removeAnimalButton}
+                >
+                  <MaterialCommunityIcons 
+                    name="close-circle" 
+                    size={16} 
+                    color={theme.colors.text} 
+                  />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
 
       <Modal
         visible={showDeleteModal}
