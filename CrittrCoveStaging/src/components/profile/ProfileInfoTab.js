@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { AuthContext, debugLog } from '../../context/AuthContext';
 import FloatingSaveButton from '../../components/FloatingSaveButton';
 import { updateProfileInfo } from '../../api/API';
+import { useToast } from '../../components/ToastProvider';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -406,6 +407,8 @@ const ProfileInfoTab = ({
     location: `${city}${state ? `, ${state}` : ''}`,
   });
   
+  const showToast = useToast();
+  
   // Log initial props
   useEffect(() => {
     debugLog('MBA230uvj0834h9', 'ProfileInfoTab mounted with props:', { 
@@ -541,12 +544,12 @@ const ProfileInfoTab = ({
 
   // Handle save all changes - now calls API directly
   const handleSaveAllChanges = async () => {
-    debugLog('MBA230uvj0834h9', 'Saving all changes', displayValues);
+    if (!hasEdits) return;
+    
+    setIsSaving(true);
     
     try {
-      setIsSaving(true);
-      
-      // Extract location components
+      // Extract city, state, zip, and country from location
       const locationComponents = extractAddressComponents(displayValues.location);
       
       // Create profile data object to send to API
@@ -581,6 +584,13 @@ const ProfileInfoTab = ({
       setHasEdits(false);
       setHasUnsavedChanges(false);
       
+      // Show success toast
+      showToast({
+        message: 'Profile updated successfully',
+        type: 'success',
+        duration: 3000
+      });
+      
       // Notify parent component that save is complete
       if (onSaveComplete) {
         onSaveComplete(updatedProfile);
@@ -595,7 +605,13 @@ const ProfileInfoTab = ({
       });
     } catch (error) {
       debugLog('MBA230uvj0834h9', 'Error saving profile changes:', error);
-      Alert.alert('Error', 'Failed to save profile changes. Please try again.');
+      
+      // Show error toast instead of alert
+      showToast({
+        message: 'Failed to update profile. Please try again.',
+        type: 'error',
+        duration: 4000
+      });
     } finally {
       setIsSaving(false);
     }
@@ -740,7 +756,7 @@ const ProfileInfoTab = ({
                 </View>
                 <View style={styles.locationContainer}>
                   <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.secondary} />
-                  <Text style={styles.location}>{displayValues.location || 'Select Location'}</Text>
+                  <Text style={styles.location}>{displayValues.location || 'Set Location'}</Text>
                   <TouchableOpacity 
                     style={styles.editIcon}
                     onPress={() => handleEdit('location', displayValues.location)}
@@ -906,6 +922,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: theme.colors.text,
+    fontFamily: theme.fonts?.regular?.fontFamily,
   },
   emailContainer: {
     flexDirection: 'row',
@@ -916,6 +933,7 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 14,
     color: theme.colors.secondary,
+    fontFamily: theme.fonts?.regular?.fontFamily,
   },
   locationContainer: {
     flexDirection: 'row',
@@ -926,6 +944,7 @@ const styles = StyleSheet.create({
   location: {
     fontSize: 14,
     color: theme.colors.secondary,
+    fontFamily: theme.fonts?.regular?.fontFamily,
   },
   roleContainer: {
     flexDirection: 'row',
@@ -976,6 +995,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: theme.colors.text,
+    fontFamily: theme.fonts?.header?.fontFamily,
   },
   editButton: {
     backgroundColor: 'transparent',
@@ -1049,6 +1069,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.text,
     lineHeight: 24,
+    fontFamily: theme.fonts?.regular?.fontFamily,
   },
   locationButtons: {
     gap: 16,
@@ -1306,6 +1327,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     flex: 1,
+    fontFamily: theme.fonts?.header?.fontFamily,
   },
   modalTitleCentered: {
     textAlign: 'center',

@@ -9,6 +9,9 @@ export const theme = {
     regular: {
       fontFamily: 'PlayfairDisplay',
     },
+    medium: {
+      fontFamily: 'PlayfairDisplay-Medium',
+    },
     header: {
       fontFamily: 'Futura',
     }
@@ -48,18 +51,6 @@ export const theme = {
       completedBg: '#F5F5F4', // #F5F5F4 Completed button background
       completedText: '#898983', // #898983 Completed button text
       searchBar: 'rgb(183, 183, 183)', // Search bar text color
-// colors if english name, its in theme.js:
-// We need to add these colors to theme.js, but i am not sure where to add them. 
-// the pending indicator will have bg color of: #FFF7ED
-// the text of the pending indicator will be: #EA580E
-// view details button bg color: primary
-// text of view details button: surfaceContrast
-// text color of start date/time/service name: #959885
-// text color of owners name: #4B4C3B
-// bg color of confirmed button: #E8E9E2
-// text color of confirmed button: #898974
-// completed bg color: #F5F5F4
-// completed text color:rgb(183, 183, 183)
     },
     primary: '#6A6C51', // #6A6C51
     secondary: '#516C61', // #516C61
@@ -72,6 +63,8 @@ export const theme = {
     placeHolderText: '#A9A9A9', // #A9A9A9
     accent: '#03dac4', // #03dac4
     error: '#B00020', // #B00020
+    warning: '#FFA726', // Orange warning color
+    info: '#29B6F6', // Light blue info color
     surface: '#F9FAFB', // #F9FAFB
     surfaceContrast: '#FFFFFF', // #FFFFFF
     border: 'rgb(183, 183, 183)', // 'rgb(183, 183, 183)'
@@ -79,7 +72,6 @@ export const theme = {
     modernBorder: '#E0E0E0', // #E0E0E0
     inputBackground: '#f6f6f6', // #f6f6f6
     receivedMessage: '#e7eae6', // #e7eae6
-    // headerBorder: '#e0e0e0', // #e0e0e0
     danger: '#A52A2A', // #A52A2A
   },
   fontSizes: {

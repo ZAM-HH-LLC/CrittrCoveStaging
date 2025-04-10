@@ -14,6 +14,7 @@ import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { navigateToFrom } from './src/components/Navigation';
 import { TutorialProvider } from './src/context/TutorialContext';
+import { ToastProvider } from './src/components/ToastProvider';
 
 // Import all your screen components
 import HomeScreen from './src/screens/HomeScreen';
@@ -52,6 +53,7 @@ import ServiceManagerScreen from './src/screens/ServiceManagerScreen';
 import BlogScreen from './src/screens/BlogScreen';
 import BlogPost from './src/screens/BlogPost';
 import Waitlist from './src/screens/Waitlist';
+import TestToast from './src/screens/TestToast';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -91,6 +93,7 @@ const screens = [
   { name: 'Blog', component: BlogScreen },
   { name: 'BlogPost', component: BlogPost },
   { name: 'Waitlist', component: Waitlist },
+  { name: 'TestToast', component: TestToast },
 ];
 
 const linking = {
@@ -151,7 +154,8 @@ const linking = {
       ServiceManager: 'service-manager',
       Blog: 'blog',
       BlogPost: 'blog-post',
-      Waitlist: 'waitlist'
+      Waitlist: 'waitlist',
+      TestToast: 'test-toast'
     }
   }
 };
@@ -393,7 +397,9 @@ export default function App() {
       <AuthProvider>
         <TutorialProvider>
           <PaperProvider theme={theme}>
-            <AppContent />
+            <ToastProvider>
+              <AppContent />
+            </ToastProvider>
           </PaperProvider>
         </TutorialProvider>
       </AuthProvider>
