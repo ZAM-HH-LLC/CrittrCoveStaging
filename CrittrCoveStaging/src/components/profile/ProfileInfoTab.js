@@ -5,7 +5,6 @@ import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext, debugLog } from '../../context/AuthContext';
-import FloatingSaveButton from '../../components/FloatingSaveButton';
 import { updateProfileInfo } from '../../api/API';
 import { useToast } from '../../components/ToastProvider';
 
@@ -97,35 +96,45 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
         setInsuranceStep(1);
         setInsuranceType(null);
       } else if (isLocation) {
-        // Parse the existing address if available
-        const addressParts = value.split(',').map(part => part.trim());
-        setAddressForm({
-          street: addressParts[0] || '',
+        // Initialize the address form
+        const newAddressForm = {
+          street: '',
           apartment: '',
-          city: addressParts[1] || '',
-          state: addressParts[2] || '',
-          zip: addressParts[3] || '',
-          country: addressParts[4] || ''
-        });
+          city: '',
+          state: '',
+          zip: '',
+          country: 'USA'
+        };
+
+        // If value is an object, use its properties
+        if (value && typeof value === 'object') {
+          if ('address' in value) {
+            newAddressForm.street = value.address || '';
+            newAddressForm.apartment = value.apartment || '';
+          } else if ('street' in value) {
+            newAddressForm.street = value.street || '';
+            newAddressForm.apartment = value.apartment || '';
+          }
+          
+          newAddressForm.city = value.city || '';
+          newAddressForm.state = value.state || '';
+          newAddressForm.zip = value.zip || '';
+          newAddressForm.country = value.country || 'USA';
+        }
+        
+        setAddressForm(newAddressForm);
       } else {
         setLocalValue(value || '');
       }
     }
-  }, [visible, value, selectedInsurance]);
+  }, [visible]); // Only depend on visibility changing - nothing else
 
   const handleSave = () => {
     if (isInsurance) {
       onSave(localInsurance);
     } else if (isLocation) {
-      const formattedAddress = [
-        addressForm.street,
-        addressForm.apartment,
-        addressForm.city,
-        addressForm.state,
-        addressForm.zip,
-        addressForm.country
-      ].filter(Boolean).join(', ');
-      onSave(formattedAddress);
+      // Pass the entire addressForm object, not a formatted string
+      onSave(addressForm);
     } else {
       onSave(localValue);
     }
@@ -351,7 +360,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
               onPress={handleSave}
               disabled={isLocation && !addressForm.street}
             >
-              <Text style={styles.modalSaveText}>Continue Editing</Text>
+              <Text style={styles.modalSaveText}>Save</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -409,7 +418,22 @@ const ProfileInfoTab = ({
   
   const showToast = useToast();
   
-  // Log initial props
+  // Track original values to detect changes
+  const [originalValues, setOriginalValues] = useState({
+    name: '',
+    email: '',
+    bio: '',
+    location: '',
+    address: '',
+    apartment: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: 'USA',
+    insurance: { type: 'none', card: null }
+  });
+  
+  // Update the initial useEffect to only run once
   useEffect(() => {
     debugLog('MBA230uvj0834h9', 'ProfileInfoTab mounted with props:', { 
       propName: name,
@@ -418,202 +442,295 @@ const ProfileInfoTab = ({
       address, 
       bio, 
       about_me, 
-      profilePhoto 
+      profilePhoto,
+      isProfessional
     });
     
-    // Initialize location once
-    const locationText = `${city}${state ? `, ${state}` : ''}`;
-    setDisplayValues(prev => ({ ...prev, location: locationText }));
-  }, []);
-  
-  // Update displayValues when props change
+    // Initialize display values on mount ONLY
+    setDisplayValues({
+      name: name || authName || "Your Name",
+      email: email || "",
+      bio: isProfessional ? bio : about_me,
+      location: `${city}${state ? `, ${state}` : ''}`
+    });
+  }, []); // Empty dependency array - only run on mount
+
+  // Add effect to update bio when isProfessional changes
   useEffect(() => {
-    debugLog('MBA230uvj0834h9', 'Props updated in ProfileInfoTab:', { 
-      receivedNameProp: name,
-      authNameFromContext: authName,
-      email, 
+    // Update the bio/about_me when the role changes
+    setDisplayValues(prev => ({
+      ...prev,
+      bio: isProfessional ? bio : about_me
+    }));
+    
+    debugLog('MBA230uvj0834h9', 'Role changed - updating bio/about_me:', { 
+      isProfessional, 
       bio, 
-      about_me, 
-      city, 
-      state,
-      isProfessional,
-      hasEdits
+      about_me 
     });
-    
-    // Only update if we're not in editing mode
-    if (!hasEdits && !isSaving) {
-      // Update the display values with the new props
-      // Prioritize the name prop over authName
-      setDisplayValues(prev => ({
-        ...prev,
-        name: name || authName || "Your Name",
-        email: email || "",
-        bio: isProfessional ? bio : about_me,
-        location: `${city}${state ? `, ${state}` : ''}`
-      }));
-      
-      debugLog('MBA230uvj0834h9', 'DisplayValues updated:', {
-        name: name || authName || "Your Name",
-        email: email || "",
-        bio: isProfessional ? bio : about_me,
-        location: `${city}${state ? `, ${state}` : ''}`
-      });
-    } else {
-      debugLog('MBA230uvj0834h9', 'Not updating displayValues because we have unsaved edits');
+  }, [isProfessional, bio, about_me]);
+  
+  // Simplify hasFieldChanged to be more direct
+  const hasFieldChanged = (field, value) => {
+    // For insurance, we need to do a deep comparison
+    if (field === 'insurance') {
+      return JSON.stringify(value) !== JSON.stringify(originalValues.insurance);
     }
-  }, [name, authName, email, bio, about_me, city, state, isProfessional, hasEdits, isSaving]);
-  
-  // Track hasEdits changes
-  useEffect(() => {
-    debugLog('MBA230uvj0834h9', `hasEdits changed to: ${hasEdits}`, {
-      currentDisplayValues: displayValues
-    });
-  }, [hasEdits]);
-  
+    
+    // For location, we can use a simpler comparison
+    if (field === 'location') {
+      // If it's an object, check city and state only
+      if (typeof value === 'object') {
+        // Only checking city and state to simplify
+        return value.city !== originalValues.city || 
+               value.state !== originalValues.state;
+      }
+    }
+    
+    // For other fields, direct comparison
+    return value !== originalValues[field];
+  };
+
   // Handle edit field
   const handleEdit = (field, currentValue) => {
     debugLog('MBA230uvj0834h9', `Edit ${field}:`, currentValue);
-    setEditValue(currentValue);
+    
+    // For location field, pass an address object with all components
+    if (field === 'location') {
+      const addressObject = {
+        address: originalValues.address || '',
+        apartment: originalValues.apartment || '',
+        city: originalValues.city || '',
+        state: originalValues.state || '',
+        zip: originalValues.zip || '',
+        country: originalValues.country || 'USA'
+      };
+      
+      // Set this once - avoid dependence on originalValues in useEffect
+      setEditValue(addressObject);
+    } else {
+      setEditValue(currentValue);
+    }
+    
+    // This triggers the modal to open
     setEditingField(field);
   };
 
-  // Handle location save specifically
-  const formatLocation = (locationValue) => {
-    if (!locationValue || locationValue.trim() === '') return '';
+  // Update extractAddressComponents to handle address objects correctly
+  const extractAddressComponents = (locationData) => {
+    // TODO: In the future, implement a proper address validation library
+    // that contains all US addresses (and eventually international addresses)
+    // to provide autocomplete and validation as the user types.
     
-    // Parse the parts
-    const parts = locationValue.split(',').map(part => part.trim());
-    const city = parts[0] || '';
-    const state = parts[1] || '';
-    
-    // Format according to our standard
-    return `${city}${state ? `, ${state}` : ''}`;
-  };
-
-  // Handle save of edited field
-  const handleSave = (value) => {
-    debugLog('MBA230uvj0834h9', `Save ${editingField} from ${editValue} to:`, value);
-    
-    if (editingField === 'insurance') {
-      setSelectedInsurance(value);
-    } else if (editingField === 'location') {
-      // Format location
-      const formattedLocation = formatLocation(value);
-      setDisplayValues(prev => ({
-        ...prev,
-        location: formattedLocation
-      }));
-    } else if (editingField === 'name') {
-      debugLog('MBA230uvj0834h9', 'Before updating displayValues name:', {
-        oldName: displayValues.name,
-        newName: value
-      });
-
-      // For name field, update displayValues directly
-      setDisplayValues(prev => {
-        const newValues = { ...prev, name: value };
-        debugLog('MBA230uvj0834h9', 'New displayValues:', newValues);
-        return newValues;
-      });
+    // If we're getting an addressForm object from our modal
+    if (locationData && typeof locationData === 'object') {
+      // If it's an address form with street property
+      if ('street' in locationData) {
+        return {
+          address: locationData.street || '',
+          apartment: locationData.apartment || '',
+          city: locationData.city || '',
+          state: locationData.state || '',
+          zip: locationData.zip || '',
+          country: locationData.country || 'USA'
+        };
+      }
       
-      debugLog('MBA230uvj0834h9', `Updated name to "${value}"`);
-    } else {
-      // For other text fields, update displayValues to show changes immediately
-      setDisplayValues(prev => ({
-        ...prev,
-        [editingField]: value
-      }));
+      // If it's our own object with address property
+      if ('address' in locationData) {
+        return {
+          address: locationData.address || '',
+          apartment: locationData.apartment || '',
+          city: locationData.city || '',
+          state: locationData.state || '',
+          zip: locationData.zip || '',
+          country: locationData.country || 'USA'
+        };
+      }
     }
     
-    // Mark that user has made an edit
-    setHasEdits(true);
-    setHasUnsavedChanges(true);
-    setEditingField(null);
-  };
-
-  // Extract address components from location string
-  const extractAddressComponents = (locationStr) => {
-    const components = locationStr.split(',').map(part => part.trim());
+    // If we're getting a string (legacy format)
+    // This is a fallback for backward compatibility
+    if (typeof locationData === 'string') {
+      const components = locationData.split(',').map(part => part.trim());
+      return {
+        address: components[0] || '',
+        apartment: '',
+        city: components[1] || '',
+        state: components[2] || '',
+        zip: components[3] || '',
+        country: components[4] || 'USA'
+      };
+    }
+    
+    // Default empty object if all else fails
     return {
-      city: components[0] || '',
-      state: components[1] || '',
-      zip: components[2] || '',
-      country: components[3] || 'USA'
+      address: '',
+      apartment: '',
+      city: '',
+      state: '',
+      zip: '',
+      country: 'USA'
     };
   };
 
-  // Handle save all changes - now calls API directly
-  const handleSaveAllChanges = async () => {
-    if (!hasEdits) return;
+  // Set original values when props change
+  useEffect(() => {
+    // Only set original values once on component mount
+    const locationDisplay = `${city || ''}${state ? `, ${state}` : ''}`;
     
+    setOriginalValues({
+      name: name || authName || "Your Name",
+      email: email || "",
+      bio: isProfessional ? bio : about_me,
+      location: locationDisplay,
+      address: address || '',
+      apartment: '',
+      city: city || '',
+      state: state || '',
+      zip: zip || '',
+      country: country || 'USA',
+      insurance: insurance
+    });
+  }, []); // Empty dependency array - only run once on mount
+  
+  // Simplify the handleSaveField function to avoid state update loops
+  const handleSaveField = async (field, value) => {
+    // Skip if no changes (keep this logic)
+    if (!hasFieldChanged(field, value)) {
+      debugLog('MBA230uvj0834h9', `No changes detected for ${field}, skipping save.`);
+      setEditingField(null);
+      return;
+    }
+
     setIsSaving(true);
     
     try {
-      // Extract city, state, zip, and country from location
-      const locationComponents = extractAddressComponents(displayValues.location);
+      let profileData = {};
       
-      // Create profile data object to send to API
-      const profileData = {
-        name: displayValues.name,
-        email: displayValues.email,
-        bio: isProfessional ? displayValues.bio : undefined,
-        about_me: !isProfessional ? displayValues.bio : undefined,
-        city: locationComponents.city,
-        state: locationComponents.state,
-        zip: locationComponents.zip,
-        country: locationComponents.country,
-        insurance: selectedInsurance
-      };
+      switch (field) {
+        case 'name':
+          profileData = { name: value };
+          break;
+        case 'email':
+          profileData = { email: value };
+          break;
+        case 'bio':
+          // Make it clearer which field we're updating
+          if (isProfessional) {
+            profileData = { bio: value };
+            debugLog('MBA4928', 'Saving professional bio:', value);
+          } else {
+            profileData = { about_me: value };
+            debugLog('MBA4928', 'Saving client about_me:', value);
+          }
+          break;
+        case 'location':
+          debugLog('MBA4928', 'Extracting address components from:', value);
+          const locationComponents = extractAddressComponents(value);
+          debugLog('MBA4928', 'Extracted components:', locationComponents);
+          
+          profileData = {
+            address: locationComponents.address,
+            apartment: locationComponents.apartment,
+            city: locationComponents.city,
+            state: locationComponents.state,
+            zip: locationComponents.zip,
+            country: locationComponents.country || 'USA'
+          };
+          break;
+        case 'insurance':
+          profileData = { insurance: value };
+          break;
+        default:
+          break;
+      }
       
-      // Call API directly
-      debugLog('MBA230uvj0834h9', 'Calling updateProfileInfo with:', profileData);
+      // Call API to update only the changed field
+      debugLog('MBA4928', `Saving ${field} to backend:`, profileData);
       const updatedProfile = await updateProfileInfo(profileData);
-      debugLog('MBA230uvj0834h9', 'Received updated profile:', updatedProfile);
+      debugLog('MBA4928', `Backend response for ${field}:`, updatedProfile);
       
-      // Update displayValues with response
-      setDisplayValues({
-        name: updatedProfile.name || displayValues.name,
-        email: updatedProfile.email || displayValues.email,
-        bio: isProfessional ? 
-          updatedProfile.bio || displayValues.bio : 
-          updatedProfile.about_me || displayValues.bio,
-        location: `${updatedProfile.city || ''}${updatedProfile.state ? `, ${updatedProfile.state}` : ''}`
-      });
+      // SIMPLIFIED: One-time update of display values and original values
+      // Directly update the field's value without spreading or manipulating nested objects
       
-      // Reset flags for edits
-      setHasEdits(false);
-      setHasUnsavedChanges(false);
+      // Update display values first
+      if (field === 'name') {
+        setDisplayValues({
+          ...displayValues, 
+          name: updatedProfile.name || displayValues.name
+        });
+      } else if (field === 'email') {
+        setDisplayValues({
+          ...displayValues, 
+          email: updatedProfile.email || displayValues.email
+        });
+      } else if (field === 'bio') {
+        // Update display values with the correct field from the response
+        if (isProfessional) {
+          setDisplayValues({
+            ...displayValues, 
+            bio: updatedProfile.bio || displayValues.bio
+          });
+        } else {
+          setDisplayValues({
+            ...displayValues, 
+            bio: updatedProfile.about_me || displayValues.bio
+          });
+        }
+      } else if (field === 'location') {
+        // Simple location formatting
+        const newLocation = `${updatedProfile.address || ''}${updatedProfile.city ? `, ${updatedProfile.city}` : ''}${updatedProfile.state ? `, ${updatedProfile.state}` : ''}`;
+        setDisplayValues({
+          ...displayValues, 
+          location: newLocation
+        });
+      } else if (field === 'insurance') {
+        setSelectedInsurance(value);
+      }
       
-      // Show success toast
+      // Success notification
       showToast({
-        message: 'Profile updated successfully',
+        message: `${field.charAt(0).toUpperCase() + field.slice(1)} updated successfully`,
         type: 'success',
         duration: 3000
       });
       
-      // Notify parent component that save is complete
+      // Notify parent component if needed
       if (onSaveComplete) {
         onSaveComplete(updatedProfile);
       }
-      
-      // Log saved values for verification
-      debugLog('MBA230uvj0834h9', 'Changes saved. Current values:', {
-        name: displayValues.name,
-        email: displayValues.email,
-        bio: displayValues.bio,
-        location: displayValues.location
-      });
     } catch (error) {
-      debugLog('MBA230uvj0834h9', 'Error saving profile changes:', error);
+      debugLog('MBA4928', `Error saving ${field}:`, error);
       
-      // Show error toast instead of alert
+      // Show error toast
       showToast({
-        message: 'Failed to update profile. Please try again.',
+        message: `Failed to update ${field}. Please try again.`,
         type: 'error',
         duration: 4000
       });
     } finally {
       setIsSaving(false);
+      setEditingField(null);
+    }
+  };
+
+  // Update handle save to call the new function
+  const handleSave = (value) => {
+    debugLog('MBA4928', `Save ${editingField} to value:`, value);
+    
+    if (editingField === 'insurance') {
+      handleSaveField('insurance', value);
+    } else if (editingField === 'location') {
+      handleSaveField('location', value);
+    } else {
+      // For text fields, update the display value first
+      const newDisplayValues = { ...displayValues };
+      newDisplayValues[editingField] = value;
+      setDisplayValues(newDisplayValues);
+      
+      // Then save to backend
+      handleSaveField(editingField, value);
     }
   };
 
@@ -622,6 +739,97 @@ const ProfileInfoTab = ({
   // Display name (use display values instead of context)
   const displayName = displayValues.name || "Your Name";
   
+  // Simplify the profile photo handler
+  const handleProfilePhotoSelection = async () => {
+    try {
+      // Let the parent component handle the actual image picking
+      const newPhotoUri = await pickImage();
+      
+      if (newPhotoUri) {
+        setIsSaving(true);
+        
+        // Create form data for photo upload
+        const formData = new FormData();
+        const photoFile = {
+          uri: newPhotoUri,
+          type: 'image/jpeg',
+          name: 'profile_photo.jpg'
+        };
+        
+        formData.append('profile_picture', photoFile);
+        
+        // Upload the photo directly
+        debugLog('MBA4928', 'Uploading profile photo');
+        await updateProfileInfo(formData);
+        
+        showToast({
+          message: 'Profile photo updated successfully',
+          type: 'success',
+          duration: 3000
+        });
+        
+        // No need to update local state - let the parent handle it via onSaveComplete
+      }
+    } catch (error) {
+      debugLog('MBA4928', 'Error uploading profile photo:', error);
+      showToast({
+        message: 'Failed to update profile photo. Please try again.',
+        type: 'error',
+        duration: 4000
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // Simplify the portfolio photo handler
+  const handleAddPortfolioPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+      
+      if (!result.canceled) {
+        setIsSaving(true);
+        
+        // Create form data for photo upload
+        const formData = new FormData();
+        const photoFile = {
+          uri: result.assets[0].uri,
+          type: 'image/jpeg',
+          name: 'portfolio_photo.jpg'
+        };
+        
+        formData.append('portfolio_photo', photoFile);
+        
+        // Upload the photo - don't update state based on response
+        debugLog('MBA4928', 'Uploading portfolio photo');
+        await updateProfileInfo(formData);
+        
+        // Just add to local portfolio photos
+        setPortfolioPhotos([...portfolioPhotos, result.assets[0].uri]);
+        
+        showToast({
+          message: 'Portfolio photo added successfully',
+          type: 'success',
+          duration: 3000
+        });
+      }
+    } catch (error) {
+      debugLog('MBA4928', 'Error adding portfolio photo:', error);
+      showToast({
+        message: 'Failed to add portfolio photo. Please try again.',
+        type: 'error',
+        duration: 4000
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const renderFacilitiesSection = () => {
     if (isProfessional) return null;
 
@@ -722,7 +930,7 @@ const ProfileInfoTab = ({
           {/* Profile Photo Section */}
           <View style={[styles.profileSection, !isMobile && styles.profileSectionDesktop]}>
             <View style={styles.profileCard}>
-              <TouchableOpacity onPress={pickImage} style={styles.profilePhotoContainer}>
+              <TouchableOpacity onPress={handleProfilePhotoSelection} style={styles.profilePhotoContainer}>
                 {profilePhoto ? (
                   <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
                 ) : (
@@ -784,12 +992,12 @@ const ProfileInfoTab = ({
             {/* About Me Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>About Me</Text>
+                <Text style={styles.sectionTitle}>{isProfessional ? 'Professional Bio' : 'About Me'}</Text>
                 <TouchableOpacity 
                   style={styles.editButton}
                   onPress={() => handleEdit('bio', displayValues.bio)}
                 >
-                  <Text style={styles.editButtonText}>Edit Bio</Text>
+                  <Text style={styles.editButtonText}>Edit {isProfessional ? 'Bio' : 'About Me'}</Text>
                 </TouchableOpacity>
               </View>
               <Text style={styles.bioText}>
@@ -806,7 +1014,7 @@ const ProfileInfoTab = ({
                 <Text style={styles.sectionTitle}>Portfolio Photos</Text>
                 <TouchableOpacity 
                   style={styles.addPhotoButton}
-                  onPress={pickImage}
+                  onPress={handleAddPortfolioPhoto}
                 >
                   <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
                   <Text style={styles.addPhotoText}>Add Photos</Text>
@@ -828,13 +1036,6 @@ const ProfileInfoTab = ({
           </View>
         </View>
       </View>
-
-      {/* Profile FloatingSaveButton - simple approach with direct visibility */}
-      <FloatingSaveButton 
-        visible={hasEdits}
-        onSave={handleSaveAllChanges}
-        btnText="Save Changes"
-      />
 
       <EditOverlay
         visible={!!editingField}

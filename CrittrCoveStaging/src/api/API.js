@@ -271,18 +271,21 @@ export const updateProfileInfo = async (profileData) => {
     
     debugLog('MBA76543', 'Updating profile info with data:', profileData);
     
+    // Check if we're dealing with FormData (for image uploads) or regular JSON data
+    const isFormData = profileData instanceof FormData;
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': isFormData ? 'multipart/form-data' : 'application/json'
+    };
+    
     const response = await axios.patch(
       `${API_BASE_URL}/api/users/v1/update_profile_info/`,
       profileData,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers }
     );
     
-    // The backend now returns only the updated fields, not the complete profile
+    // The backend returns only the updated fields, not the complete profile
     const updatedFields = response.data;
     debugLog('MBA76543', 'Updated fields received:', updatedFields);
     
