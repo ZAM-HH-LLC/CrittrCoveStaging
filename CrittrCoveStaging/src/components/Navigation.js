@@ -103,6 +103,13 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
       // Special handling for MyProfile screen to ensure tab is highlighted
       if (toLocation === 'MyProfile') {
         console.log('MBA98386196v Special handling for MyProfile screen');
+        // Store in appropriate storage for reload persistence
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('myProfileActiveTab', params.screen);
+        } else {
+          await AsyncStorage.setItem('myProfileActiveTab', params.screen);
+        }
+        
         // Use reset to ensure the navigation state is clean and the tab is highlighted
         navigation.reset({
           index: 0,
