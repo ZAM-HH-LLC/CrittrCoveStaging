@@ -118,14 +118,14 @@ const PetsPreferencesTab = ({
                 <Text style={styles.detailText}>{pet.specialCareInstructions || 'Don\'t touch his butt, he will eat your ass'}</Text>
               </View>
             </View>
-            {/* <View style={styles.detailSection}>
-              <Text style={styles.detailTitle}>Behavior Notes</Text>
-              <Text style={styles.detailText}>{pet.behaviorNotes || 'Friendly, good with other dogs, loves fetch'}</Text>
+            {/*We need to add a dropdown for Compatibility & Training, with sub categories being 
+            Friendly with children:, Friendly with cats:, Friendly with dogs:, Spayed neutered:,
+            House trained:, Microchipped:*/}
+            <View style={styles.detailRow}>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailTitle}>Compatibility & Training</Text>
+              </View>
             </View>
-            <View style={styles.detailSection}>
-              <Text style={styles.detailTitle}>Potty Break Schedule</Text>
-              <Text style={styles.detailText}>{pet.behaviorNotes || 'Friendly, good with other dogs, loves fetch'}</Text>
-            </View> */}
           </View>
         )}
       </View>
