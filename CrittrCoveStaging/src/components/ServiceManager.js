@@ -182,7 +182,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         <View style={styles.headerContainer}>
           <Text style={styles.sectionTitle}>Service Manager</Text>
           <View style={styles.headerActions}>
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               ref={collapseButtonRef}
               onPress={toggleCollapseAll} 
               style={styles.collapseButton}
@@ -207,7 +207,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
                 size={24} 
                 color={theme.colors.text} 
               />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
             
             <TouchableOpacity
               ref={buttonRef}

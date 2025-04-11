@@ -512,7 +512,7 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    gap: 32,
+    gap: screenWidth <= 900 ? 22 : 32,
     paddingRight: screenWidth <= 900 ? 16 : 0,
   },
   tab: {

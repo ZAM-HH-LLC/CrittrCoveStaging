@@ -433,6 +433,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    flex: 1,
   },
   petPhoto: {
     width: 48,
@@ -441,6 +442,7 @@ const styles = StyleSheet.create({
   },
   petInfo: {
     gap: 4,
+    flex: 1,
   },
   petName: {
     fontSize: 16,
@@ -450,6 +452,7 @@ const styles = StyleSheet.create({
   petDetails: {
     fontSize: 14,
     color: theme.colors.secondary,
+    flexWrap: 'wrap',
   },
   expandedDetails: {
     borderTopWidth: 1,
