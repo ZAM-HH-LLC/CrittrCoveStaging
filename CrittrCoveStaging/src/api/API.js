@@ -295,3 +295,37 @@ export const updateProfileInfo = async (profileData) => {
     throw error;
   }
 };
+
+/**
+ * Add a new pet to the user's account
+ * This function sends pet data to the backend to create a new pet record
+ * @param {Object} petData - Object containing the pet details
+ * @returns {Promise<Object>} - Created pet data from the backend
+ */
+export const addPet = async (petData) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    debugLog('MBA789', 'Adding new pet with data:', petData);
+
+    const response = await axios.post(
+      `${API_BASE_URL}/api/pets/v1/add-pet/`,
+      petData,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA789', 'Pet added successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA789', 'Error adding pet:', error);
+    throw error;
+  }
+};
