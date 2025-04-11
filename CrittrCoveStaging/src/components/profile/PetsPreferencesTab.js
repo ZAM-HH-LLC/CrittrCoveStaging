@@ -209,46 +209,118 @@ const PetsPreferencesTab = ({
           onPress={() => togglePetDetails(pet.id)}
         >
           <View style={styles.petBasicInfo}>
-            <Image 
-              source={require('../../../assets/default-pet-image.png')}
-              style={styles.petPhoto}
-            />
-            <View style={styles.petInfo}>
-              <Text style={styles.petName}>{pet.name}</Text>
-              <Text style={styles.petDetails}>
-                {pet.breed} • {pet.age} • {pet.type}
-              </Text>
-            </View>
+            {isEditing ? (
+              <View style={styles.editMainContainer}>
+                <View style={styles.editHeaderRow}>
+                  <View style={styles.editProfileContainer}>
+                    <TouchableOpacity
+                      style={styles.profilePhotoButton}
+                      onPress={() => handleUploadDocument(pet.id)}
+                    >
+                      <Image 
+                        source={require('../../../assets/default-pet-image.png')}
+                        style={styles.petPhoto}
+                      />
+                      <View style={styles.plusIconContainer}>
+                        <MaterialCommunityIcons name="plus-circle" size={20} color={theme.colors.primary} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.editActions}>
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={handleSavePetEdit}
+                    >
+                      <MaterialCommunityIcons name="check" size={20} color={theme.colors.success} />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={handleCancelPetEdit}
+                    >
+                      <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
+                    </TouchableOpacity>
+                    <MaterialCommunityIcons 
+                      name={isExpanded ? "chevron-up" : "chevron-down"} 
+                      size={24} 
+                      color={theme.colors.text}
+                    />
+                  </View>
+                </View>
+                
+                <View style={styles.editDetailsContainer}>
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailColumn}>
+                      <Text style={styles.inputLabel}>Name</Text>
+                      <TextInput
+                        style={styles.editInput}
+                        value={editedPetData.name || ''}
+                        onChangeText={(text) => handleEditChange('name', text)}
+                        placeholder="Enter pet name"
+                      />
+                    </View>
+                    <View style={styles.detailColumn}>
+                      <Text style={styles.inputLabel}>Breed</Text>
+                      <TextInput
+                        style={styles.editInput}
+                        value={editedPetData.breed || ''}
+                        onChangeText={(text) => handleEditChange('breed', text)}
+                        placeholder="Enter breed"
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailColumn}>
+                      <Text style={styles.inputLabel}>Age</Text>
+                      <TextInput
+                        style={styles.editInput}
+                        value={editedPetData.age || ''}
+                        onChangeText={(text) => handleEditChange('age', text)}
+                        placeholder="Enter age"
+                      />
+                    </View>
+                    <View style={styles.detailColumn}>
+                      <Text style={styles.inputLabel}>Animal Type</Text>
+                      <TextInput
+                        style={styles.editInput}
+                        value={editedPetData.type || ''}
+                        onChangeText={(text) => handleEditChange('type', text)}
+                        placeholder="Enter type"
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <>
+                <Image 
+                  source={require('../../../assets/default-pet-image.png')}
+                  style={styles.petPhoto}
+                />
+                <View style={styles.petInfo}>
+                  <Text style={styles.petName}>{pet.name}</Text>
+                  <Text style={styles.petDetails}>
+                    {pet.breed} • {pet.age} • {pet.type}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
           <View style={styles.petActions}>
             {!isEditing ? (
-              <TouchableOpacity 
-                style={styles.editButton}
-                onPress={() => handleEditPet(pet.id)}
-              >
-                <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-              </TouchableOpacity>
-            ) : (
               <>
                 <TouchableOpacity 
                   style={styles.editButton}
-                  onPress={handleSavePetEdit}
+                  onPress={() => handleEditPet(pet.id)}
                 >
-                  <MaterialCommunityIcons name="check" size={20} color={theme.colors.success} />
+                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.editButton}
-                  onPress={handleCancelPetEdit}
-                >
-                  <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
-                </TouchableOpacity>
+                <MaterialCommunityIcons 
+                  name={isExpanded ? "chevron-up" : "chevron-down"} 
+                  size={24} 
+                  color={theme.colors.text}
+                />
               </>
-            )}
-            <MaterialCommunityIcons 
-              name={isExpanded ? "chevron-up" : "chevron-down"} 
-              size={24} 
-              color={theme.colors.text}
-            />
+            ) : null}
           </View>
         </TouchableOpacity>
 
@@ -1128,12 +1200,14 @@ const styles = StyleSheet.create({
   compatibilityLabel: {
     fontSize: 14,
     color: theme.colors.text,
+    flex: 1,
   },
   dropdownContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     minWidth: 60,
+    justifyContent: 'flex-end',
   },
   dropdownText: {
     fontSize: 14,
@@ -1189,6 +1263,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     minWidth: 60,
+    justifyContent: 'flex-end',
   },
   optionButton: {
     padding: 8,
@@ -1230,7 +1305,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     color: theme.colors.text,
-    maxWidth: 200,
+    width: '100%',
   },
   uploadButton: {
     flexDirection: 'row',
@@ -1282,6 +1357,66 @@ const styles = StyleSheet.create({
   },
   detailSection: {
     marginTop: 16,
+  },
+  editContainer: {
+    flexWrap: 'wrap',
+    gap: 16,
+    alignItems: 'flex-start',
+  },
+  inputsWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    flex: 1,
+  },
+  inputWrapper: {
+    minWidth: 150,
+    flexBasis: '46%',
+    flexGrow: 1,
+    marginBottom: 8,
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    marginBottom: 4,
+  },
+  profilePhotoButton: {
+    position: 'relative',
+  },
+  plusIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: theme.colors.background,
+    borderRadius: 10,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  editMainContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  editHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+  editProfileContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  editDetailsContainer: {
+    width: '100%',
+  },
+  editActions: {
+    flexDirection: 'row',
+    gap: 12,
   },
 });
 
