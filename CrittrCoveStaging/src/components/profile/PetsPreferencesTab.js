@@ -23,8 +23,8 @@ const PetsPreferencesTab = ({
   const [newHouseholdMember, setNewHouseholdMember] = useState({ name: '', phone: '' });
   const [isAddingEmergencyContact, setIsAddingEmergencyContact] = useState(false);
   const [isAddingHouseholdMember, setIsAddingHouseholdMember] = useState(false);
-  const [editingPetId, setEditingPetId] = useState(null);
-  const [editedPetData, setEditedPetData] = useState({});
+  const [editingPetIds, setEditingPetIds] = useState(new Set());
+  const [editedPetsData, setEditedPetsData] = useState({});
   const [expandedSections, setExpandedSections] = useState({});
 
   // Define all available facilities
@@ -83,27 +83,131 @@ const PetsPreferencesTab = ({
   const handleEditPet = (petId) => {
     // Clone the current pet data to edit
     const petToEdit = pets.find(pet => pet.id === petId);
-    setEditedPetData({...petToEdit});
-    setEditingPetId(petId);
-  };
-  
-  const handleSavePetEdit = () => {
-    onEditPet(editingPetId, editedPetData);
-    setEditingPetId(null);
-    setEditedPetData({});
-  };
-  
-  const handleCancelPetEdit = () => {
-    setEditingPetId(null);
-    setEditedPetData({});
-  };
-  
-  const handleEditChange = (field, value) => {
-    setEditedPetData(prev => ({
+    
+    // Update the edited data for this specific pet
+    setEditedPetsData(prev => ({
       ...prev,
-      [field]: value
+      [petId]: {...petToEdit}
     }));
-    debugLog("MBA456", "Editing pet field", { field, value });
+    
+    // Add this pet's ID to the set of pets being edited
+    setEditingPetIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(petId);
+      return newSet;
+    });
+  };
+  
+  const handleSavePetEdit = (petId) => {
+    // Get the edited data for this pet
+    const editedData = editedPetsData[petId];
+    
+    // Save the changes
+    onEditPet(petId, editedData);
+    
+    // Remove this pet from editing state
+    setEditingPetIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(petId);
+      return newSet;
+    });
+    
+    // Clean up the edited data for this pet
+    setEditedPetsData(prev => {
+      const newData = {...prev};
+      delete newData[petId];
+      return newData;
+    });
+  };
+  
+  const handleCancelPetEdit = (petId) => {
+    // Check if this is a newly added pet (has a temp_ ID)
+    if (petId && petId.toString().startsWith('temp_')) {
+      // Delete the pet instead of just canceling edit mode
+      debugLog("MBA456", "Discarding newly added pet:", petId);
+      onDeletePet(petId);
+    }
+    
+    // Remove this pet from editing state
+    setEditingPetIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(petId);
+      return newSet;
+    });
+    
+    // Clean up the edited data for this pet
+    setEditedPetsData(prev => {
+      const newData = {...prev};
+      delete newData[petId];
+      return newData;
+    });
+  };
+  
+  const handleEditChange = (petId, field, value) => {
+    setEditedPetsData(prev => ({
+      ...prev,
+      [petId]: {
+        ...(prev[petId] || {}),
+        [field]: value
+      }
+    }));
+    debugLog("MBA456", "Editing pet field", { petId, field, value });
+  };
+
+  const handleAddNewPet = () => {
+    // Create a temporary ID for the new pet
+    const tempId = `temp_${Date.now()}`;
+    
+    // Create a blank pet entry
+    const newPet = {
+      id: tempId,
+      name: '',
+      breed: '',
+      age: '',
+      type: '',
+      feedingInstructions: '',
+      medicalNotes: '',
+      pottyBreakSchedule: '',
+      specialCareInstructions: '',
+      childrenFriendly: 'Yes',
+      dogFriendly: 'Yes',
+      catFriendly: 'Yes',
+      spayedNeutered: 'Yes',
+      houseTrained: 'Yes',
+      microchipped: 'Yes',
+      energyLevel: 'Medium',
+      canBeLeftAlone: 'Yes',
+      medications: '',
+      vetName: '',
+      vetAddress: '',
+      vetPhone: '',
+      insuranceProvider: '',
+      vetDocuments: []
+    };
+    
+    // Add the new pet to the existing pets array via the parent component
+    onAddPet(newPet);
+    
+    // Start editing the new pet immediately
+    setEditedPetsData(prev => ({
+      ...prev,
+      [tempId]: {...newPet}
+    }));
+    
+    setEditingPetIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(tempId);
+      return newSet;
+    });
+    
+    // Expand the pet card
+    setExpandedPetIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(tempId);
+      return newSet;
+    });
+    
+    debugLog("MBA456", "Added new blank pet", newPet);
   };
 
   const handleUploadDocument = async (petId) => {
@@ -118,9 +222,12 @@ const PetsPreferencesTab = ({
           type: 'application/pdf'
         };
         
-        setEditedPetData(prev => ({
+        setEditedPetsData(prev => ({
           ...prev,
-          vetDocuments: [...(prev.vetDocuments || []), mockDocument]
+          [petId]: {
+            ...(prev[petId] || {}),
+            vetDocuments: [...(prev[petId]?.vetDocuments || []), mockDocument]
+          }
         }));
         return;
       }
@@ -197,7 +304,8 @@ const PetsPreferencesTab = ({
 
   const renderPetCard = (pet) => {
     const isExpanded = expandedPetIds.has(pet.id);
-    const isEditing = editingPetId === pet.id;
+    const isEditing = editingPetIds.has(pet.id);
+    const editedPetData = editedPetsData[pet.id] || pet;
 
     return (
       <View key={pet.id} style={styles.petCard}>
@@ -229,13 +337,13 @@ const PetsPreferencesTab = ({
                   <View style={styles.editActions}>
                     <TouchableOpacity 
                       style={styles.editButton}
-                      onPress={handleSavePetEdit}
+                      onPress={() => handleSavePetEdit(pet.id)}
                     >
                       <MaterialCommunityIcons name="check" size={20} color={theme.colors.success} />
                     </TouchableOpacity>
                     <TouchableOpacity 
                       style={styles.editButton}
-                      onPress={handleCancelPetEdit}
+                      onPress={() => handleCancelPetEdit(pet.id)}
                     >
                       <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
                     </TouchableOpacity>
@@ -254,7 +362,7 @@ const PetsPreferencesTab = ({
                       <TextInput
                         style={styles.editInput}
                         value={editedPetData.name || ''}
-                        onChangeText={(text) => handleEditChange('name', text)}
+                        onChangeText={(text) => handleEditChange(pet.id, 'name', text)}
                         placeholder="Enter pet name"
                       />
                     </View>
@@ -263,7 +371,7 @@ const PetsPreferencesTab = ({
                       <TextInput
                         style={styles.editInput}
                         value={editedPetData.breed || ''}
-                        onChangeText={(text) => handleEditChange('breed', text)}
+                        onChangeText={(text) => handleEditChange(pet.id, 'breed', text)}
                         placeholder="Enter breed"
                       />
                     </View>
@@ -274,7 +382,7 @@ const PetsPreferencesTab = ({
                       <TextInput
                         style={styles.editInput}
                         value={editedPetData.age || ''}
-                        onChangeText={(text) => handleEditChange('age', text)}
+                        onChangeText={(text) => handleEditChange(pet.id, 'age', text)}
                         placeholder="Enter age"
                       />
                     </View>
@@ -283,7 +391,7 @@ const PetsPreferencesTab = ({
                       <TextInput
                         style={styles.editInput}
                         value={editedPetData.type || ''}
-                        onChangeText={(text) => handleEditChange('type', text)}
+                        onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
                         placeholder="Enter type"
                       />
                     </View>
@@ -333,7 +441,7 @@ const PetsPreferencesTab = ({
                   <TextInput
                     style={styles.editInput}
                     value={editedPetData.feedingInstructions || ''}
-                    onChangeText={(text) => handleEditChange('feedingInstructions', text)}
+                    onChangeText={(text) => handleEditChange(pet.id, 'feedingInstructions', text)}
                     placeholder="Enter feeding instructions"
                     multiline
                   />
@@ -347,7 +455,7 @@ const PetsPreferencesTab = ({
                   <TextInput
                     style={styles.editInput}
                     value={editedPetData.medicalNotes || ''}
-                    onChangeText={(text) => handleEditChange('medicalNotes', text)}
+                    onChangeText={(text) => handleEditChange(pet.id, 'medicalNotes', text)}
                     placeholder="Enter medical notes"
                     multiline
                   />
@@ -363,7 +471,7 @@ const PetsPreferencesTab = ({
                   <TextInput
                     style={styles.editInput}
                     value={editedPetData.pottyBreakSchedule || ''}
-                    onChangeText={(text) => handleEditChange('pottyBreakSchedule', text)}
+                    onChangeText={(text) => handleEditChange(pet.id, 'pottyBreakSchedule', text)}
                     placeholder="Enter potty break schedule"
                     multiline
                   />
@@ -377,7 +485,7 @@ const PetsPreferencesTab = ({
                   <TextInput
                     style={styles.editInput}
                     value={editedPetData.specialCareInstructions || ''}
-                    onChangeText={(text) => handleEditChange('specialCareInstructions', text)}
+                    onChangeText={(text) => handleEditChange(pet.id, 'specialCareInstructions', text)}
                     placeholder="Enter special care instructions"
                     multiline
                   />
@@ -404,7 +512,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.childrenFriendly || 'Yes') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('childrenFriendly', option)}
+                              onPress={() => handleEditChange(pet.id, 'childrenFriendly', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -430,7 +538,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.catFriendly || 'Yes') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('catFriendly', option)}
+                              onPress={() => handleEditChange(pet.id, 'catFriendly', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -456,7 +564,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.dogFriendly || 'Yes') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('dogFriendly', option)}
+                              onPress={() => handleEditChange(pet.id, 'dogFriendly', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -482,7 +590,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.spayedNeutered || 'Yes') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('spayedNeutered', option)}
+                              onPress={() => handleEditChange(pet.id, 'spayedNeutered', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -508,7 +616,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.houseTrained || 'Yes') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('houseTrained', option)}
+                              onPress={() => handleEditChange(pet.id, 'houseTrained', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -534,7 +642,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.microchipped || 'Yes') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('microchipped', option)}
+                              onPress={() => handleEditChange(pet.id, 'microchipped', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -571,7 +679,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.energyLevel || 'Medium') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('energyLevel', option)}
+                              onPress={() => handleEditChange(pet.id, 'energyLevel', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -597,7 +705,7 @@ const PetsPreferencesTab = ({
                                 styles.optionButton,
                                 (editedPetData.canBeLeftAlone || 'Yes') === option && styles.selectedOption
                               ]}
-                              onPress={() => handleEditChange('canBeLeftAlone', option)}
+                              onPress={() => handleEditChange(pet.id, 'canBeLeftAlone', option)}
                             >
                               <Text style={[
                                 styles.optionText,
@@ -618,7 +726,7 @@ const PetsPreferencesTab = ({
                         <TextInput
                           style={styles.editInputMedications}
                           value={editedPetData.medications || ''}
-                          onChangeText={(text) => handleEditChange('medications', text)}
+                          onChangeText={(text) => handleEditChange(pet.id, 'medications', text)}
                           placeholder="Enter medications"
                           multiline
                         />
@@ -643,7 +751,7 @@ const PetsPreferencesTab = ({
                         <TextInput
                           style={styles.editInputShort}
                           value={editedPetData.vetName || ''}
-                          onChangeText={(text) => handleEditChange('vetName', text)}
+                          onChangeText={(text) => handleEditChange(pet.id, 'vetName', text)}
                           placeholder="Enter vet name"
                         />
                       ) : (
@@ -656,7 +764,7 @@ const PetsPreferencesTab = ({
                         <TextInput
                           style={styles.editInputShort}
                           value={editedPetData.vetAddress || ''}
-                          onChangeText={(text) => handleEditChange('vetAddress', text)}
+                          onChangeText={(text) => handleEditChange(pet.id, 'vetAddress', text)}
                           placeholder="Enter vet address"
                         />
                       ) : (
@@ -669,7 +777,7 @@ const PetsPreferencesTab = ({
                         <TextInput
                           style={styles.editInputShort}
                           value={editedPetData.vetPhone || ''}
-                          onChangeText={(text) => handleEditChange('vetPhone', text)}
+                          onChangeText={(text) => handleEditChange(pet.id, 'vetPhone', text)}
                           placeholder="Enter vet phone"
                           keyboardType="phone-pad"
                         />
@@ -683,7 +791,7 @@ const PetsPreferencesTab = ({
                         <TextInput
                           style={styles.editInputShort}
                           value={editedPetData.insuranceProvider || ''}
-                          onChangeText={(text) => handleEditChange('insuranceProvider', text)}
+                          onChangeText={(text) => handleEditChange(pet.id, 'insuranceProvider', text)}
                           placeholder="Enter insurance provider"
                         />
                       ) : (
@@ -912,7 +1020,7 @@ const PetsPreferencesTab = ({
           <Text style={styles.sectionTitle}>My Pets</Text>
           <TouchableOpacity 
             style={styles.addButton}
-            onPress={onAddPet}
+            onPress={handleAddNewPet}
           >
             <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
             <Text style={styles.addButtonText}>Add Pet</Text>

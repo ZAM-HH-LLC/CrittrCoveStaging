@@ -360,9 +360,28 @@ const MyProfile = () => {
         return (
           <PetsPreferencesTab
             pets={profileData?.pets}
-            onAddPet={() => navigation.navigate('AddPet')}
-            onEditPet={(id) => navigation.navigate('EditPet', { petId: id })}
-            onDeletePet={() => {}}
+            onAddPet={(newPet) => {
+              // Add the new pet to the local state
+              const updatedPets = [...(profileData?.pets || []), newPet];
+              handleUpdateField('pets', updatedPets);
+              
+              // This will mark that there are unsaved changes
+              debugLog('MBA5432', 'Added new pet locally:', newPet);
+            }}
+            onEditPet={(petId, updatedPetData) => {
+              // Update the existing pet in local state
+              const updatedPets = (profileData?.pets || []).map(pet => 
+                pet.id === petId ? { ...pet, ...updatedPetData } : pet
+              );
+              handleUpdateField('pets', updatedPets);
+              debugLog('MBA5432', 'Updated pet locally:', { petId, updatedPetData });
+            }}
+            onDeletePet={(petId) => {
+              // Remove the pet from local state
+              const updatedPets = (profileData?.pets || []).filter(pet => pet.id !== petId);
+              handleUpdateField('pets', updatedPets);
+              debugLog('MBA5432', 'Deleted pet locally:', petId);
+            }}
             preferences={profileData?.preferences}
             onUpdatePreferences={(section, id) => {
               const updatedPreferences = { ...profileData?.preferences };
