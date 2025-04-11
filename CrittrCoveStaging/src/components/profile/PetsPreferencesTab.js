@@ -1041,9 +1041,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   petPhoto: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 68,
+    height: 68,
+    borderRadius: 50,
   },
   petInfo: {
     gap: 4,
