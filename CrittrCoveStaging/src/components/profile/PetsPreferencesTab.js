@@ -108,10 +108,24 @@ const PetsPreferencesTab = ({
                 <Text style={styles.detailText}>{pet.medicalNotes || 'Hip dysplasia, daily joint supplement in AM meal'}</Text>
               </View>
             </View>
-            <View style={styles.detailSection}>
+            <View style={styles.detailRow}>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailTitle}>Potty Break Schedule</Text>
+                <Text style={styles.detailText}>{pet.pottyBreakSchedule || '15 minutes after each meal'}</Text>
+              </View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailTitle}>Special Care Instructions</Text>
+                <Text style={styles.detailText}>{pet.specialCareInstructions || 'Don\'t touch his butt, he will eat your ass'}</Text>
+              </View>
+            </View>
+            {/* <View style={styles.detailSection}>
               <Text style={styles.detailTitle}>Behavior Notes</Text>
               <Text style={styles.detailText}>{pet.behaviorNotes || 'Friendly, good with other dogs, loves fetch'}</Text>
             </View>
+            <View style={styles.detailSection}>
+              <Text style={styles.detailTitle}>Potty Break Schedule</Text>
+              <Text style={styles.detailText}>{pet.behaviorNotes || 'Friendly, good with other dogs, loves fetch'}</Text>
+            </View> */}
           </View>
         )}
       </View>
