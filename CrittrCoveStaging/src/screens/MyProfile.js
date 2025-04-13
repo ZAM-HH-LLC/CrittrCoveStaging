@@ -210,17 +210,60 @@ const MyProfile = () => {
   const loadProfileData = async () => {
     try {
       setLoading(true);
-      const data = await userProfile();
-      debugLog('MBA54321 Profile data loaded with payment methods:', {
-        paymentMethods: data?.payment_methods,
-        fullData: data
-      });
-      setProfileData(data);
-    } catch (err) {
-      setError('Failed to load profile data');
-      debugLog('MBA54321 Error loading profile:', err);
-    } finally {
+      const response = await userProfile();
+      setProfileData(response);
+      
+      // Check for pets with missing owners and fix them if needed
+      await checkAndFixPetOwners();
+      
       setLoading(false);
+      
+      // Wait for the tab to be loaded before trying to update active tab from URL
+      setTimeout(() => {
+        loadActiveTab();
+      }, 100);
+    } catch (error) {
+      setError('Failed to load profile data');
+      setLoading(false);
+      debugLog('Failed to load profile data:', error);
+    }
+  };
+  
+  const checkAndFixPetOwners = async () => {
+    try {
+      // Check if we have any pets that need fixing
+      if (profileData?.pets && profileData.pets.length > 0) {
+        const petsWithMissingOwners = profileData.pets.filter(pet => {
+          // Try to determine if a pet might have a missing owner
+          // Unfortunately we can't directly check the owner field from frontend
+          // So we look for potential symptoms like 404 errors on editing
+          if (pet.lastUpdateFailed || pet.ownerMissing) {
+            return true;
+          }
+          return false;
+        });
+        
+        if (petsWithMissingOwners.length > 0) {
+          debugLog('MBA5432', 'Found pets with potential missing owners:', petsWithMissingOwners);
+          
+          // Try to fix each pet
+          for (const pet of petsWithMissingOwners) {
+            try {
+              const { fixPetOwner } = require('../api/API');
+              const result = await fixPetOwner(pet.id);
+              debugLog('MBA5432', 'Fixed pet owner successfully:', result);
+            } catch (err) {
+              debugLog('MBA5432', 'Failed to fix pet owner:', err);
+            }
+          }
+          
+          // Reload profile data to get updated pets
+          const response = await userProfile();
+          setProfileData(response);
+        }
+      }
+    } catch (error) {
+      debugLog('MBA5432', 'Error checking/fixing pet owners:', error);
     }
   };
 
@@ -381,6 +424,12 @@ const MyProfile = () => {
               const updatedPets = (profileData?.pets || []).filter(pet => pet.id !== petId);
               handleUpdateField('pets', updatedPets);
               debugLog('MBA5432', 'Deleted pet locally:', petId);
+            }}
+            onReplacePet={(newPetsArray) => {
+              // Replace the entire pets array with the new one
+              // This prevents the issue with double updates causing blank pets
+              handleUpdateField('pets', newPetsArray);
+              debugLog('MBA5432', 'Replaced entire pets array:', newPetsArray);
             }}
             preferences={profileData?.preferences}
             onUpdatePreferences={(section, id) => {

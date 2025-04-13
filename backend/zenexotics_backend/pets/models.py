@@ -83,7 +83,7 @@ class Pet(models.Model):
         blank=True
     )
     name = models.CharField(max_length=100)
-    species = models.CharField(max_length=20, choices=SPECIES_CHOICES)
+    species = models.CharField(max_length=50)
     breed = models.CharField(max_length=100, blank=True)
     pet_type = models.CharField(max_length=100, blank=True, help_text="Specific type for exotic pets")
     
@@ -150,6 +150,8 @@ class Pet(models.Model):
     vet_documents = models.JSONField(default=list, blank=True)
 
     def __str__(self):
+        if not self.owner:
+            return f"{self.name} - {self.species} (No owner assigned)"
         return f"{self.name} - {self.species} ({self.owner.email}'s pet)"
 
     class Meta:

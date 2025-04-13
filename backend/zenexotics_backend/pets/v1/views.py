@@ -62,4 +62,36 @@ class PetViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': f'An error occurred while adding the pet: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], url_path='fix-owner')
+    def fix_owner(self, request, pk=None):
+        """
+        Fix a pet with a missing owner by assigning the current user
+        """
+        try:
+            # Get the pet
+            pet = self.get_object()
+            
+            # Check if owner is already set
+            if pet.owner:
+                return Response(
+                    {'message': 'This pet already has an owner.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Set the owner to the current user
+            pet.owner = request.user
+            pet.save()
+            
+            # Return success
+            serializer = self.get_serializer(pet)
+            return Response(
+                {'message': 'Pet owner fixed successfully', 'pet': serializer.data},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'An error occurred while fixing the pet owner: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             ) 

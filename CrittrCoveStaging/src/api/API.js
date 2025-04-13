@@ -323,9 +323,80 @@ export const addPet = async (petData) => {
     );
     
     debugLog('MBA789', 'Pet added successfully:', response.data);
+    
+    // Return the data in a standardized format
     return response.data;
   } catch (error) {
     debugLog('MBA789', 'Error adding pet:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing pet
+ * This function sends updated pet data to the backend to update an existing pet record
+ * @param {string|number} petId - The ID of the pet to update
+ * @param {Object} petData - Object containing the updated pet details
+ * @returns {Promise<Object>} - Updated pet data from the backend
+ */
+export const updatePet = async (petId, petData) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    debugLog('MBA789', 'Updating pet with ID:', petId, 'and data:', petData);
+
+    const response = await axios.patch(
+      `${API_BASE_URL}/api/pets/v1/${petId}/`,
+      petData,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA789', 'Pet updated successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA789', 'Error updating pet:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fix the owner of a pet by assigning the current user
+ * This is used to repair pets that have a null owner field
+ * @param {string|number} petId - The ID of the pet to fix
+ * @returns {Promise<Object>} - Updated pet data from the backend
+ */
+export const fixPetOwner = async (petId) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    debugLog('MBA789', 'Fixing owner for pet with ID:', petId);
+
+    const response = await axios.post(
+      `${API_BASE_URL}/api/pets/v1/${petId}/fix-owner/`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA789', 'Pet owner fixed successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA789', 'Error fixing pet owner:', error);
     throw error;
   }
 };
