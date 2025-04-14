@@ -65,8 +65,7 @@ def get_professional_services_with_rates(request):
                 'service_id': service.service_id,
                 'service_name': service.service_name,
                 'description': service.description,
-                'animal_type': service.animal_type,
-                'categories': service.categories,
+                'animal_types': service.animal_types,
                 'base_rate': str(service.base_rate),
                 'additional_animal_rate': str(service.additional_animal_rate),
                 'holiday_rate': formatted_holiday_rate,
@@ -124,35 +123,55 @@ def create_service(request):
             words = service_name.strip().split()
             service_name = ' '.join(word[0].upper() + word[1:].lower() for word in words)
 
-        # Process animal_type
-        animal_type = "Other"  # Default value
+        # Process animal_types JSON field
+        animal_types = {}
         
-        # Extract animal_type from various possible formats
-        if 'animal_type' in data:
-            raw_animal_type = data['animal_type']
-            
-            # Handle if it's a dict with 'name' property
-            if isinstance(raw_animal_type, dict) and 'name' in raw_animal_type:
-                raw_animal_type = raw_animal_type['name']
-            
-            # Format animal type: capitalize first letter of each word, lowercase the rest
-            if isinstance(raw_animal_type, str) and raw_animal_type.strip():
-                words = raw_animal_type.strip().split()
-                animal_type = ' '.join(word[0].upper() + word[1:].lower() for word in words)
+        # Extract animal_types from request data
+        if 'animal_types' in data and isinstance(data['animal_types'], dict):
+            # If it's already a dictionary, use it directly
+            raw_animal_types = data['animal_types']
+            # Format keys to have proper capitalization
+            for animal, category in raw_animal_types.items():
+                if animal and category:
+                    # Format animal type name
+                    animal_words = animal.strip().split()
+                    formatted_animal = ' '.join(word[0].upper() + word[1:].lower() for word in animal_words)
+                    
+                    # Format category name
+                    category_words = category.strip().split()
+                    formatted_category = ' '.join(word[0].upper() + word[1:].lower() for word in category_words)
+                    
+                    animal_types[formatted_animal] = formatted_category
+        elif 'animal_types' in data and isinstance(data['animal_types'], list):
+            # Handle list of animal types with their categories
+            for item in data['animal_types']:
+                if isinstance(item, dict) and 'name' in item and 'category' in item:
+                    # Format animal type name
+                    animal_words = item['name'].strip().split()
+                    formatted_animal = ' '.join(word[0].upper() + word[1:].lower() for word in animal_words)
+                    
+                    # Format category name
+                    category_words = item['category'].strip().split()
+                    formatted_category = ' '.join(word[0].upper() + word[1:].lower() for word in category_words)
+                    
+                    animal_types[formatted_animal] = formatted_category
+                elif isinstance(item, str):
+                    # If just a string is provided, default to "Other" category
+                    animal_words = item.strip().split()
+                    formatted_animal = ' '.join(word[0].upper() + word[1:].lower() for word in animal_words)
+                    animal_types[formatted_animal] = "Other"
         
-        # Handle categories - they might be strings or objects with name
-        categories = data.get('categories', [])
-        category_names = []
-        if isinstance(categories, list):
-            for category in categories:
-                if isinstance(category, dict) and 'name' in category:
-                    category_names.append(category['name'])
-                elif isinstance(category, str):
-                    category_names.append(category)
+        # For backward compatibility
+        if not animal_types and 'animal_type' in data:
+            animal_type = data['animal_type']
+            if isinstance(animal_type, str) and animal_type.strip():
+                words = animal_type.strip().split()
+                formatted_animal = ' '.join(word[0].upper() + word[1:].lower() for word in words)
+                animal_types[formatted_animal] = "Other"
         
-        # Ensure we have at least one category
-        if not category_names:
-            category_names = ['Uncategorized']
+        # Ensure we have at least one animal type
+        if not animal_types:
+            animal_types = {"Other": "Other"}
         
         # Handle unit_of_time and ensure it's in the valid choices
         unit_of_time = data.get('unit_of_time', 'Per Visit')
@@ -184,8 +203,7 @@ def create_service(request):
             description=data['description'],
             base_rate=data['base_rate'],
             unit_of_time=unit_of_time,
-            animal_type=animal_type,
-            categories=category_names,
+            animal_types=animal_types,
             additional_animal_rate=data.get('additional_animal_rate', 0),
             holiday_rate=holiday_rate,
             holiday_rate_is_percent=is_percent,
@@ -227,8 +245,7 @@ def create_service(request):
             'service_id': service.service_id,
             'service_name': service.service_name,
             'description': service.description,
-            'animal_type': service.animal_type,
-            'categories': service.categories,
+            'animal_types': service.animal_types,
             'base_rate': str(service.base_rate),
             'additional_animal_rate': str(service.additional_animal_rate),
             'holiday_rate': formatted_holiday_rate,

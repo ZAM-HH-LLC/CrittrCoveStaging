@@ -35,6 +35,43 @@ const STEPS = {
   }
 };
 
+// Import the hardcoded animal categories directly
+const ANIMAL_CATEGORIES = {
+  // Farm animals
+  'Horse': 'Farm Animals',
+  'Cow': 'Farm Animals',
+  'Sheep': 'Farm Animals',
+  'Goat': 'Farm Animals',
+  'Pig': 'Farm Animals',
+  
+  // Domestic
+  'Dogs': 'Domestic',
+  'Cats': 'Domestic',
+  'Birds': 'Domestic',
+  'Rabbits': 'Domestic',
+  'Hamsters': 'Domestic',
+  
+  // Reptiles
+  'Snake': 'Reptiles',
+  'Lizard': 'Reptiles',
+  'Turtle': 'Reptiles',
+  'Gecko': 'Reptiles',
+  'Chameleon': 'Reptiles',
+  
+  // Aquatic
+  'Fish': 'Aquatic',
+  'Frog': 'Aquatic',
+  'Newt': 'Aquatic',
+  'Axolotl': 'Aquatic',
+  
+  // Invertebrates
+  'Spider': 'Invertebrates',
+  'Scorpion': 'Invertebrates',
+  'Crab': 'Invertebrates',
+  'Snail': 'Invertebrates',
+  'Millipede': 'Invertebrates'
+};
+
 const ServiceCreationModal = ({ 
   visible, 
   onClose,
@@ -93,7 +130,7 @@ const ServiceCreationModal = ({
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case STEPS.CATEGORY_SELECTION.id:
-        return serviceData.generalCategories?.length > 0 && serviceData.animalTypes?.length > 0;
+        return serviceData.animalTypes?.length > 0;
       
       case STEPS.SERVICE_DETAILS.id:
         return (
@@ -135,16 +172,29 @@ const ServiceCreationModal = ({
     setIsSubmitting(true);
     
     try {
-      // Check what type of data we have for animalTypes
-      let animalType = 'Other';
-      if (serviceData.animalTypes.length > 0) {
-        const firstAnimalType = serviceData.animalTypes[0];
-        animalType = typeof firstAnimalType === 'string' ? 
-          firstAnimalType : 
-          (firstAnimalType.name || 'Other');
-      }
+      // Format animal types as a dictionary mapping animal types to their categories
+      const animalTypesDict = {};
       
-      // Check what type of data we have for generalCategories
+      serviceData.animalTypes.forEach(animalType => {
+        const animalName = typeof animalType === 'string' ? animalType : animalType.name;
+        
+        // Use the hardcoded ANIMAL_CATEGORIES mapping
+        if (ANIMAL_CATEGORIES[animalName]) {
+          animalTypesDict[animalName] = ANIMAL_CATEGORIES[animalName];
+        } else {
+          // For custom animals, use the category name if it exists
+          if (typeof animalType === 'object' && animalType.categoryName) {
+            animalTypesDict[animalName] = animalType.categoryName;
+          } else {
+            animalTypesDict[animalName] = 'Other';
+          }
+        }
+      });
+      
+      // Log animal types dictionary for debugging
+      debugLog('MBA54321', 'Animal types dictionary created:', animalTypesDict);
+      
+      // Check what type of data we have for generalCategories (for backward compatibility)
       const categories = serviceData.generalCategories.map(cat => 
         typeof cat === 'string' ? cat : (cat.name || 'Uncategorized')
       );
@@ -155,17 +205,17 @@ const ServiceCreationModal = ({
         (serviceData.rates.isPercent ? `${holidayRateValue}%` : `$${holidayRateValue}`) : 
         '0';
       
-      // Log the holiday rate values for debugging
+      // Log the holiday rate values and animal types for debugging
       debugLog('MBA54321', 'Holiday rate value:', holidayRateValue);
       debugLog('MBA54321', 'Holiday rate is percent:', serviceData.rates.isPercent);
       debugLog('MBA54321', 'Formatted holiday rate:', holidayRateString);
+      debugLog('MBA54321', 'Animal types being sent:', animalTypesDict);
       
       // Format the data according to the backend's expected format
       const formattedData = {
         service_name: serviceData.serviceName,
         description: serviceData.serviceDescription,
-        animal_type: animalType,
-        categories: categories,
+        animal_types: animalTypesDict,
         base_rate: serviceData.rates.base_rate,
         additional_animal_rate: serviceData.rates.additionalAnimalRate || '0',
         holiday_rate: holidayRateString,
@@ -225,9 +275,12 @@ const ServiceCreationModal = ({
               isCustom: false
             };
           }
+          
+          // Use the categoryName if it exists, otherwise we need to include it
           return {
             name: type.name,
             categoryId: type.categoryId,
+            categoryName: type.categoryName || 'Other', // Ensure categoryName is included
             isCustom: type.isCustom || false
           };
         }),

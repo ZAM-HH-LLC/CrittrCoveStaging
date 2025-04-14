@@ -439,12 +439,36 @@ export const createService = async (serviceData) => {
     // Log the data we're sending to the server
     debugLog('MBA54321', 'Creating new service - sending data to backend:', serviceData);
 
+    // Format animal_types as a dictionary mapping animal types to their categories
+    let formattedAnimalTypes = {};
+    
+    if (serviceData.animal_types && Array.isArray(serviceData.animal_types)) {
+      // Convert array format to dictionary
+      serviceData.animal_types.forEach(animal => {
+        if (typeof animal === 'object' && animal.name && animal.category) {
+          formattedAnimalTypes[animal.name] = animal.category;
+        } else if (typeof animal === 'string') {
+          formattedAnimalTypes[animal] = 'Other';
+        }
+      });
+    } else if (serviceData.animal_types && typeof serviceData.animal_types === 'object') {
+      // If it's already a dictionary, use it directly
+      formattedAnimalTypes = serviceData.animal_types;
+    } else if (serviceData.animal_type) {
+      // Fallback to legacy single animal_type
+      formattedAnimalTypes[serviceData.animal_type] = 'Other';
+    } else {
+      // Default
+      formattedAnimalTypes['Other'] = 'Other';
+    }
+    
     // Make sure all numeric values are properly formatted as strings to avoid type issues
     const formattedData = {
       ...serviceData,
       base_rate: String(serviceData.base_rate),
       additional_animal_rate: String(serviceData.additional_animal_rate || 0),
       holiday_rate: String(serviceData.holiday_rate || 0),
+      animal_types: formattedAnimalTypes
     };
 
     const response = await axios.post(

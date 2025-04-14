@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
+from django.db.models import JSONField
 
 class Service(models.Model):
     MODERATION_STATUS_CHOICES = [
@@ -27,12 +28,22 @@ class Service(models.Model):
         ('Week', 'Week')
     ]
 
+    # Animal type category choices
+    ANIMAL_CATEGORIES = [
+        ('Farm Animals', 'Farm Animals'),
+        ('Domestic', 'Domestic'),
+        ('Reptiles', 'Reptiles'),
+        ('Aquatic', 'Aquatic'),
+        ('Invertebrates', 'Invertebrates'),
+        ('Other', 'Other')
+    ]
+
     service_id = models.AutoField(primary_key=True)
     professional = models.ForeignKey('professionals.Professional', on_delete=models.CASCADE)
     service_name = models.CharField(max_length=255)
     description = models.TextField()
-    animal_type = models.CharField(max_length=50)
-    categories = ArrayField(models.CharField(max_length=100), blank=True)
+    # Replace animal_type and categories with a single JSONField
+    animal_types = JSONField(default=dict, help_text='JSON field mapping animal types to their categories')
     base_rate = models.DecimalField(max_digits=10, decimal_places=2)
     additional_animal_rate = models.DecimalField(max_digits=10, decimal_places=2)
     holiday_rate = models.DecimalField(max_digits=10, decimal_places=2)

@@ -46,6 +46,32 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   };
 
   const handleSaveService = (updatedService) => {
+    // Add debugging log for animalTypes
+    console.log('MBA8765 Animal Types received:', updatedService.animalTypes);
+    
+    // Create animal_types dictionary from animalTypes array
+    const animalTypesDict = {};
+    if (updatedService.animalTypes && Array.isArray(updatedService.animalTypes)) {
+      updatedService.animalTypes.forEach(animal => {
+        if (animal && animal.name) {
+          // Log individual animal data for debugging
+          console.log(`MBA8765 Processing animal: ${animal.name}, categoryName: ${animal.categoryName}, category: ${animal.category}`);
+          
+          // Use the categoryName directly from the animal object if available
+          if (animal.categoryName) {
+            animalTypesDict[animal.name] = animal.categoryName;
+          } 
+          // Fallback if no categoryName is available
+          else {
+            animalTypesDict[animal.name] = animal.category || 'Other';
+          }
+        }
+      });
+    }
+    
+    // Log the final dictionary
+    console.log('MBA8765 Final animal_types dictionary:', animalTypesDict);
+
     // Transform the service data to match the backend structure
     const transformedService = {
       service_name: updatedService.serviceName,
@@ -55,16 +81,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       base_rate: updatedService.rates.base_rate,
       additional_animal_rate: updatedService.rates.additionalAnimalRate,
       holiday_rate: updatedService.rates.holidayRate,
-      categories: updatedService.generalCategories.map(cat => ({
-        id: cat.id,
-        name: cat.name,
-        is_custom: cat.isCustom || false
-      })),
-      animal_types: updatedService.animalTypes.map(type => ({
-        name: type.name,
-        category_id: type.categoryId,
-        is_custom: type.isCustom || false
-      })),
+      animal_types: animalTypesDict,
       additional_rates: updatedService.additionalRates.map(rate => ({
         title: rate.label,
         rate: rate.value,
@@ -170,6 +187,21 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       return null;
     }
 
+    // Convert animal_types from dictionary to array format
+    let animalTypesArray = [];
+    if (item.animal_types && typeof item.animal_types === 'object' && !Array.isArray(item.animal_types)) {
+      // Convert dictionary format to array format
+      animalTypesArray = Object.entries(item.animal_types).map(([name, category]) => ({
+        name: name,
+        categoryId: undefined, // We don't have exact category IDs, just names
+        category: category,    // Store the category name
+        isCustom: false        // Default to false as we don't know
+      }));
+    } else if (Array.isArray(item.animal_types)) {
+      // If it's already an array, use it directly
+      animalTypesArray = item.animal_types;
+    }
+    
     // Transform the service data to match the frontend structure
     const serviceData = {
       service_id: item.service_id,
@@ -182,11 +214,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         name: cat.name,
         isCustom: cat.is_custom
       })) || [],
-      animalTypes: item.animal_types?.map(type => ({
-        name: type.name,
-        categoryId: type.category_id,
-        isCustom: type.is_custom
-      })) || [],
+      animalTypes: animalTypesArray,
       rates: {
         base_rate: item.base_rate,
         additionalAnimalRate: item.additional_animal_rate,
