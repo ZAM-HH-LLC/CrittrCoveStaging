@@ -21,6 +21,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
   const [showTimeUnitDropdown, setShowTimeUnitDropdown] = useState(false);
   const [showThresholdDropdown, setShowThresholdDropdown] = useState(false);
   const [customChargeVisible, setCustomChargeVisible] = useState(false);
+  const [isHolidayRatePercent, setIsHolidayRatePercent] = useState(true);
   const [newCustomRate, setNewCustomRate] = useState({
     title: '',
     rate: '',
@@ -29,6 +30,15 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
 
   // Check if we need to convert existing data on component mount
   useEffect(() => {
+    // Initialize isPercent property based on the state
+    setServiceData(prev => ({
+      ...prev,
+      rates: {
+        ...prev.rates,
+        isPercent: isHolidayRatePercent
+      }
+    }));
+    
     // If we have a base_rate_unit from backend but it's not in our mapping, initialize with default
     if (serviceData.rates?.base_rate_unit && !BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit]) {
       debugLog('MBA5931', 'Converting initial base_rate_unit to mapped value');
@@ -39,6 +49,34 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
       if (!frontendKey && serviceData.rates.base_rate_unit) {
         // If we don't have a mapping for this value, keep the backend value
         debugLog('MBA5931', 'No mapping found for:', serviceData.rates.base_rate_unit);
+      }
+    }
+
+    // Check if existing holiday rate has a % sign
+    if (serviceData.rates?.holidayRate) {
+      const holidayRateString = serviceData.rates.holidayRate.toString();
+      if (holidayRateString.includes('%')) {
+        setIsHolidayRatePercent(true);
+        // Strip the % sign for the input field
+        setServiceData(prev => ({
+          ...prev,
+          rates: {
+            ...prev.rates,
+            holidayRate: holidayRateString.replace('%', ''),
+            isPercent: true
+          }
+        }));
+      } else if (holidayRateString.includes('$')) {
+        setIsHolidayRatePercent(false);
+        // Strip the $ sign for the input field
+        setServiceData(prev => ({
+          ...prev,
+          rates: {
+            ...prev.rates,
+            holidayRate: holidayRateString.replace('$', ''),
+            isPercent: false
+          }
+        }));
       }
     }
   }, []);
@@ -129,6 +167,38 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
         holidayRate: numericValue
       }
     }));
+  };
+
+  const toggleHolidayRateType = (isPercent) => {
+    setIsHolidayRatePercent(isPercent);
+    // Update the serviceData with the new holiday rate type
+    setServiceData(prevData => ({
+      ...prevData,
+      rates: {
+        ...prevData.rates,
+        isPercent: isPercent
+      }
+    }));
+  };
+
+  // Calculate the dollar amount for percentage holiday rate
+  const calculateHolidayRateDollarValue = () => {
+    const baseRate = parseFloat(serviceData.rates?.base_rate) || 0;
+    const holidayRatePercent = parseFloat(serviceData.rates?.holidayRate) || 0;
+    
+    if (baseRate > 0 && holidayRatePercent > 0) {
+      const dollarValue = (baseRate * holidayRatePercent / 100).toFixed(2);
+      return `$${dollarValue}`;
+    }
+    return null;
+  };
+
+  // Format holiday rate based on type (% or $)
+  const getFormattedHolidayRate = () => {
+    const value = serviceData.rates?.holidayRate || '';
+    if (!value) return '';
+    
+    return isHolidayRatePercent ? `${value}%` : `$${value}`;
   };
 
   const handleCustomRateChange = (field, value) => {
@@ -292,17 +362,68 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
         </View>
 
         <View style={styles.holidayRateContainer}>
-          <Text style={styles.label}>Holiday Rate <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
-          <View style={styles.percentageInputContainer}>
-            <TextInput
-              style={styles.percentageInput}
-              placeholder="0"
-              keyboardType="decimal-pad"
-              value={serviceData.rates?.holidayRate === '0' ? '' : serviceData.rates?.holidayRate}
-              onChangeText={handleHolidayRateChange}
-              placeholderTextColor={theme.colors.placeHolderText}
-            />
-            <Text style={styles.percentageSymbol}>%</Text>
+          <View style={styles.holidayRateHeader}>
+            <Text style={styles.label}>Holiday Rate <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
+            <View style={styles.rateTypeToggleContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  isHolidayRatePercent ? styles.activeToggleButton : styles.inactiveToggleButton,
+                  {
+                    borderTopLeftRadius: 8,
+                    borderBottomLeftRadius: 8,
+                    borderTopRightRadius: 0,
+                    borderBottomRightRadius: 0
+                  }
+                ]}
+                onPress={() => toggleHolidayRateType(true)}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  isHolidayRatePercent ? styles.activeToggleText : styles.inactiveToggleText
+                ]}>%</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  !isHolidayRatePercent ? styles.activeToggleButton : styles.inactiveToggleButton,
+                  {
+                    borderTopLeftRadius: 0,
+                    borderBottomLeftRadius: 0,
+                    borderTopRightRadius: 8,
+                    borderBottomRightRadius: 8
+                  }
+                ]}
+                onPress={() => toggleHolidayRateType(false)}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  !isHolidayRatePercent ? styles.activeToggleText : styles.inactiveToggleText
+                ]}>$</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={[
+            styles.holidayRateInputWrapper, 
+            { marginBottom: isHolidayRatePercent && serviceData.rates?.base_rate && serviceData.rates?.holidayRate ? 28 : 0 }
+          ]}>
+            <View style={isHolidayRatePercent ? styles.percentageInputContainer : styles.currencyInputContainer}>
+              {!isHolidayRatePercent && <Text style={styles.currencySymbol}>$</Text>}
+              <TextInput
+                style={styles.currencyInput}
+                placeholder="0"
+                keyboardType="decimal-pad"
+                value={serviceData.rates?.holidayRate === '0' ? '' : serviceData.rates?.holidayRate}
+                onChangeText={handleHolidayRateChange}
+                placeholderTextColor={theme.colors.placeHolderText}
+              />
+              {isHolidayRatePercent && <Text style={styles.percentageSymbol}>%</Text>}
+            </View>
+            {isHolidayRatePercent && serviceData.rates?.base_rate && serviceData.rates?.holidayRate && (
+              <Text style={styles.calculatedHolidayRate}>
+                {calculateHolidayRateDollarValue()}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -494,7 +615,53 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   holidayRateContainer: {
-    // marginBottom: 24,
+    marginBottom: 24,
+  },
+  holidayRateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  rateTypeToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderRadius: 8,
+  },
+  toggleButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 40,
+    width: 44,
+    height: 36,
+  },
+  activeToggleButton: {
+    backgroundColor: theme.colors.mainColors.main,
+    borderWidth: 1,
+    borderColor: theme.colors.mainColors.main,
+  },
+  inactiveToggleButton: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  toggleButtonText: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '500',
+  },
+  activeToggleText: {
+    color: theme.colors.surface,
+    fontWeight: '600',
+  },
+  inactiveToggleText: {
+    color: theme.colors.text,
+  },
+  holidayRateInputWrapper: {
+    position: 'relative',
   },
   percentageInputContainer: {
     flexDirection: 'row',
@@ -519,8 +686,17 @@ const styles = StyleSheet.create({
     marginRight: 8,
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  calculatedHolidayRate: {
+    position: 'absolute',
+    bottom: -24,
+    right: 4,
+    fontSize: 14,
+    color: theme.colors.placeHolderText,
+    fontFamily: theme.fonts.regular.fontFamily,
+    paddingTop: 4,
+  },
   customRatesContainer: {
-    marginTop: 24,
+    // marginTop: 24,
   },
   customRateItem: {
     flexDirection: 'row',

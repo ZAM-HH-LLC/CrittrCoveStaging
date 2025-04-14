@@ -56,7 +56,8 @@ const ServiceCreationModal = ({
       additionalAnimalRate: '',
       additionalAnimalThreshold: '1',
       hasHolidayRate: false,
-      holidayRate: '0'
+      holidayRate: '0',
+      isPercent: true
     },
     additionalRates: []
   });
@@ -80,7 +81,8 @@ const ServiceCreationModal = ({
           additionalAnimalRate: '',
           additionalAnimalThreshold: '1',
           hasHolidayRate: false,
-          holidayRate: '0'
+          holidayRate: '0',
+          isPercent: true
         },
         additionalRates: []
       });
@@ -147,6 +149,17 @@ const ServiceCreationModal = ({
         typeof cat === 'string' ? cat : (cat.name || 'Uncategorized')
       );
       
+      // Format holiday rate with appropriate symbol based on type
+      const holidayRateValue = serviceData.rates.holidayRate || '0';
+      const holidayRateString = holidayRateValue && holidayRateValue !== '0' ? 
+        (serviceData.rates.isPercent ? `${holidayRateValue}%` : `$${holidayRateValue}`) : 
+        '0';
+      
+      // Log the holiday rate values for debugging
+      debugLog('MBA54321', 'Holiday rate value:', holidayRateValue);
+      debugLog('MBA54321', 'Holiday rate is percent:', serviceData.rates.isPercent);
+      debugLog('MBA54321', 'Formatted holiday rate:', holidayRateString);
+      
       // Format the data according to the backend's expected format
       const formattedData = {
         service_name: serviceData.serviceName,
@@ -155,7 +168,7 @@ const ServiceCreationModal = ({
         categories: categories,
         base_rate: serviceData.rates.base_rate,
         additional_animal_rate: serviceData.rates.additionalAnimalRate || '0',
-        holiday_rate: serviceData.rates.holidayRate || '0',
+        holiday_rate: holidayRateString,
         applies_after: parseInt(serviceData.rates.additionalAnimalThreshold) || 1,
         unit_of_time: serviceData.rates.base_rate_unit,
         is_overnight: serviceData.isOvernight || false,
@@ -188,7 +201,7 @@ const ServiceCreationModal = ({
         rates: {
           base_rate: serviceData.rates.base_rate,
           additionalAnimalRate: serviceData.rates.additionalAnimalRate || '0',
-          holidayRate: serviceData.rates.holidayRate || '0'
+          holidayRate: holidayRateString
         },
         generalCategories: serviceData.generalCategories.map(cat => {
           if (typeof cat === 'string') {
@@ -243,7 +256,8 @@ const ServiceCreationModal = ({
           additionalAnimalRate: '',
           additionalAnimalThreshold: '1',
           hasHolidayRate: false,
-          holidayRate: '0'
+          holidayRate: '0',
+          isPercent: true
         },
         additionalRates: []
       });

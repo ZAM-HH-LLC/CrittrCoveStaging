@@ -36,6 +36,7 @@ class Service(models.Model):
     base_rate = models.DecimalField(max_digits=10, decimal_places=2)
     additional_animal_rate = models.DecimalField(max_digits=10, decimal_places=2)
     holiday_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    holiday_rate_is_percent = models.BooleanField(default=True, help_text='Indicates if holiday rate is a percentage or fixed amount')
     applies_after = models.IntegerField(default=1, help_text='Additional animal rate applies after this many animals')
     unit_of_time = models.CharField(max_length=50, choices=UNIT_OF_TIME_CHOICES)
     is_overnight = models.BooleanField(default=False, help_text='Indicates if this service requires overnight stay')

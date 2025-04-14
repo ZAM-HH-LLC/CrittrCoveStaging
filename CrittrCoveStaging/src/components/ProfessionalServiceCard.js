@@ -64,7 +64,7 @@ const ProfessionalServiceCard = ({
         {item.rates.holidayRate && (
           <View style={styles.rateRow}>
             <Text style={styles.rateLabel}>Holiday Rate</Text>
-            <Text style={styles.rateValue}>${item.rates.holidayRate}</Text>
+            <Text style={styles.rateValue}>{item.rates.holidayRate}</Text>
           </View>
         )}
         {item.additionalRates && item.additionalRates.map((rate, idx) => (

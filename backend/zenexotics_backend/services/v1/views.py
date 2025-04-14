@@ -13,6 +13,7 @@ from service_rates.models import ServiceRate
 from professionals.models import Professional
 import logging
 from django.db import transaction
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,13 @@ def get_professional_services_with_rates(request):
                 for rate in service.additional_rates.all()
             ]
 
+            # Format the holiday rate with appropriate symbol
+            holiday_rate = str(service.holiday_rate)
+            if service.holiday_rate_is_percent:
+                formatted_holiday_rate = f"{holiday_rate}%"
+            else:
+                formatted_holiday_rate = f"${holiday_rate}"
+
             # Format same as create_service response
             service_data = {
                 'service_id': service.service_id,
@@ -61,7 +69,8 @@ def get_professional_services_with_rates(request):
                 'categories': service.categories,
                 'base_rate': str(service.base_rate),
                 'additional_animal_rate': str(service.additional_animal_rate),
-                'holiday_rate': str(service.holiday_rate),
+                'holiday_rate': formatted_holiday_rate,
+                'holiday_rate_is_percent': service.holiday_rate_is_percent,
                 'applies_after': service.applies_after,
                 'unit_of_time': service.unit_of_time,
                 'is_overnight': service.is_overnight,
@@ -153,6 +162,21 @@ def create_service(request):
         if unit_of_time not in valid_units:
             unit_of_time = 'Per Visit'  # Default if invalid
         
+        # Process holiday_rate - handle % or $ formatting
+        holiday_rate = data.get('holiday_rate', '0')
+        is_percent = False
+        
+        if isinstance(holiday_rate, str):
+            # Check if it's a percentage or dollar amount
+            if '%' in holiday_rate:
+                is_percent = True
+                # Extract numeric value for storage
+                holiday_rate = re.sub(r'[^0-9.]', '', holiday_rate)
+            elif '$' in holiday_rate:
+                is_percent = False
+                # Extract numeric value for storage
+                holiday_rate = re.sub(r'[^0-9.]', '', holiday_rate)
+        
         # Create service object
         service = Service(
             professional=professional,
@@ -163,7 +187,8 @@ def create_service(request):
             animal_type=animal_type,
             categories=category_names,
             additional_animal_rate=data.get('additional_animal_rate', 0),
-            holiday_rate=data.get('holiday_rate', 0),
+            holiday_rate=holiday_rate,
+            holiday_rate_is_percent=is_percent,
             applies_after=data.get('applies_after', 1),
             is_overnight=data.get('is_overnight', False),
             moderation_status='PENDING'
@@ -190,6 +215,13 @@ def create_service(request):
                         'rate': str(rate.rate)
                     })
         
+        # Format the holiday rate for the response with appropriate symbol
+        formatted_holiday_rate = holiday_rate
+        if service.holiday_rate_is_percent:
+            formatted_holiday_rate = f"{holiday_rate}%"
+        else:
+            formatted_holiday_rate = f"${holiday_rate}"
+        
         # Prepare response with created service data
         service_data = {
             'service_id': service.service_id,
@@ -199,7 +231,8 @@ def create_service(request):
             'categories': service.categories,
             'base_rate': str(service.base_rate),
             'additional_animal_rate': str(service.additional_animal_rate),
-            'holiday_rate': str(service.holiday_rate),
+            'holiday_rate': formatted_holiday_rate,
+            'holiday_rate_is_percent': service.holiday_rate_is_percent,
             'applies_after': service.applies_after,
             'unit_of_time': service.unit_of_time,
             'is_overnight': service.is_overnight,
