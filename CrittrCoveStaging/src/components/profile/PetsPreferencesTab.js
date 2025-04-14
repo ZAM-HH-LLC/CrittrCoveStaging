@@ -92,15 +92,42 @@ const PetsPreferencesTab = ({
   const energyLevelOptions = ["Low", "Medium", "High", "N/A"];
   const sexOptions = ["Male", "Female"];
 
+  // Add at the top of the component, after the other utility functions
+  
+  // Helper function to safely convert any value to a display string
+  const safeDisplayText = (value, defaultText = '') => {
+    if (value === null || value === undefined) {
+      return defaultText;
+    }
+    
+    if (typeof value === 'string') {
+      return value;
+    }
+    
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    
+    // For any other type (like objects), return the default
+    return defaultText;
+  };
+  
   const returnYesNoContainer = (pet, attributeName) => {
     let displayValue = 'No Option Selected';
-    if (pet && attributeName && pet[attributeName] !== undefined) {
+    
+    if (pet && attributeName) {
       if (pet[attributeName] === null) {
         displayValue = 'N/A';
-      } else if (pet[attributeName] !== undefined) {
+      } else if (pet[attributeName] === true) {
+        displayValue = 'Yes';
+      } else if (pet[attributeName] === false) {
+        displayValue = 'No';
+      } else if (typeof pet[attributeName] === 'string') {
         displayValue = pet[attributeName];
       }
+      // If pet[attributeName] is an object or other non-string type, keep the default "No Option Selected"
     }
+    
     return (
       <View style={styles.dropdownContainer}>
         <Text style={styles.dropdownText}>{displayValue}</Text>
@@ -111,6 +138,8 @@ const PetsPreferencesTab = ({
   const returnEnergyLevelContainer = (pet) => {
     // Map backend value to frontend display value
     let displayValue = 'No Option Selected';
+    
+    // Make sure pet exists before trying to access its energyLevel property
     if (pet && pet.energyLevel !== undefined) {
       if (pet.energyLevel === null) {
         displayValue = 'N/A';
@@ -120,8 +149,10 @@ const PetsPreferencesTab = ({
         displayValue = 'Medium';
       } else if (pet.energyLevel === 'HIGH') {
         displayValue = 'High';
-      } else {
-        displayValue = pet.energyLevel; // Fallback to whatever is there
+      } else if (typeof pet.energyLevel === 'string') {
+        displayValue = pet.energyLevel; // Fallback to whatever string is there
+      } else if (pet.energyLevel && typeof pet.energyLevel === 'object') {
+        displayValue = 'No Option Selected';
       }
     }
     
@@ -486,7 +517,6 @@ const PetsPreferencesTab = ({
   };
 
   const handleAddNewPet = () => {
-    debugLog("MBA5555", "ADD PET - Starting handleAddNewPet");
     
     // Check for existing temporary pets first
     const existingTempPets = pets.filter(pet => String(pet.id).startsWith('temp_'));
@@ -639,775 +669,862 @@ const PetsPreferencesTab = ({
   };
 
   const toggleSection = (petId, sectionName, event) => {
-    // Stop event propagation to prevent triggering the pet card expansion
-    if (event) {
-      event.stopPropagation();
-    }
+    // A completely rewritten, bulletproof version of toggleSection
     
-    setExpandedSections(prev => {
-      const key = `${petId}-${sectionName}`;
-      const newState = { ...prev };
-      // Check if the key exists and is a boolean value, default to false if not
-      const currentValue = typeof prev[key] === 'boolean' ? prev[key] : false;
-      newState[key] = !currentValue;
-      return newState;
-    });
+    try {
+      // First, stop event propagation if an event was provided
+      if (event && typeof event.stopPropagation === 'function') {
+        event.stopPropagation();
+      }
+      
+      // Validate inputs - only proceed if we have valid data
+      if (!petId) {
+        console.warn("Missing petId in toggleSection");
+        return;
+      }
+      
+      if (!sectionName) {
+        console.warn("Missing sectionName in toggleSection");
+        return;
+      }
+      
+      // Sanitize inputs to ensure they're simple strings
+      const petIdStr = String(petId);
+      const sectionNameStr = String(sectionName);
+      
+      // Create a consistent key format
+      const key = `${petIdStr}-${sectionNameStr}`;
+      
+      // Update state safely
+      setExpandedSections((prev) => {
+        // If prev is somehow not an object, start fresh
+        if (!prev || typeof prev !== 'object') {
+          const newState = {};
+          newState[key] = true;
+          return newState;
+        }
+        
+        // Create a clean copy of the previous state
+        const newState = { ...prev };
+        
+        // Toggle the value, defaulting to false if not boolean
+        const currentValue = newState[key] === true;
+        newState[key] = !currentValue;
+        
+        return newState;
+      });
+    } catch (err) {
+      // If anything goes wrong, log it but don't crash
+      console.error("Error toggling section:", err.message || "Unknown error");
+    }
   };
 
   const isSectionExpanded = (petId, sectionName) => {
-    const key = `${petId}-${sectionName}`;
-    // Default to false (closed) for initial view or non-boolean values
-    return expandedSections[key] === true;
+    try {
+      // Safety checks for invalid inputs
+      if (!petId || !sectionName) {
+        return false;
+      }
+      
+      // Ensure petId is a string for consistent key format
+      const petIdStr = String(petId);
+      const key = `${petIdStr}-${sectionName}`;
+      
+      // Default to false (closed) for initial view or non-boolean values
+      const result = expandedSections[key] === true;
+      return result;
+    } catch (err) {
+      console.error("Error checking if section is expanded:", err.message || "Unknown error");
+      return false; // Default to not expanded on error
+    }
   };
 
   const renderSectionHeader = (petId, title, sectionName) => {
-    const isExpanded = isSectionExpanded(petId, sectionName);
-    
-    return (
-      <TouchableOpacity 
-        style={styles.sectionHeader}
-        onPress={(event) => toggleSection(petId, sectionName, event)}
-      >
-        <Text style={styles.detailTitle}>{title}</Text>
-        <MaterialCommunityIcons 
-          name={isExpanded ? "chevron-up" : "chevron-down"} 
-          size={20} 
-          color={theme.colors.text}
-        />
-      </TouchableOpacity>
-    );
+    try {
+      // Safety check for valid inputs
+      if (!petId || !sectionName) {
+        console.warn("Missing required parameters in renderSectionHeader");
+        return null;
+      }
+      
+      // Ensure title has a valid string value
+      const safeTitle = typeof title === 'string' ? title : 'Section';
+      
+      const isExpanded = isSectionExpanded(petId, sectionName);
+      
+      return (
+        <TouchableOpacity 
+          style={styles.sectionHeader}
+          onPress={(event) => toggleSection(petId, sectionName, event)}
+        >
+          <Text style={styles.detailTitle}>{safeTitle}</Text>
+          <MaterialCommunityIcons 
+            name={isExpanded ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color={theme.colors.text}
+          />
+        </TouchableOpacity>
+      );
+    } catch (error) {
+      console.error("Error rendering section header:", error.message || "Unknown error");
+      return null; // Return null on error to prevent crashes
+    }
   };
 
   const renderPetCard = (pet) => {
-    const isExpanded = expandedPetIds.has(pet.id);
-    const isEditing = editingPetIds.has(pet.id);
-    const editedPetData = editedPetsData[pet.id] || pet;
-    const isSmallScreen = windowWidth < 500;
-    // Check if this is a pet that hasn't been saved to the database yet
-    const isNewPet = pet.id && String(pet.id).startsWith('temp_');
-
-    return (
-      <View key={pet.id} style={styles.petCard}>
-        <TouchableOpacity 
-          style={[
-            styles.petHeader,
-            { backgroundColor: theme.colors.surface }
-          ]} 
-          onPress={(event) => {
-            // Important: only toggle details if not in edit mode
-            // This prevents any side effects during editing
-            if (!isEditing) {
-              debugLog("MBA5555", "PET HEADER - Toggle clicked for pet:", pet.id);
-              togglePetDetails(pet.id);
-            } else {
-              debugLog("MBA5555", "PET HEADER - Ignoring click while in edit mode for pet:", pet.id);
-              // Stop propagation to prevent triggering other events
-              event.stopPropagation();
-            }
-          }}
-          activeOpacity={0.2}
-        >
-          <View style={styles.petBasicInfo}>
-            {isEditing ? (
-              <View style={styles.editMainContainer}>
-                <View style={styles.editHeaderRow}>
-                  <View style={styles.editProfileContainer}>
-                    <TouchableOpacity
-                      style={styles.profilePhotoButton}
-                      onPress={() => handleUploadDocument(pet.id)}
-                    >
-                      <Image 
-                        source={require('../../../assets/default-pet-image.png')}
-                        style={styles.petPhoto}
-                      />
-                      <View style={styles.plusIconContainer}>
-                        <MaterialCommunityIcons name="plus-circle" size={20} color={theme.colors.primary} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.editActions}>
-                    <TouchableOpacity 
-                      style={styles.saveButton}
-                      onPress={(event) => {
-                        // Prevent event propagation
-                        event.stopPropagation();
-                        // Prevent duplicates
-                        if (savingPet) {
-                          debugLog("MBA5555", "Save button already clicked, ignoring");
-                          return;
-                        }
-                        debugLog("MBA5555", "SAVE BUTTON - Clicked for pet:", pet.id);
-                        handleSavePetEdit(pet.id);
-                      }}
-                      disabled={savingPet}
-                    >
-                      <Text style={styles.saveButtonText}>
-                        {isNewPet ? 'Create Pet' : 'Save Pet'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.editButton}
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        handleCancelPetEdit(pet.id);
-                      }}
-                    >
-                      <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.editButton}
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        togglePetDetails(pet.id);
-                      }}
-                    >
-                      <MaterialCommunityIcons 
-                        name={isExpanded ? "chevron-up" : "chevron-down"} 
-                        size={24} 
-                        color={theme.colors.text}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                
-                <View style={styles.editDetailsContainer}>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailColumn}>
-                      <Text style={styles.inputLabel}>Name</Text>
-                      <TextInput
-                        style={styles.editInput}
-                        value={editedPetData.name || ''}
-                        onChangeText={(text) => handleEditChange(pet.id, 'name', text)}
-                        placeholder="Enter pet name"
-                        placeholderTextColor={theme.colors.placeholder}
-                      />
+    try {
+      // Safety check to ensure we have a valid pet object
+      if (!pet || typeof pet !== 'object' || !pet.id) {
+        console.warn("Invalid pet in renderPetCard");
+        return null;
+      }
+      
+      const isExpanded = expandedPetIds.has(pet.id);
+      const isEditing = editingPetIds.has(pet.id);
+      const editedPetData = editedPetsData[pet.id] || pet;
+      const isSmallScreen = windowWidth < 500;
+      // Check if this is a pet that hasn't been saved to the database yet
+      const isNewPet = pet.id && String(pet.id).startsWith('temp_');
+      
+      // Safely extract text properties with defaults to prevent rendering objects
+      const petName = typeof pet.name === 'string' ? pet.name : '';
+      const petBreed = typeof pet.breed === 'string' ? pet.breed : '';
+      const petType = typeof pet.type === 'string' ? pet.type : '';
+      const petBirthday = typeof pet.birthday === 'string' ? pet.birthday : 'No birthday set';
+      
+      return (
+        <View key={pet.id} style={styles.petCard}>
+          <TouchableOpacity 
+            style={[
+              styles.petHeader,
+              { backgroundColor: theme.colors.surface }
+            ]} 
+            onPress={(event) => {
+              // Important: only toggle details if not in edit mode
+              // This prevents any side effects during editing
+              if (!isEditing) {
+                debugLog("MBA5555", "PET HEADER - Toggle clicked for pet:", pet.id);
+                togglePetDetails(pet.id);
+              } else {
+                debugLog("MBA5555", "PET HEADER - Ignoring click while in edit mode for pet:", pet.id);
+                // Stop propagation to prevent triggering other events
+                event.stopPropagation();
+              }
+            }}
+            activeOpacity={0.2}
+          >
+            <View style={styles.petBasicInfo}>
+              {isEditing ? (
+                <View style={styles.editMainContainer}>
+                  <View style={styles.editHeaderRow}>
+                    <View style={styles.editProfileContainer}>
+                      <TouchableOpacity
+                        style={styles.profilePhotoButton}
+                        onPress={() => handleUploadDocument(pet.id)}
+                      >
+                        <Image 
+                          source={require('../../../assets/default-pet-image.png')}
+                          style={styles.petPhoto}
+                        />
+                        <View style={styles.plusIconContainer}>
+                          <MaterialCommunityIcons name="plus-circle" size={20} color={theme.colors.primary} />
+                        </View>
+                      </TouchableOpacity>
                     </View>
-                    <View style={styles.detailColumn}>
-                      <Text style={styles.inputLabel}>Breed</Text>
-                      <TextInput
-                        style={styles.editInput}
-                        value={editedPetData.breed || ''}
-                        onChangeText={(text) => handleEditChange(pet.id, 'breed', text)}
-                        placeholder="Enter breed"
-                        placeholderTextColor={theme.colors.placeholder}
-                      />
+                    <View style={styles.editActions}>
+                      <TouchableOpacity 
+                        style={styles.saveButton}
+                        onPress={(event) => {
+                          // Prevent event propagation
+                          event.stopPropagation();
+                          // Prevent duplicates
+                          if (savingPet) {
+                            debugLog("MBA5555", "Save button already clicked, ignoring");
+                            return;
+                          }
+                          debugLog("MBA5555", "SAVE BUTTON - Clicked for pet:", pet.id);
+                          handleSavePetEdit(pet.id);
+                        }}
+                        disabled={savingPet}
+                      >
+                        <Text style={styles.saveButtonText}>
+                          {isNewPet ? 'Create Pet' : 'Save Pet'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.editButton}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          handleCancelPetEdit(pet.id);
+                        }}
+                      >
+                        <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.editButton}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          togglePetDetails(pet.id);
+                        }}
+                      >
+                        <MaterialCommunityIcons 
+                          name={isExpanded ? "chevron-up" : "chevron-down"} 
+                          size={24} 
+                          color={theme.colors.text}
+                        />
+                      </TouchableOpacity>
                     </View>
                   </View>
                   
-                  {isSmallScreen ? (
-                    // Stack animal type and birthday vertically on small screens
-                    <View style={styles.stackedFields}>
-                      <View style={[styles.detailColumn, styles.fullWidth]}>
-                        <Text style={styles.inputLabel}>Animal Type</Text>
-                        <TextInput
-                          style={styles.editInput}
-                          value={editedPetData.type || ''}
-                          onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
-                          placeholder="Enter type"
-                          placeholderTextColor={theme.colors.placeholder}
-                        />
-                      </View>
-                      
-                      <View style={[styles.detailColumn, styles.fullWidth]}>
-                        <Text style={styles.inputLabel}>Birthday</Text>
-                        <View style={styles.customDatePickerContainer}>
-                          <TouchableOpacity 
-                            activeOpacity={0.8}
-                            style={styles.dateInputBox}
-                            onPress={() => showDatePicker(pet.id, 'birthday')}
-                          >
-                            <Text style={[
-                              styles.dateInputText, 
-                              !editedPetData.birthday && styles.placeholderText
-                            ]}>
-                              {editedPetData.birthday || 'MM-DD-YYYY'}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={styles.calendarButton}
-                            onPress={() => showDatePicker(pet.id, 'birthday')}
-                            activeOpacity={0.7}
-                          >
-                            <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-                  ) : (
-                    // Original horizontal layout for larger screens
+                  <View style={styles.editDetailsContainer}>
                     <View style={styles.detailRow}>
                       <View style={styles.detailColumn}>
-                        <Text style={styles.inputLabel}>Birthday</Text>
-                        <View style={styles.customDatePickerContainer}>
-                          <TouchableOpacity 
-                            activeOpacity={0.8}
-                            style={styles.dateInputBox}
-                            onPress={() => showDatePicker(pet.id, 'birthday')}
-                          >
-                            <Text style={[
-                              styles.dateInputText, 
-                              !editedPetData.birthday && styles.placeholderText
-                            ]}>
-                              {editedPetData.birthday || 'MM-DD-YYYY'}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={styles.calendarButton}
-                            onPress={() => showDatePicker(pet.id, 'birthday')}
-                            activeOpacity={0.7}
-                          >
-                            <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                      <View style={styles.detailColumn}>
-                        <Text style={styles.inputLabel}>Animal Type</Text>
+                        <Text style={styles.inputLabel}>Name</Text>
                         <TextInput
                           style={styles.editInput}
-                          value={editedPetData.type || ''}
-                          onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
-                          placeholder="Enter type"
+                          value={editedPetData.name || ''}
+                          onChangeText={(text) => handleEditChange(pet.id, 'name', text)}
+                          placeholder="Enter pet name"
+                          placeholderTextColor={theme.colors.placeholder}
+                        />
+                      </View>
+                      <View style={styles.detailColumn}>
+                        <Text style={styles.inputLabel}>Breed</Text>
+                        <TextInput
+                          style={styles.editInput}
+                          value={editedPetData.breed || ''}
+                          onChangeText={(text) => handleEditChange(pet.id, 'breed', text)}
+                          placeholder="Enter breed"
                           placeholderTextColor={theme.colors.placeholder}
                         />
                       </View>
                     </View>
+                    
+                    {isSmallScreen ? (
+                      // Stack animal type and birthday vertically on small screens
+                      <View style={styles.stackedFields}>
+                        <View style={[styles.detailColumn, styles.fullWidth]}>
+                          <Text style={styles.inputLabel}>Animal Type</Text>
+                          <TextInput
+                            style={styles.editInput}
+                            value={editedPetData.type || ''}
+                            onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
+                            placeholder="Enter type"
+                            placeholderTextColor={theme.colors.placeholder}
+                          />
+                        </View>
+                        
+                        <View style={[styles.detailColumn, styles.fullWidth]}>
+                          <Text style={styles.inputLabel}>Birthday</Text>
+                          <View style={styles.customDatePickerContainer}>
+                            <TouchableOpacity 
+                              activeOpacity={0.8}
+                              style={styles.dateInputBox}
+                              onPress={() => showDatePicker(pet.id, 'birthday')}
+                            >
+                              <Text style={[
+                                styles.dateInputText, 
+                                !editedPetData.birthday && styles.placeholderText
+                              ]}>
+                                {editedPetData.birthday || 'MM-DD-YYYY'}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.calendarButton}
+                              onPress={() => showDatePicker(pet.id, 'birthday')}
+                              activeOpacity={0.7}
+                            >
+                              <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.primary} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    ) : (
+                      // Original horizontal layout for larger screens
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailColumn}>
+                          <Text style={styles.inputLabel}>Birthday</Text>
+                          <View style={styles.customDatePickerContainer}>
+                            <TouchableOpacity 
+                              activeOpacity={0.8}
+                              style={styles.dateInputBox}
+                              onPress={() => showDatePicker(pet.id, 'birthday')}
+                            >
+                              <Text style={[
+                                styles.dateInputText, 
+                                !editedPetData.birthday && styles.placeholderText
+                              ]}>
+                                {editedPetData.birthday || 'MM-DD-YYYY'}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.calendarButton}
+                              onPress={() => showDatePicker(pet.id, 'birthday')}
+                              activeOpacity={0.7}
+                            >
+                              <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.primary} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <View style={styles.detailColumn}>
+                          <Text style={styles.inputLabel}>Animal Type</Text>
+                          <TextInput
+                            style={styles.editInput}
+                            value={editedPetData.type || ''}
+                            onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
+                            placeholder="Enter type"
+                            placeholderTextColor={theme.colors.placeholder}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <Image 
+                    source={require('../../../assets/default-pet-image.png')}
+                    style={styles.petPhoto}
+                  />
+                  <View style={styles.petInfo}>
+                    <Text style={styles.petName}>{petName}</Text>
+                    <View style={styles.petDetailsContainer}>
+                      <Text style={styles.petDetails}>
+                        {petBreed ? petBreed : 'No breed'} • {petBirthday} • {petType ? petType : 'No type'}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+            <View style={styles.petActions}>
+              {!isEditing ? (
+                <>
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={() => handleEditPet(pet.id)}
+                  >
+                    <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={() => togglePetDetails(pet.id)}
+                  >
+                    <MaterialCommunityIcons 
+                      name={isExpanded ? "chevron-up" : "chevron-down"} 
+                      size={24} 
+                      color={theme.colors.text}
+                    />
+                  </TouchableOpacity>
+                </>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+
+          {isExpanded && (
+            <View style={[styles.expandedDetails, { backgroundColor: theme.colors.surfaceContrast }]}>
+              <View style={styles.detailRow}>
+                <View style={styles.detailColumn}>
+                  <Text style={styles.detailTitle}>Feeding Instructions</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={styles.editInput}
+                      value={editedPetData.feedingInstructions || ''}
+                      onChangeText={(text) => handleEditChange(pet.id, 'feedingInstructions', text)}
+                      placeholder="Enter feeding instructions"
+                      placeholderTextColor={theme.colors.placeholder}
+                      multiline
+                    />
+                  ) : (
+                    <Text style={styles.detailText}>{pet.feedingInstructions || '2 cups of dry food twice daily (morning/evening)'}</Text>
+                  )}
+                </View>
+                <View style={styles.detailColumn}>
+                  <Text style={styles.detailTitle}>Medical Notes</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={styles.editInput}
+                      value={editedPetData.medicalNotes || ''}
+                      onChangeText={(text) => handleEditChange(pet.id, 'medicalNotes', text)}
+                      placeholder="Enter medical notes"
+                      placeholderTextColor={theme.colors.placeholder}
+                      multiline
+                    />
+                  ) : (
+                    <Text style={styles.detailText}>{pet.medicalNotes || 'Hip dysplasia, daily joint supplement in AM meal'}</Text>
                   )}
                 </View>
               </View>
-            ) : (
-              <>
-                <Image 
-                  source={require('../../../assets/default-pet-image.png')}
-                  style={styles.petPhoto}
-                />
-                <View style={styles.petInfo}>
-                  <Text style={styles.petName}>{pet.name}</Text>
-                  <View style={styles.petDetailsContainer}>
-                    <Text style={styles.petDetails}>
-                      {pet.breed} • {pet.birthday ? pet.birthday : 'No birthday set'} • {pet.type}
-                    </Text>
-                  </View>
-                </View>
-              </>
-            )}
-          </View>
-          <View style={styles.petActions}>
-            {!isEditing ? (
-              <>
-                <TouchableOpacity 
-                  style={styles.editButton}
-                  onPress={() => handleEditPet(pet.id)}
-                >
-                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.editButton}
-                  onPress={() => togglePetDetails(pet.id)}
-                >
-                  <MaterialCommunityIcons 
-                    name={isExpanded ? "chevron-up" : "chevron-down"} 
-                    size={24} 
-                    color={theme.colors.text}
-                  />
-                </TouchableOpacity>
-              </>
-            ) : null}
-          </View>
-        </TouchableOpacity>
-
-        {isExpanded && (
-          <View style={[styles.expandedDetails, { backgroundColor: theme.colors.surfaceContrast }]}>
-            <View style={styles.detailRow}>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailTitle}>Feeding Instructions</Text>
-                {isEditing ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedPetData.feedingInstructions || ''}
-                    onChangeText={(text) => handleEditChange(pet.id, 'feedingInstructions', text)}
-                    placeholder="Enter feeding instructions"
-                    placeholderTextColor={theme.colors.placeholder}
-                    multiline
-                  />
-                ) : (
-                  <Text style={styles.detailText}>{pet.feedingInstructions || '2 cups of dry food twice daily (morning/evening)'}</Text>
-                )}
-              </View>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailTitle}>Medical Notes</Text>
-                {isEditing ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedPetData.medicalNotes || ''}
-                    onChangeText={(text) => handleEditChange(pet.id, 'medicalNotes', text)}
-                    placeholder="Enter medical notes"
-                    placeholderTextColor={theme.colors.placeholder}
-                    multiline
-                  />
-                ) : (
-                  <Text style={styles.detailText}>{pet.medicalNotes || 'Hip dysplasia, daily joint supplement in AM meal'}</Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.detailRow}>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailTitle}>Potty Break Schedule</Text>
-                {isEditing ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedPetData.pottyBreakSchedule || ''}
-                    onChangeText={(text) => handleEditChange(pet.id, 'pottyBreakSchedule', text)}
-                    placeholder="Enter potty break schedule"
-                    placeholderTextColor={theme.colors.placeholder}
-                    multiline
-                  />
-                ) : (
-                  <Text style={styles.detailText}>{pet.pottyBreakSchedule || '15 minutes after each meal'}</Text>
-                )}
-              </View>
-              <View style={styles.detailColumn}>
-                <Text style={styles.detailTitle}>Special Care Instructions</Text>
-                {isEditing ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedPetData.specialCareInstructions || ''}
-                    onChangeText={(text) => handleEditChange(pet.id, 'specialCareInstructions', text)}
-                    placeholder="Enter special care instructions"
-                    placeholderTextColor={theme.colors.placeholder}
-                    multiline
-                  />
-                ) : (
-                  <Text style={styles.detailText}>{pet.specialCareInstructions || 'Don\'t touch his butt, he will eat your ass'}</Text>
-                )}
-              </View>
-            </View>
-            
-            <View style={styles.detailSection}>
-              {renderSectionHeader(pet.id, "Compatibility & Training", "compatibility")}
-              
-              {isSectionExpanded(pet.id, "compatibility") && (
+              <View style={styles.detailRow}>
                 <View style={styles.detailColumn}>
-                  <View style={styles.compatibilityContainer}>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Friendly with children:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {yesNoOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.childrenFriendly === null && option === "N/A") || 
-                                editedPetData.childrenFriendly === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'childrenFriendly', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.childrenFriendly === null && option === "N/A") || 
-                                editedPetData.childrenFriendly === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnYesNoContainer(pet, 'childrenFriendly')
-                      )}
-                    </View>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Friendly with cats:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {yesNoOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.catFriendly === null && option === "N/A") || 
-                                editedPetData.catFriendly === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'catFriendly', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.catFriendly === null && option === "N/A") || 
-                                editedPetData.catFriendly === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnYesNoContainer(pet, 'catFriendly')
-                      )}
-                    </View>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Friendly with dogs:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {yesNoOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.dogFriendly === null && option === "N/A") || 
-                                editedPetData.dogFriendly === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'dogFriendly', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.dogFriendly === null && option === "N/A") || 
-                                editedPetData.dogFriendly === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnYesNoContainer(pet, 'dogFriendly')
-                      )}
-                    </View>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Spayed/neutered:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {yesNoOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.spayedNeutered === null && option === "N/A") || 
-                                editedPetData.spayedNeutered === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'spayedNeutered', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.spayedNeutered === null && option === "N/A") || 
-                                editedPetData.spayedNeutered === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnYesNoContainer(pet, 'spayedNeutered')
-                      )}
-                    </View>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>House trained:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {yesNoOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.houseTrained === null && option === "N/A") || 
-                                editedPetData.houseTrained === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'houseTrained', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.houseTrained === null && option === "N/A") || 
-                                editedPetData.houseTrained === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnYesNoContainer(pet, 'houseTrained')
-                      )}
-                    </View>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Microchipped:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {yesNoOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.microchipped === null && option === "N/A") || 
-                                editedPetData.microchipped === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'microchipped', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.microchipped === null && option === "N/A") || 
-                                editedPetData.microchipped === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnYesNoContainer(pet, 'microchipped')
-                      )}
-                    </View>
-                  </View>
+                  <Text style={styles.detailTitle}>Potty Break Schedule</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={styles.editInput}
+                      value={editedPetData.pottyBreakSchedule || ''}
+                      onChangeText={(text) => handleEditChange(pet.id, 'pottyBreakSchedule', text)}
+                      placeholder="Enter potty break schedule"
+                      placeholderTextColor={theme.colors.placeholder}
+                      multiline
+                    />
+                  ) : (
+                    <Text style={styles.detailText}>{pet.pottyBreakSchedule || '15 minutes after each meal'}</Text>
+                  )}
                 </View>
-              )}
-            </View>
-            
-            <View style={styles.detailSection}>
-              {renderSectionHeader(pet.id, "Care Information", "careInfo")}
-              
-              {isSectionExpanded(pet.id, "careInfo") && (
                 <View style={styles.detailColumn}>
-                  <View style={styles.careInfoContainer}>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Energy level:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {energyLevelOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.energyLevel === null && option === "N/A") || 
-                                editedPetData.energyLevel === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'energyLevel', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.energyLevel === null && option === "N/A") || 
-                                editedPetData.energyLevel === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnEnergyLevelContainer(pet)
-                      )}
-                    </View>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Can be left alone:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {yesNoOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                (editedPetData.canBeLeftAlone === null && option === "N/A") || 
-                                editedPetData.canBeLeftAlone === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'canBeLeftAlone', option === "N/A" ? null : option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                (editedPetData.canBeLeftAlone === null && option === "N/A") || 
-                                editedPetData.canBeLeftAlone === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        returnYesNoContainer(pet, 'canBeLeftAlone')
-                      )}
-                    </View>
-                    <View style={styles.compatibilityItem}>
-                      <Text style={styles.compatibilityLabel}>Weight (lbs):</Text>
-                      {isEditing ? (
-                        <TextInput
-                          style={styles.editInputWeight}
-                          value={editedPetData.weight || ''}
-                          onChangeText={(text) => {
-                            // Only allow numbers and decimal point
-                            if (/^(\d*\.?\d*)$/.test(text) || text === '') {
-                              handleEditChange(pet.id, 'weight', text);
-                            }
-                          }}
-                          placeholder="Enter weight"
-                          placeholderTextColor={theme.colors.placeholder}
-                          keyboardType="numeric"
-                        />
-                      ) : (
-                        <Text style={styles.vetInfoText}>{pet.weight || 'Not specified'}</Text>
-                      )}
-                    </View>
-                    <View style={styles.medicationsContainer}>
-                      <Text style={styles.compatibilityLabel}>Medications:</Text>
-                      {isEditing ? (
-                        <TextInput
-                          style={styles.editInputMedications}
-                          value={editedPetData.medications || ''}
-                          onChangeText={(text) => handleEditChange(pet.id, 'medications', text)}
-                          placeholder="Enter medications"
-                          placeholderTextColor={theme.colors.placeholder}
-                          multiline
-                        />
-                      ) : (
-                        <Text style={styles.medicationsText}>{pet.medications || 'None'}</Text>
-                      )}
-                    </View>
-                  </View>
+                  <Text style={styles.detailTitle}>Special Care Instructions</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={styles.editInput}
+                      value={editedPetData.specialCareInstructions || ''}
+                      onChangeText={(text) => handleEditChange(pet.id, 'specialCareInstructions', text)}
+                      placeholder="Enter special care instructions"
+                      placeholderTextColor={theme.colors.placeholder}
+                      multiline
+                    />
+                  ) : (
+                    <Text style={styles.detailText}>{pet.specialCareInstructions || 'Don\'t touch his butt, he will eat your ass'}</Text>
+                  )}
                 </View>
-              )}
-            </View>
-            
-            <View style={styles.detailSection}>
-              {renderSectionHeader(pet.id, "Vet Information", "vetInfo")}
+              </View>
               
-              {isSectionExpanded(pet.id, "vetInfo") && (
-                <View style={styles.detailColumn}>
-                  <View style={styles.vetInfoContainer}>
-                    <View style={styles.vetInfoItem}>
-                      <Text style={styles.vetInfoLabel}>Vet name:</Text>
-                      {isEditing ? (
-                        <TextInput
-                          style={styles.editInputShort}
-                          value={editedPetData.vetName || ''}
-                          onChangeText={(text) => handleEditChange(pet.id, 'vetName', text)}
-                          placeholder="Enter vet name"
-                          placeholderTextColor={theme.colors.placeholder}
-                        />
-                      ) : (
-                        <Text style={styles.vetInfoText}>{pet.vetName || 'None'}</Text>
-                      )}
-                    </View>
-                    <View style={styles.vetInfoItem}>
-                      <Text style={styles.vetInfoLabel}>Vet address:</Text>
-                      {isEditing ? (
-                        <TextInput
-                          style={styles.editInputShort}
-                          value={editedPetData.vetAddress || ''}
-                          onChangeText={(text) => handleEditChange(pet.id, 'vetAddress', text)}
-                          placeholder="Enter vet address"
-                          placeholderTextColor={theme.colors.placeholder}
-                        />
-                      ) : (
-                        <Text style={styles.vetInfoText}>{pet.vetAddress || 'None'}</Text>
-                      )}
-                    </View>
-                    <View style={styles.vetInfoItem}>
-                      <Text style={styles.vetInfoLabel}>Vet phone:</Text>
-                      {isEditing ? (
-                        <TextInput
-                          style={styles.editInputShort}
-                          value={editedPetData.vetPhone || ''}
-                          onChangeText={(text) => handleEditChange(pet.id, 'vetPhone', text)}
-                          placeholder="Enter vet phone"
-                          placeholderTextColor={theme.colors.placeholder}
-                          keyboardType="phone-pad"
-                        />
-                      ) : (
-                        <Text style={styles.vetInfoText}>{pet.vetPhone || 'None'}</Text>
-                      )}
-                    </View>
-                    <View style={styles.vetInfoItem}>
-                      <Text style={styles.vetInfoLabel}>Insurance provider:</Text>
-                      {isEditing ? (
-                        <TextInput
-                          style={styles.editInputShort}
-                          value={editedPetData.insuranceProvider || ''}
-                          onChangeText={(text) => handleEditChange(pet.id, 'insuranceProvider', text)}
-                          placeholder="Enter insurance provider"
-                          placeholderTextColor={theme.colors.placeholder}
-                        />
-                      ) : (
-                        <Text style={styles.vetInfoText}>{pet.insuranceProvider || 'Not specified'}</Text>
-                      )}
-                    </View>
-                    <View style={styles.vetInfoItem}>
-                      <Text style={styles.vetInfoLabel}>Sex:</Text>
-                      {isEditing ? (
-                        <View style={styles.dropdownContainerEdit}>
-                          {sexOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.optionButton,
-                                editedPetData.sex === option ? styles.selectedOption : null
-                              ]}
-                              onPress={() => handleEditChange(pet.id, 'sex', option)}
-                            >
-                              <Text style={[
-                                styles.optionText,
-                                editedPetData.sex === option ? styles.selectedOptionText : null
-                              ]}>
-                                {option}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : (
-                        <Text style={styles.vetInfoText}>{pet.sex || 'None Selected'}</Text>
-                      )}
-                    </View>
-                    <View style={styles.vetInfoItem}>
-                      <Text style={styles.vetInfoLabel}>Adoption Date:</Text>
-                      {isEditing ? (
-                        <View style={styles.customDatePickerContainer}>
-                          <TouchableOpacity 
-                            activeOpacity={0.8}
-                            style={styles.dateInputBox}
-                            onPress={() => showDatePicker(pet.id, 'adoptionDate')}
-                          >
-                            <Text style={[
-                              styles.dateInputText, 
-                              !editedPetData.adoptionDate && styles.placeholderText
-                            ]}>
-                              {editedPetData.adoptionDate || 'MM-DD-YYYY'}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={styles.calendarButton}
-                            onPress={() => showDatePicker(pet.id, 'adoptionDate')}
-                            activeOpacity={0.7}
-                          >
-                            <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <Text style={styles.vetInfoText}>{pet.adoptionDate || 'Not specified'}</Text>
-                      )}
-                    </View>
-                    <View style={styles.vetInfoItem}>
-                      <Text style={styles.vetInfoLabel}>Vet documents:</Text>
-                      {isEditing ? (
-                        <View style={styles.documentActionContainer}>
-                          <TouchableOpacity 
-                            style={styles.uploadButton}
-                            onPress={() => handleUploadDocument(pet.id)}
-                          >
-                            <MaterialCommunityIcons name="upload" size={16} color={theme.colors.background} />
-                            <Text style={styles.uploadButtonText}>Upload</Text>
-                          </TouchableOpacity>
-                          {renderVetDocuments(editedPetData.vetDocuments)}
-                        </View>
-                      ) : (
-                        <TouchableOpacity style={styles.documentButton}>
-                          <MaterialCommunityIcons name="file-document-outline" size={16} color={theme.colors.primary} />
-                          <Text style={styles.documentButtonText}>View documents</Text>
-                        </TouchableOpacity>
-                      )}
+              <View style={styles.detailSection}>
+                {renderSectionHeader(pet.id, "Care Information", "careInfo")}
+                
+                {isSectionExpanded(pet.id, "careInfo") && (
+                  <View style={styles.detailColumn}>
+                    <View style={styles.careInfoContainer}>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Energy level:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {energyLevelOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.energyLevel === null && option === "N/A") || 
+                                  editedPetData.energyLevel === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'energyLevel', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.energyLevel === null && option === "N/A") || 
+                                  editedPetData.energyLevel === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnEnergyLevelContainer(pet)
+                        )}
+                      </View>
+                      
+                      {/* Removing duplicate "Can be left alone" section as it's already in the Compatibility & Training section */}
+                      
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Weight (lbs):</Text>
+                        {isEditing ? (
+                          <TextInput
+                            style={styles.editInputWeight}
+                            value={editedPetData.weight || ''}
+                            onChangeText={(text) => {
+                              // Only allow numbers and decimal point
+                              if (/^(\d*\.?\d*)$/.test(text) || text === '') {
+                                handleEditChange(pet.id, 'weight', text);
+                              }
+                            }}
+                            placeholder="Enter weight"
+                            placeholderTextColor={theme.colors.placeholder}
+                            keyboardType="numeric"
+                          />
+                        ) : (
+                          <Text style={styles.vetInfoText}>{pet.weight || 'Not specified'}</Text>
+                        )}
+                      </View>
+                      <View style={styles.medicationsContainer}>
+                        <Text style={styles.compatibilityLabel}>Medications:</Text>
+                        {isEditing ? (
+                          <TextInput
+                            style={styles.editInputMedications}
+                            value={typeof editedPetData.medications === 'string' ? editedPetData.medications : ''}
+                            onChangeText={(text) => handleEditChange(pet.id, 'medications', text)}
+                            placeholder="Enter medications"
+                            placeholderTextColor={theme.colors.placeholder}
+                            multiline
+                          />
+                        ) : (
+                          <Text style={styles.medicationsText}>
+                            {typeof pet.medications === 'string' ? pet.medications : 
+                             (pet.medications === null ? 'None' : 
+                              (typeof pet.medications === 'object' ? 'None' : String(pet.medications)))}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </View>
-                </View>
-              )}
+                )}
+              </View>
+              
+              <View style={styles.detailSection}>
+                {renderSectionHeader(pet.id, "Compatibility & Training", "compatibility")}
+                
+                {isSectionExpanded(pet.id, "compatibility") && (
+                  <View style={styles.detailColumn}>
+                    <View style={styles.compatibilityContainer}>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Friendly with children:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {yesNoOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.childrenFriendly === null && option === "N/A") || 
+                                  editedPetData.childrenFriendly === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'childrenFriendly', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.childrenFriendly === null && option === "N/A") || 
+                                  editedPetData.childrenFriendly === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnYesNoContainer(pet, 'childrenFriendly')
+                        )}
+                      </View>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Friendly with cats:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {yesNoOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.catFriendly === null && option === "N/A") || 
+                                  editedPetData.catFriendly === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'catFriendly', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.catFriendly === null && option === "N/A") || 
+                                  editedPetData.catFriendly === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnYesNoContainer(pet, 'catFriendly')
+                        )}
+                      </View>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Friendly with dogs:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {yesNoOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.dogFriendly === null && option === "N/A") || 
+                                  editedPetData.dogFriendly === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'dogFriendly', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.dogFriendly === null && option === "N/A") || 
+                                  editedPetData.dogFriendly === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnYesNoContainer(pet, 'dogFriendly')
+                        )}
+                      </View>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Spayed/neutered:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {yesNoOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.spayedNeutered === null && option === "N/A") || 
+                                  editedPetData.spayedNeutered === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'spayedNeutered', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.spayedNeutered === null && option === "N/A") || 
+                                  editedPetData.spayedNeutered === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnYesNoContainer(pet, 'spayedNeutered')
+                        )}
+                      </View>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>House trained:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {yesNoOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.houseTrained === null && option === "N/A") || 
+                                  editedPetData.houseTrained === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'houseTrained', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.houseTrained === null && option === "N/A") || 
+                                  editedPetData.houseTrained === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnYesNoContainer(pet, 'houseTrained')
+                        )}
+                      </View>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Microchipped:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {yesNoOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.microchipped === null && option === "N/A") || 
+                                  editedPetData.microchipped === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'microchipped', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.microchipped === null && option === "N/A") || 
+                                  editedPetData.microchipped === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnYesNoContainer(pet, 'microchipped')
+                        )}
+                      </View>
+                      <View style={styles.compatibilityItem}>
+                        <Text style={styles.compatibilityLabel}>Can be left alone:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {yesNoOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  (editedPetData.canBeLeftAlone === null && option === "N/A") || 
+                                  editedPetData.canBeLeftAlone === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'canBeLeftAlone', option === "N/A" ? null : option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  (editedPetData.canBeLeftAlone === null && option === "N/A") || 
+                                  editedPetData.canBeLeftAlone === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          returnYesNoContainer(pet, 'canBeLeftAlone')
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </View>
+              
+              <View style={styles.detailSection}>
+                {renderSectionHeader(pet.id, "Vet Information", "vetInfo")}
+                
+                {isSectionExpanded(pet.id, "vetInfo") && (
+                  <View style={styles.detailColumn}>
+                    <View style={styles.vetInfoContainer}>
+                      <View style={styles.vetInfoItem}>
+                        <Text style={styles.vetInfoLabel}>Vet name:</Text>
+                        {isEditing ? (
+                          <TextInput
+                            style={styles.editInputShort}
+                            value={editedPetData.vetName || ''}
+                            onChangeText={(text) => handleEditChange(pet.id, 'vetName', text)}
+                            placeholder="Enter vet name"
+                            placeholderTextColor={theme.colors.placeholder}
+                          />
+                        ) : (
+                          <Text style={styles.vetInfoText}>{pet.vetName || 'None'}</Text>
+                        )}
+                      </View>
+                      <View style={styles.vetInfoItem}>
+                        <Text style={styles.vetInfoLabel}>Vet address:</Text>
+                        {isEditing ? (
+                          <TextInput
+                            style={styles.editInputShort}
+                            value={editedPetData.vetAddress || ''}
+                            onChangeText={(text) => handleEditChange(pet.id, 'vetAddress', text)}
+                            placeholder="Enter vet address"
+                            placeholderTextColor={theme.colors.placeholder}
+                          />
+                        ) : (
+                          <Text style={styles.vetInfoText}>{pet.vetAddress || 'None'}</Text>
+                        )}
+                      </View>
+                      <View style={styles.vetInfoItem}>
+                        <Text style={styles.vetInfoLabel}>Vet phone:</Text>
+                        {isEditing ? (
+                          <TextInput
+                            style={styles.editInputShort}
+                            value={editedPetData.vetPhone || ''}
+                            onChangeText={(text) => handleEditChange(pet.id, 'vetPhone', text)}
+                            placeholder="Enter vet phone"
+                            placeholderTextColor={theme.colors.placeholder}
+                            keyboardType="phone-pad"
+                          />
+                        ) : (
+                          <Text style={styles.vetInfoText}>{pet.vetPhone || 'None'}</Text>
+                        )}
+                      </View>
+                      <View style={styles.vetInfoItem}>
+                        <Text style={styles.vetInfoLabel}>Insurance provider:</Text>
+                        {isEditing ? (
+                          <TextInput
+                            style={styles.editInputShort}
+                            value={editedPetData.insuranceProvider || ''}
+                            onChangeText={(text) => handleEditChange(pet.id, 'insuranceProvider', text)}
+                            placeholder="Enter insurance provider"
+                            placeholderTextColor={theme.colors.placeholder}
+                          />
+                        ) : (
+                          <Text style={styles.vetInfoText}>{pet.insuranceProvider || 'Not specified'}</Text>
+                        )}
+                      </View>
+                      <View style={styles.vetInfoItem}>
+                        <Text style={styles.vetInfoLabel}>Sex:</Text>
+                        {isEditing ? (
+                          <View style={styles.dropdownContainerEdit}>
+                            {sexOptions.map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.optionButton,
+                                  editedPetData.sex === option ? styles.selectedOption : null
+                                ]}
+                                onPress={() => handleEditChange(pet.id, 'sex', option)}
+                              >
+                                <Text style={[
+                                  styles.optionText,
+                                  editedPetData.sex === option ? styles.selectedOptionText : null
+                                ]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={styles.vetInfoText}>{pet.sex || 'None Selected'}</Text>
+                        )}
+                      </View>
+                      <View style={styles.vetInfoItem}>
+                        <Text style={styles.vetInfoLabel}>Adoption Date:</Text>
+                        {isEditing ? (
+                          <View style={styles.customDatePickerContainer}>
+                            <TouchableOpacity 
+                              activeOpacity={0.8}
+                              style={styles.dateInputBox}
+                              onPress={() => showDatePicker(pet.id, 'adoptionDate')}
+                            >
+                              <Text style={[
+                                styles.dateInputText, 
+                                !editedPetData.adoptionDate && styles.placeholderText
+                              ]}>
+                                {editedPetData.adoptionDate || 'MM-DD-YYYY'}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.calendarButton}
+                              onPress={() => showDatePicker(pet.id, 'adoptionDate')}
+                              activeOpacity={0.7}
+                            >
+                              <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.primary} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <Text style={styles.vetInfoText}>{pet.adoptionDate || 'Not specified'}</Text>
+                        )}
+                      </View>
+                      <View style={styles.vetInfoItem}>
+                        <Text style={styles.vetInfoLabel}>Vet documents:</Text>
+                        {isEditing ? (
+                          <View style={styles.documentActionContainer}>
+                            <TouchableOpacity 
+                              style={styles.uploadButton}
+                              onPress={() => handleUploadDocument(pet.id)}
+                            >
+                              <MaterialCommunityIcons name="upload" size={16} color={theme.colors.background} />
+                              <Text style={styles.uploadButtonText}>Upload</Text>
+                            </TouchableOpacity>
+                            {renderVetDocuments(editedPetData.vetDocuments)}
+                          </View>
+                        ) : (
+                          <TouchableOpacity style={styles.documentButton}>
+                            <MaterialCommunityIcons name="file-document-outline" size={16} color={theme.colors.primary} />
+                            <Text style={styles.documentButtonText}>View documents</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-        )}
-      </View>
-    );
+          )}
+        </View>
+      );
+    } catch (error) {
+      console.error("Error rendering pet card: " + (error.message || "Unknown error"));
+      return null; // Return null on error to prevent crashes
+    }
   };
 
   const handleAddEmergencyContact = () => {

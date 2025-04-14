@@ -18,10 +18,10 @@ export const setDebugEnabled = (enabled) => {
   debugEnabled = enabled;
 };
 
-export const debugLog = (message, data = null) => {
+export const debugLog = (message, ...data) => {
   if (debugEnabled) {
-    if (data) {
-      console.log(`${message}:`, data);
+    if (data.length > 0) {
+      console.log(`${message}:`, ...data);
     } else {
       console.log(`${message}`);
     }
