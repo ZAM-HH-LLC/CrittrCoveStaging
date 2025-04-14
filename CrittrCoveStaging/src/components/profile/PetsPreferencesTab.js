@@ -5,6 +5,7 @@ import { theme } from '../../styles/theme';
 import { debugLog } from '../../context/AuthContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { addPet, updatePet, fixPetOwner } from '../../api/API';
+import { useToast } from '../../components/ToastProvider';
 
 const PetsPreferencesTab = ({
   pets = [],
@@ -40,12 +41,7 @@ const PetsPreferencesTab = ({
   const [displayMonth, setDisplayMonth] = useState(new Date().getMonth());
   const [displayYear, setDisplayYear] = useState(new Date().getFullYear());
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
-  const [errorModal, setErrorModal] = useState({
-    visible: false,
-    title: '',
-    message: '',
-    isSuccess: false
-  });
+  const toast = useToast();
 
   // Add this new variable to track if a save operation is in progress
   const [savingPet, setSavingPet] = useState(false);
@@ -172,23 +168,16 @@ const PetsPreferencesTab = ({
     try {
       debugLog("MBA456", "Attempting to fix pet with ID:", petId);
       
-      // Show fixing modal
-      setErrorModal({
-        visible: true,
-        title: "Fixing Pet...",
-        message: "Attempting to repair pet data. Please wait..."
+      // Show fixing toast
+      toast({
+        message: "Attempting to repair pet data. Please wait...",
+        type: 'info',
+        duration: 3000
       });
       
       // Call the fix pet owner API
       const response = await fixPetOwner(petId);
       debugLog("MBA456", "Successfully fixed pet owner:", response);
-      
-      // Close the fixing modal
-      setErrorModal({
-        visible: false,
-        title: "",
-        message: ""
-      });
       
       // Update the pet data with the fixed pet info
       if (response && response.pet) {
@@ -212,19 +201,19 @@ const PetsPreferencesTab = ({
           
           // Update the pet in the parent component
           onEditPet(petId, updatedPet);
+          
+          // Show success toast
+          toast({
+            message: "The pet's owner has been restored. You should now be able to edit this pet normally.",
+            type: 'success',
+            duration: 5000
+          });
         }
       }
-      
-      // Show success modal
-      setErrorModal({
-        visible: true,
-        title: "Pet Fixed Successfully",
-        message: "The pet's owner has been restored. You should now be able to edit this pet normally.\n\nIf you still encounter issues, please try refreshing the page or contact support."
-      });
     } catch (error) {
       debugLog("MBA456", "Error fixing pet:", error);
       
-      // Show error modal
+      // Show error toast
       let errorMessage = "There was a problem fixing the pet. Please try again or contact support.";
       
       if (error.response && error.response.data) {
@@ -233,10 +222,10 @@ const PetsPreferencesTab = ({
         }
       }
       
-      setErrorModal({
-        visible: true,
-        title: "Failed to Fix Pet",
-        message: errorMessage + "\n\nYou can try again by:\n1. Refreshing the page\n2. Logging out and back in\n3. Contacting support if the issue persists"
+      toast({
+        message: errorMessage,
+        type: 'error',
+        duration: 5000
       });
     }
   };
@@ -312,7 +301,6 @@ const PetsPreferencesTab = ({
       const isNewPet = String(petId).startsWith('temp_');
       debugLog("MBA5555", "SAVE PET - Is this a new pet?", isNewPet);
       
-      // Create a variable to track if we need to show a success modal
       let successMessage = "";
       
       if (isNewPet) {
@@ -353,6 +341,13 @@ const PetsPreferencesTab = ({
             // Set success message
             successMessage = `Pet "${updatedPetData.name}" was successfully created!`;
             
+            // Show success toast
+            toast({
+              message: successMessage,
+              type: 'success',
+              duration: 3000
+            });
+            
             // Reset all editing state for this pet
             setEditingPetIds(prev => {
               const newSet = new Set(prev);
@@ -378,8 +373,8 @@ const PetsPreferencesTab = ({
           debugLog("MBA5555", "SAVE PET - API error adding pet:", apiError);
           setSavingPet(false); // Reset saving flag
           
-          // Show error modal with details from the API error
-          showErrorModal("Failed to Create Pet", apiError);
+          // Show error message with details from the API error
+          showErrorMessage("Failed to Create Pet", apiError);
           return; // Exit the function early to prevent further processing
         }
       } else {
@@ -410,6 +405,13 @@ const PetsPreferencesTab = ({
             // Set success message
             successMessage = `Pet "${updatedPetData.name}" was successfully updated!`;
             
+            // Show success toast
+            toast({
+              message: successMessage,
+              type: 'success',
+              duration: 3000
+            });
+            
             // Reset editing state for this pet
             setEditingPetIds(prev => {
               const newSet = new Set(prev);
@@ -428,24 +430,14 @@ const PetsPreferencesTab = ({
         } catch (apiError) {
           debugLog("MBA5555", "SAVE PET - API error updating pet:", apiError);
           
-          // Show error modal with details from the API error
-          showErrorModal("Failed to Update Pet", apiError);
+          // Show error message with details from the API error
+          showErrorMessage("Failed to Update Pet", apiError);
           setSavingPet(false); // Reset saving flag
           return; // Exit early
         }
       }
       
-      // Show success modal if we have a success message and success modals are enabled
-      if (successMessage && showSuccessModals) {
-        setErrorModal({
-          visible: true,
-          title: "Success",
-          message: successMessage,
-          isSuccess: true // Add a flag to style the modal differently for success
-        });
-      }
-      
-      // After all operations complete, reset saving flag
+      // Reset saving flag
       setTimeout(() => {
         setSavingPet(false);
         debugLog("MBA5555", "SAVE PET - Final state after all operations:", pets.map(p => ({id: p.id, name: p.name || 'unnamed'})));
@@ -454,8 +446,8 @@ const PetsPreferencesTab = ({
       debugLog("MBA5555", "SAVE PET - Unexpected error saving pet:", error);
       setSavingPet(false); // Reset saving flag even on error
       
-      // Show generic error modal for unexpected errors
-      showErrorModal("Failed to Save Pet", error);
+      // Show generic error message for unexpected errors
+      showErrorMessage("Failed to Save Pet", error);
     }
   };
   
@@ -578,8 +570,9 @@ const PetsPreferencesTab = ({
     });
     
     // Now add the new pet to the existing pets array via the parent component
-    debugLog("MBA5555", "ADD PET - Calling onAddPet with new pet");
-    onAddPet(newPet);
+    // Adding at the top of the list instead of the bottom
+    debugLog("MBA5555", "ADD PET - Calling onAddPet with new pet (adding to top of list)");
+    onAddPet({...newPet, _addToTop: true});
     
     // After everything is done, log the current state
     setTimeout(() => {
@@ -589,33 +582,37 @@ const PetsPreferencesTab = ({
 
   const handleUploadDocument = async (petId) => {
     try {
-      // For web compatibility, we just simulate document upload
-      if (Platform.OS === 'web') {
-        debugLog("MBA456", "Web document upload simulated");
-        // Simulate a document being selected
-        const mockDocument = {
-          name: `Document_${new Date().getTime()}.pdf`,
-          size: 1024 * 1024 * 2, // 2MB
-          type: 'application/pdf'
-        };
-        
-        setEditedPetsData(prev => ({
-          ...prev,
-          [petId]: {
-            ...(prev[petId] || {}),
-            vetDocuments: [...(prev[petId]?.vetDocuments || []), mockDocument]
-          }
-        }));
-        return;
-      }
-
-      // This code would only run on native platforms where the module is available
-      debugLog("MBA456", "Native document picker would be triggered here");
-      alert("Document upload feature will be available soon on this platform");
+      debugLog("MBA456", "Document upload simulated");
+      // Simulate a document being selected
+      const mockDocument = {
+        name: `Document_${new Date().getTime()}.pdf`,
+        size: 1024 * 1024 * 2, // 2MB
+        type: 'application/pdf'
+      };
       
-      // When actual document picker is implemented, we would update the state here
+      setEditedPetsData(prev => ({
+        ...prev,
+        [petId]: {
+          ...(prev[petId] || {}),
+          vetDocuments: [...(prev[petId]?.vetDocuments || []), mockDocument]
+        }
+      }));
+      
+      // Show a toast notification
+      toast({
+        message: "Document added successfully. Full document upload feature coming soon.",
+        type: 'info',
+        duration: 3000
+      });
     } catch (error) {
       debugLog("MBA456", "Error with document upload", error);
+      
+      // Show error toast notification
+      toast({
+        message: "Failed to add document",
+        type: 'error',
+        duration: 3000
+      });
     }
   };
 
@@ -650,14 +647,16 @@ const PetsPreferencesTab = ({
     setExpandedSections(prev => {
       const key = `${petId}-${sectionName}`;
       const newState = { ...prev };
-      newState[key] = !prev[key];
+      // Check if the key exists and is a boolean value, default to false if not
+      const currentValue = typeof prev[key] === 'boolean' ? prev[key] : false;
+      newState[key] = !currentValue;
       return newState;
     });
   };
 
   const isSectionExpanded = (petId, sectionName) => {
     const key = `${petId}-${sectionName}`;
-    // Default to false (closed) for initial view
+    // Default to false (closed) for initial view or non-boolean values
     return expandedSections[key] === true;
   };
 
@@ -1830,8 +1829,8 @@ const PetsPreferencesTab = ({
     );
   };
 
-  // Helper function to show error modals with consistent formatting
-  const showErrorModal = (title, error) => {
+  // Helper function to show error toasts with consistent formatting
+  const showErrorMessage = (title, error) => {
     let errorMessage = "There was a problem with this operation. Please try again.";
     
     // Check if we have more specific error details from the API
@@ -1839,10 +1838,10 @@ const PetsPreferencesTab = ({
       const details = error.response.data.details;
       if (details) {
         // Build a more specific error message
-        errorMessage = "Error details:\n";
+        errorMessage = "Error details: ";
         
         Object.keys(details).forEach(field => {
-          errorMessage += `- ${field}: ${details[field].join(", ")}\n`;
+          errorMessage += `${field}: ${details[field].join(", ")}`;
         });
       } else if (error.response.data.error) {
         errorMessage = error.response.data.error;
@@ -1851,72 +1850,13 @@ const PetsPreferencesTab = ({
       errorMessage = error.message;
     }
     
-    setErrorModal({
-      visible: true,
-      title: title,
-      message: errorMessage,
-      isSuccess: false
+    toast({
+      message: `${title}: ${errorMessage}`,
+      type: 'error',
+      duration: 5000
     });
   };
 
-  // Update the renderErrorModal function to show different styles for success vs error
-  const renderErrorModal = () => {
-    return (
-      <Modal
-        visible={errorModal.visible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setErrorModal(prev => ({ ...prev, visible: false }))}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[
-            styles.errorModalContent,
-            errorModal.isSuccess && styles.successModalContent
-          ]}>
-            <View style={[
-              styles.errorModalHeader, 
-              errorModal.isSuccess && styles.successModalHeader
-            ]}>
-              <Text style={[
-                styles.errorModalTitle,
-                errorModal.isSuccess && styles.successModalTitle
-              ]}>
-                {errorModal.title}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setErrorModal(prev => ({ ...prev, visible: false }))}
-                style={styles.closeButton}
-              >
-                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[
-              styles.errorModalMessage,
-              errorModal.isSuccess && styles.successModalMessage
-            ]}>
-              {errorModal.message}
-            </Text>
-            
-            <TouchableOpacity 
-              style={[
-                styles.errorModalButton,
-                errorModal.isSuccess && styles.successModalButton
-              ]}
-              onPress={() => setErrorModal(prev => ({ ...prev, visible: false }))}
-            >
-              <Text style={[
-                styles.errorModalButtonText,
-                errorModal.isSuccess && styles.successModalButtonText
-              ]}>
-                OK
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
 
   // New helper function to replace a temporary pet with a real one in a single operation
   const replaceTempPetWithReal = (tempPetId, realPetData) => {
@@ -1982,7 +1922,6 @@ const PetsPreferencesTab = ({
   return (
     <ScrollView style={styles.container}>
       {renderDatePickerModal()}
-      {renderErrorModal()}
       <View style={[styles.section, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Pets</Text>

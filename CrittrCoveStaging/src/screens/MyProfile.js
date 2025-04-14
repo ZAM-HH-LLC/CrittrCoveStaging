@@ -60,79 +60,80 @@ const MyProfile = () => {
     completeTutorial,
   } = useContext(TutorialContext);
 
+  // Define loadActiveTab at component level so it's accessible throughout the component
+  const loadActiveTab = async () => {
+    try {
+      // First, check URL parameters directly when on web
+      if (Platform.OS === 'web') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabFromUrl = urlParams.get('initialTab') || urlParams.get('screen');
+        
+        if (tabFromUrl && ['profile_info', 'pets_preferences', 'settings_payments', 'services_availability'].includes(tabFromUrl)) {
+          debugLog('MBA54321 MyProfile retrieved tab from URL params', { tabFromUrl });
+          setActiveTab(tabFromUrl);
+          // Store this tab in storage for persistence
+          sessionStorage.setItem('myProfileActiveTab', tabFromUrl);
+          return;
+        }
+      }
+      
+      // Then check navigation params
+      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+      debugLog('MBA54321 MyProfile navigation params', params);
+      
+      if (params?.initialTab) {
+        debugLog('MBA54321 MyProfile received initialTab param', { initialTab: params.initialTab });
+        setActiveTab(params.initialTab);
+        // Store in storage
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('myProfileActiveTab', params.initialTab);
+        } else {
+          await AsyncStorage.setItem('myProfileActiveTab', params.initialTab);
+        }
+        return;
+      } else if (params?.screen) {
+        debugLog('MBA54321 MyProfile received screen param', { screen: params.screen });
+        setActiveTab(params.screen);
+        // Store in storage
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('myProfileActiveTab', params.screen);
+        } else {
+          await AsyncStorage.setItem('myProfileActiveTab', params.screen);
+        }
+        return;
+      } else if (stepData?.tab) {
+        debugLog('MBA54321 MyProfile received tab from stepData', { tab: stepData.tab });
+        setActiveTab(stepData.tab);
+        // Store in storage
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('myProfileActiveTab', stepData.tab);
+        } else {
+          await AsyncStorage.setItem('myProfileActiveTab', stepData.tab);
+        }
+        return;
+      }
+      
+      // If we reach here, attempt to load from storage
+      if (Platform.OS === 'web') {
+        const storedTab = sessionStorage.getItem('myProfileActiveTab');
+        if (storedTab) {
+          debugLog('MBA54321 MyProfile loaded tab from sessionStorage', { storedTab });
+          setActiveTab(storedTab);
+        }
+      } else {
+        const storedTab = await AsyncStorage.getItem('myProfileActiveTab');
+        if (storedTab) {
+          debugLog('MBA54321 MyProfile loaded tab from AsyncStorage', { storedTab });
+          setActiveTab(storedTab);
+        }
+      }
+    } catch (error) {
+      debugLog('MBA54321 Error loading active tab', error);
+    }
+  };
+
   // Get initialTab from navigation params
   useEffect(() => {
-    const loadActiveTab = async () => {
-      try {
-        // First, check URL parameters directly when on web
-        if (Platform.OS === 'web') {
-          const urlParams = new URLSearchParams(window.location.search);
-          const tabFromUrl = urlParams.get('initialTab') || urlParams.get('screen');
-          
-          if (tabFromUrl && ['profile_info', 'pets_preferences', 'settings_payments', 'services_availability'].includes(tabFromUrl)) {
-            debugLog('MBA54321 MyProfile retrieved tab from URL params', { tabFromUrl });
-            setActiveTab(tabFromUrl);
-            // Store this tab in storage for persistence
-            sessionStorage.setItem('myProfileActiveTab', tabFromUrl);
-            return;
-          }
-        }
-        
-        // Then check navigation params
-        const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-        debugLog('MBA54321 MyProfile navigation params', params);
-        
-        if (params?.initialTab) {
-          debugLog('MBA54321 MyProfile received initialTab param', { initialTab: params.initialTab });
-          setActiveTab(params.initialTab);
-          // Store in storage
-          if (Platform.OS === 'web') {
-            sessionStorage.setItem('myProfileActiveTab', params.initialTab);
-          } else {
-            await AsyncStorage.setItem('myProfileActiveTab', params.initialTab);
-          }
-          return;
-        } else if (params?.screen) {
-          debugLog('MBA54321 MyProfile received screen param', { screen: params.screen });
-          setActiveTab(params.screen);
-          // Store in storage
-          if (Platform.OS === 'web') {
-            sessionStorage.setItem('myProfileActiveTab', params.screen);
-          } else {
-            await AsyncStorage.setItem('myProfileActiveTab', params.screen);
-          }
-          return;
-        } else if (stepData?.tab) {
-          debugLog('MBA54321 MyProfile received tab from stepData', { tab: stepData.tab });
-          setActiveTab(stepData.tab);
-          // Store in storage
-          if (Platform.OS === 'web') {
-            sessionStorage.setItem('myProfileActiveTab', stepData.tab);
-          } else {
-            await AsyncStorage.setItem('myProfileActiveTab', stepData.tab);
-          }
-          return;
-        }
-        
-        // If we reach here, attempt to load from storage
-        if (Platform.OS === 'web') {
-          const storedTab = sessionStorage.getItem('myProfileActiveTab');
-          if (storedTab) {
-            debugLog('MBA54321 MyProfile loaded tab from sessionStorage', { storedTab });
-            setActiveTab(storedTab);
-          }
-        } else {
-          const storedTab = await AsyncStorage.getItem('myProfileActiveTab');
-          if (storedTab) {
-            debugLog('MBA54321 MyProfile loaded tab from AsyncStorage', { storedTab });
-            setActiveTab(storedTab);
-          }
-        }
-      } catch (error) {
-        debugLog('MBA54321 Error loading active tab', error);
-      }
-    };
-    
     loadActiveTab();
   }, [navigation, stepData]);
 
@@ -404,12 +405,21 @@ const MyProfile = () => {
           <PetsPreferencesTab
             pets={profileData?.pets}
             onAddPet={(newPet) => {
-              // Add the new pet to the local state
-              const updatedPets = [...(profileData?.pets || []), newPet];
+              // Check if the pet should be added to the top of the list
+              const shouldAddToTop = newPet._addToTop;
+              
+              // Remove the _addToTop flag before adding to state
+              const { _addToTop, ...petToAdd } = newPet;
+              
+              // Add the new pet to the local state (at the top or bottom)
+              const updatedPets = shouldAddToTop 
+                ? [petToAdd, ...(profileData?.pets || [])] 
+                : [...(profileData?.pets || []), petToAdd];
+                
               handleUpdateField('pets', updatedPets);
               
               // This will mark that there are unsaved changes
-              debugLog('MBA5432', 'Added new pet locally:', newPet);
+              debugLog('MBA5432', 'Added new pet locally:', petToAdd, shouldAddToTop ? '(at top of list)' : '(at bottom of list)');
             }}
             onEditPet={(petId, updatedPetData) => {
               // Update the existing pet in local state
