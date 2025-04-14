@@ -2,7 +2,7 @@ Always respond with what you are fixing, and never remove comments or edit anyth
 
 File Locations:
 backend: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend
-frontend: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/CrittrCoveStaging
+frontend: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/CrittrCoveStaging/package.json
 
 Time and Date Format Rules:
 1. When sending data from frontend to backend:
@@ -21,6 +21,7 @@ Time and Date Format Rules:
 
 Backend Instructions:
 1. When creating or searching for endpoints, all of my endpoints will be structured like this: /api/<app_name>/v1/<bunch of unique extra stuff in urls past this point>.
+2. When creating an endpoint and checking if the requesting user is a professional, be sure to use the is_professional function inside of backend/zenexotics_backend/core/common_checks.py. if we need to verify the professional is the owner of the service, then use common_checks.py's owns_service function. 
 
 
 Extra instructions:

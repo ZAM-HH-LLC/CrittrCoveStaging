@@ -7,6 +7,8 @@ import ProfessionalServiceCard from './ProfessionalServiceCard';
 import ConfirmationModal from './ConfirmationModal';
 import { Portal } from 'react-native-paper';
 import { AuthContext } from '../context/AuthContext';
+import { deleteService } from '../api/API';
+import { useToast } from './ToastProvider';
 
 const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfessionalTab = false, isMobile = false }) => {
   const [showModal, setShowModal] = useState(false);
@@ -17,10 +19,11 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   const [serviceToDelete, setServiceToDelete] = useState(null);
   const [hoveredButton, setHoveredButton] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState(null);
-  const { screenWidth } = useContext(AuthContext);
+  const { screenWidth, is_DEBUG } = useContext(AuthContext);
   const [collapseTooltipPosition, setCollapseTooltipPosition] = useState(null);
   const buttonRef = useRef(null);
   const collapseButtonRef = useRef(null);
+  const showToast = useToast();
 
   const toggleCollapseAll = () => {
     if (allCollapsed) {
@@ -90,32 +93,74 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
     );
   };
 
-  const confirmDelete = () => {
-    setServices(prevServices => 
-      prevServices.filter((_, i) => i !== serviceToDelete)
-    );
-    setHasUnsavedChanges(true);
-    setShowDeleteModal(false);
+  const confirmDelete = async () => {
+    try {
+      // Get the service ID from the selected service
+      const serviceToRemove = services[serviceToDelete];
+      if (!serviceToRemove || !serviceToRemove.service_id) {
+        showToast({
+          message: 'Unable to identify service for deletion',
+          type: 'error',
+          duration: 3000
+        });
+        setShowDeleteModal(false);
+        return;
+      }
+
+      // Call the API to delete the service
+      await deleteService(serviceToRemove.service_id);
+
+      // Remove from UI if successful
+      setServices(prevServices => 
+        prevServices.filter((_, i) => i !== serviceToDelete)
+      );
+      
+      setHasUnsavedChanges(true);
+      setShowDeleteModal(false);
+      
+      showToast({
+        message: 'Service deleted successfully',
+        type: 'success',
+        duration: 3000
+      });
+    } catch (error) {
+      // Handle the error case
+      const errorMessage = error.response?.data?.error || 'Failed to delete service';
+      
+      showToast({
+        message: errorMessage,
+        type: 'error',
+        duration: 3000
+      });
+      
+      setShowDeleteModal(false);
+    }
   };
 
   const showTooltip = (ref, tooltipText, setPosition) => {
-    if (ref.current) {
-      setTimeout(() => {
-        // Get the button's DOM element
-        const element = ref.current;
-        // Get the button's bounding rectangle relative to the viewport
-        const rect = element.getBoundingOwnerRect();
-        
-        
-        setPosition({
-          x: rect.left + (rect.width / 2),
-          y: rect.top, // Position tooltip at the top of the button
-          text: tooltipText
-        });
-        
-        
-        setHoveredButton(tooltipText);
-      }, 0);
+    if (ref && ref.current) {
+      try {
+        setTimeout(() => {
+          // Get the button's DOM element
+          const element = ref.current;
+          // Get the button's bounding rectangle relative to the viewport
+          if (element.getBoundingOwnerRect) {
+            const rect = element.getBoundingOwnerRect();
+            
+            setPosition({
+              x: rect.left + (rect.width / 2),
+              y: rect.top, // Position tooltip at the top of the button
+              text: tooltipText
+            });
+            
+            setHoveredButton(tooltipText);
+          } else {
+            console.error('Error: getBoundingOwnerRect method not found on element');
+          }
+        }, 0);
+      } catch (error) {
+        console.error('Error showing tooltip:', error);
+      }
     }
   };
 
@@ -127,9 +172,11 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
 
     // Transform the service data to match the frontend structure
     const serviceData = {
+      service_id: item.service_id,
       serviceName: item.service_name,
       description: item.description,
       lengthOfService: item.unit_of_time,
+      is_active: item.is_active,
       generalCategories: item.categories?.map(cat => ({
         id: cat.id,
         name: cat.name,
@@ -312,6 +359,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
           </View>
         </Portal>
       )}
+      
     </View>
   );
 };

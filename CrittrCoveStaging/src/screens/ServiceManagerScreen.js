@@ -7,7 +7,8 @@ import BackHeader from '../components/BackHeader';
 import { handleBack } from '../components/Navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getProfessionalServices } from '../api/API';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
+import { useToast } from '../components/ToastProvider';
 
 const ServiceManagerScreen = () => {
   const navigation = useNavigation();
@@ -16,6 +17,7 @@ const ServiceManagerScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
   const { isCollapsed, is_DEBUG } = useContext(AuthContext);
+  const showToast = useToast();
 
   useEffect(() => {
     const updateLayout = () => {
@@ -28,16 +30,35 @@ const ServiceManagerScreen = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const fetchServices = async () => {
+  const fetchServices = async () => {
+    try {
+      setIsLoading(true);
       const data = await getProfessionalServices();
-      if (is_DEBUG) console.log('MBA123: Fetched services:', data);
+      if (is_DEBUG) console.log('MBA7890: Fetched services:', data);
       setServices(data);
+    } catch (error) {
+      console.error('MBA7890: Error fetching services:', error);
+      showToast({
+        message: 'Failed to load services',
+        type: 'error',
+        duration: 3000
+      });
+    } finally {
       setIsLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     fetchServices();
   }, [is_DEBUG]);
+
+  // Effect to handle unsaved changes
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      fetchServices();
+      setHasUnsavedChanges(false);
+    }
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     const setRouteHistory = async () => {

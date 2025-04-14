@@ -14,6 +14,7 @@ from professionals.models import Professional
 import logging
 from django.db import transaction
 import re
+from core.common_checks import is_professional, owns_service
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +26,12 @@ def get_professional_services_with_rates(request):
     """
     try:
         # Check if user is a professional
-        if not hasattr(request.user, 'professional_profile'):
-            return Response(
-                {'error': 'User is not registered as a professional'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        professional = request.user.professional_profile
+        is_prof, result = is_professional(request)
+        
+        if not is_prof:
+            return result
+            
+        professional = result
 
         # Get all services for the professional - include both APPROVED and PENDING
         services = Service.objects.filter(
@@ -74,6 +74,7 @@ def get_professional_services_with_rates(request):
                 'applies_after': service.applies_after,
                 'unit_of_time': service.unit_of_time,
                 'is_overnight': service.is_overnight,
+                'is_active': service.is_active,
                 'moderation_status': service.moderation_status,
                 'additional_rates': additional_rates
             }
@@ -97,13 +98,12 @@ def create_service(request):
     """
     try:
         # Check if user is a professional
-        if not hasattr(request.user, 'professional_profile'):
-            return Response(
-                {'error': 'User is not registered as a professional'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        professional = request.user.professional_profile
+        is_prof, result = is_professional(request)
+        
+        if not is_prof:
+            return result
+            
+        professional = result
         
         # Extract data from request
         data = request.data
@@ -246,6 +246,42 @@ def create_service(request):
         logger.error(f"Error in create_service: {str(e)}")
         return Response(
             {'error': f'An error occurred while creating the service: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_service(request, service_id):
+    """
+    Delete a service if it is not being used in any bookings.
+    """
+    try:
+        # Check if user is a professional and owns this service
+        owns, response, service = owns_service(request, service_id)
+        
+        if not owns:
+            return response
+        
+        # Check if the service is being used in any bookings
+        if service.bookings.exists():
+            return Response(
+                {'error': 'Cannot delete this service as it is being used in bookings'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Delete the service
+        service.delete()
+        logger.info(f"Service {service_id} deleted successfully")
+        
+        return Response(
+            {'success': 'Service deleted successfully'},
+            status=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in delete_service: {str(e)}")
+        return Response(
+            {'error': f'An error occurred while deleting the service: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

@@ -11,10 +11,11 @@ const ProfessionalServiceCard = ({
   onDelete 
 }) => {
   const { screenWidth } = useContext(AuthContext);
-  const [isActive, setIsActive] = useState(true);
+  const [isActive, setIsActive] = useState(item.is_active !== false); // Default to true if not specified
 
   const handleToggleActive = () => {
     setIsActive(!isActive);
+    // Here you would normally update this to the backend
   };
 
   // Determine background color for pricing section based on service type

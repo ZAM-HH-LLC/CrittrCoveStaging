@@ -6,6 +6,12 @@ import { getStorage, debugLog } from '../context/AuthContext';
 export const getProfessionalServices = async () => {
   try {
     const token = await getStorage('userToken');
+    if (!token) {
+      debugLog('MBA7890: No authentication token found');
+      throw new Error('No authentication token found');
+    }
+    
+    debugLog('MBA7890: Fetching professional services');
     const response = await axios.get(`${API_BASE_URL}/api/services/v1/professional/services/`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -14,7 +20,8 @@ export const getProfessionalServices = async () => {
     });
     return response.data;
   } catch (error) {
-    console.error('MBA123: Error fetching professional services:', error);
+    debugLog('MBA7890: Error fetching professional services:', error);
+    debugLog('MBA7890: Error details:', error.response?.data || error.message);
     throw error;
   }
 };
@@ -35,7 +42,7 @@ export const getBookingAvailableServices = async (bookingId) => {
     );
     return response.data;
   } catch (error) {
-    console.error('MBA12345 Error fetching available services:', error);
+    debugLog('MBA12345 Error fetching available services:', error);
     throw error;
   }
 };
@@ -54,7 +61,7 @@ export const getBookingAvailablePets = async (bookingId) => {
     );
     return response.data;
   } catch (error) {
-    console.error('MBA12345 Error fetching available pets:', error);
+    debugLog('MBA12345 Error fetching available pets:', error);
     throw error;
   }
 };
@@ -74,7 +81,7 @@ export const approveBooking = async (bookingId) => {
     );
     return response.data;
   } catch (error) {
-    console.error('Error approving booking:', error);
+    debugLog('Error approving booking:', error);
     throw error;
   }
 };
@@ -108,7 +115,7 @@ export const updateBookingDraftPetsAndServices = async (draftId, data) => {
 
 export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate, startTime, endTime) => {
     try {
-        console.log('MBA1234 - Updating booking draft time and date:', {
+        debugLog('MBA1234 - Updating booking draft time and date:', {
             draftId,
             startDate,
             endDate,
@@ -132,10 +139,10 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
             }
         );
 
-        console.log('MBA1234 - Booking draft time and date update response:', response.data);
+        debugLog('MBA1234 - Booking draft time and date update response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('MBA98765 Error updating booking draft time and date:', error);
+        debugLog('MBA98765 Error updating booking draft time and date:', error);
         throw error;
     }
 };
@@ -456,6 +463,39 @@ export const createService = async (serviceData) => {
   } catch (error) {
     debugLog('MBA54321', 'Error creating service:', error);
     debugLog('MBA54321', 'Error response data:', error.response?.data);
+    throw error;
+  }
+};
+
+/**
+ * Delete a service by ID
+ * @param {number} serviceId - ID of the service to delete
+ * @returns {Promise<Object>} Response data with success message or error details
+ */
+export const deleteService = async (serviceId) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    debugLog('MBA7890: Deleting service with ID:', serviceId);
+
+    const response = await axios.delete(
+      `${API_BASE_URL}/api/services/v1/delete/${serviceId}/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    debugLog('MBA7890: Service deleted successfully - backend response:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA7890: Error deleting service:', error);
+    debugLog('MBA7890: Error response data:', error.response?.data);
     throw error;
   }
 };
