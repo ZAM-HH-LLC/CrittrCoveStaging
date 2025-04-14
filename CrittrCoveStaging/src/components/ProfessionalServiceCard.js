@@ -1,8 +1,9 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
+import { debugLog } from '../context/AuthContext';
 
 const ProfessionalServiceCard = ({ 
   item, 
@@ -12,6 +13,11 @@ const ProfessionalServiceCard = ({
 }) => {
   const { screenWidth } = useContext(AuthContext);
   const [isActive, setIsActive] = useState(item.is_active !== false); // Default to true if not specified
+  
+  // Log the item data when it changes
+  useEffect(() => {
+    debugLog('MBA3377', 'ProfessionalServiceCard Item Data:', item);
+  }, [item]);
 
   const handleToggleActive = () => {
     setIsActive(!isActive);
@@ -27,6 +33,14 @@ const ProfessionalServiceCard = ({
       // theme.colors.proDashboard.tertiary, // Light orange
     ];
     return colors[index % colors.length];
+  };
+
+  // Format the display of unit of time in a user-friendly way
+  const formatUnitOfTime = (unitOfTime) => {
+    if (!unitOfTime) return 'visit';
+    
+    // If we receive a nicely formatted unit of time from the backend, use it
+    return unitOfTime;
   };
 
   return (
@@ -53,7 +67,7 @@ const ProfessionalServiceCard = ({
       <View style={[styles.ratesContainer, { backgroundColor: getPricingBackgroundColor() }]}>
         <View style={styles.rateRow}>
           <Text style={styles.rateLabel}>Base Rate</Text>
-          <Text style={styles.rateValue}>${item.rates.base_rate || 'N/A'}/{item.lengthOfService || 'visit'}</Text>
+          <Text style={styles.rateValue}>${item.rates.base_rate || 'N/A'}/{formatUnitOfTime(item.lengthOfService)}</Text>
         </View>
         
         {item.rates.additionalAnimalRate && (

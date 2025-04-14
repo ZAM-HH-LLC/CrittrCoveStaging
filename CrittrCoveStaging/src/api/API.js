@@ -462,14 +462,24 @@ export const createService = async (serviceData) => {
       formattedAnimalTypes['Other'] = 'Other';
     }
     
+    // Format additional rates to ensure rate values are strings
+    const formattedAdditionalRates = (serviceData.additional_rates || []).map(rate => ({
+      ...rate,
+      rate: String(rate.rate)
+    }));
+    
     // Make sure all numeric values are properly formatted as strings to avoid type issues
     const formattedData = {
       ...serviceData,
       base_rate: String(serviceData.base_rate),
       additional_animal_rate: String(serviceData.additional_animal_rate || 0),
       holiday_rate: String(serviceData.holiday_rate || 0),
-      animal_types: formattedAnimalTypes
+      animal_types: formattedAnimalTypes,
+      additional_rates: formattedAdditionalRates
     };
+    
+    // Log we're sending the additional rates too
+    debugLog('MBA54321', 'Sending additional rates to backend:', formattedData.additional_rates);
 
     const response = await axios.post(
       `${API_BASE_URL}/api/services/v1/create/`,

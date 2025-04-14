@@ -22,6 +22,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
   const [showThresholdDropdown, setShowThresholdDropdown] = useState(false);
   const [customChargeVisible, setCustomChargeVisible] = useState(false);
   const [isHolidayRatePercent, setIsHolidayRatePercent] = useState(true);
+  const [isEditingExistingRate, setIsEditingExistingRate] = useState(false);
   const [newCustomRate, setNewCustomRate] = useState({
     title: '',
     rate: '',
@@ -214,25 +215,64 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
   const handleAddCustomRate = () => {
     if (!customChargeVisible) {
       setCustomChargeVisible(true);
+      setIsEditingExistingRate(false);
       return;
     }
 
-    if (newCustomRate.title && newCustomRate.rate) {
-      setServiceData(prev => ({
-        ...prev,
-        additionalRates: [...(prev.additionalRates || []), newCustomRate]
-      }));
-      setNewCustomRate({
-        title: '',
-        rate: '',
-        description: ''
-      });
-      setCustomChargeVisible(false);
+    // Check for title
+    if (!newCustomRate.title.trim()) {
+      debugLog('MBA54321', 'Missing custom rate title');
+      // You could set an error state here if you want to show a specific error message
+      return;
     }
+    
+    // Check for rate value
+    if (!newCustomRate.rate) {
+      debugLog('MBA54321', 'Missing custom rate value');
+      return;
+    }
+
+    // Validate rate value
+    const rateValue = parseFloat(newCustomRate.rate);
+    if (isNaN(rateValue) || rateValue <= 0) {
+      // Show an error or alert that rate must be greater than 0
+      debugLog('MBA54321', 'Invalid rate value:', newCustomRate.rate);
+      return;
+    }
+
+    setServiceData(prev => ({
+      ...prev,
+      additionalRates: [...(prev.additionalRates || []), newCustomRate]
+    }));
+    setNewCustomRate({
+      title: '',
+      rate: '',
+      description: ''
+    });
+    setCustomChargeVisible(false);
+    setIsEditingExistingRate(false);
   };
 
   const handleEditCustomRate = (index) => {
-    // Implementation for editing custom rate
+    // Get the rate to edit
+    const rateToEdit = serviceData.additionalRates[index];
+    
+    // Set the form with existing values
+    setNewCustomRate({
+      title: rateToEdit.title,
+      rate: rateToEdit.rate,
+      description: rateToEdit.description || ''
+    });
+    
+    // Show the custom charge form and indicate we're editing
+    setCustomChargeVisible(true);
+    setIsEditingExistingRate(true);
+    
+    // Remove the old item
+    setServiceData(prev => ({
+      ...prev,
+      additionalRates: prev.additionalRates.filter((_, i) => i !== index)
+    }));
   };
 
   const handleDeleteCustomRate = (index) => {
@@ -429,39 +469,58 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
 
         <View style={styles.customRatesContainer}>
           <Text style={styles.label}>Custom Charges <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
-          {serviceData.additionalRates?.map((rate, index) => (
-            <View key={index} style={styles.customRateItem}>
-              <View style={styles.customRateContent}>
-                <Text style={styles.customRateTitle}>{rate.title}</Text>
-                <Text style={styles.customRateAmount}>${rate.rate}</Text>
+          {serviceData.additionalRates?.length > 0 ? (
+            serviceData.additionalRates.map((rate, index) => (
+              <View key={index} style={styles.customRateItem}>
+                <View style={styles.customRateContent}>
+                  <View style={styles.customRateTitleContainer}>
+                    <Text style={styles.customRateTitle}>{rate.title}</Text>
+                    {rate.description ? (
+                      <Text style={styles.customRateDescription} numberOfLines={1}>
+                        {rate.description}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.customRateAmount}>${rate.rate}</Text>
+                </View>
+                <View style={styles.customRateActions}>
+                  <TouchableOpacity
+                    onPress={() => handleEditCustomRate(index)}
+                    style={styles.customRateAction}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons
+                      name="pencil"
+                      size={20}
+                      color={theme.colors.mainColors.main}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteCustomRate(index)}
+                    style={styles.customRateAction}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons
+                      name="delete"
+                      size={20}
+                      color="#F26969"
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.customRateActions}>
-                <TouchableOpacity
-                  onPress={() => handleEditCustomRate(index)}
-                  style={styles.customRateAction}
-                >
-                  <MaterialCommunityIcons
-                    name="pencil"
-                    size={20}
-                    color={theme.colors.placeHolderText}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDeleteCustomRate(index)}
-                  style={styles.customRateAction}
-                >
-                  <MaterialCommunityIcons
-                    name="delete"
-                    size={20}
-                    color={theme.colors.placeHolderText}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
+            ))
+          ) : customChargeVisible ? null : (
+            <Text style={styles.noCustomRatesText}>
+              No custom charges added yet. Use the button below to add one.
+            </Text>
+          )}
           
+          {/* Custom charge form or Add button */}
           {customChargeVisible ? (
             <View style={styles.newCustomRateContainer}>
+              <Text style={styles.customRateFormHeading}>
+                {isEditingExistingRate ? 'Edit Custom Rate' : 'New Custom Rate'}
+              </Text>
               <TextInput
                 style={styles.customRateInput}
                 placeholder="Charge Title"
@@ -489,20 +548,62 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
                 multiline={true}
                 numberOfLines={3}
               />
+              <View style={styles.customRateButtonContainer}>
+                <TouchableOpacity
+                  style={styles.cancelRateButton}
+                  onPress={() => {
+                    setCustomChargeVisible(false);
+                    setNewCustomRate({
+                      title: '',
+                      rate: '',
+                      description: ''
+                    });
+                    setIsEditingExistingRate(false);
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={20}
+                    color={theme.colors.text}
+                  />
+                  <Text style={styles.cancelRateText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.addRateButton, 
+                    styles.saveRateButton,
+                    (!newCustomRate.title.trim() || !newCustomRate.rate || 
+                      isNaN(parseFloat(newCustomRate.rate)) || parseFloat(newCustomRate.rate) <= 0) 
+                      ? styles.disabledSaveButton : {}
+                  ]}
+                  onPress={handleAddCustomRate}
+                  disabled={!newCustomRate.title.trim() || !newCustomRate.rate || 
+                    isNaN(parseFloat(newCustomRate.rate)) || parseFloat(newCustomRate.rate) <= 0}
+                >
+                  <MaterialCommunityIcons
+                    name="content-save"
+                    size={20}
+                    color={theme.colors.surface}
+                  />
+                  <Text style={styles.saveRateText}>
+                    {isEditingExistingRate ? 'Update Custom Rate' : 'Save Custom Rate'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          ) : null}
-          
-          <TouchableOpacity
-            style={styles.addRateButton}
-            onPress={handleAddCustomRate}
-          >
-            <MaterialCommunityIcons
-              name="plus"
-              size={20}
-              color={theme.colors.mainColors.main}
-            />
-            <Text style={styles.addRateText}>Add Rate</Text>
-          </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.addRateButton}
+              onPress={handleAddCustomRate}
+            >
+              <MaterialCommunityIcons
+                name="plus"
+                size={20}
+                color={theme.colors.mainColors.main}
+              />
+              <Text style={styles.addRateText}>Add Rate</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </TouchableWithoutFeedback>
@@ -720,12 +821,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  customRateAction: {
-    padding: 4,
+  customRateTitleContainer: {
+    flex: 1,
+    marginRight: 16,
   },
   customRateTitle: {
     fontSize: 16,
     color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  customRateDescription: {
+    fontSize: 14,
+    color: theme.colors.placeHolderText,
+    marginTop: 2,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   customRateAmount: {
@@ -768,6 +876,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  customRateButtonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  cancelRateButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface,
+  },
+  cancelRateText: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  saveRateButton: {
+    flex: 2,
+    backgroundColor: theme.colors.mainColors.main,
+    borderColor: theme.colors.mainColors.main,
+  },
+  disabledSaveButton: {
+    backgroundColor: theme.colors.placeHolderText,
+    borderColor: theme.colors.placeHolderText,
+  },
+  saveRateText: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  customRateFormHeading: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 12,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  noCustomRatesText: {
+    fontSize: 14,
+    color: theme.colors.placeHolderText,
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  customRateAction: {
+    padding: 8,
+    borderRadius: 4,
   },
 });
 

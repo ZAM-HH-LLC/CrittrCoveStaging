@@ -65,7 +65,7 @@ export const TIME_OPTIONS = [
 export const TIME_UNIT_MAPPING = {
   // User-friendly labels mapped to backend constants
   'Per Visit': 'Per Visit',
-  'Per Day': 'Per Day',
+  'Per Day (24 Hours)': 'Per Day',
   'Per Night': 'Per Night',
   'Every 15 Minutes': '15 Min',
   'Every 30 Minutes': '30 Min',

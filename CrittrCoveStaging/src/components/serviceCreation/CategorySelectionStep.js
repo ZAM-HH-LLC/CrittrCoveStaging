@@ -158,8 +158,35 @@ const DEFAULT_ANIMAL_TYPES = [
   'Snake'
 ];
 
-const getAnimalIcon = (animalName) => {
-  return ANIMAL_ICONS[animalName] || 'help-circle-outline';
+// Most common pets to display first when "All" is selected
+const COMMON_PETS = [
+  'Dogs',
+  'Cats',
+  'Fish',
+  'Birds',
+  'Hamsters',
+  'Rabbits',
+  'Snake',
+  'Turtle'
+];
+
+// Get the appropriate icon for an animal type
+const getAnimalIcon = (animalName, categoryId = null) => {
+  // If the animal has a predefined icon, use it
+  if (ANIMAL_ICONS[animalName]) {
+    return ANIMAL_ICONS[animalName];
+  }
+  
+  // For custom animals, use the category icon if available
+  if (categoryId) {
+    const category = GENERAL_CATEGORIES.find(cat => cat.id === categoryId);
+    if (category) {
+      return category.icon;
+    }
+  }
+  
+  // Default to paw icon
+  return 'paw';
 };
 
 const getCategoryIcon = (categoryName) => {
@@ -358,7 +385,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
             name: type,
             categoryId: selectedCategoryFilter,
             categoryName: categoryData.name,
-            icon: getAnimalIcon(type)
+            icon: getAnimalIcon(type, selectedCategoryFilter)
           }));
         categoriesUsed.add(categoryData.name);
       }
@@ -373,7 +400,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
                 name: type,
                 categoryId: category.id,
                 categoryName: category.name,
-                icon: getAnimalIcon(type)
+                icon: getAnimalIcon(type, category.id)
               });
               categoriesUsed.add(category.name);
             });
@@ -398,7 +425,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
               name: animal.name,
               categoryId: animal.categoryId,
               categoryName: categoryName,
-              icon: 'help-circle-outline', // Default icon for custom animals
+              icon: getAnimalIcon(animal.name, animal.categoryId), // Use the category icon
               isCustom: true
             });
             categoriesUsed.add(categoryName);
@@ -407,8 +434,29 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       }
     });
     
-    // Sort alphabetically by name
-    animalTypesToShow.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort with common pets first, then alphabetically
+    animalTypesToShow.sort((a, b) => {
+      const aCommonIndex = COMMON_PETS.indexOf(a.name);
+      const bCommonIndex = COMMON_PETS.indexOf(b.name);
+      
+      // If both are common pets, sort by common pet order
+      if (aCommonIndex !== -1 && bCommonIndex !== -1) {
+        return aCommonIndex - bCommonIndex;
+      }
+      
+      // If only a is a common pet, it comes first
+      if (aCommonIndex !== -1) {
+        return -1;
+      }
+      
+      // If only b is a common pet, it comes first
+      if (bCommonIndex !== -1) {
+        return 1;
+      }
+      
+      // Otherwise sort alphabetically
+      return a.name.localeCompare(b.name);
+    });
     
     return { animalTypes: animalTypesToShow, categories: Array.from(categoriesUsed) };
   };
@@ -443,9 +491,12 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     },
     categoryFiltersContainer: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
       marginBottom: 24,
+      paddingLeft: 2,
+      paddingRight: 20, // Extra padding at the end for better scrolling
+    },
+    categoryFiltersScrollView: {
+      maxHeight: 60,
     },
     categoryFilterButton: {
       paddingVertical: 12,
@@ -458,6 +509,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       alignItems: 'center',
       gap: 8,
       minHeight: 46,
+      marginRight: 10,
     },
     selectedCategoryFilter: {
       backgroundColor: theme.colors.mainColors.mainLight,
@@ -476,7 +528,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       marginBottom: 24,
-      gap: 16,
+      // gap: 16,
     },
     actionButton: {
       paddingVertical: 8,
@@ -634,7 +686,12 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       </Text>
       
       {/* Category filters */}
-      <View style={styles.categoryFiltersContainer}>
+      <ScrollView 
+        horizontal={true}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryFiltersContainer}
+        style={styles.categoryFiltersScrollView}
+      >
         {GENERAL_CATEGORIES.map((category) => (
           <TouchableOpacity
             key={category.id}
@@ -657,7 +714,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
       
       {/* Actions */}
       <View style={styles.actionsContainer}>
@@ -671,7 +728,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
           style={styles.actionButton}
           onPress={() => setShowCustomAnimalInput(true)}
         >
-          <Text style={styles.actionButtonText}>Add Custom</Text>
+          <Text style={styles.actionButtonText}>Add Custom Pet</Text>
         </TouchableOpacity>
       </View>
       
@@ -775,7 +832,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
           <View style={styles.selectedAnimalsList}>
             {serviceData.animalTypes.map((animal, index) => {
               const animalName = animal.name;
-              const icon = getAnimalIcon(animalName);
+              const icon = getAnimalIcon(animalName, animal.categoryId);
               
               return (
                 <View key={index} style={styles.animalBubble}>

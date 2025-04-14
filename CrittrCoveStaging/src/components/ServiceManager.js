@@ -6,7 +6,7 @@ import ServiceCreationModal from './ServiceCreationModal';
 import ProfessionalServiceCard from './ProfessionalServiceCard';
 import ConfirmationModal from './ConfirmationModal';
 import { Portal } from 'react-native-paper';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import { deleteService } from '../api/API';
 import { useToast } from './ToastProvider';
 
@@ -46,8 +46,27 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   };
 
   const handleSaveService = (updatedService) => {
+    // Add debugging log for service data received
+    debugLog('MBA8765', 'Service data received from modal:', updatedService);
+    
+    // Check if we have a service_id (meaning it was created on the backend)
+    const serviceWasCreatedOnBackend = !!updatedService.service_id;
+    
+    // If the service was created on the backend, it already has the correct data structure
+    // including service_id, formatted service_name and unit_of_time
+    if (serviceWasCreatedOnBackend) {
+      debugLog('MBA8765', 'Using backend-created service with ID:', updatedService.service_id);
+      
+      // Add the new service to the list
+      setServices(prev => [...prev, updatedService]);
+      setHasUnsavedChanges(true);
+      setEditingService(null);
+      return;
+    }
+    
+    // For services not yet created on the backend, proceed with the old logic
     // Add debugging log for animalTypes
-    console.log('MBA8765 Animal Types received:', updatedService.animalTypes);
+    debugLog('MBA8765', 'Animal Types received:', updatedService.animalTypes);
     
     // Create animal_types dictionary from animalTypes array
     const animalTypesDict = {};
@@ -55,7 +74,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       updatedService.animalTypes.forEach(animal => {
         if (animal && animal.name) {
           // Log individual animal data for debugging
-          console.log(`MBA8765 Processing animal: ${animal.name}, categoryName: ${animal.categoryName}, category: ${animal.category}`);
+          debugLog('MBA8765', `Processing animal: ${animal.name}, categoryName: ${animal.categoryName}, category: ${animal.category}`);
           
           // Use the categoryName directly from the animal object if available
           if (animal.categoryName) {
@@ -70,7 +89,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
     }
     
     // Log the final dictionary
-    console.log('MBA8765 Final animal_types dictionary:', animalTypesDict);
+    debugLog('MBA8765', 'Final animal_types dictionary:', animalTypesDict);
 
     // Transform the service data to match the backend structure
     const transformedService = {
@@ -185,6 +204,29 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
     if (!item || typeof item !== 'object') {
       console.warn('Invalid item detected:', item);
       return null;
+    }
+
+    debugLog('MBA8765', 'Rendering service item:', item);
+
+    // Check if this is a service that already has a service_id (created on backend)
+    if (item.service_id) {
+      debugLog('MBA8765', 'This is a backend-created service with ID:', item.service_id);
+      
+      // If the item structure already matches what ProfessionalServiceCard expects, use it directly
+      if (item.serviceName && item.rates) {
+        return (
+          <ProfessionalServiceCard
+            key={`service-${index}`}
+            item={item}
+            index={index}
+            onEdit={() => handleEditService(index)}
+            onDelete={() => handleDeleteService(index)}
+            isCollapsed={collapsedServices.includes(index)}
+            onToggleCollapse={() => toggleCollapse(index)}
+            isProfessionalTab={isProfessionalTab}
+          />
+        );
+      }
     }
 
     // Convert animal_types from dictionary to array format

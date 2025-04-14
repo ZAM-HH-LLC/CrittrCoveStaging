@@ -244,10 +244,15 @@ const ServiceCreationModal = ({
       
       // Format the data according to what ServiceManager expects
       const serviceManagerData = {
-        serviceName: serviceData.serviceName,
+        // Use the service_id from the response
+        service_id: response.service_id,
+        // Use the formatted service_name from the response if available
+        serviceName: response.service_name || serviceData.serviceName,
         serviceDescription: serviceData.serviceDescription,
-        lengthOfService: serviceData.rates.base_rate_unit,
+        // Use the formatted unit_of_time from the response if available
+        lengthOfService: response.unit_of_time || serviceData.rates.base_rate_unit,
         isOvernight: serviceData.isOvernight || false,
+        is_active: response.is_active !== undefined ? response.is_active : true,
         rates: {
           base_rate: serviceData.rates.base_rate,
           additionalAnimalRate: serviceData.rates.additionalAnimalRate || '0',
@@ -290,6 +295,17 @@ const ServiceCreationModal = ({
           description: rate.description || ''
         }))
       };
+      
+      // If the response has additional_rates, use those instead
+      if (response.additional_rates && Array.isArray(response.additional_rates)) {
+        serviceManagerData.additionalRates = response.additional_rates.map(rate => ({
+          label: rate.title,
+          value: rate.rate,
+          description: rate.description || ''
+        }));
+      }
+      
+      debugLog('MBA54321', 'Formatted data for ServiceManager:', serviceManagerData);
       
       // Call the onSave prop with properly formatted data
       if (onSave) {
