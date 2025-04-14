@@ -47,6 +47,9 @@ def get_user_profile_data(user):
             'home_environment': client.home_environment,
             'created_at': client.created_at,
             'updated_at': client.updated_at,
+            'subscription_plan': user.subscription_plan,
+            'is_profile_visible': user.is_active and user.is_profile_visible,
+            'currentPlan': get_current_plan_details(user),
         })
         
         # Get address information from Address model
@@ -91,8 +94,8 @@ def get_user_profile_data(user):
         # Add preferences structure
         response_data['preferences'] = get_user_preferences(client)
         
-        # Add settings structure
-        response_data['settings'] = get_default_settings()
+        # Add user settings values directly to response_data
+        response_data.update(get_user_settings(user))
         
         # Add payment methods structure
         response_data['payment_methods'] = get_user_payment_methods(user)
@@ -171,19 +174,67 @@ def get_user_preferences(client):
         ]
     }
 
+def get_user_settings(user):
+    """Get user settings from UserSettings model or return defaults if not found."""
+    try:
+        # Try to get the user's settings
+        user_settings, created = UserSettings.objects.get_or_create(
+            user=user,
+            defaults={
+                'timezone': 'UTC',
+                'use_military_time': False,
+                'push_notifications': True,
+                'email_updates': True,
+                'marketing_communications': True
+            }
+        )
+        
+        # Return simple boolean flags and settings
+        return {
+            'push_notifications': user_settings.push_notifications,
+            'email_updates': user_settings.email_updates,
+            'marketing_communications': user_settings.marketing_communications,
+            'profile_visibility': user.is_active and user.is_profile_visible,
+            'timezone': user_settings.timezone,
+            'use_military_time': user_settings.use_military_time
+            # TODO: Add location_privacy after MVP launch
+        }
+    except Exception as e:
+        logger.error(f"helpers.py: Error fetching user settings: {str(e)}")
+        return {
+            'push_notifications': True,
+            'email_updates': True,
+            'marketing_communications': True,
+            'profile_visibility': True,
+            'timezone': 'UTC',
+            'use_military_time': False
+        }
+
 def get_default_settings():
-    """Get default settings structure."""
+    """Get default settings structure. Used as fallback if actual settings can't be retrieved."""
     return [
-        {'id': 'notifications', 'title': 'Push Notifications', 'type': 'toggle', 'value': True, 'icon': 'bell'},
-        {'id': 'email_updates', 'title': 'Email Updates', 'type': 'toggle', 'value': True, 'icon': 'email'},
-        {'id': 'privacy', 'title': 'Privacy Settings', 'type': 'link', 'icon': 'shield-account'}
+        {'id': 'notifications', 'title': 'Push Notifications', 'type': 'toggle', 'value': True, 'icon': 'bell', 'category': 'notifications'},
+        {'id': 'email_updates', 'title': 'Email Updates', 'type': 'toggle', 'value': True, 'icon': 'email', 'category': 'notifications'},
+        {'id': 'privacy', 'title': 'Privacy Settings', 'type': 'link', 'icon': 'shield-account', 'category': 'privacy'}
     ]
 
 def get_user_payment_methods(user):
     """Get user payment methods."""
-    # Example implementation - would be replaced with actual payment method retrieval
+    # This is a placeholder implementation using mock data
+    # In a real implementation, you would fetch payment methods from a payment processor like Stripe
+    # or from a database table that stores payment methods
+    
+    # For now, returning a sample payment method with the correct structure
     return [
-        {'id': 3, 'type': 'bank', 'last4': '1234', 'expiry': None, 'isDefault': True, 'bankName': 'Ent Federal Credit Union'}
+        {
+            'id': 3, 
+            'type': 'bank', 
+            'last4': '1234', 
+            'expiry': None, 
+            'isDefault': True, 
+            'bankName': 'Ent Federal Credit Union'
+        }
+        # Additional payment methods would be added here when implemented
     ]
 
 def geocode_address(address_str, city, state, zip_code, country="USA"):
@@ -403,3 +454,70 @@ def update_user_profile(user, data):
     except Exception as e:
         logger.exception(f"helpers.py: Error updating profile: {str(e)}")
         raise 
+
+def get_current_plan_details(user):
+    """Get details about the user's current subscription plan."""
+    # Map subscription_plan integers to plan IDs used in the frontend
+    plan_id_map = {
+        0: 'free',
+        1: 'waitlist',
+        2: 'commission',
+        3: 'subscription',   # Pro subscription
+        4: 'subscription',   # Client/Owner subscription
+        5: 'dual_subscription'
+    }
+    
+    # Get the plan ID for the frontend
+    plan_id = plan_id_map.get(user.subscription_plan, 'waitlist')
+    
+    # Create the plan details object based on subscription_plan
+    if user.subscription_plan == 1:  # Waitlist tier
+        return {
+            'id': 'waitlist',
+            'title': 'Waitlist Tier',
+            'nextBilling': 'N/A',
+            'connections': {'used': 0, 'total': 'Unlimited'}
+        }
+    elif user.subscription_plan == 0:  # Free tier
+        return {
+            'id': 'free',
+            'title': 'Free Tier',
+            'nextBilling': 'N/A',
+            'connections': {'used': 0, 'total': 5}
+        }
+    elif user.subscription_plan == 2:  # Commission tier
+        return {
+            'id': 'commission',
+            'title': 'Commission Based',
+            'nextBilling': 'Pay as you go',
+            'connections': {'used': 0, 'total': 'Unlimited'}
+        }
+    elif user.subscription_plan == 3:  # Pro subscription
+        return {
+            'id': 'subscription',
+            'title': 'Pro Subscription',
+            'nextBilling': 'End of month',  # This would come from payment processor in reality
+            'connections': {'used': 0, 'total': 'Unlimited'}
+        }
+    elif user.subscription_plan == 4:  # Client/Owner subscription
+        return {
+            'id': 'subscription',
+            'title': 'Owner Subscription',
+            'nextBilling': 'End of month',  # This would come from payment processor in reality
+            'connections': {'used': 0, 'total': 'Unlimited'}
+        }
+    elif user.subscription_plan == 5:  # Dual subscription
+        return {
+            'id': 'dual_subscription',
+            'title': 'Dual Role Subscription',
+            'nextBilling': 'End of month',  # This would come from payment processor in reality
+            'connections': {'used': 0, 'total': 'Unlimited'}
+        }
+    else:
+        # Default fallback
+        return {
+            'id': 'waitlist',
+            'title': 'Waitlist Signup',
+            'nextBilling': 'N/A',
+            'connections': {'used': 0, 'total': 'Unlimited'}
+        } 

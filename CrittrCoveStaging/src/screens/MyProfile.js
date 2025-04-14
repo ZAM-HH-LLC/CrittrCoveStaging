@@ -467,74 +467,23 @@ const MyProfile = () => {
         });
         return (
           <SettingsPaymentsTab
-            settings={[
-              {
-                id: 'push_notifications',
-                title: 'Push Notifications',
-                description: 'Receive notifications for new bookings and messages',
-                icon: 'bell',
-                type: 'toggle',
-                value: true,
-                category: 'notifications'
-              },
-              {
-                id: 'email_updates',
-                title: 'Email Updates',
-                description: 'Receive booking confirmations and important updates',
-                icon: 'email',
-                type: 'toggle',
-                value: false,
-                category: 'notifications'
-              },
-              {
-                id: 'marketing',
-                title: 'Marketing Communications',
-                description: 'Receive news about promotions and updates',
-                icon: 'bullhorn',
-                type: 'toggle',
-                value: false,
-                category: 'notifications'
-              },
-              {
-                id: 'profile_visibility',
-                title: 'Profile Visibility',
-                description: 'Make your profile visible to potential owners',
-                icon: 'eye',
-                type: 'toggle',
-                value: true,
-                category: 'privacy'
-              },
-              {
-                id: 'show_location',
-                title: 'Show Location',
-                description: 'Display your approximate location on the map',
-                icon: 'map-marker',
-                type: 'toggle',
-                value: true,
-                category: 'privacy'
-              },
-              {
-                id: 'change_password',
-                title: 'Change Password',
-                description: 'Last changed 3 months ago',
-                icon: 'lock',
-                type: 'action',
-                actionText: 'Update',
-                category: 'security'
-              },
-              {
-                id: 'two_factor',
-                title: 'Two-Factor Authentication',
-                description: 'Add an extra layer of security',
-                icon: 'shield-check',
-                type: 'action',
-                actionText: 'Enable',
-                category: 'security'
-              }
-            ]}
+            {...profileData}
             onUpdateSetting={(id, value) => {
               debugLog('Updating setting:', { id, value });
-              // TODO: Implement API call to update settings
+              // Create an update object with just the changed setting
+              const updateData = { [id]: value };
+              updateProfileInfo(updateData)
+                .then(updatedProfile => {
+                  // Update the profile data with the response
+                  setProfileData(prev => ({
+                    ...prev,
+                    ...updatedProfile
+                  }));
+                  debugLog('MBA54321 Setting updated successfully:', updateData);
+                })
+                .catch(error => {
+                  debugLog('MBA54321 Error updating setting:', error);
+                });
             }}
             paymentMethods={profileData?.payment_methods || []}
             onAddPaymentMethod={() => navigation.navigate('AddPaymentMethod')}
@@ -546,7 +495,7 @@ const MyProfile = () => {
               debugLog('Setting default payment method:', id);
               // TODO: Implement API call to set default payment method
             }}
-            currentPlan={currentPlan}
+            currentPlan={profileData?.currentPlan || currentPlan}
             onSwitchPlan={handleSwitchPlan}
             isMobile={isMobile}
             userRole={userRole}

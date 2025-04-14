@@ -280,22 +280,32 @@ def update_time_settings(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def user_profile(request):
     """
-    Get the complete user profile data.
+    Get or update the complete user profile data.
     
     This endpoint returns all profile-related information for the currently 
     authenticated user, including personal details, pets, services, etc.
+    
+    For PATCH requests, it updates the specified fields and returns the
+    complete updated profile data.
     """
     user = request.user
     logger.debug(f"user_profile: Processing request for user {user.id}")
     
     try:
         # Use the helper function to get profile data
-        from ..helpers import get_user_profile_data
-        response_data = get_user_profile_data(user)
+        from ..helpers import get_user_profile_data, update_user_profile
+        
+        if request.method == 'GET':
+            response_data = get_user_profile_data(user)
+        elif request.method == 'PATCH':
+            # Update the specified fields
+            update_user_profile(user, request.data)
+            # Then return the complete updated profile
+            response_data = get_user_profile_data(user)
         
         # If the helper function returned an error, return it with the appropriate status
         if 'error' in response_data:

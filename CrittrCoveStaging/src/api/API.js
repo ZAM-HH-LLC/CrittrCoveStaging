@@ -238,7 +238,7 @@ export const userProfile = async (data = null) => {
   
   try {
     const response = await fetch(url, {
-      method: 'GET',
+      method: data ? 'PATCH' : 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${await getStorage('userToken')}`,
@@ -260,36 +260,17 @@ export const userProfile = async (data = null) => {
 /**
  * Update user profile information
  * @param {Object} profileData - Data to update in the user profile
- * @returns {Promise<Object>} - Only the updated fields, not the entire profile data
+ * @returns {Promise<Object>} - The complete updated profile data
  */
 export const updateProfileInfo = async (profileData) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    
     debugLog('MBA76543', 'Updating profile info with data:', profileData);
     
-    // Check if we're dealing with FormData (for image uploads) or regular JSON data
-    const isFormData = profileData instanceof FormData;
+    // Use the userProfile function with data to trigger a PATCH request
+    const updatedProfile = await userProfile(profileData);
     
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': isFormData ? 'multipart/form-data' : 'application/json'
-    };
-    
-    const response = await axios.patch(
-      `${API_BASE_URL}/api/users/v1/update_profile_info/`,
-      profileData,
-      { headers }
-    );
-    
-    // The backend returns only the updated fields, not the complete profile
-    const updatedFields = response.data;
-    debugLog('MBA76543', 'Updated fields received:', updatedFields);
-    
-    return updatedFields;
+    debugLog('MBA76543', 'Profile updated successfully:', updatedProfile);
+    return updatedProfile;
   } catch (error) {
     debugLog('MBA76543', 'Error updating profile info:', error);
     throw error;

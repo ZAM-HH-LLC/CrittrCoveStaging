@@ -38,7 +38,12 @@ const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
 );
 
 const SettingsPaymentsTab = ({
-  settings,
+  push_notifications,
+  email_updates,
+  marketing_communications,
+  profile_visibility,
+  timezone: propTimezone,
+  use_military_time,
   onUpdateSetting,
   paymentMethods,
   onAddPaymentMethod,
@@ -55,7 +60,7 @@ const SettingsPaymentsTab = ({
   userRole,
   isApprovedProfessional,
 }) => {
-  const [timezone, setTimezone] = useState('UTC');
+  const [timezone, setTimezone] = useState(propTimezone || 'UTC');
   const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
   const [timezones, setTimezones] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -75,8 +80,13 @@ const SettingsPaymentsTab = ({
       }
     };
 
-    fetchTimeSettings();
-  }, []);
+    // Check if timezone is in the props already
+    if (propTimezone) {
+      setTimezone(propTimezone);
+    } else {
+      fetchTimeSettings();
+    }
+  }, [propTimezone]);
 
   useEffect(() => {
     debugLog('MBA54321 SettingsPaymentsTab received paymentMethods:', paymentMethods);
@@ -343,17 +353,12 @@ const SettingsPaymentsTab = ({
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Preferences</Text>
-          {settings.filter(s => s.category === 'notifications').map(renderSettingItem)}
+          {renderNotificationSettings()}
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Privacy Settings</Text>
-          {settings.filter(s => s.category === 'privacy').map(renderSettingItem)}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security</Text>
-          {settings.filter(s => s.category === 'security').map(renderSettingItem)}
+          {renderPrivacySettings()}
         </View>
 
         <View style={styles.section}>
@@ -403,17 +408,12 @@ const SettingsPaymentsTab = ({
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notification Settings</Text>
-        {settings.filter(s => s.category === 'notifications').map(renderSettingItem)}
+        {renderNotificationSettings()}
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Privacy Settings</Text>
-        {settings.filter(s => s.category === 'privacy').map(renderSettingItem)}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Security</Text>
-        {settings.filter(s => s.category === 'security').map(renderSettingItem)}
+        {renderPrivacySettings()}
       </View>
 
       <View style={styles.section}>
@@ -437,6 +437,80 @@ const SettingsPaymentsTab = ({
       </View>
     </ScrollView>
   );
+
+  const renderNotificationSettings = () => {
+    return (
+      <>
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="bell" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Push Notifications</Text>
+              <Text style={styles.settingDescription}>Receive push notifications for updates</Text>
+            </View>
+          </View>
+          <Switch
+            value={push_notifications}
+            onValueChange={(value) => onUpdateSetting('push_notifications', value)}
+            trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
+          />
+        </View>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="email" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Email Updates</Text>
+              <Text style={styles.settingDescription}>Receive important updates via email</Text>
+            </View>
+          </View>
+          <Switch
+            value={email_updates}
+            onValueChange={(value) => onUpdateSetting('email_updates', value)}
+            trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
+          />
+        </View>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Marketing Communications</Text>
+              <Text style={styles.settingDescription}>Receive promotions and marketing emails</Text>
+            </View>
+          </View>
+          <Switch
+            value={marketing_communications}
+            onValueChange={(value) => onUpdateSetting('marketing_communications', value)}
+            trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
+          />
+        </View>
+      </>
+    );
+  };
+
+  const renderPrivacySettings = () => {
+    return (
+      <>
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="account-eye" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Profile Visibility</Text>
+              <Text style={styles.settingDescription}>Make your profile visible to others</Text>
+            </View>
+          </View>
+          <Switch
+            value={profile_visibility}
+            onValueChange={(value) => onUpdateSetting('profile_visibility', value)}
+            trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
+          />
+        </View>
+        
+        {/* TODO: Add location privacy toggle after MVP launch */}
+      </>
+    );
+  };
 
   const renderSettingItem = (setting) => (
     <View key={setting.id} style={styles.settingItem}>

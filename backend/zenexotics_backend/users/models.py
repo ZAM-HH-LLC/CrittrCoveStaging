@@ -59,12 +59,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Status fields
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_profile_visible = models.BooleanField(default=True)
     identity_verified = models.BooleanField(default=False)
     email_is_verified = models.BooleanField(default=False)
     
     # Subscription and Beta related
     subscription_plan = models.IntegerField(
-        default=0,
+        default=1,
         help_text="0: Free tier, 1: Waitlist tier, 2: Commission tier, 3: Pro subscription, 4: Client subscription, 5: Dual subscription"
     )
     is_waitlister = models.BooleanField(default=False)
@@ -119,6 +120,7 @@ class UserSettings(models.Model):
     )
     push_notifications = models.BooleanField(default=True)
     email_updates = models.BooleanField(default=True)
+    marketing_communications = models.BooleanField(default=True)
     privacy_settings = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
