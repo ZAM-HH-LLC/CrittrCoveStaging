@@ -27,9 +27,18 @@ Extra instructions:
 1. Try to reduce server load where it makes sense. For example, on the bookingstepmodal's first step: the service and pets editor shouldn't call the backend if the backend got a service and pet, unless and changes were done to it. Only call the backend when needed, or in the above example, when it has changes from the data recieved from the backend. 
 2. When adding any frontend call to the backend, these should be done inside of CrittrCoveStaging/src/api/API.js with a sufficient comment above them with what the function is doing/sending and what the backend should be responding with
 3. When adding new debug messages with console.log on the frontend, make sure to use the authContext.js's debugLog function to print the message to the log, DO NOT USE THE is_DEBUG from AuthContext.js as the debugLog already accounts for this. The function is working for logging, so anytime cursor ai wants to add a console log, instead of console.log("message"), use debugLog("Message", dataForMessage); 
-4. when adding error messages or anything of the sort, NEVER use alerts. Use modals instead for a more friendly user experience, and compatibility across platforms.
+4. when adding error messages or anything of the sort, NEVER use alerts. Use modals instead for a more friendly user experience, and compatibility across platforms. Any errors or successes from the api responses should result in the toast showing like it does on the profilinfotab.js file. 
 5. Anytime i ask you a question about anything, your job is to respond and think about the architecture like a senior software engineer would. 
 6. Ensure to follow DRY (Do Not Repeat Yourself) principles. Code should not repeat. If an endpoint has similar code as another endpoint, consider centralizing that similar code into a function they both reference. Same with frontend code.
+7. Use Snake Case for Variable Names and Title Case for Values – Prioritize Consistency and Readability Across Backend and Frontend
+    Variable names should always use snake_case. This applies to all keys in your database models, serializers, API responses, and frontend code that references backend data.
+        ✅ unit_of_time, service_type, pet_name
+        ❌ unitOfTime, UnitOfTime, UNIT_OF_TIME
+    Values (i.e., the actual content stored in or returned by these variables) should use Title Case, written exactly as they are displayed to the user.
+        ✅ "Dog", "Cat", "Per Visit", "Every 15 Min"
+        ❌ "DOG", "CAT", "PER_VISIT", "15_MIN"
+    Frontend and backend values should always match exactly. Avoid using internal codes or ALL_CAPS values that require mapping. What the user sees should be what’s stored and transmitted.
+8. Avoid duplicating data in responses. for example, if we are returning base rate = service.base_rate, if we are using service.base_rate for anything else in the response, we shouldn't because we are already returning that value to the client. 
 
 Debugging:
-1. If we encounter a 404 not found after making changes to frontend files, it is not a backend issue 99.999% of the time, even if we edit views and v1/urls.py, it still isn't the issue with the url being incorrect, it is almost always an import issue, using a variable that doesn't exist, or something like that.
+1. If we encounter a 404 not found after making changes to frontend files, it is not a backend issue 99.999% of the time, even if we edit views and v1/urls.py on the backend, it still isn't the issue with the url being incorrect, it is almost always an import issue, using a variable that doesn't exist, or something like that.

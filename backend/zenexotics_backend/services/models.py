@@ -2,14 +2,6 @@ from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
 class Service(models.Model):
-    ANIMAL_TYPE_CHOICES = [
-        ('DOG', 'Dog'),
-        ('CAT', 'Cat'),
-        ('EXOTIC', 'Exotic'),
-        ('FARM', 'Farm Animal'),
-        ('OTHER', 'Other'),
-    ]
-
     MODERATION_STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('APPROVED', 'Approved'),
@@ -39,7 +31,7 @@ class Service(models.Model):
     professional = models.ForeignKey('professionals.Professional', on_delete=models.CASCADE)
     service_name = models.CharField(max_length=255)
     description = models.TextField()
-    animal_type = models.CharField(max_length=50, choices=ANIMAL_TYPE_CHOICES)
+    animal_type = models.CharField(max_length=50)
     categories = ArrayField(models.CharField(max_length=100), blank=True)
     base_rate = models.DecimalField(max_digits=10, decimal_places=2)
     additional_animal_rate = models.DecimalField(max_digits=10, decimal_places=2)

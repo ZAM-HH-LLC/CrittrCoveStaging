@@ -48,6 +48,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       service_name: updatedService.serviceName,
       description: updatedService.serviceDescription,
       unit_of_time: updatedService.lengthOfService,
+      is_overnight: updatedService.isOvernight || false,
       base_rate: updatedService.rates.base_rate,
       additional_animal_rate: updatedService.rates.additionalAnimalRate,
       holiday_rate: updatedService.rates.holidayRate,

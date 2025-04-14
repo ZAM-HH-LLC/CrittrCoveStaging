@@ -12,6 +12,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { TIME_UNIT_MAPPING, BACKEND_TO_FRONTEND_TIME_UNIT } from '../../data/mockData';
+import { debugLog } from '../../context/AuthContext';
 
 const TIME_UNITS = Object.keys(TIME_UNIT_MAPPING);
 const ANIMAL_THRESHOLDS = ['1', '2', '3', '4', '5'];
@@ -30,23 +31,23 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
   useEffect(() => {
     // If we have a base_rate_unit from backend but it's not in our mapping, initialize with default
     if (serviceData.rates?.base_rate_unit && !BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit]) {
-      console.log('MBA5931 - Converting initial base_rate_unit to mapped value');
+      debugLog('MBA5931', 'Converting initial base_rate_unit to mapped value');
       const frontendKey = Object.keys(TIME_UNIT_MAPPING).find(
         key => TIME_UNIT_MAPPING[key] === serviceData.rates.base_rate_unit
       );
       
       if (!frontendKey && serviceData.rates.base_rate_unit) {
         // If we don't have a mapping for this value, keep the backend value
-        console.log('MBA5931 - No mapping found for:', serviceData.rates.base_rate_unit);
+        debugLog('MBA5931', 'No mapping found for:', serviceData.rates.base_rate_unit);
       }
     }
   }, []);
 
   useEffect(() => {
-    console.log('MBA5931 - Available TIME_UNITS:', TIME_UNITS);
-    console.log('MBA5931 - TIME_UNIT_MAPPING:', TIME_UNIT_MAPPING);
-    console.log('MBA5931 - Current base_rate_unit:', serviceData.rates?.base_rate_unit);
-    console.log('MBA5931 - Displayed unit text:', serviceData.rates?.base_rate_unit ? 
+    debugLog('MBA5931', 'Available TIME_UNITS:', TIME_UNITS);
+    debugLog('MBA5931', 'TIME_UNIT_MAPPING:', TIME_UNIT_MAPPING);
+    debugLog('MBA5931', 'Current base_rate_unit:', serviceData.rates?.base_rate_unit);
+    debugLog('MBA5931', 'Displayed unit text:', serviceData.rates?.base_rate_unit ? 
       (BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit] || serviceData.rates.base_rate_unit) : 
       TIME_UNITS[0]);
   }, [serviceData.rates?.base_rate_unit]);
@@ -176,23 +177,25 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
 
     return (
       <View style={[styles.dropdownContainer, containerStyle]}>
-        {options.map((option) => (
-          <TouchableOpacity
-            key={option}
-            style={[
-              styles.dropdownItem,
-              selectedValue === option && styles.selectedDropdownItem
-            ]}
-            onPress={() => onSelect(option)}
-          >
-            <Text style={[
-              styles.dropdownText,
-              selectedValue === option && styles.selectedDropdownText
-            ]}>
-              {option}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <ScrollView style={styles.dropdownScroll} contentContainerStyle={styles.dropdownScrollContent}>
+          {options.map((option) => (
+            <TouchableOpacity
+              key={option}
+              style={[
+                styles.dropdownItem,
+                selectedValue === option && styles.selectedDropdownItem
+              ]}
+              onPress={() => onSelect(option)}
+            >
+              <Text style={[
+                styles.dropdownText,
+                selectedValue === option && styles.selectedDropdownText
+              ]}>
+                {option}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
     );
   };
@@ -465,6 +468,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    maxHeight: 200,
+  },
+  dropdownScroll: {
+    width: '100%',
+  },
+  dropdownScrollContent: {
+    flexGrow: 1,
   },
   dropdownItem: {
     padding: 12,

@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   Platform,
   ScrollView,
+  ActivityIndicator
 } from 'react-native';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
@@ -16,6 +17,8 @@ import { debugLog } from '../context/AuthContext';
 import CategorySelectionStep from './serviceCreation/CategorySelectionStep';
 import ServiceDetailsStep from './serviceCreation/ServiceDetailsStep';
 import RatesAndReviewStep from './serviceCreation/RatesAndReviewStep';
+import { createService } from '../api/API';
+import { useToast } from './ToastProvider';
 
 const STEPS = {
   CATEGORY_SELECTION: {
@@ -46,6 +49,7 @@ const ServiceCreationModal = ({
     animalTypes: [],
     serviceName: '',
     serviceDescription: '',
+    isOvernight: false,
     rates: {
       base_rate: '',
       base_rate_unit: 'Per Visit',
@@ -57,6 +61,8 @@ const ServiceCreationModal = ({
     additionalRates: []
   });
   const [error, setError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const showToast = useToast();
 
   // Reset state when modal is opened
   useEffect(() => {
@@ -67,6 +73,7 @@ const ServiceCreationModal = ({
         animalTypes: [],
         serviceName: '',
         serviceDescription: '',
+        isOvernight: false,
         rates: {
           base_rate: '',
           base_rate_unit: 'Per Visit',
@@ -117,8 +124,147 @@ const ServiceCreationModal = ({
     if (currentStep < STEPS.RATES_AND_REVIEW.id) {
       setCurrentStep(prev => prev + 1);
     } else {
-      onSave(serviceData);
-      setHasUnsavedChanges(true);
+      handleSaveService();
+    }
+  };
+
+  const handleSaveService = async () => {
+    debugLog('MBA54321', 'Original serviceData:', serviceData);
+    setIsSubmitting(true);
+    
+    try {
+      // Check what type of data we have for animalTypes
+      let animalType = 'Other';
+      if (serviceData.animalTypes.length > 0) {
+        const firstAnimalType = serviceData.animalTypes[0];
+        animalType = typeof firstAnimalType === 'string' ? 
+          firstAnimalType : 
+          (firstAnimalType.name || 'Other');
+      }
+      
+      // Check what type of data we have for generalCategories
+      const categories = serviceData.generalCategories.map(cat => 
+        typeof cat === 'string' ? cat : (cat.name || 'Uncategorized')
+      );
+      
+      // Format the data according to the backend's expected format
+      const formattedData = {
+        service_name: serviceData.serviceName,
+        description: serviceData.serviceDescription,
+        animal_type: animalType,
+        categories: categories,
+        base_rate: serviceData.rates.base_rate,
+        additional_animal_rate: serviceData.rates.additionalAnimalRate || '0',
+        holiday_rate: serviceData.rates.holidayRate || '0',
+        applies_after: parseInt(serviceData.rates.additionalAnimalThreshold) || 1,
+        unit_of_time: serviceData.rates.base_rate_unit,
+        is_overnight: serviceData.isOvernight || false,
+        additional_rates: serviceData.additionalRates.map(rate => ({
+          title: rate.title,
+          description: rate.description || '',
+          rate: rate.rate
+        }))
+      };
+      
+      debugLog('MBA54321', 'Formatted data for backend:', formattedData);
+      
+      // Call the API to create the service
+      const response = await createService(formattedData);
+      debugLog('MBA54321', 'Service created successfully, response:', response);
+      
+      // Show success toast
+      showToast({
+        message: 'Service created successfully!',
+        type: 'success',
+        duration: 3000
+      });
+      
+      // Format the data according to what ServiceManager expects
+      const serviceManagerData = {
+        serviceName: serviceData.serviceName,
+        serviceDescription: serviceData.serviceDescription,
+        lengthOfService: serviceData.rates.base_rate_unit,
+        isOvernight: serviceData.isOvernight || false,
+        rates: {
+          base_rate: serviceData.rates.base_rate,
+          additionalAnimalRate: serviceData.rates.additionalAnimalRate || '0',
+          holidayRate: serviceData.rates.holidayRate || '0'
+        },
+        generalCategories: serviceData.generalCategories.map(cat => {
+          if (typeof cat === 'string') {
+            return {
+              id: cat.toLowerCase().replace(/\s+/g, '_'),
+              name: cat,
+              isCustom: false
+            };
+          }
+          return {
+            id: cat.id || cat.name.toLowerCase().replace(/\s+/g, '_'),
+            name: cat.name,
+            isCustom: cat.isCustom || false
+          };
+        }),
+        animalTypes: serviceData.animalTypes.map(type => {
+          if (typeof type === 'string') {
+            return {
+              name: type,
+              categoryId: null,
+              isCustom: false
+            };
+          }
+          return {
+            name: type.name,
+            categoryId: type.categoryId,
+            isCustom: type.isCustom || false
+          };
+        }),
+        additionalRates: serviceData.additionalRates.map(rate => ({
+          label: rate.title,
+          value: rate.rate,
+          description: rate.description || ''
+        }))
+      };
+      
+      // Call the onSave prop with properly formatted data
+      if (onSave) {
+        onSave(serviceManagerData);
+      }
+      
+      // Reset form and close modal
+      setServiceData({
+        generalCategories: [],
+        animalTypes: [],
+        serviceName: '',
+        serviceDescription: '',
+        isOvernight: false,
+        rates: {
+          base_rate: '',
+          base_rate_unit: 'Per Visit',
+          additionalAnimalRate: '',
+          additionalAnimalThreshold: '1',
+          hasHolidayRate: false,
+          holidayRate: '0'
+        },
+        additionalRates: []
+      });
+      
+      setCurrentStep(STEPS.CATEGORY_SELECTION.id);
+      setHasUnsavedChanges(false);
+      onClose();
+    } catch (error) {
+      debugLog('MBA54321', 'Error creating service:', error);
+      debugLog('MBA54321', 'Error response:', error.response?.data);
+      
+      // Show error toast
+      showToast({
+        message: `Failed to create service: ${error.response?.data?.error || error.message}`,
+        type: 'error',
+        duration: 4000
+      });
+      
+      setError('Failed to create service. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -187,6 +333,7 @@ const ServiceCreationModal = ({
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={handleBack}
+              disabled={isSubmitting}
             >
               <Text style={styles.cancelButtonText}>
                 {currentStep > STEPS.CATEGORY_SELECTION.id ? 'Back' : 'Cancel'}
@@ -195,17 +342,21 @@ const ServiceCreationModal = ({
             <TouchableOpacity
               style={[
                 styles.nextButton,
-                !canProceedToNextStep() && styles.disabledButton
+                (!canProceedToNextStep() || isSubmitting) && styles.disabledButton
               ]}
               onPress={handleNext}
-              disabled={!canProceedToNextStep()}
+              disabled={!canProceedToNextStep() || isSubmitting}
             >
-              <Text style={[
-                styles.nextButtonText,
-                !canProceedToNextStep() && styles.disabledButtonText
-              ]}>
-                {currentStep === STEPS.RATES_AND_REVIEW.id ? 'Create Service' : 'Next'}
-              </Text>
+              {isSubmitting && currentStep === STEPS.RATES_AND_REVIEW.id ? (
+                <ActivityIndicator color={theme.colors.surface} size="small" />
+              ) : (
+                <Text style={[
+                  styles.nextButtonText,
+                  !canProceedToNextStep() && styles.disabledButtonText
+                ]}>
+                  {currentStep === STEPS.RATES_AND_REVIEW.id ? 'Create Service' : 'Next'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>

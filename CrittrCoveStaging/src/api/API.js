@@ -416,3 +416,46 @@ export const fixPetOwner = async (petId) => {
     throw error;
   }
 };
+
+/**
+ * Creates a new professional service
+ * @param {Object} serviceData - Data for the new service
+ * @returns {Promise<Object>} - The created service data
+ */
+export const createService = async (serviceData) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    // Log the data we're sending to the server
+    debugLog('MBA54321', 'Creating new service - sending data to backend:', serviceData);
+
+    // Make sure all numeric values are properly formatted as strings to avoid type issues
+    const formattedData = {
+      ...serviceData,
+      base_rate: String(serviceData.base_rate),
+      additional_animal_rate: String(serviceData.additional_animal_rate || 0),
+      holiday_rate: String(serviceData.holiday_rate || 0),
+    };
+
+    const response = await axios.post(
+      `${API_BASE_URL}/api/services/v1/create/`,
+      formattedData,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    debugLog('MBA54321', 'Service created successfully - backend response:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA54321', 'Error creating service:', error);
+    debugLog('MBA54321', 'Error response data:', error.response?.data);
+    throw error;
+  }
+};
