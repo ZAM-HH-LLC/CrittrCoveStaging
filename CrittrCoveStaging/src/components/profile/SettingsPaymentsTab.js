@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { getTimeSettings, updateTimeSettings } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
+import { useToast } from '../../components/ToastProvider';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -64,6 +65,7 @@ const SettingsPaymentsTab = ({
   const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
   const [timezones, setTimezones] = useState([]);
   const [loading, setLoading] = useState(false);
+  const showToast = useToast();
 
   useEffect(() => {
     // Fetch user's time settings when component mounts
@@ -99,8 +101,18 @@ const SettingsPaymentsTab = ({
       setTimezone(newTimezone);
       setTimezoneModalVisible(false);
       debugLog('MBA12345 Updated timezone to:', newTimezone);
+      showToast({
+        message: 'Timezone updated successfully',
+        type: 'success',
+        duration: 3000
+      });
     } catch (error) {
       debugLog('MBA12345 Error updating timezone:', error);
+      showToast({
+        message: 'Failed to update timezone. Please try again.',
+        type: 'error',
+        duration: 4000
+      });
     } finally {
       setLoading(false);
     }
@@ -379,6 +391,22 @@ const SettingsPaymentsTab = ({
               <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
+          
+          {/* TODO: implement after MVP Launch 
+          <View style={styles.settingItem}>
+            <View style={styles.settingContent}>
+              <MaterialCommunityIcons name="clock-time-eight" size={24} color={theme.colors.primary} />
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Military Time (24-hour)</Text>
+                <Text style={styles.settingDescription}>Use 24-hour time format instead of 12-hour format</Text>
+              </View>
+            </View>
+            <Switch
+              value={use_military_time}
+              onValueChange={(value) => handleUpdateSetting('use_military_time', value)}
+              trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
+            />
+          </View> */}
         </View>
       </View>
 
@@ -434,6 +462,22 @@ const SettingsPaymentsTab = ({
             <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
+        
+        {/* TODO: implement after MVP Launch 
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="clock-time-eight" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Military Time (24-hour)</Text>
+              <Text style={styles.settingDescription}>Use 24-hour time format instead of 12-hour format</Text>
+            </View>
+          </View>
+          <Switch
+            value={use_military_time}
+            onValueChange={(value) => handleUpdateSetting('use_military_time', value)}
+            trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
+          />
+        </View> */}
       </View>
     </ScrollView>
   );
@@ -451,7 +495,7 @@ const SettingsPaymentsTab = ({
           </View>
           <Switch
             value={push_notifications}
-            onValueChange={(value) => onUpdateSetting('push_notifications', value)}
+            onValueChange={(value) => handleUpdateSetting('push_notifications', value)}
             trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
           />
         </View>
@@ -466,7 +510,7 @@ const SettingsPaymentsTab = ({
           </View>
           <Switch
             value={email_updates}
-            onValueChange={(value) => onUpdateSetting('email_updates', value)}
+            onValueChange={(value) => handleUpdateSetting('email_updates', value)}
             trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
           />
         </View>
@@ -481,7 +525,7 @@ const SettingsPaymentsTab = ({
           </View>
           <Switch
             value={marketing_communications}
-            onValueChange={(value) => onUpdateSetting('marketing_communications', value)}
+            onValueChange={(value) => handleUpdateSetting('marketing_communications', value)}
             trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
           />
         </View>
@@ -502,7 +546,7 @@ const SettingsPaymentsTab = ({
           </View>
           <Switch
             value={profile_visibility}
-            onValueChange={(value) => onUpdateSetting('profile_visibility', value)}
+            onValueChange={(value) => handleUpdateSetting('profile_visibility', value)}
             trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
           />
         </View>
@@ -526,7 +570,7 @@ const SettingsPaymentsTab = ({
       {setting.type === 'toggle' ? (
         <Switch
           value={setting.value}
-          onValueChange={(value) => onUpdateSetting(setting.id, value)}
+          onValueChange={(value) => handleUpdateSetting(setting.id, value)}
           trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
         />
       ) : setting.type === 'timezone' ? (
@@ -540,7 +584,7 @@ const SettingsPaymentsTab = ({
       ) : (
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => onUpdateSetting(setting.id)}
+          onPress={() => handleUpdateSetting(setting.id)}
         >
           <Text style={styles.actionButtonText}>{setting.actionText || 'Update'}</Text>
         </TouchableOpacity>
@@ -583,6 +627,42 @@ const SettingsPaymentsTab = ({
       </TouchableOpacity>
     </View>
   );
+
+  // Handle setting updates with toast notifications
+  const handleUpdateSetting = (id, value) => {
+    debugLog('MBA54321 Updating setting:', { id, value });
+    
+    // Get readable setting name for toast messages
+    const settingNames = {
+      'push_notifications': 'Push Notifications',
+      'email_updates': 'Email Updates',
+      'marketing_communications': 'Marketing Communications',
+      'profile_visibility': 'Profile Visibility',
+      'use_military_time': 'Military Time'
+    };
+    
+    const settingName = settingNames[id] || id;
+    
+    // Call the parent update function
+    onUpdateSetting(id, value)
+      .then(() => {
+        // Show success toast
+        showToast({
+          message: `${settingName} ${value ? 'enabled' : 'disabled'} successfully`,
+          type: 'success',
+          duration: 3000
+        });
+      })
+      .catch(error => {
+        debugLog('MBA54321 Error updating setting:', error);
+        // Show error toast
+        showToast({
+          message: `Failed to update ${settingName.toLowerCase()}. Please try again.`,
+          type: 'error',
+          duration: 4000
+        });
+      });
+  };
 
   return (
     <View style={styles.container}>

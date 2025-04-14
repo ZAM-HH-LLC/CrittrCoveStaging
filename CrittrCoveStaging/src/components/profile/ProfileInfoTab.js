@@ -433,6 +433,14 @@ const ProfileInfoTab = ({
     country: 'USA',
     insurance: { type: 'none', card: null }
   });
+
+  // Make sure parent component is notified about unsaved changes
+  useEffect(() => {
+    if (setHasUnsavedChanges) {
+      debugLog('MBA230uvj0834h9', 'Updating parent component with hasUnsavedChanges:', hasEdits);
+      setHasUnsavedChanges(hasEdits);
+    }
+  }, [hasEdits, setHasUnsavedChanges]);
   
   // Update the initial useEffect to only run once
   useEffect(() => {
@@ -534,6 +542,14 @@ const ProfileInfoTab = ({
     
     // This triggers the modal to open
     setEditingField(field);
+    
+    // Mark that we're starting an edit
+    setHasEdits(true);
+    
+    // Notify parent component
+    if (setHasUnsavedChanges) {
+      setHasUnsavedChanges(true);
+    }
   };
 
   // Update extractAddressComponents to handle address objects correctly
@@ -620,6 +636,12 @@ const ProfileInfoTab = ({
     if (!hasFieldChanged(field, value)) {
       debugLog('MBA230uvj0834h9', `No changes detected for ${field}, skipping save.`);
       setEditingField(null);
+      
+      // Reset state since no changes were made
+      setHasEdits(false);
+      if (setHasUnsavedChanges) {
+        setHasUnsavedChanges(false);
+      }
       return;
     }
 
@@ -672,20 +694,29 @@ const ProfileInfoTab = ({
       const updatedProfile = await updateProfileInfo(profileData);
       debugLog('MBA4928', `Backend response for ${field}:`, updatedProfile);
       
-      // SIMPLIFIED: One-time update of display values and original values
-      // Directly update the field's value without spreading or manipulating nested objects
-      
       // Update display values first
       if (field === 'name') {
         setDisplayValues({
           ...displayValues, 
           name: updatedProfile.name || displayValues.name
         });
+        
+        // Update original values to match the new values from the server
+        setOriginalValues(prevValues => ({
+          ...prevValues,
+          name: updatedProfile.name || prevValues.name
+        }));
       } else if (field === 'email') {
         setDisplayValues({
           ...displayValues, 
           email: updatedProfile.email || displayValues.email
         });
+        
+        // Update original values
+        setOriginalValues(prevValues => ({
+          ...prevValues,
+          email: updatedProfile.email || prevValues.email
+        }));
       } else if (field === 'bio') {
         // Update display values with the correct field from the response
         if (isProfessional) {
@@ -693,11 +724,23 @@ const ProfileInfoTab = ({
             ...displayValues, 
             bio: updatedProfile.bio || displayValues.bio
           });
+          
+          // Update original values
+          setOriginalValues(prevValues => ({
+            ...prevValues,
+            bio: updatedProfile.bio || prevValues.bio
+          }));
         } else {
           setDisplayValues({
             ...displayValues, 
             bio: updatedProfile.about_me || displayValues.bio
           });
+          
+          // Update original values
+          setOriginalValues(prevValues => ({
+            ...prevValues,
+            bio: updatedProfile.about_me || prevValues.bio
+          }));
         }
       } else if (field === 'location') {
         // Simple location formatting
@@ -706,9 +749,37 @@ const ProfileInfoTab = ({
           ...displayValues, 
           location: newLocation
         });
+        
+        // Update original values for all address components
+        setOriginalValues(prevValues => ({
+          ...prevValues,
+          location: newLocation,
+          address: updatedProfile.address || prevValues.address,
+          apartment: updatedProfile.apartment || prevValues.apartment,
+          city: updatedProfile.city || prevValues.city,
+          state: updatedProfile.state || prevValues.state,
+          zip: updatedProfile.zip || prevValues.zip,
+          country: updatedProfile.country || prevValues.country
+        }));
       } else if (field === 'insurance') {
         setSelectedInsurance(value);
+        
+        // Update original values
+        setOriginalValues(prevValues => ({
+          ...prevValues,
+          insurance: value
+        }));
       }
+      
+      // Log the updated original values for debugging
+      debugLog('MBA4928', `Original values updated after save for ${field}`, { 
+        originalValues: {
+          ...originalValues,
+          [field]: field === 'location' ? 
+            `${updatedProfile.address || ''}${updatedProfile.city ? `, ${updatedProfile.city}` : ''}${updatedProfile.state ? `, ${updatedProfile.state}` : ''}` : 
+            updatedProfile[field]
+        }
+      });
       
       // Success notification
       showToast({
@@ -716,6 +787,12 @@ const ProfileInfoTab = ({
         type: 'success',
         duration: 3000
       });
+      
+      // Reset state since changes were saved
+      setHasEdits(false);
+      if (setHasUnsavedChanges) {
+        setHasUnsavedChanges(false);
+      }
       
       // Notify parent component if needed
       if (onSaveComplete) {
@@ -730,6 +807,11 @@ const ProfileInfoTab = ({
         type: 'error',
         duration: 4000
       });
+      
+      // Keep edit state if there was an error
+      if (setHasUnsavedChanges) {
+        setHasUnsavedChanges(true);
+      }
     } finally {
       setIsSaving(false);
       setEditingField(null);

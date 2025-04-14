@@ -229,30 +229,42 @@ export const getUserName = async () => {
 };
 
 /**
- * Get or update user profile data
- * @param {Object} data - Optional data for updating profile
+ * Get user profile data
  * @returns {Promise<Object>} - User profile data
  */
-export const userProfile = async (data = null) => {
+export const userProfile = async () => {
   const url = `${API_BASE_URL}/api/users/v1/profile/`;
   
   try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    debugLog('MBA12345', 'Fetching user profile data');
+    
     const response = await fetch(url, {
-      method: data ? 'PATCH' : 'GET',
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await getStorage('userToken')}`,
+        'Authorization': `Bearer ${token}`,
       },
-      ...(data && { body: JSON.stringify(data) }),
     });
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    debugLog('MBA12345', 'User profile data fetched successfully:', {
+      name: data.name,
+      email: data.email,
+      address: data.address
+    });
+    
+    return data;
   } catch (error) {
-    console.error('Error in userProfile:', error);
+    debugLog('MBA12345', 'Error in userProfile:', error);
     throw error;
   }
 };
@@ -260,16 +272,39 @@ export const userProfile = async (data = null) => {
 /**
  * Update user profile information
  * @param {Object} profileData - Data to update in the user profile
- * @returns {Promise<Object>} - The complete updated profile data
+ * @returns {Promise<Object>} - Only the updated fields
  */
 export const updateProfileInfo = async (profileData) => {
   try {
     debugLog('MBA76543', 'Updating profile info with data:', profileData);
     
-    // Use the userProfile function with data to trigger a PATCH request
-    const updatedProfile = await userProfile(profileData);
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
     
-    debugLog('MBA76543', 'Profile updated successfully:', updatedProfile);
+    // Handle FormData differently than JSON
+    const isFormData = profileData instanceof FormData;
+    
+    debugLog('MBA76543', `Making ${isFormData ? 'FormData' : 'JSON'} request to update profile`);
+    
+    const response = await fetch(`${API_BASE_URL}/api/users/v1/update-profile/`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      },
+      body: isFormData ? profileData : JSON.stringify(profileData),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+    
+    const updatedProfile = await response.json();
+    
+    debugLog('MBA76543', 'Profile updated successfully with response:', updatedProfile);
     return updatedProfile;
   } catch (error) {
     debugLog('MBA76543', 'Error updating profile info:', error);

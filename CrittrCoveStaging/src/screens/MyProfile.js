@@ -299,16 +299,28 @@ const MyProfile = () => {
 
   // Handle save completion from child components
   const handleSaveComplete = (updatedProfile) => {
-    debugLog('MBA9876', 'Save completed with updated profile:', {
-      updatedName: updatedProfile.name,
-      updatedEmail: updatedProfile.email
-    });
+    debugLog('MBA9876', 'Save completed with updated profile:', updatedProfile);
     
     // Update the profileData with the saved data
-    setProfileData(prev => ({
-      ...prev,
-      ...updatedProfile
-    }));
+    setProfileData(prev => {
+      const newProfileData = {
+        ...prev,
+        ...updatedProfile
+      };
+      
+      // Log the updated profile data for debugging
+      debugLog('MBA9876', 'Updated profile data after save:', {
+        name: newProfileData.name,
+        email: newProfileData.email,
+        address: newProfileData.address,
+        city: newProfileData.city,
+        state: newProfileData.state,
+        zip: newProfileData.zip,
+        country: newProfileData.country
+      });
+      
+      return newProfileData;
+    });
     
     // Reset state flags
     setHasUnsavedChanges(false);
@@ -472,7 +484,9 @@ const MyProfile = () => {
               debugLog('Updating setting:', { id, value });
               // Create an update object with just the changed setting
               const updateData = { [id]: value };
-              updateProfileInfo(updateData)
+              
+              // Return the promise for proper chaining in the component
+              return updateProfileInfo(updateData)
                 .then(updatedProfile => {
                   // Update the profile data with the response
                   setProfileData(prev => ({
@@ -480,9 +494,8 @@ const MyProfile = () => {
                     ...updatedProfile
                   }));
                   debugLog('MBA54321 Setting updated successfully:', updateData);
-                })
-                .catch(error => {
-                  debugLog('MBA54321 Error updating setting:', error);
+                  // Return the updated profile for the promise chain
+                  return updatedProfile;
                 });
             }}
             paymentMethods={profileData?.payment_methods || []}

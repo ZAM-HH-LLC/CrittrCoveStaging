@@ -322,6 +322,56 @@ def update_user_profile(user, data):
             user.phone_number = data['phone']
             response_data['phone'] = data['phone']
         
+        # Handle settings toggle fields from SettingsPaymentsTab
+        if 'profile_visibility' in data:
+            user.is_profile_visible = data['profile_visibility']
+            response_data['profile_visibility'] = user.is_active and user.is_profile_visible
+            logger.debug(f"helpers.py: Updated profile visibility for user {user.id} to {user.is_profile_visible}")
+        
+        # Handle user settings
+        try:
+            user_settings, created = UserSettings.objects.get_or_create(user=user)
+            
+            # Update user settings if provided
+            settings_updated = False
+            
+            if 'push_notifications' in data:
+                user_settings.push_notifications = data['push_notifications']
+                response_data['push_notifications'] = data['push_notifications']
+                settings_updated = True
+                logger.debug(f"helpers.py: Updated push notifications for user {user.id} to {data['push_notifications']}")
+            
+            if 'email_updates' in data:
+                user_settings.email_updates = data['email_updates']
+                response_data['email_updates'] = data['email_updates']
+                settings_updated = True
+                logger.debug(f"helpers.py: Updated email updates for user {user.id} to {data['email_updates']}")
+            
+            if 'marketing_communications' in data:
+                user_settings.marketing_communications = data['marketing_communications']
+                response_data['marketing_communications'] = data['marketing_communications']
+                settings_updated = True
+                logger.debug(f"helpers.py: Updated marketing communications for user {user.id} to {data['marketing_communications']}")
+            
+            if 'timezone' in data:
+                user_settings.timezone = data['timezone']
+                response_data['timezone'] = data['timezone']
+                settings_updated = True
+                logger.debug(f"helpers.py: Updated timezone for user {user.id} to {data['timezone']}")
+            
+            if 'use_military_time' in data:
+                user_settings.use_military_time = data['use_military_time']
+                response_data['use_military_time'] = data['use_military_time']
+                settings_updated = True
+                logger.debug(f"helpers.py: Updated use_military_time for user {user.id} to {data['use_military_time']}")
+            
+            # Save user settings if any were updated
+            if settings_updated:
+                user_settings.save()
+                logger.debug(f"helpers.py: Saved updated user settings for user {user.id}")
+        except Exception as e:
+            logger.error(f"helpers.py: Error updating user settings: {str(e)}")
+        
         # Handle address fields - update or create Address record
         address_fields = ['address', 'apartment', 'city', 'state', 'zip', 'country']
         has_address_data = any(field in data for field in address_fields)
