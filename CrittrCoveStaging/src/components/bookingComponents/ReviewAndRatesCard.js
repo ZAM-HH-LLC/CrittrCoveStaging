@@ -186,7 +186,7 @@ const ReviewAndRatesCard = ({ bookingData }) => {
           {/* Total Owner Cost */}
           <View style={styles.totalAmountContainer}>
             <Text style={styles.totalLabel}>Total Owner Cost</Text>
-            <Text style={styles.totalAmount}>{formatCurrency(costSummary.total_owner_cost)}</Text>
+            <Text style={styles.totalAmount}>{formatCurrency(costSummary.total_client_cost)}</Text>
           </View>
 
           {/* Divider */}

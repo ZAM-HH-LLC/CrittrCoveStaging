@@ -558,8 +558,8 @@ export const formatDateTimeRangeFromUTC = ({
       console.log('MBA134njo0vh02c23 Timezone abbreviation:', tzAbbrev);
 
       // Format the dates without timezone in the format string
-      const startFormatted = startLocalMoment.format("MMM D, YYYY at h:mm A");
-      const endFormatted = endLocalMoment.format("MMM D, YYYY at h:mm A");
+      const startFormatted = startLocalMoment.format("MMM D, YYYY h:mm A");
+      const endFormatted = endLocalMoment.format("MMM D, YYYY h:mm A");
 
       // Add timezone abbreviation if needed
       const finalStart = includeTimezone ? `${startFormatted} ${tzAbbrev}` : startFormatted;
