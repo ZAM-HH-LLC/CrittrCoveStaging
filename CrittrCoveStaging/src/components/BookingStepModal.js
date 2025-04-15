@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '95%',
-    maxWidth: Platform.OS === 'web' ? 800 : '100%',
+    maxWidth: Platform.OS === 'web' ? 600 : '100%',
     maxHeight: '90%',
     backgroundColor: theme.colors.background,
     borderRadius: 12,

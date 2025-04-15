@@ -429,15 +429,15 @@ const TimeRangeSelector = ({
     <View style={[styles.timeSelectContainer, type === 'start' ? styles.startTimeContainer : styles.endTimeContainer]}>
       <View style={styles.dateTimeWrapper}>
         <View style={styles.dateHeaderContainer}>
+          <Text style={styles.dateLabel}>
+            {type === 'start' ? 'Start Time:' : 'End Time:'}
+          </Text>
           <View style={styles.dateContainer}>
             <MaterialIcons name="calendar-today" size={20} color={theme.colors.mainColors.main} />
             <Text style={styles.dateText}>
               {formatDate(type === 'start' ? dateRange?.startDate : dateRange?.endDate)}
             </Text>
           </View>
-          <Text style={styles.dateLabel}>
-            {type === 'start' ? 'Start Date:' : 'End Date:'}
-          </Text>
         </View>
         <TouchableOpacity 
           style={styles.timeSelectButton}
@@ -648,7 +648,7 @@ const styles = StyleSheet.create({
   },
   dateLabel: {
     fontSize: theme.fontSizes.medium,
-    color: theme.colors.mainColors.main,
+    color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   timeSelectButton: {
