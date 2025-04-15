@@ -209,7 +209,7 @@ def create_service(request):
             holiday_rate_is_percent=is_percent,
             applies_after=data.get('applies_after', 1),
             is_overnight=data.get('is_overnight', False),
-            moderation_status='PENDING'
+            moderation_status='APPROVED'
         )
         
         service.save()
@@ -414,9 +414,6 @@ def update_service(request, service_id):
             
             service.holiday_rate = holiday_rate
             service.holiday_rate_is_percent = is_percent
-        
-        # Always set moderation status to PENDING on update
-        service.moderation_status = 'PENDING'
         
         service.save()
         logger.info(f"Updated service with ID: {service.service_id}")

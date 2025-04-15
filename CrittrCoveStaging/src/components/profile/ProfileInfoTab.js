@@ -215,7 +215,8 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
               <Text style={styles.insuranceTypeDescription}>Upload your existing insurance card</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity 
+          {/* TODO: Implement after MVP
+           <TouchableOpacity 
             style={styles.insuranceTypeButton}
             onPress={() => handleInsuranceTypeSelect('platform')}
           >
@@ -224,7 +225,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
               <Text style={styles.insuranceTypeTitle}>Use Platform Insurance</Text>
               <Text style={styles.insuranceTypeDescription}>Select from our insurance providers</Text>
             </View>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       );
     }

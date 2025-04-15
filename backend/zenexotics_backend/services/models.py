@@ -55,7 +55,7 @@ class Service(models.Model):
     moderation_status = models.CharField(
         max_length=50, 
         choices=MODERATION_STATUS_CHOICES,
-        default='PENDING'
+        default='APPROVED'
     )
     moderation_notes = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
