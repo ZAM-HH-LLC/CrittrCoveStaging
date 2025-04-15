@@ -1,3 +1,4 @@
+// THIS FILE IS FOR THE BOOKING STEP MODAL
 import React, { useEffect, useContext } from 'react';
 import {
   View,
@@ -24,84 +25,6 @@ const ReviewAndRatesCard = ({ bookingData }) => {
     return `$${parseFloat(amount).toFixed(2)}`;
   };
 
-  const renderBaseRate = () => {
-    debugLog('MBA54321 Rendering base rate with data:', bookingData?.occurrences?.[0]?.rates);
-    const occurrence = bookingData?.occurrences?.[0];
-    if (!occurrence?.rates?.base_rate || !occurrence?.unit_of_time) {
-      debugLog('MBA54321 No base rate or unit of time data available');
-      return null;
-    }
-
-    return (
-      <View>
-        <Text style={styles.sectionHeader}>Base Rate</Text>
-        <View style={[styles.card, { paddingTop: 16 }]}>
-          <View style={[styles.rateItem, { paddingVertical: 0, borderBottomWidth: 0 }]}>
-            <View>
-              <Text style={styles.rateLabel}>Standard Rate</Text>
-              <Text style={styles.subLabel}>{occurrence?.unit_of_time}</Text>
-            </View>
-            <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.base_rate)}</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderAdditionalRates = () => {
-    debugLog('MBA54321 Rendering additional rates');
-    const occurrence = bookingData?.occurrences?.[0];
-    if (!occurrence?.rates) return null;
-
-    const { additional_animal_rate, holiday_rate, additional_rates = [], applies_after } = occurrence.rates;
-
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderContainer}>
-          <Text style={styles.sectionHeader}>Additional Rates</Text>
-          <TouchableOpacity>
-            <Text style={styles.addRateText}>+ Add Rate</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.card}>
-          {additional_animal_rate && (
-            <View style={styles.rateItem}>
-              <View>
-                <Text style={styles.rateLabel}>Additional Pet Rate</Text>
-                <Text style={styles.subLabel}>Applies after {applies_after} pets</Text>
-              </View>
-              <Text style={styles.additionalAmount}>+{formatCurrency(additional_animal_rate)}</Text>
-            </View>
-          )}
-          {holiday_rate && (
-            <View style={styles.rateItem}>
-              <View>
-                <Text style={styles.rateLabel}>Holiday Rate</Text>
-                <Text style={styles.subLabel}>Applied on holidays</Text>
-              </View>
-              <Text style={styles.additionalAmount}>+{formatCurrency(holiday_rate)}</Text>
-            </View>
-          )}
-          {additional_rates.map((rate, index) => (
-            <View 
-              key={index} 
-              style={[
-                styles.rateItem, 
-                index === additional_rates.length - 1 && !holiday_rate && styles.lastItem
-              ]}
-            >
-              <View>
-                <Text style={styles.rateLabel}>{rate.name}</Text>
-                <Text style={styles.subLabel}>{rate.description}</Text>
-              </View>
-              <Text style={styles.additionalAmount}>+{formatCurrency(rate.amount)}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
   const renderBookingBreakdown = () => {
     debugLog('MBA54321 Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
     const occurrence = bookingData?.occurrences?.[0];
@@ -125,7 +48,12 @@ const ReviewAndRatesCard = ({ bookingData }) => {
 
     return (
       <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Booking Breakdown</Text>
+        <View style={styles.sectionHeaderContainer}>
+          <Text style={styles.sectionHeader}>Booking Breakdown</Text>
+          <TouchableOpacity>
+            <Text style={styles.addRateText}>+ Add Rate</Text>
+          </TouchableOpacity>
+        </View>
         <View style={[styles.card, { paddingTop: 16 }]}>
           <View style={styles.breakdownSection}>
             <View style={styles.dateHeader}>
@@ -147,11 +75,49 @@ const ReviewAndRatesCard = ({ bookingData }) => {
               </View>
               <Text style={styles.breakdownAmount}>{formatCurrency(occurrence.base_total)}</Text>
             </View>
-            {/* Add any additional rate breakdowns here if needed */}
-            <View style={[styles.breakdownItem, styles.totalItem, { borderBottomWidth: 0 }]}>
-              <Text style={styles.breakdownLabel}>Date Range Total</Text>
-              <Text style={styles.breakdownAmount}>{formatCurrency(occurrence.calculated_cost)}</Text>
-            </View>
+            
+            {occurrence?.rates?.additional_animal_rate && occurrence.rates.applies_after < bookingData.pets.length && (
+              <View style={styles.breakdownItem}>
+                <View style={styles.breakdownLabelContainer}>
+                  <Text style={styles.breakdownLabel}>
+                    Additional Pet Rate (after {occurrence.rates?.applies_after || 1} {occurrence.rates?.applies_after !== 1 ? 'pets' : 'pet'})
+                  </Text>
+                  <Text style={styles.breakdownCalculation}>
+                    ${occurrence.rates.additional_animal_rate} / pet / {occurrence.unit_of_time}
+                  </Text>
+                </View>
+                <Text style={styles.breakdownAmount}>
+                  {occurrence.rates.applies_after < bookingData.pets.length ? '+' : ''}{occurrence.rates.applies_after < bookingData.pets.length ? formatCurrency(occurrence.rates.additional_animal_rate_total || occurrence.rates.additional_animal_rate) : 'NA'}
+                </Text>
+              </View>
+            )}
+            
+            {occurrence?.rates?.holiday_rate && occurrence.rates.holiday_days > 0 && (
+              <View style={[styles.breakdownItem,{ borderBottomWidth: occurrence.rates?.additional_rates.length > 0 ? 1 : 0 }]}>
+                <View style={styles.breakdownLabelContainer}>
+                  <Text style={styles.breakdownLabel}>
+                    Holiday Rate
+                  </Text>
+                  <Text style={styles.breakdownCalculation}>
+                    {formatCurrency(occurrence.rates.holiday_rate)} × {occurrence.rates.holiday_days} {occurrence.rates?.holiday_days !== 1 ? 'holidays' : 'holiday'}
+                  </Text>
+                </View>
+                <Text style={styles.breakdownAmount}>
+                  {occurrence.rates.holiday_days ? '+' : ''}{occurrence.rates.holiday_days ? formatCurrency(occurrence.rates.holiday_rate_total || occurrence.rates.holiday_rate) : 'NA'}
+                </Text>
+              </View>
+            )}
+            
+            {/* Add additional rates here if needed */}
+            {(occurrence.rates?.additional_rates || []).map((rate, index) => (
+              <View key={index} style={styles.breakdownItem}>
+                <View style={styles.breakdownLabelContainer}>
+                  <Text style={styles.breakdownLabel}>{rate.name}</Text>
+                  <Text style={styles.breakdownCalculation}>{rate.description}</Text>
+                </View>
+                <Text style={styles.breakdownAmount}>+{formatCurrency(rate.amount)}</Text>
+              </View>
+            ))}
           </View>
         </View>
       </View>
@@ -165,6 +131,7 @@ const ReviewAndRatesCard = ({ bookingData }) => {
 
     return (
       <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Cost Summary</Text>
         <View style={[styles.card, { paddingTop: 16 }]}>
           <View style={styles.subtotalRow}>
             <Text style={styles.subtotalLabel}>Subtotal</Text>
@@ -207,8 +174,6 @@ const ReviewAndRatesCard = ({ bookingData }) => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {renderBaseRate()}
-      {renderAdditionalRates()}
       {renderBookingBreakdown()}
       {renderTotalAmount()}
     </ScrollView>
@@ -238,6 +203,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginBottom: 8,
   },
+  addRateText: {
+    color: theme.colors.mainColors.main,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
   card: {
     backgroundColor: theme.colors.surfaceContrast,
     borderRadius: 8,
@@ -249,175 +220,137 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  rateItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.modernBorder,
-  },
-  lastItem: {
-    borderBottomWidth: 0,
-    paddingBottom: 0,
-  },
-  rateLabel: {
-    fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  subLabel: {
-    fontSize: 14,
-    fontFamily: theme.fonts.regular.fontFamily,
-    color: theme.colors.placeHolderText,
-  },
-  rateAmount: {
-    fontSize: 24,
-    fontFamily: theme.fonts.header.fontFamily,
-    color: theme.colors.text,
-  },
-  additionalAmount: {
-    fontSize: 24,
-    fontFamily: theme.fonts.header.fontFamily,
-    color: theme.colors.text,
-  },
-  addRateText: {
-    color: theme.colors.mainColors.main,
-    fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
   breakdownSection: {
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.modernBorder,
+    width: '100%',
   },
   dateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   dateTextContainer: {
     flex: 1,
-    marginRight: 16,
+    marginRight: 8,
   },
   dateText: {
     fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
-    flexWrap: 'wrap',
-  },
-  recurringText: {
-    fontSize: 16,
     fontFamily: theme.fonts.regular.fontFamily,
-    color: theme.colors.text,
   },
   breakdownItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  totalItem: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.modernBorder,
-    marginBottom: 0,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   breakdownLabelContainer: {
     flex: 1,
+    marginRight: 16,
   },
   breakdownLabel: {
     fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   breakdownCalculation: {
     fontSize: 14,
-    fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.placeHolderText,
     marginTop: 4,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   breakdownAmount: {
     fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
+  totalItem: {
+    marginTop: 8,
+    paddingTop: 16,
+  },
+  // Fee and total styles
   subtotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.modernBorder,
+    borderBottomColor: theme.colors.border,
   },
   subtotalLabel: {
     fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   subtotalAmount: {
     fontSize: 16,
+    color: theme.colors.text,
+    fontWeight: '600',
     fontFamily: theme.fonts.regular.fontFamily,
-    color: theme.colors.text,
-  },
-  totalAmountContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontFamily: theme.fonts.header.fontFamily,
-    color: theme.colors.text,
-  },
-  totalAmount: {
-    fontSize: 18,
-    fontFamily: theme.fonts.header.fontFamily,
-    color: theme.colors.text,
   },
   feeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   feeLabel: {
     fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   feeAmount: {
     fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  totalAmountContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingBottom: 16,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  totalAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.mainColors.main,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   divider: {
     height: 1,
-    backgroundColor: theme.colors.modernBorder,
-    marginVertical: 16,
+    backgroundColor: theme.colors.border,
+    marginBottom: 16,
   },
   payoutContainer: {
-    marginTop: 8,
+    alignItems: 'flex-end',
   },
   payoutLabel: {
-    fontSize: 18,
-    fontFamily: theme.fonts.header.fontFamily,
+    fontSize: 16,
     color: theme.colors.text,
-    marginBottom: 4,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   payoutAmount: {
-    fontSize: 24,
-    fontFamily: theme.fonts.header.fontFamily,
-    color: theme.colors.text,
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.success,
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginTop: 4,
   },
   payoutBreakdown: {
-    fontSize: 14,
-    fontFamily: theme.fonts.regular.fontFamily,
+    fontSize: 12,
     color: theme.colors.placeHolderText,
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginTop: 4,
   },
 });
 
