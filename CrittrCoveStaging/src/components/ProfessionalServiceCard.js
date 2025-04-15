@@ -46,7 +46,7 @@ const ProfessionalServiceCard = ({
   return (
     <View style={styles.serviceCard}>
       <View style={styles.cardHeader}>
-        <Text style={styles.serviceName}>{item.serviceName}</Text>
+        <Text style={styles.serviceName} numberOfLines={2} ellipsizeMode="tail">{item.serviceName}</Text>
         <View style={styles.activeToggleContainer}>
           <Text style={isActive ? styles.activeText : styles.inactiveText}>
             {isActive ? 'Active' : 'Inactive'}
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   serviceName: {
@@ -133,6 +133,8 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontFamily: theme.fonts.header.fontFamily,
     flex: 1,
+    flexWrap: 'wrap',
+    marginRight: 8,
   },
   activeToggleContainer: {
     flexDirection: 'row',

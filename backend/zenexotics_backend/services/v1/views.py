@@ -302,4 +302,189 @@ def delete_service(request, service_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def update_service(request, service_id):
+    """
+    Update an existing service for the authenticated professional.
+    """
+    try:
+        # Check if user is a professional and owns this service
+        owns, response, service = owns_service(request, service_id)
+        
+        if not owns:
+            return response
+            
+        # Extract data from request
+        data = request.data
+        logger.info(f"Updating service {service_id} with data: {data}")
+        
+        # Format service_name if provided
+        if 'service_name' in data and isinstance(data['service_name'], str) and data['service_name'].strip():
+            words = data['service_name'].strip().split()
+            service.service_name = ' '.join(word[0].upper() + word[1:].lower() for word in words)
+        
+        # Update description if provided
+        if 'description' in data:
+            service.description = data['description']
+        
+        # Process animal_types if provided
+        if 'animal_types' in data:
+            animal_types = {}
+            
+            if isinstance(data['animal_types'], dict):
+                # If it's already a dictionary, use it directly
+                raw_animal_types = data['animal_types']
+                # Format keys to have proper capitalization
+                for animal, category in raw_animal_types.items():
+                    if animal and category:
+                        # Format animal type name
+                        animal_words = animal.strip().split()
+                        formatted_animal = ' '.join(word[0].upper() + word[1:].lower() for word in animal_words)
+                        
+                        # Format category name
+                        category_words = category.strip().split()
+                        formatted_category = ' '.join(word[0].upper() + word[1:].lower() for word in category_words)
+                        
+                        animal_types[formatted_animal] = formatted_category
+            elif isinstance(data['animal_types'], list):
+                # Handle list of animal types with their categories
+                for item in data['animal_types']:
+                    if isinstance(item, dict) and 'name' in item and 'category' in item:
+                        # Format animal type name
+                        animal_words = item['name'].strip().split()
+                        formatted_animal = ' '.join(word[0].upper() + word[1:].lower() for word in animal_words)
+                        
+                        # Format category name
+                        category_words = item['category'].strip().split()
+                        formatted_category = ' '.join(word[0].upper() + word[1:].lower() for word in category_words)
+                        
+                        animal_types[formatted_animal] = formatted_category
+                    elif isinstance(item, str):
+                        # If just a string is provided, default to "Other" category
+                        animal_words = item.strip().split()
+                        formatted_animal = ' '.join(word[0].upper() + word[1:].lower() for word in animal_words)
+                        animal_types[formatted_animal] = "Other"
+            
+            # Ensure we have at least one animal type
+            if animal_types:
+                service.animal_types = animal_types
+        
+        # Update base_rate if provided
+        if 'base_rate' in data:
+            service.base_rate = data['base_rate']
+        
+        # Update unit_of_time if provided
+        if 'unit_of_time' in data:
+            unit_of_time = data['unit_of_time']
+            valid_units = ['15 Min', '30 Min', '45 Min', '1 Hour', '2 Hour', '3 Hour', 
+                          '4 Hour', '5 Hour', '6 Hour', '7 Hour', '8 Hour', '24 Hour', 
+                          'Per Day', 'Per Night', 'Per Visit', 'Week']
+            if unit_of_time in valid_units:
+                service.unit_of_time = unit_of_time
+        
+        # Update additional_animal_rate if provided
+        if 'additional_animal_rate' in data:
+            service.additional_animal_rate = data['additional_animal_rate']
+        
+        # Update applies_after if provided
+        if 'applies_after' in data:
+            service.applies_after = data['applies_after']
+        
+        # Update is_overnight if provided
+        if 'is_overnight' in data:
+            service.is_overnight = data['is_overnight']
+        
+        # Process holiday_rate if provided
+        if 'holiday_rate' in data:
+            holiday_rate = data['holiday_rate']
+            is_percent = service.holiday_rate_is_percent  # Default to current value
+            
+            if isinstance(holiday_rate, str):
+                # Check if it's a percentage or dollar amount
+                if '%' in holiday_rate:
+                    is_percent = True
+                    # Extract numeric value for storage
+                    holiday_rate = re.sub(r'[^0-9.]', '', holiday_rate)
+                elif '$' in holiday_rate:
+                    is_percent = False
+                    # Extract numeric value for storage
+                    holiday_rate = re.sub(r'[^0-9.]', '', holiday_rate)
+            
+            service.holiday_rate = holiday_rate
+            service.holiday_rate_is_percent = is_percent
+        
+        # Always set moderation status to PENDING on update
+        service.moderation_status = 'PENDING'
+        
+        service.save()
+        logger.info(f"Updated service with ID: {service.service_id}")
+        
+        # Handle additional rates if provided
+        if 'additional_rates' in data and isinstance(data['additional_rates'], list):
+            # Remove existing additional rates
+            service.additional_rates.all().delete()
+            
+            # Add new additional rates
+            additional_rates_list = []
+            for rate_data in data['additional_rates']:
+                if 'title' in rate_data and 'rate' in rate_data:
+                    rate = ServiceRate.objects.create(
+                        service=service,
+                        title=rate_data['title'],
+                        description=rate_data.get('description', ''),
+                        rate=rate_data['rate']
+                    )
+                    additional_rates_list.append({
+                        'rate_id': rate.rate_id,
+                        'title': rate.title,
+                        'description': rate.description,
+                        'rate': str(rate.rate)
+                    })
+        else:
+            # Retrieve current additional rates
+            additional_rates_list = [
+                {
+                    'rate_id': rate.rate_id,
+                    'title': rate.title,
+                    'description': rate.description,
+                    'rate': str(rate.rate)
+                }
+                for rate in service.additional_rates.all()
+            ]
+        
+        # Format the holiday rate for the response with appropriate symbol
+        formatted_holiday_rate = str(service.holiday_rate)
+        if service.holiday_rate_is_percent:
+            formatted_holiday_rate = f"{formatted_holiday_rate}%"
+        else:
+            formatted_holiday_rate = f"${formatted_holiday_rate}"
+        
+        # Prepare response with updated service data
+        service_data = {
+            'service_id': service.service_id,
+            'service_name': service.service_name,
+            'description': service.description,
+            'animal_types': service.animal_types,
+            'base_rate': str(service.base_rate),
+            'additional_animal_rate': str(service.additional_animal_rate),
+            'holiday_rate': formatted_holiday_rate,
+            'holiday_rate_is_percent': service.holiday_rate_is_percent,
+            'applies_after': service.applies_after,
+            'unit_of_time': service.unit_of_time,
+            'is_overnight': service.is_overnight,
+            'moderation_status': service.moderation_status,
+            'additional_rates': additional_rates_list
+        }
+        
+        return Response(service_data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error in update_service: {str(e)}")
+        return Response(
+            {'error': f'An error occurred while updating the service: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 # Views will be added here

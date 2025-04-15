@@ -221,10 +221,28 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     if (!customAnimalCategory && GENERAL_CATEGORIES.length > 1) {
       setCustomAnimalCategory(GENERAL_CATEGORIES[1].id);
     }
+    
+    // Debug log to check what animal types we're receiving
+    debugLog('MBA456789', 'CategorySelectionStep received serviceData:', serviceData);
+    if (serviceData.animalTypes && serviceData.animalTypes.length > 0) {
+      debugLog('MBA456789', 'Initial animal types in CategorySelectionStep:', serviceData.animalTypes);
+    }
   }, []);
 
   const isAnimalTypeSelected = (animalName) => {
-    return serviceData.animalTypes.some(animal => animal.name === animalName);
+    if (!serviceData.animalTypes || !serviceData.animalTypes.length) {
+      return false;
+    }
+    
+    // Check all possible formats of animal types
+    return serviceData.animalTypes.some(animal => {
+      if (typeof animal === 'string') {
+        return animal === animalName;
+      } else if (typeof animal === 'object' && animal !== null) {
+        return animal.name === animalName;
+      }
+      return false;
+    });
   };
 
   const getCategoryForAnimal = (animalName) => {
@@ -241,6 +259,8 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
   };
 
   const handleAnimalTypeSelect = (animalName, categoryId = null) => {
+    debugLog('MBA456789', `Selecting animal: ${animalName}, categoryId: ${categoryId}`);
+    
     if (animalName === 'Other') {
       setShowCustomAnimalInput(true);
       setCustomAnimalCategory(categoryId || (GENERAL_CATEGORIES[1] && GENERAL_CATEGORIES[1].id));
@@ -248,13 +268,27 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     }
 
     setServiceData(prev => {
+      const prevAnimalTypes = prev.animalTypes || [];
+      debugLog('MBA456789', 'Current animal types before update:', prevAnimalTypes);
+      
       // Check if this animal is already selected
-      const existingAnimalIndex = prev.animalTypes.findIndex(animal => animal.name === animalName);
+      const existingAnimalIndex = prevAnimalTypes.findIndex(animal => {
+        if (typeof animal === 'string') {
+          return animal === animalName;
+        } else if (typeof animal === 'object' && animal !== null) {
+          return animal.name === animalName;
+        }
+        return false;
+      });
+      
+      debugLog('MBA456789', `Animal ${animalName} is ${existingAnimalIndex !== -1 ? 'already selected' : 'not selected'}`);
       
       if (existingAnimalIndex !== -1) {
         // If already selected, remove it
-        const updatedTypes = [...prev.animalTypes];
+        const updatedTypes = [...prevAnimalTypes];
         updatedTypes.splice(existingAnimalIndex, 1);
+        debugLog('MBA456789', 'Animal types after removal:', updatedTypes);
+        
         return {
           ...prev,
           animalTypes: updatedTypes
@@ -271,14 +305,19 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
           categoryToUse = foundCategory ? foundCategory.id : 'other';
         }
         
+        const newAnimal = {
+          name: animalName,
+          categoryId: categoryToUse,
+          categoryName: hardcodedCategory, // Always use the hardcoded category name
+          isCustom: false
+        };
+        
+        debugLog('MBA456789', 'Adding new animal:', newAnimal);
+        debugLog('MBA456789', 'Animal types after addition:', [...prevAnimalTypes, newAnimal]);
+        
         return {
           ...prev,
-          animalTypes: [...prev.animalTypes, {
-            name: animalName,
-            categoryId: categoryToUse,
-            categoryName: hardcodedCategory, // Always use the hardcoded category name
-            isCustom: false
-          }]
+          animalTypes: [...prevAnimalTypes, newAnimal]
         };
       }
     });
@@ -372,6 +411,9 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
   };
 
   const getFilteredAnimalTypes = () => {
+    debugLog('MBA456789', 'Getting filtered animal types with filter:', selectedCategoryFilter);
+    debugLog('MBA456789', 'Current serviceData.animalTypes:', serviceData.animalTypes);
+    
     let animalTypesToShow = [];
     let categoriesUsed = new Set();
     
@@ -409,30 +451,59 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     }
     
     // Add custom animals that match the filter
-    serviceData.animalTypes.forEach(animal => {
-      if (animal.isCustom) {
-        const categoryData = animal.categoryId 
-          ? GENERAL_CATEGORIES.find(cat => cat.id === animal.categoryId)
-          : null;
+    if (serviceData.animalTypes && serviceData.animalTypes.length > 0) {
+      serviceData.animalTypes.forEach(animal => {
+        // Skip if not an object or has no name
+        if (typeof animal !== 'object' || !animal || !animal.name) {
+          return;
+        }
         
-        const categoryName = categoryData ? categoryData.name : 'Other';
+        // Check if it's a custom animal or if its name doesn't match any predefined animal types
+        const isCustomOrUnknown = animal.isCustom || 
+          !GENERAL_CATEGORIES.some(cat => 
+            cat.animalTypes && cat.animalTypes.includes(animal.name)
+          );
         
-        if (selectedCategoryFilter === 'all' || animal.categoryId === selectedCategoryFilter) {
-          // Check if this animal is already in the list
-          const existing = animalTypesToShow.find(a => a.name === animal.name);
-          if (!existing) {
-            animalTypesToShow.push({
-              name: animal.name,
-              categoryId: animal.categoryId,
-              categoryName: categoryName,
-              icon: getAnimalIcon(animal.name, animal.categoryId), // Use the category icon
-              isCustom: true
-            });
-            categoriesUsed.add(categoryName);
+        if (isCustomOrUnknown) {
+          let categoryId = animal.categoryId;
+          let categoryName = animal.categoryName || 'Other';
+          
+          // If we have a categoryName but no categoryId, try to find the corresponding categoryId
+          if (!categoryId && categoryName) {
+            const category = GENERAL_CATEGORIES.find(cat => cat.name === categoryName);
+            if (category) {
+              categoryId = category.id;
+            }
+          }
+          
+          // If we still don't have a categoryName, try to derive from categoryId
+          if (!categoryName && categoryId) {
+            const category = GENERAL_CATEGORIES.find(cat => cat.id === categoryId);
+            if (category) {
+              categoryName = category.name;
+            }
+          }
+          
+          // Check if this animal should be shown based on the selected filter
+          if (selectedCategoryFilter === 'all' || categoryId === selectedCategoryFilter) {
+            // Check if this animal is already in the list
+            const existing = animalTypesToShow.find(a => a.name === animal.name);
+            if (!existing) {
+              debugLog('MBA456789', `Adding custom/unknown animal to filtered list: ${animal.name}, category: ${categoryName}`);
+              
+              animalTypesToShow.push({
+                name: animal.name,
+                categoryId: categoryId,
+                categoryName: categoryName,
+                icon: getAnimalIcon(animal.name, categoryId),
+                isCustom: true
+              });
+              categoriesUsed.add(categoryName);
+            }
           }
         }
-      }
-    });
+      });
+    }
     
     // Sort with common pets first, then alphabetically
     animalTypesToShow.sort((a, b) => {
@@ -457,6 +528,8 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       // Otherwise sort alphabetically
       return a.name.localeCompare(b.name);
     });
+    
+    debugLog('MBA456789', 'Filtered animal types to show:', animalTypesToShow);
     
     return { animalTypes: animalTypesToShow, categories: Array.from(categoriesUsed) };
   };

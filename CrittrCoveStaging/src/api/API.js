@@ -2,22 +2,31 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { getStorage, debugLog } from '../context/AuthContext';
 
+// Create API client for standardized requests
+const createApiClient = async () => {
+  const token = await getStorage('userToken');
+  return axios.create({
+    baseURL: API_BASE_URL,
+    headers: {
+      Authorization: token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Helper function to get API client instance
+const getApiClient = async () => {
+  return await createApiClient();
+};
+
 // Get all professional services for service manager screen
 export const getProfessionalServices = async () => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      debugLog('MBA7890: No authentication token found');
-      throw new Error('No authentication token found');
-    }
-    
     debugLog('MBA7890: Fetching professional services');
-    const response = await axios.get(`${API_BASE_URL}/api/services/v1/professional/services/`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.get('/api/services/v1/professional/services/');
+    
     return response.data;
   } catch (error) {
     debugLog('MBA7890: Error fetching professional services:', error);
@@ -431,11 +440,6 @@ export const fixPetOwner = async (petId) => {
  */
 export const createService = async (serviceData) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     // Log the data we're sending to the server
     debugLog('MBA54321', 'Creating new service - sending data to backend:', serviceData);
 
@@ -481,16 +485,8 @@ export const createService = async (serviceData) => {
     // Log we're sending the additional rates too
     debugLog('MBA54321', 'Sending additional rates to backend:', formattedData.additional_rates);
 
-    const response = await axios.post(
-      `${API_BASE_URL}/api/services/v1/create/`,
-      formattedData,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    const apiClient = await getApiClient();
+    const response = await apiClient.post('/api/services/v1/create/', formattedData);
 
     debugLog('MBA54321', 'Service created successfully - backend response:', response.data);
     return response.data;
@@ -508,28 +504,32 @@ export const createService = async (serviceData) => {
  */
 export const deleteService = async (serviceId) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     debugLog('MBA7890: Deleting service with ID:', serviceId);
 
-    const response = await axios.delete(
-      `${API_BASE_URL}/api/services/v1/delete/${serviceId}/`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    const apiClient = await getApiClient();
+    const response = await apiClient.delete(`/api/services/v1/delete/${serviceId}/`);
 
     debugLog('MBA7890: Service deleted successfully - backend response:', response.data);
     return response.data;
   } catch (error) {
     debugLog('MBA7890: Error deleting service:', error);
     debugLog('MBA7890: Error response data:', error.response?.data);
+    throw error;
+  }
+};
+
+// Function to update an existing service
+export const updateService = async (serviceData) => {
+  try {
+    const apiClient = await getApiClient();
+    debugLog('API updateService', 'Updating service with data:', serviceData);
+    
+    const response = await apiClient.patch(`/api/services/v1/update/${serviceData.service_id}/`, serviceData);
+    
+    debugLog('API updateService Response:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('API updateService Error:', error.response?.data || error.message);
     throw error;
   }
 };

@@ -17,7 +17,7 @@ import { debugLog } from '../context/AuthContext';
 import CategorySelectionStep from './serviceCreation/CategorySelectionStep';
 import ServiceDetailsStep from './serviceCreation/ServiceDetailsStep';
 import RatesAndReviewStep from './serviceCreation/RatesAndReviewStep';
-import { createService } from '../api/API';
+import { createService, updateService } from '../api/API';
 import { useToast } from './ToastProvider';
 
 const STEPS = {
@@ -72,6 +72,40 @@ const ANIMAL_CATEGORIES = {
   'Millipede': 'Invertebrates'
 };
 
+// Also define GENERAL_CATEGORIES so we can look up category IDs from names
+const GENERAL_CATEGORIES = [
+  {
+    id: 'all',
+    name: 'All',
+    icon: 'paw-outline',
+  },
+  {
+    id: 'farm_animals',
+    name: 'Farm Animals',
+    icon: 'horse',
+  },
+  {
+    id: 'domestic',
+    name: 'Domestic',
+    icon: 'paw',
+  },
+  {
+    id: 'reptiles',
+    name: 'Reptiles',
+    icon: 'snake',
+  },
+  {
+    id: 'aquatic',
+    name: 'Aquatic',
+    icon: 'fish',
+  },
+  {
+    id: 'invertebrates',
+    name: 'Invertebrates',
+    icon: 'spider',
+  }
+];
+
 const ServiceCreationModal = ({ 
   visible, 
   onClose,
@@ -100,32 +134,130 @@ const ServiceCreationModal = ({
   });
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const showToast = useToast();
 
   // Reset state when modal is opened
   useEffect(() => {
     if (visible) {
       setCurrentStep(STEPS.CATEGORY_SELECTION.id);
-      setServiceData({
-        generalCategories: [],
-        animalTypes: [],
-        serviceName: '',
-        serviceDescription: '',
-        isOvernight: false,
-        rates: {
-          base_rate: '',
-          base_rate_unit: 'Per Visit',
-          additionalAnimalRate: '',
-          additionalAnimalThreshold: '1',
-          hasHolidayRate: false,
-          holidayRate: '0',
-          isPercent: true
-        },
-        additionalRates: []
-      });
       setError(null);
+      
+      if (initialService) {
+        debugLog('MBA123456', 'Initializing with service data:', initialService);
+        setIsEditMode(true);
+        
+        // Extract animal types from the object
+        let animalTypesArray = [];
+        
+        // Log the animal types we're working with
+        if (initialService.animalTypes && initialService.animalTypes.length > 0) {
+          // If animalTypes is already provided in the expected format, use it directly
+          debugLog('MBA123456', 'Using pre-formatted animalTypes array:', initialService.animalTypes);
+          animalTypesArray = initialService.animalTypes;
+        } else if (initialService.animal_types) {
+          debugLog('MBA123456', 'Using animal_types from backend:', initialService.animal_types);
+          
+          // Handle if animal_types is a dictionary mapping animal types to categories
+          if (typeof initialService.animal_types === 'object' && !Array.isArray(initialService.animal_types)) {
+            debugLog('MBA123456', 'Processing animal_types as dictionary');
+            Object.entries(initialService.animal_types).forEach(([animalName, categoryName]) => {
+              // Find the category ID for this category name
+              const category = GENERAL_CATEGORIES.find(cat => cat.name === categoryName);
+              debugLog('MBA123456', `Adding animal: ${animalName}, category: ${categoryName}, categoryId: ${category?.id || 'not found'}`);
+              
+              animalTypesArray.push({
+                name: animalName,
+                categoryName: categoryName,
+                categoryId: category ? category.id : null, 
+                isCustom: false
+              });
+            });
+          }
+        } else {
+          debugLog('MBA123456', 'No animal types found in data');
+        }
+        
+        debugLog('MBA123456', 'Final converted animal types:', animalTypesArray);
+        
+        // Parse holiday rate
+        let holidayRate = '0';
+        let isPercent = true;
+        
+        if (initialService.holiday_rate) {
+          if (typeof initialService.holiday_rate === 'string') {
+            if (initialService.holiday_rate.includes('%')) {
+              holidayRate = initialService.holiday_rate.replace('%', '');
+              isPercent = true;
+            } else if (initialService.holiday_rate.includes('$')) {
+              holidayRate = initialService.holiday_rate.replace('$', '');
+              isPercent = false;
+            } else {
+              holidayRate = initialService.holiday_rate;
+              isPercent = initialService.holiday_rate_is_percent !== undefined 
+                ? initialService.holiday_rate_is_percent 
+                : true;
+            }
+          } else {
+            holidayRate = initialService.holiday_rate.toString();
+            isPercent = initialService.holiday_rate_is_percent !== undefined 
+              ? initialService.holiday_rate_is_percent 
+              : true;
+          }
+        }
+        
+        // Format additional rates
+        let additionalRates = [];
+        if (initialService.additional_rates && Array.isArray(initialService.additional_rates)) {
+          additionalRates = initialService.additional_rates.map(rate => ({
+            title: rate.title,
+            rate: rate.rate,
+            description: rate.description || ''
+          }));
+        }
+        
+        // Set the service data with the provided initial values
+        setServiceData({
+          service_id: initialService.service_id,
+          generalCategories: [], // We don't need to populate this as it's derived from animalTypes
+          animalTypes: animalTypesArray,
+          serviceName: initialService.service_name || '',
+          serviceDescription: initialService.description || '',
+          isOvernight: initialService.is_overnight || false,
+          rates: {
+            base_rate: initialService.base_rate || '',
+            base_rate_unit: initialService.unit_of_time || 'Per Visit',
+            additionalAnimalRate: initialService.additional_animal_rate || '',
+            additionalAnimalThreshold: initialService.applies_after?.toString() || '1',
+            hasHolidayRate: holidayRate !== '0',
+            holidayRate: holidayRate,
+            isPercent: isPercent
+          },
+          additionalRates: additionalRates
+        });
+      } else {
+        // Reset to default state if not in edit mode
+        setIsEditMode(false);
+        setServiceData({
+          generalCategories: [],
+          animalTypes: [],
+          serviceName: '',
+          serviceDescription: '',
+          isOvernight: false,
+          rates: {
+            base_rate: '',
+            base_rate_unit: 'Per Visit',
+            additionalAnimalRate: '',
+            additionalAnimalThreshold: '1',
+            hasHolidayRate: false,
+            holidayRate: '0',
+            isPercent: true
+          },
+          additionalRates: []
+        });
+      }
     }
-  }, [visible]);
+  }, [visible, initialService]);
 
   const canProceedToNextStep = () => {
     switch (currentStep) {
@@ -229,15 +361,27 @@ const ServiceCreationModal = ({
         }))
       };
       
+      // If in edit mode, include the service_id in the formatted data
+      if (isEditMode && serviceData.service_id) {
+        formattedData.service_id = serviceData.service_id;
+      }
+      
       debugLog('MBA54321', 'Formatted data for backend:', formattedData);
       
-      // Call the API to create the service
-      const response = await createService(formattedData);
-      debugLog('MBA54321', 'Service created successfully, response:', response);
+      let response;
+      
+      // Call the appropriate API based on edit mode
+      if (isEditMode && serviceData.service_id) {
+        response = await updateService(formattedData);
+        debugLog('MBA54321', 'Service updated successfully, response:', response);
+      } else {
+        response = await createService(formattedData);
+        debugLog('MBA54321', 'Service created successfully, response:', response);
+      }
       
       // Show success toast
       showToast({
-        message: 'Service created successfully!',
+        message: isEditMode ? 'Service updated successfully!' : 'Service created successfully!',
         type: 'success',
         duration: 3000
       });
@@ -332,20 +476,20 @@ const ServiceCreationModal = ({
       });
       
       setCurrentStep(STEPS.CATEGORY_SELECTION.id);
-      setHasUnsavedChanges(false);
+      setHasUnsavedChanges(true);
       onClose();
     } catch (error) {
-      debugLog('MBA54321', 'Error creating service:', error);
+      debugLog('MBA54321', 'Error saving service:', error);
       debugLog('MBA54321', 'Error response:', error.response?.data);
       
       // Show error toast
       showToast({
-        message: `Failed to create service: ${error.response?.data?.error || error.message}`,
+        message: `Failed to ${isEditMode ? 'update' : 'create'} service: ${error.response?.data?.error || error.message}`,
         type: 'error',
         duration: 4000
       });
       
-      setError('Failed to create service. Please try again.');
+      setError(`Failed to ${isEditMode ? 'update' : 'create'} service. Please try again.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -437,7 +581,9 @@ const ServiceCreationModal = ({
                   styles.nextButtonText,
                   !canProceedToNextStep() && styles.disabledButtonText
                 ]}>
-                  {currentStep === STEPS.RATES_AND_REVIEW.id ? 'Create Service' : 'Next'}
+                  {currentStep === STEPS.RATES_AND_REVIEW.id ? 
+                    (isEditMode ? 'Update Service' : 'Create Service') : 
+                    'Next'}
                 </Text>
               )}
             </TouchableOpacity>

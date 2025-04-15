@@ -10,6 +10,40 @@ import { AuthContext, debugLog } from '../context/AuthContext';
 import { deleteService } from '../api/API';
 import { useToast } from './ToastProvider';
 
+// Define GENERAL_CATEGORIES for mapping category names to IDs
+const GENERAL_CATEGORIES = [
+  {
+    id: 'all',
+    name: 'All',
+    icon: 'paw-outline',
+  },
+  {
+    id: 'farm_animals',
+    name: 'Farm Animals',
+    icon: 'horse',
+  },
+  {
+    id: 'domestic',
+    name: 'Domestic',
+    icon: 'paw',
+  },
+  {
+    id: 'reptiles',
+    name: 'Reptiles',
+    icon: 'snake',
+  },
+  {
+    id: 'aquatic',
+    name: 'Aquatic',
+    icon: 'fish',
+  },
+  {
+    id: 'invertebrates',
+    name: 'Invertebrates',
+    icon: 'spider',
+  }
+];
+
 const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfessionalTab = false, isMobile = false }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingService, setEditingService] = useState(null);
@@ -35,8 +69,59 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   };
 
   const handleEditService = (index) => {
-    const serviceToEdit = { ...services[index], index };
-    setEditingService(serviceToEdit);
+    const serviceToEdit = services[index];
+    debugLog('MBA87654', 'Original service for editing:', serviceToEdit);
+    
+    // Convert animal_types from object format to array format if needed
+    let formattedAnimalTypes = [];
+    
+    if (serviceToEdit.animal_types && typeof serviceToEdit.animal_types === 'object' && !Array.isArray(serviceToEdit.animal_types)) {
+      // Convert from backend format {animalName: categoryName} to array of objects
+      formattedAnimalTypes = Object.entries(serviceToEdit.animal_types).map(([animalName, categoryName]) => {
+        // Find category ID from category name
+        const category = GENERAL_CATEGORIES.find(cat => cat.name === categoryName);
+        const categoryId = category ? category.id : null;
+        
+        return {
+          name: animalName,
+          categoryName: categoryName,
+          categoryId: categoryId,
+          isCustom: false
+        };
+      });
+      
+      debugLog('MBA87654', 'Converted animal_types to array format:', formattedAnimalTypes);
+    } else if (serviceToEdit.animalTypes) {
+      // If we already have animalTypes in the expected format, use it
+      formattedAnimalTypes = serviceToEdit.animalTypes;
+      debugLog('MBA87654', 'Using existing animalTypes array:', formattedAnimalTypes);
+    }
+    
+    // Transform to the format expected by ServiceCreationModal
+    const formattedService = {
+      service_id: serviceToEdit.service_id,
+      service_name: serviceToEdit.service_name || serviceToEdit.serviceName,
+      description: serviceToEdit.description || serviceToEdit.serviceDescription,
+      animal_types: serviceToEdit.animal_types,  // Keep the original format for API calls
+      animalTypes: formattedAnimalTypes,        // Add the formatted version for the UI
+      base_rate: serviceToEdit.base_rate || (serviceToEdit.rates ? serviceToEdit.rates.base_rate : ''),
+      additional_animal_rate: serviceToEdit.additional_animal_rate || (serviceToEdit.rates ? serviceToEdit.rates.additionalAnimalRate : '0'),
+      holiday_rate: serviceToEdit.holiday_rate || (serviceToEdit.rates ? serviceToEdit.rates.holidayRate : '0'),
+      applies_after: serviceToEdit.applies_after || 1,
+      unit_of_time: serviceToEdit.unit_of_time || serviceToEdit.lengthOfService || 'Per Visit',
+      is_overnight: serviceToEdit.is_overnight || serviceToEdit.isOvernight || false,
+      is_active: serviceToEdit.is_active !== undefined ? serviceToEdit.is_active : true,
+      holiday_rate_is_percent: serviceToEdit.holiday_rate_is_percent,
+      additional_rates: serviceToEdit.additional_rates || 
+        (serviceToEdit.additionalRates ? serviceToEdit.additionalRates.map(rate => ({
+          title: rate.label || rate.title,
+          rate: rate.value || rate.rate,
+          description: rate.description || ''
+        })) : [])
+    };
+    
+    debugLog('MBA87654', 'Formatted service for editing modal:', formattedService);
+    setEditingService(formattedService);
     setShowModal(true);
   };
 
@@ -49,13 +134,38 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
     // Add debugging log for service data received
     debugLog('MBA8765', 'Service data received from modal:', updatedService);
     
-    // Check if we have a service_id (meaning it was created on the backend)
-    const serviceWasCreatedOnBackend = !!updatedService.service_id;
+    // Check if we're updating an existing service
+    const isEditingExisting = editingService && updatedService.service_id;
     
-    // If the service was created on the backend, it already has the correct data structure
-    // including service_id, formatted service_name and unit_of_time
-    if (serviceWasCreatedOnBackend) {
-      debugLog('MBA8765', 'Using backend-created service with ID:', updatedService.service_id);
+    if (isEditingExisting) {
+      debugLog('MBA8765', 'Updating existing service with ID:', updatedService.service_id);
+      
+      // Find the index of this service in our list by service_id
+      const serviceIndex = services.findIndex(s => s.service_id === updatedService.service_id);
+      
+      if (serviceIndex !== -1) {
+        // Update the service in the array
+        setServices(prev => {
+          const newServices = [...prev];
+          newServices[serviceIndex] = updatedService;
+          return newServices;
+        });
+        
+        debugLog('MBA8765', 'Service updated at index:', serviceIndex);
+      } else {
+        // If not found by ID, just add it
+        debugLog('MBA8765', 'Service ID not found in existing list, adding as new');
+        setServices(prev => [...prev, updatedService]);
+      }
+      
+      setHasUnsavedChanges(true);
+      setEditingService(null);
+      return;
+    }
+    
+    // For new services
+    if (updatedService.service_id) {
+      debugLog('MBA8765', 'New service created on backend with ID:', updatedService.service_id);
       
       // Add the new service to the list
       setServices(prev => [...prev, updatedService]);
@@ -64,18 +174,14 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       return;
     }
     
-    // For services not yet created on the backend, proceed with the old logic
-    // Add debugging log for animalTypes
-    debugLog('MBA8765', 'Animal Types received:', updatedService.animalTypes);
+    // Legacy support for old-format services (should not reach here with new code)
+    debugLog('MBA8765', 'Warning: Falling back to legacy service format handling');
     
     // Create animal_types dictionary from animalTypes array
     const animalTypesDict = {};
     if (updatedService.animalTypes && Array.isArray(updatedService.animalTypes)) {
       updatedService.animalTypes.forEach(animal => {
         if (animal && animal.name) {
-          // Log individual animal data for debugging
-          debugLog('MBA8765', `Processing animal: ${animal.name}, categoryName: ${animal.categoryName}, category: ${animal.category}`);
-          
           // Use the categoryName directly from the animal object if available
           if (animal.categoryName) {
             animalTypesDict[animal.name] = animal.categoryName;
@@ -87,9 +193,6 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         }
       });
     }
-    
-    // Log the final dictionary
-    debugLog('MBA8765', 'Final animal_types dictionary:', animalTypesDict);
 
     // Transform the service data to match the backend structure
     const transformedService = {
@@ -108,15 +211,25 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       }))
     };
 
-    if (editingService !== null) {
-      setServices(prev => 
-        prev.map((service, index) => 
-          index === editingService.index ? transformedService : service
-        )
+    // Legacy code for handling legacy editing
+    if (editingService) {
+      const existingIndex = services.findIndex(s => 
+        s.service_id === editingService.service_id
       );
+      
+      if (existingIndex !== -1) {
+        setServices(prev => {
+          const newServices = [...prev];
+          newServices[existingIndex] = transformedService;
+          return newServices;
+        });
+      } else {
+        setServices(prev => [...prev, transformedService]);
+      }
     } else {
       setServices(prev => [...prev, transformedService]);
     }
+    
     setHasUnsavedChanges(true);
     setEditingService(null);
   };

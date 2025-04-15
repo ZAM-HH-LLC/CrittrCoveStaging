@@ -1,26 +1,65 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
-  Switch,
+  TouchableOpacity,
+  Switch
 } from 'react-native';
 import { theme } from '../../styles/theme';
+import { debugLog } from '../../context/AuthContext';
+
+const MAX_SERVICE_NAME_LENGTH = 30;
+const MAX_DESCRIPTION_LENGTH = 300;
 
 const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
+  const [nameError, setNameError] = useState('');
+  const [descriptionError, setDescriptionError] = useState('');
+
+  const validateInput = (text, isName = true) => {
+    // Allow only letters, numbers, spaces and & symbol
+    const validRegex = /^[a-zA-Z0-9\s&]*$/;
+    
+    if (!validRegex.test(text)) {
+      if (isName) {
+        setNameError('Service name can only contain letters, numbers, spaces, and &');
+      } else {
+        setDescriptionError('Description can only contain letters, numbers, spaces, and &');
+      }
+      return false;
+    }
+    
+    if (isName) {
+      setNameError('');
+    } else {
+      setDescriptionError('');
+    }
+    return true;
+  };
+
   const handleServiceNameChange = (text) => {
-    setServiceData(prev => ({
-      ...prev,
-      serviceName: text
-    }));
+    // Limit to MAX_SERVICE_NAME_LENGTH characters
+    const truncatedText = text.slice(0, MAX_SERVICE_NAME_LENGTH);
+    
+    if (validateInput(truncatedText, true)) {
+      setServiceData(prev => ({
+        ...prev,
+        serviceName: truncatedText
+      }));
+    }
   };
 
   const handleDescriptionChange = (text) => {
-    setServiceData(prev => ({
-      ...prev,
-      serviceDescription: text
-    }));
+    // Limit to MAX_DESCRIPTION_LENGTH characters
+    const truncatedText = text.slice(0, MAX_DESCRIPTION_LENGTH);
+    
+    if (validateInput(truncatedText, false)) {
+      setServiceData(prev => ({
+        ...prev,
+        serviceDescription: truncatedText
+      }));
+    }
   };
 
   const handleOvernightToggle = (value) => {
@@ -38,27 +77,37 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
         <Text style={styles.label}>Service Name</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Premium Pet Grooming"
-          placeholderTextColor={theme.colors.placeHolderText}
           value={serviceData.serviceName}
           onChangeText={handleServiceNameChange}
+          placeholder="e.g. Premium Pet Grooming"
+          placeholderTextColor={theme.colors.placeHolderText}
+          maxLength={MAX_SERVICE_NAME_LENGTH}
         />
+        <Text style={styles.characterCount}>
+          {serviceData.serviceName.length}/{MAX_SERVICE_NAME_LENGTH}
+        </Text>
+        {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
       </View>
-
+      
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Service Description</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Describe your service in detail..."
-          placeholderTextColor={theme.colors.placeHolderText}
           value={serviceData.serviceDescription}
           onChangeText={handleDescriptionChange}
+          placeholder="Describe your service in detail..."
+          placeholderTextColor={theme.colors.placeHolderText}
           multiline={true}
           numberOfLines={6}
           textAlignVertical="top"
+          maxLength={MAX_DESCRIPTION_LENGTH}
         />
+        <Text style={styles.characterCount}>
+          {serviceData.serviceDescription.length}/{MAX_DESCRIPTION_LENGTH}
+        </Text>
+        {descriptionError ? <Text style={styles.errorText}>{descriptionError}</Text> : null}
       </View>
-
+      
       <View style={styles.switchContainer}>
         <View style={styles.switchGroup}>
           <Text style={styles.switchLabel}>Overnight Service</Text>
@@ -134,6 +183,19 @@ const styles = StyleSheet.create({
   switchSubLabel: {
     fontSize: 14,
     color: theme.colors.placeHolderText,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  errorText: {
+    color: theme.colors.error,
+    fontSize: 14,
+    marginTop: 4,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  characterCount: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'right',
     fontFamily: theme.fonts.regular.fontFamily,
   },
 });
