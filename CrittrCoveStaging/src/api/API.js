@@ -1,6 +1,42 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { getStorage, debugLog } from '../context/AuthContext';
+import { Platform } from 'react-native';
+
+/**
+ * Handles authentication errors (401) gracefully
+ * This should be called by API functions when they receive a 401 response
+ * @param {Object} error - The error object from catch block
+ * @returns {Error} A standardized error that can be displayed to the user
+ */
+const handleAuthError = (error) => {
+  // Only process if it's a 401 error with token_not_valid code
+  if (error.response?.status === 401 && error.response?.data?.code === 'token_not_valid') {
+    debugLog('MBA54321', 'Auth error handler: Token invalid detected');
+    
+    // Clear tokens from storage
+    if (Platform.OS === 'web') {
+      sessionStorage.removeItem('userToken');
+      sessionStorage.removeItem('refreshToken');
+      sessionStorage.setItem('explicitSignOut', 'true');
+    } else {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      AsyncStorage.multiRemove(['userToken', 'refreshToken']);
+    }
+    
+    // Navigate to sign-in page after a brief delay
+    setTimeout(() => {
+      const { navigate } = require('../../App');
+      navigate('SignIn');
+    }, 0);
+    
+    // Return standardized error message
+    return new Error('Your session has expired. Please sign in again to continue.');
+  }
+  
+  // If not a token error, return the original error
+  return error;
+};
 
 // Create API client for standardized requests
 const createApiClient = async () => {
@@ -493,6 +529,15 @@ export const createService = async (serviceData) => {
   } catch (error) {
     debugLog('MBA54321', 'Error creating service:', error);
     debugLog('MBA54321', 'Error response data:', error.response?.data);
+    
+    // Check for authentication errors using the centralized handler
+    const authError = handleAuthError(error);
+    if (authError !== error) {
+      // If handleAuthError processed this as an auth error, throw the new error
+      throw authError;
+    }
+    
+    // Otherwise rethrow the original error
     throw error;
   }
 };

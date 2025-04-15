@@ -35,6 +35,8 @@ class AuthService {
     this.isRefreshing = false;
     this.refreshSubscribers = [];
     this.is_DEBUG = false;
+    this.tokenExpiryTime = null;
+    this.lastValidation = null;
   }
 
   setDebug(enabled) {
@@ -42,25 +44,119 @@ class AuthService {
     console.log('MBA98765 AuthService debug mode:', enabled);
   }
 
+  // Parse JWT token to get expiry time
+  parseJwt(token) {
+    try {
+      if (!token) return null;
+      
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      let jsonPayload;
+      
+      if (typeof atob === 'function') {
+        // Browser environment
+        jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+      } else {
+        // React Native environment
+        jsonPayload = decodeURIComponent(
+          Buffer.from(base64, 'base64')
+            .toString('binary')
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+      }
+      
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('MBA54321 Error parsing JWT:', error);
+      return null;
+    }
+  }
+
+  // Calculate time until token expires in milliseconds
+  getTimeUntilExpiry(token) {
+    const parsedToken = this.parseJwt(token);
+    if (!parsedToken || !parsedToken.exp) return 0;
+    
+    const expiryTime = parsedToken.exp * 1000; // Convert to milliseconds
+    this.tokenExpiryTime = expiryTime;
+    
+    return expiryTime - Date.now();
+  }
+  
+  // Check token freshness after returning to the app
+  // Minimizes API calls by only refreshing if token is about to expire
+  async checkTokenFreshnessOnReturn() {
+    // Skip if we checked within the last minute to avoid excessive checks
+    const now = Date.now();
+    if (this.lastValidation && now - this.lastValidation < 60 * 1000) {
+      console.log('MBA54321 Skipping token check - checked recently');
+      return;
+    }
+    
+    this.lastValidation = now;
+    
+    if (!this.accessToken) {
+      console.log('MBA54321 No access token, skipping check');
+      return;
+    }
+    
+    const timeUntilExpiry = this.getTimeUntilExpiry(this.accessToken);
+    
+    // If token expires in less than 5 minutes or is expired, refresh it
+    if (timeUntilExpiry < 5 * 60 * 1000) {
+      console.log(`MBA54321 Token expires in ${Math.round(timeUntilExpiry/1000)} seconds, refreshing`);
+      try {
+        await this.refreshTokens();
+      } catch (error) {
+        console.error('MBA54321 Error refreshing token on return:', error);
+      }
+    } else {
+      console.log(`MBA54321 Token still valid for ${Math.round(timeUntilExpiry/60000)} minutes, no refresh needed`);
+    }
+  }
+
   async initialize() {
     console.log('MBA98765 Starting AuthService.initialize()');
     try {
+      let accessToken, refreshToken;
+      
       if (Platform.OS === 'web') {
         console.log('MBA98765 Web platform detected, using sessionStorage');
-        this.accessToken = sessionStorage.getItem('userToken');
-        this.refreshToken = sessionStorage.getItem('refreshToken');
+        accessToken = sessionStorage.getItem('userToken');
+        refreshToken = sessionStorage.getItem('refreshToken');
       } else {
         console.log('MBA98765 Mobile platform detected, using AsyncStorage');
-        [this.accessToken, this.refreshToken] = await AsyncStorage.multiGet([
+        [accessToken, refreshToken] = await AsyncStorage.multiGet([
           'userToken',
           'refreshToken'
         ]);
       }
+      
+      this.accessToken = accessToken;
+      this.refreshToken = refreshToken;
 
       console.log('MBA98765 Tokens retrieved:', {
         hasAccessToken: !!this.accessToken,
         hasRefreshToken: !!this.refreshToken
       });
+      
+      // Check if token is close to expiry and refresh if needed
+      if (this.accessToken) {
+        const timeUntilExpiry = this.getTimeUntilExpiry(this.accessToken);
+        if (timeUntilExpiry < 5 * 60 * 1000) {
+          console.log('MBA54321 Token close to expiry during init, refreshing');
+          await this.refreshTokens().catch(err => {
+            console.log('MBA54321 Failed to refresh token during init:', err);
+          });
+        }
+      }
 
       return {
         hasAccessToken: !!this.accessToken,
@@ -73,11 +169,22 @@ class AuthService {
   }
 
   async getAccessToken() {
-    console.log('MBA98765 getAccessToken called');
-    if (!this.accessToken && this.refreshToken) {
+    // Only refresh token if it's about to expire (less than 2 minutes left)
+    if (this.accessToken) {
+      const timeUntilExpiry = this.getTimeUntilExpiry(this.accessToken);
+      if (timeUntilExpiry < 2 * 60 * 1000 && timeUntilExpiry > 0) {
+        console.log('MBA54321 Token about to expire, refreshing');
+        await this.refreshTokens().catch(err => {
+          console.log('MBA54321 Failed to refresh token in getAccessToken:', err);
+        });
+      }
+    } else if (this.refreshToken) {
       console.log('MBA98765 No access token but has refresh token, attempting refresh');
-      await this.refreshTokens();
+      await this.refreshTokens().catch(err => {
+        console.log('MBA54321 Failed to refresh token in getAccessToken:', err);
+      });
     }
+    
     return this.accessToken;
   }
 
@@ -99,6 +206,9 @@ class AuthService {
       this.isRefreshing = true;
       console.log('MBA98765 Starting token refresh');
 
+      // Update the last validation time first so we don't trigger multiple refreshes
+      this.lastValidation = Date.now();
+
       const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
         refresh: this.refreshToken
       });
@@ -111,14 +221,25 @@ class AuthService {
         await AsyncStorage.setItem('userToken', this.accessToken);
       }
 
-      console.log('MBA98765 Token refresh successful');
+      // Parse and store the expiry time from the new token
+      const timeUntilExpiry = this.getTimeUntilExpiry(this.accessToken);
+      console.log(`MBA98765 Token refresh successful, new token valid for ${Math.round(timeUntilExpiry/60000)} minutes`);
 
       this.refreshSubscribers.forEach(callback => callback(this.accessToken));
       this.refreshSubscribers = [];
       
       return this.accessToken;
     } catch (error) {
-      console.error('MBA98765 Token refresh failed:', error.response?.status);
+      console.error('MBA98765 Token refresh failed:', error.response?.status, error.response?.data);
+      
+      // Check if refresh token is expired
+      const isRefreshTokenExpired = error.response?.data?.code === 'token_not_valid' && 
+                                    error.response?.data?.messages?.[0]?.token_type === 'refresh';
+      
+      if (isRefreshTokenExpired) {
+        console.log('MBA98765 Refresh token expired, clearing tokens');
+      }
+      
       this.clearTokens();
       throw error;
     } finally {
@@ -127,12 +248,23 @@ class AuthService {
   }
 
   async validateToken(token) {
+    // Skip actual validation API call if we checked within the last 5 minutes
+    const now = Date.now();
+    if (this.lastValidation && now - this.lastValidation < 5 * 60 * 1000) {
+      console.log('MBA54321 Using cached token validation');
+      
+      // Use expiry time from the token itself instead of making API call
+      const timeUntilExpiry = this.getTimeUntilExpiry(token);
+      return timeUntilExpiry > 0;
+    }
+    
     console.log('MBA98765 validateToken called');
     try {
       const response = await axios.post(`${API_BASE_URL}/api/token/verify/`, {
         token: token
       });
 
+      this.lastValidation = now;
       console.log('MBA98765 Token validation successful');
       return response.status === 200;
     } catch (error) {
@@ -174,6 +306,9 @@ class AuthService {
           ['refreshToken', refreshToken]
         ]);
       }
+      
+      // Schedule token refresh for the new token
+      this.scheduleTokenRefresh(accessToken);
 
       console.log('MBA98765 Tokens set successfully');
     } catch (error) {
@@ -239,9 +374,13 @@ export const AuthProvider = ({ children }) => {
     const requestInterceptor = axios.interceptors.request.use(
       async (config) => {
         if (!is_prototype) {
-          const token = await authService.current.getAccessToken();
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+          try {
+            const token = await authService.current.getAccessToken();
+            if (token) {
+              config.headers.Authorization = `Bearer ${token}`;
+            }
+          } catch (error) {
+            console.error('MBA98765 Error getting access token for request:', error);
           }
         }
         return config;
@@ -258,10 +397,30 @@ export const AuthProvider = ({ children }) => {
           originalRequest._retry = true;
           
           try {
-            const newToken = await authService.current.refreshTokens();
-            if (newToken) {
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-              return axios(originalRequest);
+            // Check if the error is specifically about an invalid token
+            const isTokenError = error.response?.data?.code === 'token_not_valid';
+            
+            if (isTokenError) {
+              debugLog('MBA54321 Token invalid error detected', error.response?.data);
+              
+              const refreshSuccessful = await authService.current.refreshTokens().then(() => true).catch(() => false);
+              
+              if (refreshSuccessful) {
+                const newToken = authService.current.accessToken;
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                return axios(originalRequest);
+              } else {
+                debugLog('MBA54321 Could not refresh token, forcing sign out');
+                await signOut();
+                return Promise.reject(new Error('Session expired. Please sign in again.'));
+              }
+            } else {
+              // For other 401 errors, still try to refresh the token
+              const newToken = await authService.current.refreshTokens();
+              if (newToken) {
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                return axios(originalRequest);
+              }
             }
           } catch (refreshError) {
             console.error('MBA98765 Token refresh failed:', refreshError);
@@ -279,6 +438,40 @@ export const AuthProvider = ({ children }) => {
       axios.interceptors.response.eject(responseInterceptor);
     };
   }, [is_prototype]);
+
+  // Minimalist approach to token refresh on window focus
+  useEffect(() => {
+    if (!isSignedIn || is_prototype) return;
+    
+    // Handler to check token when window regains focus
+    const handleWindowFocus = () => {
+      debugLog('MBA54321 Window regained focus, scheduling token refresh check');
+      
+      // This will only refresh if token is within 5 minutes of expiry or expired
+      // Won't make network call if token is still valid for more than 5 minutes
+      if (authService.current) {
+        authService.current.checkTokenFreshnessOnReturn();
+      }
+    };
+    
+    // Set up event listeners for window focus and visibility changes
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleWindowFocus);
+      
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          handleWindowFocus();
+        }
+      });
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleWindowFocus);
+        document.removeEventListener('visibilitychange', handleWindowFocus);
+      }
+    };
+  }, [isSignedIn, is_prototype]);
 
   // Initialize auth state
   useEffect(() => {
