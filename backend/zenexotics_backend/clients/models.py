@@ -34,6 +34,14 @@ class Client(models.Model):
         default=False,
         help_text='True if client has a verified payment method'
     )
+    invited_by = models.ForeignKey(
+        'professionals.Professional',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invited_clients',
+        help_text='The professional who invited this client'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

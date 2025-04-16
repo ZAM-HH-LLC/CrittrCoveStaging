@@ -578,3 +578,103 @@ export const updateService = async (serviceData) => {
     throw error;
   }
 };
+
+/**
+ * Get user connections (clients for professionals, professionals for pet owners)
+ * @param {string} type - The type of connections to fetch ('clients' or 'professionals')
+ * @param {string} filter - Optional filter to apply ('all', 'active_bookings', 'no_bookings', 'past_bookings')
+ * @param {number} page - Page number for pagination
+ * @param {number} pageSize - Number of results per page
+ * @returns {Promise<Object>} Object containing connections and pagination info
+ */
+export const getUserConnections = async (type = 'clients', filter = 'all', page = 1, pageSize = 20) => {
+  try {
+    debugLog('MBA4321 Fetching user connections:', { type, filter, page, pageSize });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.get('/api/bookings/v1/connections/', {
+      params: {
+        type,
+        filter,
+        page,
+        page_size: pageSize
+      }
+    });
+    
+    debugLog('MBA4321 Connections response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error fetching connections:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Get profile details for a specific connection
+ * @param {string} userId - The ID of the user to get profile details for
+ * @param {string} type - The type of connection ('client' or 'professional')
+ * @returns {Promise<Object>} Object containing detailed profile info
+ */
+export const getConnectionProfile = async (userId, type = 'client') => {
+  try {
+    debugLog('MBA4321 Fetching connection profile:', { userId, type });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.get(`/api/connections/v1/profile/${userId}/`, {
+      params: { type }
+    });
+    
+    debugLog('MBA4321 Connection profile response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error fetching connection profile:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * TODO: Implement this
+ * Invite a client to connect with a professional
+ * @param {string} email - The email address of the client to invite
+ * @returns {Promise<Object>} Object containing result of invitation
+ */
+export const inviteClient = async (email) => {
+  try {
+    debugLog('MBA4321 Inviting client:', { email });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.post('/api/connections/v1/invite-client/', {
+      email
+    });
+    
+    debugLog('MBA4321 Invite client response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error inviting client:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};

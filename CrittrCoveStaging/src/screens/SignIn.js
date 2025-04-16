@@ -66,7 +66,7 @@ export default function SignIn() {
       debugLog('MBA67890 Authentication successful, received tokens');
       
       // Pass both tokens to signIn and get the status
-      const status = await signIn(access, refresh);
+      const status = await signIn(access, refresh, navigation);
       debugLog('MBA67890 Sign in status:', status);
       
       // After successful login, detect and send timezone to backend

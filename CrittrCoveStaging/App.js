@@ -54,6 +54,7 @@ import BlogScreen from './src/screens/BlogScreen';
 import BlogPost from './src/screens/BlogPost';
 import Waitlist from './src/screens/Waitlist';
 import TestToast from './src/screens/TestToast';
+import Connections from './src/screens/Connections';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -94,6 +95,7 @@ const screens = [
   { name: 'BlogPost', component: BlogPost },
   { name: 'Waitlist', component: Waitlist },
   { name: 'TestToast', component: TestToast },
+  { name: 'Connections', component: Connections },
 ];
 
 const linking = {
@@ -155,7 +157,8 @@ const linking = {
       Blog: 'blog',
       BlogPost: 'blog-post',
       Waitlist: 'waitlist',
-      TestToast: 'test-toast'
+      TestToast: 'test-toast',
+      Connections: 'connections',
     }
   }
 };

@@ -342,6 +342,19 @@ export default function Navigation({ state, descriptors, navigation }) {
           navigateToFrom(navigation, 'MyBookings', currentScreen, { screen: activeTab });
           break;
           
+        case 'Connections':
+          // For Connections, stay on the same screen but switch tabs based on the new role
+          const connectionsTab = newRole === 'professional' ? 'clients' : 'professionals';
+          if (is_DEBUG) {
+            console.log('MBA98386196v Connections tab switch:', {
+              newRole,
+              connectionsTab
+            });
+          }
+          // Pass the appropriate tab parameter
+          navigateToFrom(navigation, 'Connections', currentScreen, { screen: connectionsTab });
+          break;
+          
         case 'Dashboard':
           // For Dashboard, stay on the same screen
           navigateToFrom(navigation, 'Dashboard', currentScreen);
@@ -420,6 +433,7 @@ export default function Navigation({ state, descriptors, navigation }) {
         { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
+        { title: 'Connections', icon: 'account-group', route: 'Connections' },
         { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
       ];

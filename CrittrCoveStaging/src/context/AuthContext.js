@@ -307,9 +307,6 @@ class AuthService {
         ]);
       }
       
-      // Schedule token refresh for the new token
-      this.scheduleTokenRefresh(accessToken);
-
       console.log('MBA98765 Tokens set successfully');
     } catch (error) {
       console.error('MBA98765 Error setting tokens:', error);
@@ -602,7 +599,7 @@ export const AuthProvider = ({ children }) => {
       // Navigate to dashboard after successful sign in
       if (navigation) {
         setTimeout(() => {
-          navigateToFrom(navigation, 'Dashboard');
+          navigateToFrom(navigation, 'Dashboard', 'SignIn');
         }, 0);
       }
 
