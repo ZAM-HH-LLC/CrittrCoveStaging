@@ -649,18 +649,21 @@ export const getConnectionProfile = async (userId, type = 'client') => {
 };
 
 /**
- * TODO: Implement this
- * Invite a client to connect with a professional
- * @param {string} email - The email address of the client to invite
- * @returns {Promise<Object>} Object containing result of invitation
+ * Invite a client to connect with a professional via email or link
+ * 
+ * @param {string} type - Type of invitation: 'email' or 'link'
+ * @param {string} email - The email address of the client to invite (required if type is 'email')
+ * @returns {Promise<Object>} Object containing result of invitation, including invitation_link for link invitations
  */
-export const inviteClient = async (email) => {
+export const inviteClient = async (type = 'email', email = null) => {
   try {
-    debugLog('MBA4321 Inviting client:', { email });
+    debugLog('MBA4321 Inviting client:', { type, email });
     
     const apiClient = await getApiClient();
-    const response = await apiClient.post('/api/connections/v1/invite-client/', {
-      email
+    const response = await apiClient.post('/api/users/v1/invitations/', {
+      type,
+      email,
+      is_professional_invite: true
     });
     
     debugLog('MBA4321 Invite client response:', response.data);
@@ -668,6 +671,213 @@ export const inviteClient = async (email) => {
     return response.data;
   } catch (error) {
     debugLog('MBA4321 Error inviting client:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Send a referral to invite someone to join CrittrCove
+ * 
+ * @param {string} type - Type of invitation: 'email' or 'link'
+ * @param {string} email - The email address to refer (required if type is 'email')
+ * @param {string} referralType - The type of referral: 'client_to_client', 'client_to_professional', or 'professional_to_professional'
+ * @returns {Promise<Object>} Object containing result of referral, including invitation_link for link referrals
+ */
+export const sendReferral = async (type = 'email', email = null, referralType) => {
+  try {
+    debugLog('MBA4321 Sending referral:', { type, email, referralType });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.post('/api/users/v1/invitations/', {
+      type,
+      email,
+      is_professional_invite: false,
+      referral_type: referralType
+    });
+    
+    debugLog('MBA4321 Send referral response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error sending referral:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Get a list of all invitations created by the current user
+ * 
+ * @param {string} type - Type of invitations to fetch: 'all', 'professional', or 'referral'
+ * @returns {Promise<Array>} Array of invitation objects
+ */
+export const getInvitations = async (type = 'all') => {
+  try {
+    debugLog('MBA4321 Getting invitations:', { type });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.get(`/api/users/v1/invitations/?type=${type}`);
+    
+    debugLog('MBA4321 Get invitations response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error getting invitations:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Get details of a specific invitation
+ * 
+ * @param {string} token - The invitation token
+ * @returns {Promise<Object>} Invitation details
+ */
+export const getInvitationDetails = async (token) => {
+  try {
+    debugLog('MBA4321 Getting invitation details:', { token });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.get(`/api/users/v1/invitations/${token}/`);
+    
+    debugLog('MBA4321 Get invitation details response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error getting invitation details:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Verify if an invitation is valid
+ * This endpoint doesn't require authentication
+ * 
+ * @param {string} token - The invitation token
+ * @returns {Promise<Object>} Object with valid flag and invitation details
+ */
+export const verifyInvitation = async (token) => {
+  try {
+    debugLog('MBA4321 Verifying invitation:', { token });
+    debugLog('MBA4321 Verification endpoint:', `${API_BASE_URL}/api/users/v1/invitations/${token}/verify/`);
+    
+    // Don't use the authenticated API client since this doesn't require auth
+    const response = await axios.get(`${API_BASE_URL}/api/users/v1/invitations/${token}/verify/`);
+    
+    debugLog('MBA4321 Verify invitation response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error verifying invitation:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    throw error;
+  }
+};
+
+/**
+ * Accept an invitation and create a connection between client and professional
+ * 
+ * @param {string} token - The invitation token
+ * @returns {Promise<Object>} Result of accepting the invitation
+ */
+export const acceptInvitation = async (token) => {
+  try {
+    debugLog('MBA4321 Accepting invitation:', { token });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.post(`/api/users/v1/invitations/${token}/accept/`);
+    
+    debugLog('MBA4321 Accept invitation response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error accepting invitation:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Delete/cancel an invitation
+ * 
+ * @param {string} token - The invitation token
+ * @returns {Promise<void>}
+ */
+export const deleteInvitation = async (token) => {
+  try {
+    debugLog('MBA4321 Deleting invitation:', { token });
+    
+    const apiClient = await getApiClient();
+    await apiClient.delete(`/api/users/v1/invitations/${token}/`);
+    
+    debugLog('MBA4321 Delete invitation success');
+    
+    return true;
+  } catch (error) {
+    debugLog('MBA4321 Error deleting invitation:', error);
+    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Resend an invitation email
+ * 
+ * @param {string} token - The invitation token
+ * @returns {Promise<Object>} Result of resending the invitation
+ */
+export const resendInvitation = async (token) => {
+  try {
+    debugLog('MBA4321 Resending invitation:', { token });
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.post(`/api/users/v1/invitations/${token}/resend/`);
+    
+    debugLog('MBA4321 Resend invitation response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    debugLog('MBA4321 Error resending invitation:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
     
     // Handle auth error gracefully

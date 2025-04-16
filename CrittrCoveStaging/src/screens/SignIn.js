@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { View, TextInput, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Platform, Keyboard, SafeAreaView, KeyboardAvoidingView, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { theme } from '../styles/theme';
 import CustomButton from '../components/CustomButton';
@@ -148,6 +148,27 @@ export default function SignIn() {
       handleLogin();
     }
   };
+
+  // Add this inside the SignIn component, after any existing useEffect
+  useEffect(() => {
+    // Check if we're on web and have an invitation token in the URL
+    if (Platform.OS === 'web') {
+      const url = window.location.pathname;
+      debugLog('MBA5555 SignIn screen - Current URL path:', url);
+      
+      if (url.includes('/invite/')) {
+        // Extract token and redirect to signup
+        const pathParts = url.split('/');
+        const inviteIndex = pathParts.findIndex(part => part === 'invite');
+        if (inviteIndex !== -1 && pathParts.length > inviteIndex + 1) {
+          const token = pathParts[inviteIndex + 1];
+          debugLog('MBA5555 SignIn detected invite token, redirecting to SignUp:', token);
+          // Navigate to SignUp with the token
+          navigation.navigate('SignUp', { token });
+        }
+      }
+    }
+  }, []);
 
   return (
     <View style={styles.container}>

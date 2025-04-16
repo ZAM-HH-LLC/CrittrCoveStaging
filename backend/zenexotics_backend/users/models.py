@@ -8,6 +8,8 @@ import string
 import os
 from django.utils.translation import gettext_lazy as _
 import pytz
+import uuid
+from datetime import timedelta
 
 def validate_image_file(value):
     if value.size > settings.MAX_UPLOAD_SIZE:
@@ -161,3 +163,96 @@ class TutorialStatus(models.Model):
 
     def __str__(self):
         return f"Tutorial Status for {self.user.email}"
+
+class Invitation(models.Model):
+    """
+    Model to track client invitations sent by professionals and referrals sent by any user.
+    Supports both email invitations and shareable link invitations.
+    """
+    # Who sent the invitation
+    inviter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_invitations')
+    # Email of invitee (optional for link invitations)
+    email = models.EmailField(blank=True, null=True)
+    # Unique token for the invitation
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    # When invitation was created
+    created_at = models.DateTimeField(auto_now_add=True)
+    # When invitation expires (default 14 days)
+    expires_at = models.DateTimeField()
+    # Has this invitation been used?
+    is_accepted = models.BooleanField(default=False)
+    # When was it accepted (if it was)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    # Type of invitation
+    invitation_type = models.CharField(
+        max_length=10,
+        choices=[('email', 'Email'), ('link', 'Link')],
+        default='email'
+    )
+    # Is this a professional invitation or a general referral?
+    is_professional_invite = models.BooleanField(default=True)
+    # For referrals: what type of referral is this?
+    referral_type = models.CharField(
+        max_length=30,
+        choices=[
+            ('client_to_client', 'Client to Client'),
+            ('client_to_professional', 'Client to Professional'),
+            ('professional_to_professional', 'Professional to Professional')
+        ],
+        null=True, blank=True
+    )
+    # For referrals: status of any rewards associated with this referral
+    reward_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('awarded', 'Awarded'),
+            ('ineligible', 'Ineligible')
+        ],
+        default='pending',
+        null=True, blank=True
+    )
+    # User that accepted the invitation (filled after acceptance)
+    invitee = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='received_invitations'
+    )
+    
+    class Meta:
+        db_table = 'client_invitations'
+        verbose_name = 'Invitation & Referral'
+        verbose_name_plural = 'Invitations & Referrals'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['inviter']),
+            models.Index(fields=['invitee']),
+            models.Index(fields=['email']),
+            models.Index(fields=['is_professional_invite']),
+            models.Index(fields=['is_accepted']),
+            models.Index(fields=['created_at']),
+        ]
+        
+    def __str__(self):
+        if self.email:
+            return f"Invitation for {self.email} from {self.inviter.email}"
+        return f"Link invitation from {self.inviter.email}"
+    
+    def save(self, *args, **kwargs):
+        # Set expiration date if not set
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(days=14)
+        super().save(*args, **kwargs)
+    
+    @property
+    def is_expired(self):
+        """Check if the invitation has expired"""
+        return timezone.now() > self.expires_at
+    
+    @property
+    def is_valid(self):
+        """Check if the invitation is still valid"""
+        return not self.is_accepted and not self.is_expired

@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surfaceContrast,
     borderRadius: 8,
-    marginBottom: 16,
+    // marginBottom: 16,
     padding: 16,
     elevation: 2,
     shadowColor: '#000',

@@ -1,18 +1,19 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { View, TextInput, Text, StyleSheet, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import axios from 'axios';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { theme } from '../styles/theme';
 import CustomButton from '../components/CustomButton';
 import { API_BASE_URL } from '../config/config';
-import { AuthContext } from '../context/AuthContext'; // Import AuthContext
-import { debugLog } from '../context/AuthContext'; // Import debugLog
+import { AuthContext, debugLog } from '../context/AuthContext'; // Import AuthContext
 import { validateEmail, validateName, validatePassword, validatePasswordMatch } from '../validation/validation';
+import { verifyInvitation } from '../api/API';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function SignUp() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { signIn, is_DEBUG } = useContext(AuthContext); // Use AuthContext to update auth state
 
   const [firstName, setFirstName] = useState('');
@@ -22,6 +23,10 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [inviterName, setInviterName] = useState('');
+  const [inviteToken, setInviteToken] = useState(null);
+  const [inviteVerified, setInviteVerified] = useState(false);
+  const [verifyingInvite, setVerifyingInvite] = useState(false);
   
   // Validation states
   const [firstNameError, setFirstNameError] = useState('');
@@ -29,6 +34,98 @@ export default function SignUp() {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+
+  // Check for invitation token when component mounts
+  useEffect(() => {
+    // Check if we have an invitation token in the route params or URL
+    const checkInvitation = async () => {
+      try {
+        // First check if we're on the 'Invite' screen
+        const isInviteScreen = route.name === 'Invite';
+        debugLog('MBA4321 Current route name:', route.name);
+        
+        // Check route params
+        let token = route.params?.token;
+        debugLog('MBA4321 Token from route params:', token);
+        
+        // If not in route params, check if we're on web and have it in the URL
+        if (!token && Platform.OS === 'web') {
+          const url = window.location.pathname;
+          debugLog('MBA4321 Current URL path:', url);
+          debugLog('MBA4321 Full location object:', {
+            pathname: window.location.pathname,
+            href: window.location.href,
+            search: window.location.search,
+            hash: window.location.hash
+          });
+          
+          if (url.includes('/invite/')) {
+            // Extract token from invite URL format
+            const pathParts = url.split('/');
+            const inviteIndex = pathParts.findIndex(part => part === 'invite');
+            if (inviteIndex !== -1 && pathParts.length > inviteIndex + 1) {
+              token = pathParts[inviteIndex + 1];
+              debugLog('MBA4321 Found invitation token from invite URL path:', token);
+            }
+          } else if (url.includes('/signup/')) {
+            // Extract token from signup URL format
+            const pathParts = url.split('/');
+            const signupIndex = pathParts.findIndex(part => part === 'signup');
+            if (signupIndex !== -1 && pathParts.length > signupIndex + 1) {
+              token = pathParts[signupIndex + 1];
+              debugLog('MBA4321 Found invitation token from signup URL path:', token);
+            }
+          }
+        }
+        
+        // If we still don't have a token, check the URL search params
+        if (!token && Platform.OS === 'web') {
+          const searchParams = new URLSearchParams(window.location.search);
+          const searchToken = searchParams.get('token');
+          if (searchToken) {
+            token = searchToken;
+            debugLog('MBA4321 Found invitation token from URL search params:', token);
+          }
+        }
+        
+        if (token) {
+          debugLog('MBA4321 Processing invitation token:', token);
+          setInviteToken(token);
+          setVerifyingInvite(true);
+          
+          try {
+            // Verify the token with the backend
+            const inviteInfo = await verifyInvitation(token);
+            debugLog('MBA4321 Invitation verification result:', inviteInfo);
+            
+            if (inviteInfo.valid) {
+              setInviteVerified(true);
+              setInviterName(inviteInfo.inviter_name);
+              
+              // If it's an email invitation, set the email field
+              if (inviteInfo.email) {
+                setEmail(inviteInfo.email);
+              }
+              
+              setSuccessMessage(`You've been invited by ${inviteInfo.inviter_name}!`);
+            } else {
+              setSuccessMessage(`This invitation is no longer valid: ${inviteInfo.error}`);
+            }
+          } catch (error) {
+            debugLog('MBA4321 Error verifying invitation:', error);
+            setSuccessMessage('This invitation link is invalid or has expired.');
+          } finally {
+            setVerifyingInvite(false);
+          }
+        }
+      } catch (error) {
+        debugLog('MBA4321 Error processing invitation:', error);
+        setVerifyingInvite(false);
+      }
+    };
+    
+    checkInvitation();
+  }, [route.params, route.name]);
 
   const validateForm = () => {
     let isValid = true;
@@ -87,11 +184,12 @@ export default function SignUp() {
       
       debugLog('MBA12345 User timezone and preferences', { userTimezone, useMilitaryTime });
       
-      // Prepare user data with time settings
+      // Prepare user data with time settings and invitation token
       const registrationData = {
         ...userData,
         timezone: userTimezone,
-        use_military_time: useMilitaryTime
+        use_military_time: useMilitaryTime,
+        invitation_token: inviteToken
       };
       
       // First register the user
@@ -117,6 +215,26 @@ export default function SignUp() {
       await signIn(access, refresh);
       
       debugLog('MBA12345 Authentication setup complete');
+      
+      // If the user came from an invitation, accept the invitation
+      if (inviteToken && inviteVerified) {
+        try {
+          await axios.post(
+            `${API_BASE_URL}/api/users/v1/invitations/${inviteToken}/accept/`,
+            {},
+            {
+              headers: {
+                Authorization: `Bearer ${access}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          debugLog('MBA12345 Invitation accepted successfully');
+        } catch (error) {
+          debugLog('MBA12345 Error accepting invitation:', error);
+          // Continue even if this fails
+        }
+      }
       
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         Alert.alert('Success', 'Account created successfully!', [
@@ -167,6 +285,22 @@ export default function SignUp() {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <Text style={styles.title}>Sign Up</Text>
+        
+        {verifyingInvite && (
+          <View style={styles.inviteContainer}>
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+            <Text style={styles.inviteText}>Verifying invitation...</Text>
+          </View>
+        )}
+        
+        {inviteVerified && (
+          <View style={styles.inviteContainer}>
+            <Text style={styles.inviteText}>
+              You've been invited by {inviterName}!
+            </Text>
+          </View>
+        )}
+        
         <View style={styles.inputContainer}>
           <TextInput
             style={[styles.input, firstNameError ? styles.errorInput : null]}
@@ -204,6 +338,7 @@ export default function SignUp() {
             }}
             keyboardType="email-address"
             autoCapitalize="none"
+            editable={true}
           />
           {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
         </View>
@@ -250,40 +385,62 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   scrollContainer: {
-    padding: theme.spacing.medium,
+    padding: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    flexGrow: 1, // Ensure the ScrollView takes up the full height
+    maxWidth: 500,
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
-    fontSize: theme.fontSizes.large,
-    color: theme.colors.primary,
-    marginBottom: theme.spacing.medium,
+    fontSize: 24,
+    color: theme.colors.text,
+    marginBottom: 20,
+    fontWeight: 'bold',
   },
   inputContainer: {
-    width: screenWidth > 600 ? 600 : '100%',
-    maxWidth: 600,
-    marginBottom: theme.spacing.small,
+    width: '100%',
+    marginBottom: 15,
   },
   input: {
     width: '100%',
-    height: 40,
-    borderColor: 'gray',
+    height: 50,
     borderWidth: 1,
-    paddingHorizontal: theme.spacing.small,
-    borderRadius: 4,
+    borderColor: theme.colors.border,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    backgroundColor: theme.colors.surface,
   },
   errorInput: {
-    borderColor: 'red',
+    borderColor: theme.colors.error,
   },
   errorText: {
-    color: 'red',
+    color: theme.colors.error,
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 5,
   },
   message: {
-    marginTop: theme.spacing.small,
+    marginTop: 20,
+    color: theme.colors.text,
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  inviteContainer: {
+    marginBottom: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#f0f9ff',
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  inviteText: {
     color: theme.colors.primary,
-    fontSize: theme.fontSizes.medium,
+    fontSize: 16,
+    marginLeft: 8,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

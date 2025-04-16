@@ -6,7 +6,7 @@ import { createStackNavigator, TransitionPresets } from '@react-navigation/stack
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Navigation from './src/components/Navigation';
 import { theme } from './src/styles/theme';
-import { AuthProvider, AuthContext } from './src/context/AuthContext';
+import { AuthProvider, AuthContext, debugLog } from './src/context/AuthContext';
 import { API_BASE_URL } from './src/config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createNavigationContainerRef } from '@react-navigation/native';
@@ -66,6 +66,7 @@ const screens = [
   { name: 'MyProfile', component: MyProfile },  
   { name: 'SignIn', component: SignIn },
   { name: 'SignUp', component: SignUp },
+  { name: 'Invite', component: SignUp },
   { name: 'ResetPassword', component: ResetPassword },
   { name: 'ResetPasswordConfirm', component: ResetPasswordConfirm },
   { name: 'SearchProfessionalsListing', component: SearchProfessionalsListing },
@@ -112,7 +113,22 @@ const linking = {
       OwnerProfile: 'owner-profile',
       MyProfile: 'my-profile',
       SignIn: 'signin',
-      SignUp: 'signup',
+      SignUp: {
+        path: 'signup/:token?',
+        parse: {
+          token: (token) => token || null
+        }
+      },
+      Invite: {
+        path: 'invite/:token',
+        exact: true,
+        parse: {
+          token: (token) => token
+        },
+        stringify: {
+          token: (token) => token
+        }
+      },
       ResetPassword: 'reset-password',
       ResetPasswordConfirm: 'reset-password/:uid/:token',
       SearchProfessionalsListing: 'search-professionals-listing',
@@ -243,10 +259,34 @@ const MVPWarning = () => {
 };
 
 function AppContent() {
-  const { checkAuthStatus, is_DEBUG } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
+  const { checkAuthStatus, is_DEBUG } = authContext;
   const [initialRoute, setInitialRoute] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
+  const [inviteToken, setInviteToken] = useState(null);
+
+  // Check for invitation in the URL
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const url = window.location.pathname;
+      if (authContext.debugLog) {
+        authContext.debugLog('MBA6666 App - Current URL path:', url);
+      }
+      
+      if (url.includes('/invite/')) {
+        const pathParts = url.split('/');
+        const inviteIndex = pathParts.findIndex(part => part === 'invite');
+        if (inviteIndex !== -1 && pathParts.length > inviteIndex + 1) {
+          const token = pathParts[inviteIndex + 1];
+          if (authContext.debugLog) {
+            authContext.debugLog('MBA6666 Found invitation token in URL:', token);
+          }
+          setInviteToken(token);
+        }
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -254,22 +294,29 @@ function AppContent() {
         const authStatus = await checkAuthStatus();
         let route = 'Home';
 
-        // Only change route if user is authenticated
-        if (authStatus.isAuthenticated) {
+        // If we have an invite token, go to SignUp
+        if (inviteToken) {
+          if (authContext.debugLog) {
+            authContext.debugLog('MBA6666 Setting initial route to SignUp with token:', inviteToken);
+          }
+          route = 'SignUp';
+        }
+        // Only change route if user is authenticated and no invite token
+        else if (authStatus.isAuthenticated) {
           route = authStatus.userRole === 'professional' ? 'Dashboard' : 'Home';
         }
 
         setInitialRoute(route);
       } catch (error) {
         console.error('Error initializing app:', error);
-        setInitialRoute('Home');
+        setInitialRoute(inviteToken ? 'SignUp' : 'Home');
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeApp();
-  }, []);
+  }, [inviteToken]);
 
   // Handle route changes without triggering auth checks
   useEffect(() => {

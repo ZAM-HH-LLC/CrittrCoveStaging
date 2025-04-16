@@ -3,6 +3,10 @@ from rest_framework.routers import DefaultRouter
 from ..views import TutorialStatusViewSet
 from . import views
 from .views import user_profile, clear_url_cache, update_profile_info
+from .views_invitation import (
+    InvitationListCreateView, InvitationDetailView,
+    verify_invitation, accept_invitation, resend_invitation_email
+)
 
 # Create a router for the TutorialStatusViewSet
 tutorial_router = DefaultRouter()
@@ -22,6 +26,13 @@ urlpatterns = [
     path('profile/', views.user_profile, name='user-profile'),
     path('update-profile/', update_profile_info, name='update-profile-info'),
     path('clear-url-cache/', clear_url_cache, name='clear-url-cache'),
+    
+    # Invitation URLs
+    path('invitations/', InvitationListCreateView.as_view(), name='invitation-list-create'),
+    path('invitations/<uuid:token>/', InvitationDetailView.as_view(), name='invitation-detail'),
+    path('invitations/<uuid:token>/verify/', verify_invitation, name='verify-invitation'),
+    path('invitations/<uuid:token>/accept/', accept_invitation, name='accept-invitation'),
+    path('invitations/<uuid:token>/resend/', resend_invitation_email, name='resend-invitation'),
 ]
 
 # Add the tutorial router URLs

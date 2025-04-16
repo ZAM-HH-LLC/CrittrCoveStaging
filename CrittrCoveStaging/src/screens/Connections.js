@@ -30,6 +30,10 @@ const Connections = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   const searchInputRef = useRef(null);
   const [allConnections, setAllConnections] = useState([]);
+  const [invitationType, setInvitationType] = useState('email');
+  const [generatedLink, setGeneratedLink] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState('');
 
   // Update layout based on screen size
   useEffect(() => {
@@ -191,28 +195,59 @@ const Connections = () => {
   const handleInviteClient = () => {
     debugLog('MBA4321 Opening invite client modal');
     setInviteEmail('');
+    setGeneratedLink('');
+    setInviteError('');
+    setInviteSuccess('');
+    setInvitationType('email');
     setShowInviteModal(true);
   };
   
   const handleSendInvite = async () => {
-    if (!inviteEmail || !inviteEmail.includes('@')) {
-      debugLog('MBA4321 Invalid email format:', inviteEmail);
-      return;
+    setInviteError('');
+    setInviteSuccess('');
+    
+    if (invitationType === 'email') {
+      if (!inviteEmail || !inviteEmail.includes('@')) {
+        setInviteError('Please enter a valid email address');
+        debugLog('MBA4321 Invalid email format:', inviteEmail);
+        return;
+      }
     }
     
     setIsInviting(true);
-    debugLog('MBA4321 Sending invite to:', inviteEmail);
+    debugLog('MBA4321 Creating invitation:', { 
+      type: invitationType, 
+      email: invitationType === 'email' ? inviteEmail : null 
+    });
     
     try {
-      const response = await inviteClient(inviteEmail);
-      debugLog('MBA4321 Invite sent successfully:', response);
-      setShowInviteModal(false);
-      // Refresh the connections list to show the new invited client
-      fetchConnections(1);
+      const response = await inviteClient(invitationType, invitationType === 'email' ? inviteEmail : null);
+      debugLog('MBA4321 Invitation created successfully:', response);
+      
+      if (invitationType === 'email') {
+        setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+        setInviteEmail('');
+      } else {
+        setGeneratedLink(response.invitation_link);
+        setInviteSuccess('Invitation link created successfully!');
+      }
+      
+      // Refresh the connections list only if needed
+      if (activeFilter === 'pending' || activeFilter === 'all') {
+        fetchConnections(1);
+      }
     } catch (error) {
-      debugLog('MBA4321 Error sending invite:', error);
+      debugLog('MBA4321 Error creating invitation:', error);
+      setInviteError(error.response?.data?.error || 'Failed to send invitation. Please try again.');
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (generatedLink) {
+      navigator.clipboard.writeText(generatedLink);
+      setInviteSuccess('Link copied to clipboard!');
     }
   };
 
@@ -589,43 +624,134 @@ const Connections = () => {
               </View>
               
               <Text style={styles.modalText}>
-                Enter the email address of the client you'd like to invite.
-                They'll receive an invitation to connect with you on CrittrCove.
+                Invite a client to connect with you on CrittrCove. 
+                You can either send them an email invitation or generate a link to share.
               </Text>
               
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.emailInput}
-                  placeholder="client@example.com"
-                  value={inviteEmail}
-                  onChangeText={setInviteEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
+              <View style={styles.inviteTypeToggle}>
+                <TouchableOpacity
+                  style={[
+                    styles.inviteTypeButton,
+                    invitationType === 'email' && styles.inviteTypeButtonActive
+                  ]}
+                  onPress={() => {
+                    setInvitationType('email');
+                    setInviteError('');
+                    setInviteSuccess('');
+                  }}
+                >
+                  <MaterialCommunityIcons 
+                    name="email-outline" 
+                    size={20} 
+                    color={invitationType === 'email' ? theme.colors.primary : "#666"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.inviteTypeText,
+                      invitationType === 'email' && styles.inviteTypeTextActive
+                    ]}
+                  >
+                    Email Invitation
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.inviteTypeButton,
+                    invitationType === 'link' && styles.inviteTypeButtonActive
+                  ]}
+                  onPress={() => {
+                    setInvitationType('link');
+                    setInviteError('');
+                    setInviteSuccess('');
+                  }}
+                >
+                  <MaterialCommunityIcons 
+                    name="link-variant" 
+                    size={20} 
+                    color={invitationType === 'link' ? theme.colors.primary : "#666"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.inviteTypeText,
+                      invitationType === 'link' && styles.inviteTypeTextActive
+                    ]}
+                  >
+                    Generate Link
+                  </Text>
+                </TouchableOpacity>
               </View>
+              
+              {invitationType === 'email' ? (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Client's Email Address</Text>
+                  <TextInput
+                    style={styles.emailInput}
+                    placeholder="client@example.com"
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+              ) : generatedLink ? (
+                <View style={styles.linkContainer}>
+                  <Text style={styles.inputLabel}>Shareable Invitation Link</Text>
+                  <View style={styles.generatedLinkContainer}>
+                    <Text 
+                      style={styles.generatedLink}
+                      numberOfLines={1}
+                      ellipsizeMode="middle"
+                    >
+                      {generatedLink}
+                    </Text>
+                    {Platform.OS === 'web' && (
+                      <TouchableOpacity 
+                        style={styles.copyButton}
+                        onPress={handleCopyLink}
+                      >
+                        <MaterialCommunityIcons name="content-copy" size={20} color={theme.colors.primary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ) : null}
+              
+              {inviteError ? (
+                <Text style={styles.errorText}>{inviteError}</Text>
+              ) : null}
+              
+              {inviteSuccess ? (
+                <Text style={styles.successText}>{inviteSuccess}</Text>
+              ) : null}
               
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={() => setShowInviteModal(false)}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={styles.cancelButtonText}>Close</Text>
                 </TouchableOpacity>
                 
-                <TouchableOpacity
-                  style={[
-                    styles.sendInviteButton,
-                    (!inviteEmail || !inviteEmail.includes('@')) && styles.disabledButton
-                  ]}
-                  onPress={handleSendInvite}
-                  disabled={isInviting || !inviteEmail || !inviteEmail.includes('@')}
-                >
-                  {isInviting ? (
-                    <ActivityIndicator size="small" color={theme.colors.surface} />
-                  ) : (
-                    <Text style={styles.sendInviteButtonText}>Send Invite</Text>
-                  )}
-                </TouchableOpacity>
+                {!generatedLink || invitationType === 'email' ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.sendInviteButton,
+                      (invitationType === 'email' && (!inviteEmail || !inviteEmail.includes('@'))) && styles.disabledButton,
+                      isInviting && styles.disabledButton
+                    ]}
+                    onPress={handleSendInvite}
+                    disabled={isInviting || (invitationType === 'email' && (!inviteEmail || !inviteEmail.includes('@')))}
+                  >
+                    {isInviting ? (
+                      <ActivityIndicator size="small" color={theme.colors.surface} />
+                    ) : (
+                      <Text style={styles.sendInviteButtonText}>
+                        {invitationType === 'email' ? 'Send Invitation' : 'Generate Link'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
           </View>
@@ -964,8 +1090,47 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
     lineHeight: 24,
   },
+  inviteTypeToggle: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  inviteTypeButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#CCCBC9',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    ...(Platform.OS === 'web' && {
+      cursor: 'pointer',
+    }),
+  },
+  inviteTypeButtonActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: 'rgba(7, 132, 198, 0.05)',
+  },
+  inviteTypeText: {
+    fontSize: 16,
+    color: '#666',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  inviteTypeTextActive: {
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
   inputContainer: {
     marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 8,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   emailInput: {
     borderWidth: 1,
@@ -975,10 +1140,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  linkContainer: {
+    marginBottom: 24,
+  },
+  generatedLinkContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#CCCBC9',
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+  },
+  generatedLink: {
+    flex: 1,
+    color: theme.colors.text,
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  copyButton: {
+    padding: 8,
+    ...(Platform.OS === 'web' && {
+      cursor: 'pointer',
+    }),
+  },
+  errorText: {
+    color: theme.colors.error || '#D32F2F',
+    fontSize: 16,
+    marginBottom: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  successText: {
+    color: theme.colors.success || '#4CAF50',
+    fontSize: 16,
+    marginBottom: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 12,
+    marginTop: 8,
   },
   cancelButton: {
     paddingVertical: 10,
@@ -987,6 +1190,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CCCBC9',
     backgroundColor: theme.colors.surface,
+    ...(Platform.OS === 'web' && {
+      cursor: 'pointer',
+    }),
   },
   cancelButtonText: {
     color: theme.colors.text,
@@ -999,8 +1205,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: theme.colors.primary,
-    minWidth: 100,
+    minWidth: 140,
     alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' && {
+      cursor: 'pointer',
+    }),
   },
   sendInviteButtonText: {
     color: theme.colors.surface,
@@ -1011,6 +1221,9 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: '#CCCCCC',
     opacity: 0.7,
+    ...(Platform.OS === 'web' && {
+      cursor: 'not-allowed',
+    }),
   },
   columnWrapper: {
     flexWrap: 'wrap',

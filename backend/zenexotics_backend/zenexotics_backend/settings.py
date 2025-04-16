@@ -240,16 +240,22 @@ CORS_ALLOWED_ORIGINS = [
     FRONTEND_BASE_URL,  # Use the FRONTEND_BASE_URL variable
 ]
 
+# Email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'zam.hh.llc@gmail.com'
-EMAIL_HOST_PASSWORD = 'tnrz nsbl uhiu dmxb' # TODO: This is an app password for gmail, must change before deployment
+EMAIL_HOST_PASSWORD = 'tnrz nsbl uhiu dmxb'  # Gmail app password
 EMAIL_USE_SSL = False
 
+# Contact and sender emails
 CONTACT_EMAIL = 'zam.hh.llc@gmail.com'
-DEFAULT_FROM_EMAIL = 'zam.hh.llc@gmail.com'
+DEFAULT_FROM_EMAIL = 'CrittrCove <zam.hh.llc@gmail.com>'  # Format with name for better deliverability
+
+# Email deliverability settings
+EMAIL_TIMEOUT = 30  # Timeout in seconds
+EMAIL_SUBJECT_PREFIX = ''  # No prefix for cleaner subjects
 
 # Add this near your other logging configurations
 LOGGING = {
