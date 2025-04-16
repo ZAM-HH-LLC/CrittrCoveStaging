@@ -157,32 +157,34 @@ const Connections = () => {
     }
   };
 
-  const handleViewProfile = async (connection) => {
-    debugLog('MBA4321 Navigating to profile:', {
+  const handleViewMessages = async (connection) => {
+    debugLog('MBA4321 Navigating to messages with connection:', {
       connectionId: connection.id,
-      connectionName: connection.name
+      connectionName: connection.name,
+      conversationId: connection.conversation_id
     });
     
-    // Navigate to the appropriate profile page based on the connection type
-    const targetScreen = activeTab === 'clients' ? 'OwnerProfile' : 'ProfessionalProfile';
-    await navigateToFrom(navigation, targetScreen, 'Connections', {
-      userId: connection.id
+    // Navigate to MessageHistory screen with conversation ID
+    await navigateToFrom(navigation, 'MessageHistory', 'Connections', {
+      conversationId: connection.conversation_id,
+      otherUserName: connection.name
+      // No isProfessional flag here as we don't want to trigger booking creation
     });
   };
 
   const handleCreateBooking = async (connection) => {
     debugLog('MBA4321 Creating booking with client:', {
       clientId: connection.id,
-      clientName: connection.name
+      clientName: connection.name,
+      conversationId: connection.conversation_id
     });
     
-    // Navigate to the booking creation screen with the client info
-    await navigateToFrom(navigation, 'BookingDetails', 'Connections', {
-      clientId: connection.id,
-      clientName: connection.name,
-      clientEmail: connection.email,
-      pets: connection.pets,
-      mode: 'create'
+    // Navigate directly to the MessageHistory screen with the conversation ID
+    await navigateToFrom(navigation, 'MessageHistory', 'Connections', {
+      conversationId: connection.conversation_id,
+      otherUserName: connection.name,
+      clientId: connection.client_id, // Include client_id for potential future use
+      isProfessional: true // Since this is called from the professional's perspective
     });
   };
 
@@ -294,7 +296,7 @@ const Connections = () => {
         <ConnectionCard
           connection={item}
           type={activeTab}
-          onViewProfile={() => handleViewProfile(item)}
+          onViewProfile={() => handleViewMessages(item)}
           onCreateBooking={activeTab === 'clients' ? () => handleCreateBooking(item) : null}
         />
       </View>

@@ -38,6 +38,7 @@ from rest_framework.renderers import JSONRenderer
 from collections import OrderedDict
 from django.utils import timezone
 from user_messages.models import UserMessage
+from conversations.v1.views import find_or_create_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -1552,9 +1553,15 @@ class ConnectionsView(APIView):
                         (Q(participant1=client.user) & Q(participant2=user))
                     ).exists()
                     
+                    # Get or create a conversation with this client
+                    conversation, is_professional_in_convo = find_or_create_conversation(
+                        user, client.user, 'professional'
+                    )
+                    
                     # Build client connection data
                     connection = {
                         'id': client.user.id,
+                        'client_id': client.id,  # Add the actual client ID
                         'name': client.user.name,
                         'email': client.user.email,
                         'profile_image': client.user.profile_image_url if hasattr(client.user, 'profile_image_url') else None,
@@ -1573,7 +1580,8 @@ class ConnectionsView(APIView):
                         'services': services,
                         'active_bookings_count': active_bookings_count,
                         'completed_bookings_count': completed_bookings_count,
-                        'has_conversation': has_conversation
+                        'has_conversation': has_conversation,
+                        'conversation_id': conversation.conversation_id
                     }
                     connections.append(connection)
             
@@ -1680,9 +1688,15 @@ class ConnectionsView(APIView):
                         (Q(participant1=prof.user) & Q(participant2=user))
                     ).exists()
                     
+                    # Get or create a conversation with this professional
+                    conversation, is_professional_in_convo = find_or_create_conversation(
+                        user, prof.user, 'client'
+                    )
+                    
                     # Build professional connection data
                     connection = {
                         'id': prof.user.id,
+                        'professional_id': prof.professional_id,  # Add the actual professional ID
                         'name': prof.user.name,
                         'email': prof.user.email,
                         'profile_image': prof.user.profile_image_url if hasattr(prof.user, 'profile_image_url') else None,
@@ -1692,7 +1706,8 @@ class ConnectionsView(APIView):
                         'services': services,
                         'active_bookings_count': active_bookings_count,
                         'completed_bookings_count': completed_bookings_count,
-                        'has_conversation': has_conversation
+                        'has_conversation': has_conversation,
+                        'conversation_id': conversation.conversation_id
                     }
                     connections.append(connection)
             
@@ -1722,3 +1737,5 @@ class ConnectionsView(APIView):
                 {"error": "Failed to fetch connections"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+        

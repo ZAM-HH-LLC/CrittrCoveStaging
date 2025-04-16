@@ -16,6 +16,7 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
     connectionId: connection.id,
     connectionName: connection.name,
     connectionType: type,
+    conversationId: connection.conversation_id,
     isMobile,
     isWideScreen,
     isExtraWideScreen,
@@ -83,18 +84,24 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
               <TouchableOpacity 
                 style={styles.viewProfileButton}
                 onPress={() => {
-                  debugLog('MBA4321 View Profile button clicked', connection.name);
+                  debugLog('MBA4321 View Messages button clicked', {
+                    connectionName: connection.name,
+                    conversationId: connection.conversation_id
+                  });
                   onViewProfile(connection);
                 }}
               >
-                <Text style={styles.viewProfileText}>View Profile</Text>
+                <Text style={styles.viewProfileText}>View Messages</Text>
               </TouchableOpacity>
               
               {isClient && (
                 <TouchableOpacity 
                   style={styles.createBookingButton}
                   onPress={() => {
-                    debugLog('MBA4321 Create Booking button clicked', connection.name);
+                    debugLog('MBA4321 Create Booking button clicked', {
+                      connectionName: connection.name,
+                      conversationId: connection.conversation_id
+                    });
                     onCreateBooking(connection);
                   }}
                 >
@@ -130,18 +137,24 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
             <TouchableOpacity 
               style={styles.viewProfileButton}
               onPress={() => {
-                debugLog('MBA4321 View Profile button clicked (mobile)', connection.name);
+                debugLog('MBA4321 View Messages button clicked (mobile)', {
+                  connectionName: connection.name,
+                  conversationId: connection.conversation_id
+                });
                 onViewProfile(connection);
               }}
             >
-              <Text style={styles.viewProfileText}>View Profile</Text>
+              <Text style={styles.viewProfileText}>View Messages</Text>
             </TouchableOpacity>
             
             {isClient && (
               <TouchableOpacity 
                 style={styles.createBookingButton}
                 onPress={() => {
-                  debugLog('MBA4321 Create Booking button clicked (mobile)', connection.name);
+                  debugLog('MBA4321 Create Booking button clicked (mobile)', {
+                    connectionName: connection.name,
+                    conversationId: connection.conversation_id
+                  });
                   onCreateBooking(connection);
                 }}
               >

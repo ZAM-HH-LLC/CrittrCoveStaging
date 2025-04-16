@@ -649,6 +649,9 @@ const MessageHistory = ({ navigation, route }) => {
   // Add a ref to track if messages have been fetched for the current conversation
   const hasLoadedMessagesRef = useRef(false);
 
+  // Add a ref to track if we need to open booking creation
+  const shouldOpenBookingCreationRef = useRef(false);
+
   // Modify the mount effect to handle initial load
   useEffect(() => {
     if (!initialLoadRef.current) return; // Only run on first mount
@@ -692,11 +695,27 @@ const MessageHistory = ({ navigation, route }) => {
         }
 
         // If we have route params on initial load, handle them here
-        if (route.params?.messageId && route.params?.conversationId) {
+        if (route.params?.conversationId) {
           isHandlingRouteParamsRef.current = true;
+          
+          // Check if we should open booking creation (coming from Connections)
+          if (route.params.isProfessional === true) {
+            shouldOpenBookingCreationRef.current = true;
+            if (is_DEBUG) {
+              console.log('MBA98765 Will open booking creation after data loads');
+            }
+          }
+          
           const conversationsData = await fetchConversations();
           setSelectedConversation(route.params.conversationId);
-          navigation.setParams({ messageId: null, conversationId: null });
+          
+          navigation.setParams({ 
+            messageId: null, 
+            conversationId: null,
+            otherUserName: null,
+            isProfessional: null,
+            clientId: null
+          });
           return;
         }
 
@@ -728,24 +747,36 @@ const MessageHistory = ({ navigation, route }) => {
       setIsInitialLoad(true);
       isHandlingRouteParamsRef.current = false;
       hasLoadedMessagesRef.current = false;
+      shouldOpenBookingCreationRef.current = false;
     };
   }, []); // Empty dependency array means this runs once on mount
 
   // Modify route params effect to only handle non-reload cases
   useEffect(() => {
     // Skip if this is the initial load/reload or if we're already handling route params
-    if (initialLoadRef.current || isHandlingRouteParamsRef.current || !route.params?.messageId || !route.params?.conversationId) {
+    if (initialLoadRef.current || isHandlingRouteParamsRef.current || !route.params?.conversationId) {
       return;
     }
 
     if (is_DEBUG) {
       console.log('MBA98765 Route params detected (non-reload):', {
         messageId: route.params.messageId,
-        conversationId: route.params.conversationId
+        conversationId: route.params.conversationId,
+        otherUserName: route.params.otherUserName,
+        isProfessional: route.params.isProfessional,
+        clientId: route.params.clientId
       });
     }
     
     isHandlingRouteParamsRef.current = true;
+    
+    // Check if we should open booking creation (coming from Connections)
+    if (route.params.isProfessional === true) {
+      shouldOpenBookingCreationRef.current = true;
+      if (is_DEBUG) {
+        console.log('MBA98765 Will open booking creation after data loads');
+      }
+    }
     
     // Set the selected conversation and fetch data
     setSelectedConversation(route.params.conversationId);
@@ -760,8 +791,37 @@ const MessageHistory = ({ navigation, route }) => {
     });
     
     // Clear the params to prevent re-fetching
-    navigation.setParams({ messageId: null, conversationId: null });
+    navigation.setParams({ 
+      messageId: null, 
+      conversationId: null,
+      otherUserName: null,
+      isProfessional: null,
+      clientId: null
+    });
   }, [route.params]);
+
+  // Effect to trigger booking creation once conversation data is loaded
+  useEffect(() => {
+    // Only run if we should open booking creation, have conversation data, and messages are loaded
+    if (shouldOpenBookingCreationRef.current && selectedConversationData && hasLoadedMessagesRef.current) {
+      if (is_DEBUG) {
+        console.log('MBA98765 Conversation data and messages loaded, triggering booking creation', {
+          conversationId: selectedConversationData.conversation_id,
+          isProfessional: selectedConversationData.is_professional,
+          hasDraft: hasDraft,
+          draftData: draftData ? 'exists' : 'none'
+        });
+      }
+      
+      // Reset the flag to prevent re-triggering
+      shouldOpenBookingCreationRef.current = false;
+      
+      // Add a small delay to ensure everything is properly loaded
+      setTimeout(() => {
+        handleCreateBooking();
+      }, 300);
+    }
+  }, [selectedConversationData, hasLoadedMessagesRef.current, hasDraft, draftData]);
 
   // Keep the conversation selection effect but remove message fetching
   useEffect(() => {
@@ -815,12 +875,25 @@ const MessageHistory = ({ navigation, route }) => {
     if (is_DEBUG) {
       console.log('MBA98765 Fetching messages for conversation:', {
         id: selectedConversation,
-        hasLoaded: hasLoadedMessagesRef.current
+        hasLoaded: hasLoadedMessagesRef.current,
+        shouldOpenBookingCreation: shouldOpenBookingCreationRef.current
       });
     }
 
     hasLoadedMessagesRef.current = true;
-    fetchMessages(selectedConversation, 1);
+    fetchMessages(selectedConversation, 1)
+      .then(() => {
+        // After messages are loaded, if we need to open booking creation,
+        // we now have hasDraft and draftData set properly
+        if (shouldOpenBookingCreationRef.current && selectedConversationData) {
+          if (is_DEBUG) {
+            console.log('MBA98765 Messages loaded, now draft data is available');
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching messages:', error);
+      });
   }, [selectedConversation, isInitialLoad]);
 
   // Modify existing screen width effect
