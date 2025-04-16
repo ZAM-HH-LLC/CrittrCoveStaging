@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Platform, Dimensions, ScrollView, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ const Connections = () => {
   const navigation = useNavigation();
   const { isApprovedProfessional, userRole, isCollapsed, screenWidth } = useContext(AuthContext);
   const [isMobile, setIsMobile] = useState(screenWidth < 900);
-  const [isWideScreen, setIsWideScreen] = useState(screenWidth >= 1200);
+  const [isWideScreen, setIsWideScreen] = useState(screenWidth >= 1500);
   const [activeTab, setActiveTab] = useState('clients');
   const [searchQuery, setSearchQuery] = useState('');
   const [connections, setConnections] = useState([]);
@@ -28,6 +28,8 @@ const Connections = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const searchInputRef = useRef(null);
+  const [allConnections, setAllConnections] = useState([]);
 
   // Update layout based on screen size
   useEffect(() => {
@@ -51,6 +53,27 @@ const Connections = () => {
     }
   }, [userRole]);
 
+  // Handle navigation based on the user role
+  useEffect(() => {
+    const handleRoleNavigation = async () => {
+      debugLog('MBA4321 Checking user role for navigation', { userRole });
+      if (userRole === 'petOwner') {
+        // Store Dashboard as the current route before navigating
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('previousRoute', '');
+          sessionStorage.setItem('currentRoute', 'Dashboard');
+        } else {
+          await AsyncStorage.setItem('previousRoute', '');
+          await AsyncStorage.setItem('currentRoute', 'Dashboard');
+        }
+        debugLog('MBA4321 User is pet owner, navigating to Dashboard');
+        navigation.navigate('Dashboard');
+      }
+    };
+
+    handleRoleNavigation();
+  }, [userRole, navigation]);
+
   const fetchConnections = async (pageNum = 1, isLoadMore = false) => {
     if (isLoadingMore) {
       setIsLoadingMore(true);
@@ -67,9 +90,12 @@ const Connections = () => {
       const connectionsList = response.connections || [];
       
       if (isLoadMore) {
-        setConnections(prev => [...prev, ...connectionsList]);
+        const newConnections = [...connections, ...connectionsList];
+        setConnections(newConnections);
+        setAllConnections(newConnections);
       } else {
         setConnections(connectionsList);
+        setAllConnections(connectionsList);
       }
 
       setHasMore(connectionsList.length === 20);
@@ -99,15 +125,18 @@ const Connections = () => {
   const handleSearch = (query) => {
     setSearchQuery(query);
     
+    // If query is empty, restore the original connections
     if (!query.trim()) {
-      setPage(1);
-      setConnections([]);
-      fetchConnections(1);
+      debugLog('MBA4321 Empty search query, restoring all connections');
+      setConnections(allConnections);
       return;
     }
 
+    debugLog('MBA4321 Searching connections with query:', query);
+    
+    // Filter from the allConnections list without making API calls
     const searchLower = query.toLowerCase();
-    const filtered = connections.filter(connection => 
+    const filtered = allConnections.filter(connection => 
       connection.name.toLowerCase().includes(searchLower) || 
       connection.email.toLowerCase().includes(searchLower) ||
       (activeTab === 'clients' && connection.pets?.some(pet => 
@@ -292,6 +321,7 @@ const Connections = () => {
                   </Text>
                 </TouchableOpacity>
               )}
+              {/* My Professionals tab commented out until implementation
               <TouchableOpacity
                 style={[styles.tab, activeTab === 'professionals' && styles.activeTab]}
                 onPress={() => setActiveTab('professionals')}
@@ -300,6 +330,7 @@ const Connections = () => {
                   My Professionals
                 </Text>
               </TouchableOpacity>
+              */}
             </View>
           </View>
           <View style={styles.connectionsContent}>
@@ -307,7 +338,7 @@ const Connections = () => {
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
               </View>
-            ) : connections.length > 0 ? (
+            ) : (
               <View style={styles.connectionsContent}>
                 <View style={styles.stickyHeader}>
                   <View style={[styles.stickyHeaderContent, { 
@@ -327,6 +358,7 @@ const Connections = () => {
                           color={searchFocused ? theme.colors.primary : "#666"} 
                         />
                         <TextInput
+                          ref={searchInputRef}
                           style={styles.searchInput}
                           placeholder={activeTab === 'clients' 
                             ? "Search by client name, email, or pet" 
@@ -337,6 +369,16 @@ const Connections = () => {
                           onFocus={() => setSearchFocused(true)}
                           onBlur={() => setSearchFocused(false)}
                         />
+                        {searchQuery ? (
+                          <TouchableOpacity 
+                            onPress={() => {
+                              setSearchQuery('');
+                              setConnections(allConnections);
+                            }}
+                          >
+                            <MaterialCommunityIcons name="close-circle" size={20} color="#777" />
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
                       
                       {activeTab === 'clients' && userRole === 'professional' && (
@@ -482,22 +524,45 @@ const Connections = () => {
                   </View>
                 </View>
 
-                <FlatList
-                  data={connections}
-                  renderItem={renderItem}
-                  keyExtractor={item => item.id.toString()}
-                  contentContainerStyle={styles.listContainer}
-                  onEndReached={handleLoadMore}
-                  onEndReachedThreshold={0.5}
-                  ListFooterComponent={renderFooter}
-                  ListHeaderComponent={<View style={[styles.listHeaderSpacing, { height: isWideScreen ? 130 : 190 }]} />}
-                  numColumns={isWideScreen ? 3 : (isMobile ? 1 : 2)}
-                  key={isWideScreen ? 'three-columns' : (isMobile ? 'one-column' : 'two-columns')}
-                  columnWrapperStyle={!isMobile && styles.columnWrapper}
-                />
+                {connections.length > 0 ? (
+                  <FlatList
+                    data={connections}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.id.toString()}
+                    contentContainerStyle={styles.listContainer}
+                    onEndReached={handleLoadMore}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={renderFooter}
+                    ListHeaderComponent={<View style={[styles.listHeaderSpacing, { height: isWideScreen ? 130 : 190 }]} />}
+                    numColumns={isWideScreen ? 3 : (isMobile ? 1 : 2)}
+                    key={isWideScreen ? 'three-columns' : (isMobile ? 'one-column' : 'two-columns')}
+                    columnWrapperStyle={!isMobile && styles.columnWrapper}
+                  />
+                ) : searchQuery ? (
+                  <View style={styles.emptyContainer}>
+                    <View style={[styles.listHeaderSpacing, { height: isWideScreen ? 130 : 190 }]} />
+                    <MaterialCommunityIcons 
+                      name="magnify-close" 
+                      size={80} 
+                      color={theme.colors.placeholder} 
+                    />
+                    <Text style={styles.emptyText}>
+                      No {activeTab} found matching "{searchQuery}"
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.inviteButton}
+                      onPress={() => {
+                        setSearchQuery('');
+                        setConnections(allConnections);
+                      }}
+                    >
+                      <Text style={styles.inviteButtonText}>Clear Search</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <EmptyStateMessage type={activeTab} />
+                )}
               </View>
-            ) : (
-              <EmptyStateMessage type={activeTab} />
             )}
           </View>
         </View>
@@ -960,7 +1025,8 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   wideScreenCardWrapper: {
-    maxWidth: 'calc(33.33% - 16px)',
+    maxWidth: 'calc(50% - 11px)',
+    // width: 'calc(33.33% - 11px)',
   },
 });
 

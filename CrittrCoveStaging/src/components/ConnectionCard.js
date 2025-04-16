@@ -9,31 +9,45 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
   const isClient = type === 'clients';
   const { screenWidth } = useContext(AuthContext);
   const isMobile = screenWidth < 900;
+  const isWideScreen = screenWidth >= 1200;
+  const isExtraWideScreen = screenWidth >= 1500;
   
   debugLog('MBA4321 Rendering ConnectionCard:', {
     connectionId: connection.id,
     connectionName: connection.name,
     connectionType: type,
-    isMobile
+    isMobile,
+    isWideScreen,
+    isExtraWideScreen,
+    screenWidth
   });
   
   return (
     <View style={styles.card}>
       <View style={styles.contentContainer}>
         <View style={styles.topRow}>
-          <View style={styles.profileInfo}>
+          <View style={[
+            styles.profileInfo,
+            !isExtraWideScreen && styles.profileInfoWrap
+          ]}>
             <Image 
               source={connection.avatar ? { uri: connection.avatar } : require('../../assets/default-profile.png')} 
               style={styles.avatar} 
             />
             
-            <View style={styles.nameContainer}>
+            <View style={[
+              styles.nameContainer,
+              isWideScreen && styles.nameContainerWide
+            ]}>
               <Text style={styles.name}>{connection.name}</Text>
               
               {isClient ? (
                 <View style={styles.petsContainer}>
                   <Text style={styles.petsLabel}>Pets: </Text>
-                  <Text style={styles.petsText}>
+                  <Text style={[
+                    styles.petsText,
+                    isWideScreen && styles.petsTextWide
+                  ]}>
                     {connection.pets?.length > 0 
                       ? connection.pets.map(pet => `${pet.name} (${pet.type})`).join(', ') 
                       : 'No pets added yet'}
@@ -42,7 +56,12 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
               ) : (
                 <View style={styles.servicesContainer}>
                   <Text style={styles.servicesLabel}>Services: </Text>
-                  <Text style={styles.servicesText}>{connection.services?.join(', ') || 'No services'}</Text>
+                  <Text style={[
+                    styles.servicesText,
+                    isWideScreen && styles.servicesTextWide
+                  ]}>
+                    {connection.services?.join(', ') || 'No services'}
+                  </Text>
                 </View>
               )}
               
@@ -57,7 +76,10 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
           </View>
           
           {!isMobile && (
-            <View style={styles.buttonSection}>
+            <View style={[
+              styles.buttonSection,
+              !isExtraWideScreen && styles.buttonSectionWrap
+            ]}>
               <TouchableOpacity 
                 style={styles.viewProfileButton}
                 onPress={() => {
@@ -152,25 +174,37 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     width: '100%',
+    flexWrap: 'wrap',
   },
   profileInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
+  },
+  profileInfoWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: '70%',
   },
   avatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
     marginRight: 16,
+    flexShrink: 0,
   },
   nameContainer: {
     flex: 1,
     justifyContent: 'center',
-    minWidth: 200,
+    minWidth: 0,
     marginRight: 16,
+  },
+  nameContainerWide: {
+    maxWidth: '60%',
   },
   name: {
     fontSize: 18,
@@ -190,12 +224,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
+    flexShrink: 0,
   },
   petsText: {
     fontSize: 14,
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
     flex: 1,
+    minWidth: 0,
+  },
+  petsTextWide: {
+    maxWidth: '80%',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   servicesContainer: {
     flexDirection: 'row',
@@ -208,12 +250,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
+    flexShrink: 0,
   },
   servicesText: {
     fontSize: 14,
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
     flex: 1,
+    minWidth: 0,
+  },
+  servicesTextWide: {
+    maxWidth: '80%',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   statusSection: {
     flexDirection: 'row',
@@ -265,6 +315,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     flexShrink: 0,
+  },
+  buttonSectionWrap: {
+    marginTop: 12,
+    marginLeft: 'auto',
   },
   mobileBtnSection: {
     flexDirection: 'row',

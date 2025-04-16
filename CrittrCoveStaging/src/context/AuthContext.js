@@ -640,7 +640,7 @@ export const AuthProvider = ({ children }) => {
     }, 0);
   };
 
-  const switchRole = async () => {
+  const switchRole = async (navigation) => {
     if (isApprovedProfessional) {
       if (is_DEBUG) {
         debugLog('MBA98765 Switching role, current role:', userRole);
@@ -652,6 +652,13 @@ export const AuthProvider = ({ children }) => {
           sessionStorage.setItem('userRole', newRole);
         } else {
           await AsyncStorage.setItem('userRole', newRole);
+        }
+        
+        // Navigate to Dashboard if switching to pet owner from Connections screen
+        const currentRoute = navigation?.getCurrentRoute?.()?.name;
+        if (newRole === 'petOwner' && currentRoute === 'Connections') {
+          debugLog('MBA98765 Navigating to Dashboard from Connections when switching to pet owner');
+          navigate('Dashboard');
         }
         
         if (is_DEBUG) {

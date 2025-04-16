@@ -1453,14 +1453,15 @@ class ConnectionsView(APIView):
             # CASE 1: Professional looking for their clients
             if is_professional and connection_type == 'clients':
                 logger.info(f"MBA7893 Professional looking for clients")
-                
-                # Base query for professional's clients
-                # Only show clients with bookings or invited by this professional
+
+                # Base query for clients
                 if filter_type == 'all':
-                    # All clients: both with bookings and invited
+                    # All clients: with bookings, invited by this professional, or in conversations
                     client_query = Client.objects.filter(
                         Q(booking__professional=professional) |  # Clients who have bookings with this professional
-                        Q(invited_by=professional)  # Clients who were invited by this professional
+                        Q(invited_by=professional) |  # Clients who were invited by this professional
+                        Q(user__conversations_as_participant1__participant2=user) |  # Clients in conversations (as participant1)
+                        Q(user__conversations_as_participant2__participant1=user)    # Clients in conversations (as participant2)
                     ).distinct().select_related('user')
                 elif filter_type == 'active_bookings':
                     # Clients with active bookings (not completed, not cancelled)
@@ -1476,9 +1477,11 @@ class ConnectionsView(APIView):
                         ]
                     ).distinct()
                 elif filter_type == 'no_bookings':
-                    # Clients invited by professional but no bookings
+                    # Clients invited by professional or in conversations but no bookings
                     client_query = Client.objects.filter(
-                        invited_by=professional
+                        Q(invited_by=professional) |
+                        Q(user__conversations_as_participant1__participant2=user) |
+                        Q(user__conversations_as_participant2__participant1=user)
                     ).exclude(
                         booking__professional=professional
                     ).distinct()
@@ -1543,6 +1546,12 @@ class ConnectionsView(APIView):
                         status=BookingStates.COMPLETED
                     ).count()
                     
+                    # Check if there's a conversation with this client
+                    has_conversation = Conversation.objects.filter(
+                        (Q(participant1=user) & Q(participant2=client.user)) |
+                        (Q(participant1=client.user) & Q(participant2=user))
+                    ).exists()
+                    
                     # Build client connection data
                     connection = {
                         'id': client.user.id,
@@ -1564,6 +1573,7 @@ class ConnectionsView(APIView):
                         'services': services,
                         'active_bookings_count': active_bookings_count,
                         'completed_bookings_count': completed_bookings_count,
+                        'has_conversation': has_conversation
                     }
                     connections.append(connection)
             
@@ -1571,10 +1581,12 @@ class ConnectionsView(APIView):
             elif is_client and connection_type == 'professionals':
                 logger.info(f"MBA7893 Client looking for professionals")
                 
-                # Base query for client's professionals through bookings
+                # Base query for client's professionals
                 if filter_type == 'all':
                     professional_query = Professional.objects.filter(
-                        booking__client=client  # Professionals who have bookings with this client
+                        Q(booking__client=client) |  # Professionals who have bookings with this client
+                        Q(user__conversations_as_participant1__participant2=user) |  # Professionals in conversations (as participant1)
+                        Q(user__conversations_as_participant2__participant1=user)    # Professionals in conversations (as participant2)
                     ).distinct().select_related('user')
                 elif filter_type == 'active_bookings':
                     # Professionals with active bookings (not completed, not cancelled)
@@ -1609,10 +1621,20 @@ class ConnectionsView(APIView):
                             BookingStates.PENDING_PROFESSIONAL_CHANGES
                         ]
                     ).distinct()
+                elif filter_type == 'no_bookings':
+                    # Professionals with conversations but no bookings
+                    professional_query = Professional.objects.filter(
+                        Q(user__conversations_as_participant1__participant2=user) |
+                        Q(user__conversations_as_participant2__participant1=user)
+                    ).exclude(
+                        booking__client=client
+                    ).distinct()
                 else:
                     # Default case
                     professional_query = Professional.objects.filter(
-                        booking__client=client
+                        Q(booking__client=client) |
+                        Q(user__conversations_as_participant1__participant2=user) |
+                        Q(user__conversations_as_participant2__participant1=user)
                     ).distinct().select_related('user')
                 
                 # Apply pagination
@@ -1652,6 +1674,12 @@ class ConnectionsView(APIView):
                         status=BookingStates.COMPLETED
                     ).count()
                     
+                    # Check if there's a conversation with this professional
+                    has_conversation = Conversation.objects.filter(
+                        (Q(participant1=user) & Q(participant2=prof.user)) |
+                        (Q(participant1=prof.user) & Q(participant2=user))
+                    ).exists()
+                    
                     # Build professional connection data
                     connection = {
                         'id': prof.user.id,
@@ -1664,6 +1692,7 @@ class ConnectionsView(APIView):
                         'services': services,
                         'active_bookings_count': active_bookings_count,
                         'completed_bookings_count': completed_bookings_count,
+                        'has_conversation': has_conversation
                     }
                     connections.append(connection)
             
