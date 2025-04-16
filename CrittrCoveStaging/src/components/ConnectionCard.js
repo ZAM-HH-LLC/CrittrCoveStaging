@@ -17,6 +17,7 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
     connectionName: connection.name,
     connectionType: type,
     conversationId: connection.conversation_id,
+    lastBookingDate: connection.last_booking_date,
     isMobile,
     isWideScreen,
     isExtraWideScreen,
@@ -66,7 +67,14 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                 </View>
               )}
               
-              {!connection.last_booking && (
+              {connection.last_booking_date ? (
+                <View style={styles.pastBookingsContainer}>
+                  <MaterialCommunityIcons name="calendar-clock" size={14} color={"#9C27B0"} />
+                  <Text style={styles.pastBookingsText}>
+                    Past Bookings
+                  </Text>
+                </View>
+              ) : (
                 <View style={styles.noBookingsContainer}>
                   <Text style={styles.noBookingsText}>
                     No Bookings Yet
@@ -306,6 +314,22 @@ const styles = StyleSheet.create({
   noBookingsText: {
     fontSize: 12,
     color: theme.colors.placeholder,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  pastBookingsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#F3E5F5',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 2,
+  },
+  pastBookingsText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: '#9C27B0',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   upcomingContainer: {
