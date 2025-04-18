@@ -1409,6 +1409,266 @@ class ApproveBookingView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class CreateFromDraftView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    @transaction.atomic
+    def post(self, request):
+        """
+        Create a booking from a draft.
+        
+        This endpoint:
+        1. Validates the professional is the one in the conversation
+        2. Creates a new booking with data from the draft
+        3. Creates booking occurrences, details, and rates
+        4. Creates booking pets entries
+        5. Creates a booking summary
+        6. Logs the interaction
+        7. Creates a message for the client
+        8. Deletes the draft
+        """
+        logger.info("MBA66777 Starting CreateFromDraftView.post")
+        sid = transaction.savepoint()  # Create savepoint for rollback
+        
+        try:
+            # Extract conversation_id from request data
+            conversation_id = request.data.get('conversation_id')
+            if not conversation_id:
+                return Response(
+                    {"error": "Conversation ID is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get conversation and verify professional access
+            conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
+            if not (request.user == conversation.participant1 or request.user == conversation.participant2):
+                return Response(
+                    {"error": "Not authorized to access this conversation"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Determine if user is professional
+            try:
+                professional = Professional.objects.get(user=request.user)
+            except Professional.DoesNotExist:
+                return Response(
+                    {"error": "Only professionals can create bookings from drafts"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Get draft from conversation
+            draft = BookingDraft.objects.filter(
+                draft_data__conversation_id=conversation_id,
+                status='IN_PROGRESS'
+            ).first()
+            
+            if not draft:
+                return Response(
+                    {"error": "No draft found for this conversation"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            draft_data = draft.draft_data
+            logger.info(f"MBA66777 Draft data: {draft_data}")
+            
+            # Get client from draft data
+            client_id = draft_data.get('client_id')
+            if not client_id:
+                return Response(
+                    {"error": "Client ID not found in draft data"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            client = get_object_or_404(Client, id=client_id)
+            
+            # Get service from draft data
+            service_details = draft_data.get('service_details', {})
+            service_id = service_details.get('service_id')
+            if not service_id:
+                return Response(
+                    {"error": "Service ID not found in draft data"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            service = get_object_or_404(Service, service_id=service_id)
+            
+            # Create booking with status "Pending Client Approval"
+            booking = Booking.objects.create(
+                client=client,
+                professional=professional,
+                service_id=service,
+                status=BookingStates.PENDING_CLIENT_APPROVAL,
+                initiated_by=professional.user,
+                last_modified_by=professional.user
+            )
+            logger.info(f"MBA66777 Created booking {booking.booking_id}")
+            
+            # Add pets to booking
+            pet_count = 0
+            for pet_data in draft_data.get('pets', []):
+                pet_id = pet_data.get('pet_id')
+                if pet_id:
+                    pet = get_object_or_404(Pet, pet_id=pet_id)
+                    BookingPets.objects.create(booking=booking, pet=pet)
+                    pet_count += 1
+            
+            logger.info(f"MBA66777 Added {pet_count} pets to booking {booking.booking_id}")
+            
+            # Process occurrences
+            occurrences = []
+            for occurrence_data in draft_data.get('occurrences', []):
+                # Parse dates and times
+                start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
+                end_date = datetime.strptime(occurrence_data['end_date'], '%Y-%m-%d').date()
+                start_time = datetime.strptime(occurrence_data['start_time'], '%H:%M').time()
+                end_time = datetime.strptime(occurrence_data['end_time'], '%H:%M').time()
+                
+                # Create occurrence
+                occurrence = BookingOccurrence.objects.create(
+                    booking=booking,
+                    start_date=start_date,
+                    end_date=end_date,
+                    start_time=start_time,
+                    end_time=end_time,
+                    created_by='PROFESSIONAL',
+                    last_modified_by='PROFESSIONAL',
+                    status='PENDING',
+                    calculated_cost=Decimal(str(occurrence_data.get('calculated_cost', 0)))
+                )
+                
+                logger.info(f"MBA66777 Created occurrence {occurrence.occurrence_id} for booking {booking.booking_id}")
+                
+                # Get or create booking details
+                unit_of_time = occurrence_data.get('unit_of_time', 'Per Visit')
+                logger.info(f"MBA66777 Unit of time: {unit_of_time}")
+                multiple = occurrence_data.get('multiple', 1)
+                logger.info(f"MBA66777 Multiple: {multiple}")
+                rates = occurrence_data.get('rates', {})
+                logger.info(f"MBA66777 Rates: {rates}")
+                
+                # BookingDetails is created by signal, so let's update it
+                booking_details = BookingDetails.objects.filter(booking_occurrence=occurrence).first()
+                if booking_details:
+                    booking_details.num_pets = pet_count
+                    booking_details.base_rate = Decimal(str(rates.get('base_rate', 0)))
+                    booking_details.additional_pet_rate = Decimal(str(rates.get('additional_animal_rate', 0)))
+                    booking_details.applies_after = int(rates.get('applies_after', 1))
+                    booking_details.holiday_rate = Decimal(str(rates.get('holiday_rate', 0)))
+                    booking_details.unit_of_time = unit_of_time
+                    booking_details.multiple = Decimal(str(multiple))
+                    booking_details.save()
+                    
+                    logger.info(f"MBA66777 Updated booking details for occurrence {occurrence.occurrence_id}")
+                
+                # Create additional rates if any
+                additional_rates = rates.get('additional_rates', [])
+                if additional_rates:
+                    occurrence_rate, created = BookingOccurrenceRate.objects.get_or_create(
+                        occurrence=occurrence,
+                        defaults={'rates': []}
+                    )
+                    
+                    rate_objects = []
+                    for rate in additional_rates:
+                        rate_objects.append({
+                            'title': rate.get('title'),
+                            'amount': str(rate.get('amount')),
+                            'description': rate.get('description', 'Additional rate')
+                        })
+                    
+                    occurrence_rate.rates = rate_objects
+                    occurrence_rate.save()
+                    
+                    logger.info(f"MBA66777 Added {len(rate_objects)} additional rates for occurrence {occurrence.occurrence_id}")
+                
+                # Add to occurrences list for message
+                occurrences.append({
+                    'occurrence_id': occurrence.occurrence_id,
+                    'start_date': start_date.strftime('%Y-%m-%d'),
+                    'end_date': end_date.strftime('%Y-%m-%d'),
+                    'start_time': start_time.strftime('%H:%M'),
+                    'end_time': end_time.strftime('%H:%M')
+                })
+            
+            # Create booking summary with platform fee data
+            cost_summary = draft_data.get('cost_summary', {})
+            summary, created = BookingSummary.objects.get_or_create(
+                booking=booking,
+                defaults={
+                    'client_platform_fee_percentage': Decimal(str(cost_summary.get('client_platform_fee_percentage', 15))),
+                    'pro_platform_fee_percentage': Decimal(str(cost_summary.get('pro_platform_fee_percentage', 10))),
+                    'tax_percentage': Decimal(str(cost_summary.get('tax_percentage', 8))),
+                    'client_platform_fee': Decimal(str(cost_summary.get('client_platform_fee', 0))),
+                    'pro_platform_fee': Decimal(str(cost_summary.get('pro_platform_fee', 0))),
+                }
+            )
+            
+            logger.info(f"MBA66777 Created/updated booking summary for booking {booking.booking_id}")
+            
+            # Log the interaction with metadata
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_CREATED_FROM_DRAFT',
+                target_type='BOOKING',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'draft_id': draft.draft_id,
+                    'draft_data': draft_data,
+                    'cost_summary': cost_summary
+                }
+            )
+            
+            # Create a message for the client
+            message = UserMessage.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                content='Approval Request',
+                type_of_message='send_approved_message',
+                is_clickable=True,
+                status='sent',
+                booking=booking,
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'service_type': service.service_name,
+                    'occurrences': occurrences,
+                    'cost_summary': {
+                        'total_client_cost': float(cost_summary.get('total_client_cost', 0)),
+                        'total_sitter_payout': float(cost_summary.get('total_sitter_payout', 0))
+                    }
+                }
+            )
+            
+            logger.info(f"MBA66777 Created message for conversation {conversation.conversation_id}")
+            
+            # Update conversation's last message and time
+            conversation.last_message = "Approval Request"
+            conversation.last_message_time = timezone.now()
+            conversation.save()
+            
+            # Delete the draft
+            draft.delete()
+            logger.info(f"MBA66777 Deleted draft {draft.draft_id}")
+            
+            # Commit the transaction
+            transaction.savepoint_commit(sid)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Booking created successfully',
+                'booking_id': booking.booking_id,
+                'message': message.metadata
+            })
+            
+        except Exception as e:
+            transaction.savepoint_rollback(sid)
+            logger.error(f"MBA66777 Error creating booking from draft: {str(e)}")
+            logger.error(f"MBA66777 Full traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": "An error occurred while creating the booking"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 class ConnectionsView(APIView):
     permission_classes = [IsAuthenticated]
 

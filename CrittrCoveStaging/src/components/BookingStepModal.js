@@ -18,7 +18,7 @@ import DateSelectionCard from './bookingComponents/DateSelectionCard';
 import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
 import ReviewAndRatesCard from './bookingComponents/ReviewAndRatesCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
-import { updateBookingDraftPetsAndServices, updateBookingDraftTimeAndDate } from '../api/API';
+import { updateBookingDraftPetsAndServices, updateBookingDraftTimeAndDate, createBookingFromDraft } from '../api/API';
 import { convertToUTC, formatDateForAPI, formatTimeForAPI } from '../utils/time_utils';
 import { debugLog } from '../context/AuthContext';
 
@@ -280,7 +280,33 @@ const BookingStepModal = ({
 
       setCurrentStep(prev => prev + 1);
     } else {
-      onComplete(bookingData);
+      // We're on the final step (REVIEW_AND_RATES), so create the booking
+      try {
+        setError(null);
+        
+        // Check if we have a conversation ID from the booking data
+        if (!bookingData.conversation_id) {
+          setError('Missing conversation information');
+          return;
+        }
+        
+        debugLog('MBA66777 Creating booking from draft with conversation ID:', bookingData.conversation_id);
+        
+        // Call the API to create a booking from the draft
+        const response = await createBookingFromDraft(bookingData.conversation_id);
+        
+        debugLog('MBA66777 Booking created successfully:', response);
+        
+        // Close the modal and pass the new booking data to the parent component
+        onComplete({
+          ...bookingData,
+          booking_id: response.booking_id,
+          status: 'Pending Client Approval'
+        });
+      } catch (error) {
+        debugLog('MBA66777 Error creating booking:', error);
+        setError('Failed to create booking. Please try again.');
+      }
     }
   };
 

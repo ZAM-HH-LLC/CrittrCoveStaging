@@ -10,11 +10,29 @@ class BookingSummary(models.Model):
     summary_id = models.AutoField(primary_key=True)
     booking = models.OneToOneField('bookings.Booking', on_delete=models.CASCADE)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    fee_percentage = models.DecimalField(
+    client_platform_fee_percentage = models.DecimalField(
         max_digits=5, 
         decimal_places=2,
-        help_text="Platform fee percentage (e.g., 10.00 for 10%)",
-        default=10.00
+        help_text="Client platform fee percentage (e.g., 15.00 for 15%)",
+        default=15.00
+    )
+    pro_platform_fee_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2,
+        help_text="Professional platform fee percentage (e.g., 15.00 for 15%)",
+        default=15.00
+    )
+    client_platform_fee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Actual platform fee charged to client"
+    )
+    pro_platform_fee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Actual platform fee deducted from professional payout"
     )
     tax_percentage = models.DecimalField(
         max_digits=5, 
@@ -33,9 +51,13 @@ class BookingSummary(models.Model):
     def __str__(self):
         return f"Summary for Booking {self.booking.booking_id}"
 
-    def calculate_fee(self):
-        """Calculate the service fee based on the subtotal and fee percentage"""
-        return (self.subtotal * self.fee_percentage / Decimal('100.00')).quantize(Decimal('0.01'))
+    def calculate_client_fee(self):
+        """Calculate the client service fee based on the subtotal and client fee percentage"""
+        return (self.subtotal * self.client_platform_fee_percentage / Decimal('100.00')).quantize(Decimal('0.01'))
+
+    def calculate_pro_fee(self):
+        """Calculate the professional service fee based on the subtotal and pro fee percentage"""
+        return (self.subtotal * self.pro_platform_fee_percentage / Decimal('100.00')).quantize(Decimal('0.01'))
 
     def calculate_tax(self):
         """Calculate the tax based on the subtotal and tax percentage"""
@@ -43,7 +65,7 @@ class BookingSummary(models.Model):
 
     def calculate_total(self):
         """Calculate the total including subtotal, fee, and tax"""
-        return (self.subtotal + self.calculate_fee() + self.calculate_tax()).quantize(Decimal('0.01'))
+        return (self.subtotal + self.client_platform_fee + self.calculate_tax()).quantize(Decimal('0.01'))
 
     def update_subtotal(self):
         """Update the subtotal by summing all occurrence calculated costs"""
@@ -62,27 +84,24 @@ class BookingSummary(models.Model):
 
     @property
     def platform_fee(self):
-        """Calculate platform fee based on subtotal and fee percentage"""
-        return (self.subtotal * (self.fee_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+        """Calculate total platform fee (client fee)"""
+        return self.client_platform_fee
 
     @property
     def taxes(self):
         """Calculate taxes based on subtotal and tax percentage"""
-        platform_fee = self.platform_fee
-        return ((self.subtotal + platform_fee) * (self.tax_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+        return ((self.subtotal + self.client_platform_fee) * (self.tax_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
 
     @property
     def total_client_cost(self):
         """Calculate total cost for the client including fees and taxes"""
-        platform_fee = self.platform_fee
         taxes = self.taxes
-        return (self.subtotal + platform_fee + taxes).quantize(Decimal('0.01'))
+        return (self.subtotal + self.client_platform_fee + taxes).quantize(Decimal('0.01'))
 
     @property
     def total_sitter_payout(self):
         """Calculate total payout for the sitter (subtotal minus platform fee)"""
-        platform_fee = self.platform_fee
-        return (self.subtotal - platform_fee).quantize(Decimal('0.01'))
+        return (self.subtotal - self.pro_platform_fee).quantize(Decimal('0.01'))
 
 @receiver([post_save], sender='booking_occurrences.BookingOccurrence')
 def update_booking_summary(sender, instance, **kwargs):
@@ -95,7 +114,8 @@ def update_booking_summary(sender, instance, **kwargs):
         summary, created = BookingSummary.objects.get_or_create(
             booking=instance.booking,
             defaults={
-                'fee_percentage': Decimal('10.00'),
+                'client_platform_fee_percentage': Decimal('10.00'),
+                'pro_platform_fee_percentage': Decimal('10.00'),
                 'tax_percentage': Decimal('8.00')
             }
         )

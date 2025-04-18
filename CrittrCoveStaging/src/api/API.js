@@ -922,3 +922,36 @@ export const updateBookingDraftRates = async (draftId, occurrences) => {
         throw error;
     }
 };
+
+/**
+ * Create a booking from a draft
+ * Called when the professional confirms a booking from the booking step modal
+ * @param {string} conversationId - The ID of the conversation containing the draft
+ * @returns {Promise<Object>} Response containing the new booking information and message
+ */
+export const createBookingFromDraft = async (conversationId) => {
+    try {
+        debugLog('MBA66777 - Creating booking from draft:', {
+            conversationId
+        });
+
+        const response = await axios.post(
+            `${API_BASE_URL}/api/bookings/v1/create-from-draft/`,
+            {
+                conversation_id: conversationId
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${await getStorage('userToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        debugLog('MBA66777 - Booking created from draft:', response.data);
+        return response.data;
+    } catch (error) {
+        debugLog('MBA66777 Error creating booking from draft:', error);
+        throw error;
+    }
+};
