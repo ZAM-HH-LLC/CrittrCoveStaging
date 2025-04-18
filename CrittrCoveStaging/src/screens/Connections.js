@@ -34,6 +34,8 @@ const Connections = () => {
   const [generatedLink, setGeneratedLink] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
+  const [isInviteButtonHovered, setIsInviteButtonHovered] = useState(false);
+  const [isCreateServiceButtonHovered, setIsCreateServiceButtonHovered] = useState(false);
 
   // Update layout based on screen size
   useEffect(() => {
@@ -304,11 +306,16 @@ const Connections = () => {
           <Text style={styles.footerText}>No more {activeTab} to load</Text>
           {userRole === 'professional' && activeTab === 'clients' && (
             <TouchableOpacity 
-              style={styles.createServiceButton}
+              style={[
+                styles.createServiceButton,
+                isCreateServiceButtonHovered && styles.buttonHovered
+              ]}
               onPress={() => {
                 debugLog('MBA4321 Create Service button clicked in footer');
                 navigateToFrom(navigation, 'ServiceManager', 'Connections');
               }}
+              onMouseEnter={() => setIsCreateServiceButtonHovered(true)}
+              onMouseLeave={() => setIsCreateServiceButtonHovered(false)}
             >
               <Text style={styles.createServiceButtonText}>Create a Service to Get More Clients</Text>
             </TouchableOpacity>
@@ -420,8 +427,13 @@ const Connections = () => {
                       
                       {activeTab === 'clients' && userRole === 'professional' && (
                         <TouchableOpacity 
-                          style={styles.inviteButtonSmall}
+                          style={[
+                            styles.inviteButtonSmall,
+                            isInviteButtonHovered && styles.buttonHovered
+                          ]}
                           onPress={handleInviteClient}
+                          onMouseEnter={() => setIsInviteButtonHovered(true)}
+                          onMouseLeave={() => setIsInviteButtonHovered(false)}
                         >
                           <MaterialCommunityIcons name="account-plus" size={16} color={theme.colors.surface} />
                           <Text style={styles.inviteButtonSmallText}>Invite</Text>
@@ -894,7 +906,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     gap: 6,
     ...(Platform.OS === 'web' && {
-      transition: 'all 0.2s ease-in-out',
+      transition: 'all 0.2s ease',
       cursor: 'pointer',
     })
   },
@@ -1043,6 +1055,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderRadius: 8,
     marginTop: 8,
+    ...(Platform.OS === 'web' && {
+      transition: 'all 0.2s ease',
+      cursor: 'pointer',
+    })
   },
   createServiceButtonText: {
     color: theme.colors.surface,
@@ -1242,6 +1258,14 @@ const styles = StyleSheet.create({
   wideScreenCardWrapper: {
     maxWidth: 'calc(50% - 11px)',
     // width: 'calc(33.33% - 11px)',
+  },
+  buttonHovered: {
+    transform: [{translateY: -3}],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
   },
 });
 

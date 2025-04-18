@@ -1,5 +1,5 @@
-import React, { useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useContext, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext, debugLog } from '../context/AuthContext';
@@ -10,7 +10,11 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
   const { screenWidth } = useContext(AuthContext);
   const isMobile = screenWidth < 900;
   const isWideScreen = screenWidth >= 1200;
-  const isExtraWideScreen = screenWidth >= 1500;
+  const isExtraWideScreen = screenWidth >= 2500;
+  
+  // State for button hover effects
+  const [isViewMessagesHovered, setIsViewMessagesHovered] = useState(false);
+  const [isCreateBookingHovered, setIsCreateBookingHovered] = useState(false);
   
   debugLog('MBA4321 Rendering ConnectionCard:', {
     connectionId: connection.id,
@@ -90,7 +94,10 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
               !isExtraWideScreen && styles.buttonSectionWrap
             ]}>
               <TouchableOpacity 
-                style={styles.viewProfileButton}
+                style={[
+                  styles.viewProfileButton,
+                  isViewMessagesHovered && styles.buttonHovered
+                ]}
                 onPress={() => {
                   debugLog('MBA4321 View Messages button clicked', {
                     connectionName: connection.name,
@@ -98,13 +105,18 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                   });
                   onViewProfile(connection);
                 }}
+                onMouseEnter={() => setIsViewMessagesHovered(true)}
+                onMouseLeave={() => setIsViewMessagesHovered(false)}
               >
                 <Text style={styles.viewProfileText}>View Messages</Text>
               </TouchableOpacity>
               
               {isClient && (
                 <TouchableOpacity 
-                  style={styles.createBookingButton}
+                  style={[
+                    styles.createBookingButton,
+                    isCreateBookingHovered && styles.buttonHovered
+                  ]}
                   onPress={() => {
                     debugLog('MBA4321 Create Booking button clicked', {
                       connectionName: connection.name,
@@ -112,6 +124,8 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                     });
                     onCreateBooking(connection);
                   }}
+                  onMouseEnter={() => setIsCreateBookingHovered(true)}
+                  onMouseLeave={() => setIsCreateBookingHovered(false)}
                 >
                   <Text style={styles.createBookingText}>Create Booking</Text>
                 </TouchableOpacity>
@@ -143,7 +157,10 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
         {isMobile && (
           <View style={styles.mobileBtnSection}>
             <TouchableOpacity 
-              style={styles.viewProfileButton}
+              style={[
+                styles.viewProfileButton,
+                isViewMessagesHovered && styles.buttonHovered
+              ]}
               onPress={() => {
                 debugLog('MBA4321 View Messages button clicked (mobile)', {
                   connectionName: connection.name,
@@ -151,13 +168,18 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                 });
                 onViewProfile(connection);
               }}
+              onMouseEnter={() => setIsViewMessagesHovered(true)}
+              onMouseLeave={() => setIsViewMessagesHovered(false)}
             >
               <Text style={styles.viewProfileText}>View Messages</Text>
             </TouchableOpacity>
             
             {isClient && (
               <TouchableOpacity 
-                style={styles.createBookingButton}
+                style={[
+                  styles.createBookingButton,
+                  isCreateBookingHovered && styles.buttonHovered
+                ]}
                 onPress={() => {
                   debugLog('MBA4321 Create Booking button clicked (mobile)', {
                     connectionName: connection.name,
@@ -165,6 +187,8 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                   });
                   onCreateBooking(connection);
                 }}
+                onMouseEnter={() => setIsCreateBookingHovered(true)}
+                onMouseLeave={() => setIsCreateBookingHovered(false)}
               >
                 <Text style={styles.createBookingText}>Create Booking</Text>
               </TouchableOpacity>
@@ -370,6 +394,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
   },
   viewProfileText: {
     color: theme.colors.primary,
@@ -384,12 +409,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
   },
   createBookingText: {
     color: theme.colors.surfaceContrast,
     fontSize: 14,
     fontWeight: '600',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  buttonHovered: {
+    transform: [{translateY: -3}],
+    boxShadow: '0px 6px 10px rgba(0, 0, 0, 0.15)',
   },
 });
 
