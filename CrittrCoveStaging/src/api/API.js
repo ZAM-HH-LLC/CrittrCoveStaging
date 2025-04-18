@@ -888,3 +888,37 @@ export const resendInvitation = async (token) => {
     throw error;
   }
 };
+
+/**
+ * Update booking draft rates and recalculate cost summary
+ * @param {string} draftId - The ID of the booking draft to update
+ * @param {Array} occurrences - Array of occurrence objects with updated rates
+ * @returns {Promise<Object>} Updated draft data
+ */
+export const updateBookingDraftRates = async (draftId, occurrences) => {
+    try {
+        debugLog('MBA98765 - Updating booking draft rates:', {
+            draftId,
+            occurrences
+        });
+
+        const response = await axios.post(
+            `${API_BASE_URL}/api/booking_drafts/v1/update-rates/${draftId}/`,
+            {
+                occurrences
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${await getStorage('userToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        debugLog('MBA98765 - Booking draft rates update response:', response.data);
+        return response.data;
+    } catch (error) {
+        debugLog('MBA98765 Error updating booking draft rates:', error);
+        throw error;
+    }
+};

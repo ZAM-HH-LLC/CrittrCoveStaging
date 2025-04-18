@@ -330,6 +330,15 @@ const BookingStepModal = ({
         return (
           <ReviewAndRatesCard
             bookingData={bookingData}
+            bookingId={bookingId}
+            onRatesUpdate={(updatedData) => {
+              debugLog('MBA54321 Rates updated:', updatedData);
+              setBookingData(prev => ({
+                ...prev,
+                occurrences: updatedData.occurrences,
+                cost_summary: updatedData.cost_summary
+              }));
+            }}
           />
         );
       default:

@@ -10,23 +10,26 @@ import {
 } from 'react-native';
 import { theme } from '../../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { debugLog } from '../../context/AuthContext';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext, debugLog } from '../../context/AuthContext';
 import { formatDateTimeRangeFromUTC, formatFromUTC, FORMAT_TYPES } from '../../utils/time_utils';
+import { updateBookingDraftRates } from '../../api/API';
 
-const ReviewAndRatesCard = ({ bookingData, onRatesUpdate }) => {
+const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
   const { timeSettings } = useContext(AuthContext);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAddingRate, setIsAddingRate] = useState(false);
   const [editedRates, setEditedRates] = useState(null);
   const [newRate, setNewRate] = useState({ name: '', amount: '', description: '' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     debugLog('MBA54321 ReviewAndRatesCard received bookingData:', bookingData);
+    debugLog('MBA54321 ReviewAndRatesCard received bookingId:', bookingId);
     if (bookingData?.occurrences?.[0]?.rates) {
       setEditedRates({ ...bookingData.occurrences[0].rates });
     }
-  }, [bookingData]);
+  }, [bookingData, bookingId]);
 
   const formatCurrency = (amount) => {
     if (!amount) return '$0.00';
@@ -52,63 +55,138 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate }) => {
     setNewRate({ name: '', amount: '', description: '' });
   };
 
-  const saveRateChanges = () => {
+  const saveRateChanges = async () => {
     // Create a copy of bookingData with updated rates
     if (!editedRates) return;
 
-    debugLog('MBA66777 Saving rate changes:', editedRates);
-    
-    // Call onRatesUpdate with the edited rates
-    if (onRatesUpdate) {
-      const updatedOccurrences = [...bookingData.occurrences];
-      updatedOccurrences[0] = {
-        ...updatedOccurrences[0],
-        rates: editedRates
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      debugLog('MBA66777 Saving rate changes:', editedRates);
+      debugLog('MBA66777 Using bookingId:', bookingId);
+      
+      // Create the occurrence object with updated rates for the API
+      const firstOccurrence = bookingData.occurrences[0];
+      const occurrenceForApi = {
+        occurrence_id: firstOccurrence.occurrence_id,
+        rates: {
+          base_rate: parseFloat(editedRates.base_rate),
+          additional_animal_rate: parseFloat(editedRates.additional_animal_rate || 0),
+          applies_after: parseInt(editedRates.applies_after || 1),
+          holiday_rate: parseFloat(editedRates.holiday_rate || 0)
+        }
       };
       
-      onRatesUpdate({
-        ...bookingData,
-        occurrences: updatedOccurrences
-      });
+      // Add additional rates if present
+      if (editedRates.additional_rates && editedRates.additional_rates.length > 0) {
+        occurrenceForApi.rates.additional_rates = editedRates.additional_rates.map(rate => ({
+          title: rate.name || rate.title,
+          amount: parseFloat(rate.amount),
+          description: rate.description || `Additional rate`
+        }));
+      } else {
+        occurrenceForApi.rates.additional_rates = [];
+      }
+      
+      // Call the API to update rates using the bookingId prop
+      const response = await updateBookingDraftRates(
+        bookingId, 
+        [occurrenceForApi]
+      );
+      
+      debugLog('MBA66777 Rate update API response:', response);
+      
+      // Update the local state with the response
+      if (response.draft_data) {
+        // Call onRatesUpdate with the updated data from the API
+        if (onRatesUpdate) {
+          onRatesUpdate(response.draft_data);
+        }
+      }
+      
+      setIsEditMode(false);
+    } catch (err) {
+      debugLog('MBA66777 Error saving rate changes:', err);
+      setError('Failed to update rates. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsEditMode(false);
   };
 
-  const saveNewRate = () => {
+  const saveNewRate = async () => {
     if (!newRate.name || !newRate.amount) return;
     
-    const newAdditionalRate = {
-      name: newRate.name,
-      amount: parseFloat(newRate.amount.replace(/[^0-9.]/g, '')),
-      description: newRate.description || `Additional rate`
-    };
-    
-    const updatedRates = { ...editedRates };
-    
-    if (!updatedRates.additional_rates) {
-      updatedRates.additional_rates = [];
-    }
-    
-    updatedRates.additional_rates.push(newAdditionalRate);
-    setEditedRates(updatedRates);
-    
-    // Call onRatesUpdate with the updated rates
-    if (onRatesUpdate) {
-      const updatedOccurrences = [...bookingData.occurrences];
-      updatedOccurrences[0] = {
-        ...updatedOccurrences[0],
-        rates: updatedRates
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Create the new rate object
+      const newAdditionalRate = {
+        title: newRate.name,
+        amount: parseFloat(newRate.amount.replace(/[^0-9.]/g, '')),
+        description: newRate.description || `Additional rate`
       };
       
-      onRatesUpdate({
-        ...bookingData,
-        occurrences: updatedOccurrences
+      // Create an updated rates object
+      const updatedRates = { ...editedRates };
+      
+      if (!updatedRates.additional_rates) {
+        updatedRates.additional_rates = [];
+      }
+      
+      updatedRates.additional_rates.push({
+        name: newRate.name,
+        amount: parseFloat(newRate.amount.replace(/[^0-9.]/g, '')),
+        description: newRate.description || `Additional rate`
       });
+      
+      // Create the occurrence object for the API
+      const firstOccurrence = bookingData.occurrences[0];
+      const occurrenceForApi = {
+        occurrence_id: firstOccurrence.occurrence_id,
+        rates: {
+          base_rate: parseFloat(updatedRates.base_rate),
+          additional_animal_rate: parseFloat(updatedRates.additional_animal_rate || 0),
+          applies_after: parseInt(updatedRates.applies_after || 1),
+          holiday_rate: parseFloat(updatedRates.holiday_rate || 0),
+          additional_rates: updatedRates.additional_rates.map(rate => ({
+            title: rate.name || rate.title,
+            amount: parseFloat(rate.amount),
+            description: rate.description || `Additional rate`
+          }))
+        }
+      };
+      
+      // Call the API to update rates using the bookingId prop
+      const response = await updateBookingDraftRates(
+        bookingId, 
+        [occurrenceForApi]
+      );
+      
+      debugLog('MBA66777 New rate added API response:', response);
+      
+      // Update the local state with the response
+      if (response.draft_data) {
+        // Set the edited rates from the response
+        if (response.draft_data.occurrences && response.draft_data.occurrences[0]) {
+          setEditedRates(response.draft_data.occurrences[0].rates);
+        }
+        
+        // Call onRatesUpdate with the updated data from the API
+        if (onRatesUpdate) {
+          onRatesUpdate(response.draft_data);
+        }
+      }
+      
+      setIsAddingRate(false);
+      setNewRate({ name: '', amount: '', description: '' });
+    } catch (err) {
+      debugLog('MBA66777 Error adding new rate:', err);
+      setError('Failed to add new rate. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsAddingRate(false);
-    setNewRate({ name: '', amount: '', description: '' });
   };
 
   const updateBaseRate = (value) => {
@@ -159,34 +237,61 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate }) => {
     }));
   };
 
-  const deleteAdditionalRate = (index) => {
+  const deleteAdditionalRate = async (index) => {
     if (!editedRates?.additional_rates) return;
     
-    const updatedAdditionalRates = [...editedRates.additional_rates];
-    updatedAdditionalRates.splice(index, 1);
-    
-    setEditedRates(prev => ({
-      ...prev,
-      additional_rates: updatedAdditionalRates
-    }));
-    
-    // Call onRatesUpdate with the updated rates immediately
-    if (onRatesUpdate) {
-      const updatedRates = {
-        ...editedRates,
-        additional_rates: updatedAdditionalRates
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Create an updated rates object
+      const updatedRates = { ...editedRates };
+      const updatedAdditionalRates = [...updatedRates.additional_rates];
+      updatedAdditionalRates.splice(index, 1);
+      updatedRates.additional_rates = updatedAdditionalRates;
+      
+      // Create the occurrence object for the API
+      const firstOccurrence = bookingData.occurrences[0];
+      const occurrenceForApi = {
+        occurrence_id: firstOccurrence.occurrence_id,
+        rates: {
+          base_rate: parseFloat(updatedRates.base_rate),
+          additional_animal_rate: parseFloat(updatedRates.additional_animal_rate || 0),
+          applies_after: parseInt(updatedRates.applies_after || 1),
+          holiday_rate: parseFloat(updatedRates.holiday_rate || 0),
+          additional_rates: updatedRates.additional_rates.map(rate => ({
+            title: rate.name || rate.title,
+            amount: parseFloat(rate.amount),
+            description: rate.description || `Additional rate`
+          }))
+        }
       };
       
-      const updatedOccurrences = [...bookingData.occurrences];
-      updatedOccurrences[0] = {
-        ...updatedOccurrences[0],
-        rates: updatedRates
-      };
+      // Call the API to update rates using the bookingId prop
+      const response = await updateBookingDraftRates(
+        bookingId, 
+        [occurrenceForApi]
+      );
       
-      onRatesUpdate({
-        ...bookingData,
-        occurrences: updatedOccurrences
-      });
+      debugLog('MBA66777 Rate deleted API response:', response);
+      
+      // Update the local state with the response
+      if (response.draft_data) {
+        // Set the edited rates from the response
+        if (response.draft_data.occurrences && response.draft_data.occurrences[0]) {
+          setEditedRates(response.draft_data.occurrences[0].rates);
+        }
+        
+        // Call onRatesUpdate with the updated data from the API
+        if (onRatesUpdate) {
+          onRatesUpdate(response.draft_data);
+        }
+      }
+    } catch (err) {
+      debugLog('MBA66777 Error deleting rate:', err);
+      setError('Failed to delete rate. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -419,15 +524,20 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate }) => {
                   
                   <View style={styles.formDivider} />
                 </View>
-                <TouchableOpacity style={styles.saveButton} onPress={saveNewRate}>
-                  <Text style={styles.saveButtonText}>Save New Rate</Text>
-                </TouchableOpacity>
+                <View style={styles.buttonsContainer}>
+                  <TouchableOpacity style={styles.cancelButton} onPress={toggleAddRate}>
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.saveButton} onPress={saveNewRate}>
+                    <Text style={styles.saveButtonText}>Save New Rate</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
             
             {/* Save button for edit mode */}
             {isEditMode && (
-              <TouchableOpacity style={styles.saveButton} onPress={saveRateChanges}>
+              <TouchableOpacity style={[styles.saveButton, {alignSelf: 'flex-end', marginRight: 16, marginTop: 16, marginBottom: 8}]} onPress={saveRateChanges}>
                 <Text style={styles.saveButtonText}>Save Changes</Text>
               </TouchableOpacity>
             )}
@@ -766,10 +876,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    alignSelf: 'flex-end',
-    marginTop: 16,
-    marginBottom: 8,
-    marginRight: 16,
+    marginTop: 0,
+    marginBottom: 0,
+    marginRight: 0,
   },
   saveButtonText: {
     color: 'white',
@@ -801,6 +910,27 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderRadius: 4,
     marginLeft: 8,
+  },
+  buttonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+    marginRight: 16,
+  },
+  cancelButton: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginRight: 12,
+  },
+  cancelButtonText: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 

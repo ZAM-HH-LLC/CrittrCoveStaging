@@ -34,7 +34,7 @@ from core.booking_operations import (
 import traceback
 import pytz
 from django.utils import timezone
-from booking_drafts.serializers import OvernightBookingCalculationSerializer
+from booking_drafts.serializers import OvernightBookingCalculationSerializer, UpdateRatesSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -1043,6 +1043,7 @@ class UpdateBookingOccurrencesView(APIView):
                         ('end_time', end_time.strftime('%H:%M')),      # UTC time
                         ('calculated_cost', rate_data['calculated_cost']),
                         ('base_total', rate_data['base_total']),
+                        ('unit_of_time', rate_data['unit_of_time']),
                         ('multiple', rate_data['multiple']),
                         ('rates', rate_data['rates'])
                     ])
@@ -1312,7 +1313,8 @@ class UpdateBookingDraftPetsAndServicesView(APIView):
                     'draft_id': draft_id,
                     'service_updated': 'service_id' in request.data,
                     'pets_updated': 'pets' in request.data,
-                    'status_changed': draft.draft_data.get('status') != draft.booking.status if draft.booking else False
+                    'status_changed': draft.draft_data.get('status') != draft.booking.status if draft.booking else False,
+                    'draft_data': draft.draft_data
                 }
             )
 
@@ -1379,10 +1381,22 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             # Get number of pets
             num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
 
-            # Calculate base rate and additional charges
-            base_rate = Decimal(str(service.base_rate))
-            additional_rate = Decimal(str(service.additional_animal_rate))
-            holiday_rate = Decimal(str(service.holiday_rate))
+            # Get rates from draft if they exist, otherwise use service rates
+            # First check if there are existing rates in the draft data
+            existing_rates = None
+            if draft.draft_data and 'occurrences' in draft.draft_data and draft.draft_data['occurrences']:
+                # Get rates from the first occurrence in the draft
+                first_occurrence = draft.draft_data['occurrences'][0]
+                if 'rates' in first_occurrence:
+                    existing_rates = first_occurrence['rates']
+                    logger.info(f"MBA1234 - Found existing rates in draft: {existing_rates}")
+
+            # Calculate base rate and additional charges using draft rates if available
+            base_rate = Decimal(str(existing_rates.get('base_rate', service.base_rate))) if existing_rates else Decimal(str(service.base_rate))
+            additional_animal_rate = Decimal(str(existing_rates.get('additional_animal_rate', service.additional_animal_rate))) if existing_rates else Decimal(str(service.additional_animal_rate))
+            holiday_rate = Decimal(str(existing_rates.get('holiday_rate', service.holiday_rate))) if existing_rates else Decimal(str(service.holiday_rate))
+
+            logger.info(f"MBA1234 - Using rates: base_rate={base_rate}, additional_animal_rate={additional_animal_rate}, holiday_rate={holiday_rate}")
 
             # Calculate number of nights based on local times
             # Create datetime objects in the user's timezone
@@ -1405,17 +1419,30 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             additional_pet_charges = Decimal('0')
             if num_pets > 1:
                 additional_pets = num_pets - 1
-                additional_pet_charges = additional_rate * additional_pets
+                additional_pet_charges = additional_animal_rate * additional_pets * nights
+                logger.info(f"MBA1234 - Additional pet charges: {additional_pet_charges} for {additional_pets} additional pets")
 
-            # Calculate total cost (base rate per night + additional pet charges per night)
+            # Calculate total cost (base rate per night + additional pet charges)
             total_cost = (base_rate * nights) + additional_pet_charges
 
             # Calculate additional rates total to add to the total cost
             additional_rates_total = Decimal('0')
-            for rate in service.additional_rates.all():
-                rate_amount = Decimal(str(rate.rate))
-                additional_rates_total += rate_amount
             
+            # If draft has additional rates, use those
+            if existing_rates and 'additional_rates' in existing_rates:
+                for rate in existing_rates['additional_rates']:
+                    # Handle rate amount that might be formatted as a string with a dollar sign
+                    rate_amount_str = str(rate.get('amount', '0')).replace('$', '').strip()
+                    rate_amount = Decimal(rate_amount_str)
+                    additional_rates_total += rate_amount
+                    logger.info(f"MBA1234 - Using draft additional rate: {rate.get('title')}: {rate_amount}")
+            # Else use service additional rates
+            else:
+                for rate in service.additional_rates.all():
+                    rate_amount = Decimal(str(rate.rate))
+                    additional_rates_total += rate_amount
+                    logger.info(f"MBA1234 - Using service additional rate: {rate.title}: {rate_amount}")
+                    
             # Update total cost with additional rates
             total_cost += additional_rates_total
             logger.info(f"MBA1234 - Base cost: {base_rate * nights}, Additional pet charges: {additional_pet_charges}, Additional rates: {additional_rates_total}")
@@ -1434,11 +1461,11 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 ('multiple', nights),
                 ('rates', OrderedDict([
                     ('base_rate', str(base_rate)),
-                    ('additional_animal_rate', str(additional_rate)),
+                    ('additional_animal_rate', str(additional_animal_rate)),
                     ('applies_after', service.applies_after),
                     ('holiday_rate', str(holiday_rate)),
                     ('holiday_days', 0),
-                    ('additional_rates', [
+                    ('additional_rates', existing_rates.get('additional_rates', []) if existing_rates else [
                         OrderedDict([
                             ('title', rate.title),
                             ('description', rate.description or ''),
@@ -1532,14 +1559,7 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                         target_id=str(draft_id),
                         metadata={
                             'draft_id': draft_id,
-                            'start_date': start_date.isoformat(),
-                            'end_date': end_date.isoformat(),
-                            'nights': nights,
-                            'total_cost': float(total_cost),
-                            'tax_state': state,
-                            'tax_rate': float(tax_rate),
-                            'client_platform_fee_percentage': float(client_platform_fee_percentage * 100),
-                            'pro_platform_fee_percentage': float(pro_platform_fee_percentage * 100)
+                            'draft_data': draft.draft_data
                         }
                     )
 
@@ -1621,14 +1641,7 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 target_id=str(draft_id),
                 metadata={
                     'draft_id': draft_id,
-                    'start_date': start_date.isoformat(),
-                    'end_date': end_date.isoformat(),
-                    'nights': nights,
-                    'total_cost': float(total_cost),
-                    'tax_state': state,
-                    'tax_rate': float(tax_rate),
-                    'client_platform_fee_percentage': float(client_platform_fee_percentage * 100),
-                    'pro_platform_fee_percentage': float(pro_platform_fee_percentage * 100)
+                    'draft_data': draft.draft_data
                 }
             )
 
@@ -1764,5 +1777,324 @@ class UpdateBookingDraftTimeAndDateView(APIView):
         # All other cases (plan 2, 4, or non-first booking for plan 0) - 15% platform fee
         logger.info("MBA1234 - Professional pays standard 15% platform fee")
         return platform_fee
+
+class UpdateBookingRatesView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, draft_id):
+        logger.info("MBA98765 - Starting UpdateBookingRatesView.post")
+        logger.info(f"MBA98765 - Request data: {request.data}")
+        
+        try:
+            # Get the draft and verify professional access
+            draft = get_object_or_404(BookingDraft, draft_id=draft_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if draft.booking and draft.booking.professional != professional:
+                logger.error(f"MBA98765 - Unauthorized access attempt by {request.user.email} for draft {draft_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Validate input data
+            serializer = UpdateRatesSerializer(data=request.data)
+            if not serializer.is_valid():
+                logger.error(f"MBA98765 - Invalid input data: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get or create draft_data if it doesn't exist
+            if not draft.draft_data:
+                draft.draft_data = {}
+
+            # Get validated data
+            occurrences_data = serializer.validated_data.get('occurrences', [])
+            
+            # If there are no occurrences in the draft, return error
+            if 'occurrences' not in draft.draft_data or not draft.draft_data['occurrences']:
+                logger.error(f"MBA98765 - No occurrences found in draft {draft_id}")
+                return Response(
+                    {"error": "No occurrences found in draft data. Please set up dates and times first."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Update rates in the draft occurrences
+            updated_occurrences = []
+            
+            for occurrence_update in occurrences_data:
+                occurrence_id = occurrence_update['occurrence_id']
+                new_rates = occurrence_update['rates']
+                
+                # Find the occurrence in the draft data
+                for i, occurrence in enumerate(draft.draft_data['occurrences']):
+                    if occurrence['occurrence_id'] == occurrence_id:
+                        # Update the occurrence rates
+                        occurrence['rates']['base_rate'] = str(new_rates['base_rate'])
+                        if 'additional_animal_rate' in new_rates:
+                            occurrence['rates']['additional_animal_rate'] = str(new_rates['additional_animal_rate'])
+                        if 'applies_after' in new_rates:
+                            occurrence['rates']['applies_after'] = new_rates['applies_after']
+                        if 'holiday_rate' in new_rates:
+                            occurrence['rates']['holiday_rate'] = str(new_rates['holiday_rate'])
+                        
+                        # Update additional rates if provided
+                        if 'additional_rates' in new_rates:
+                            additional_rates = []
+                            for rate in new_rates['additional_rates']:
+                                additional_rates.append(OrderedDict([
+                                    ('title', rate['title']),
+                                    ('amount', str(rate['amount'])),
+                                    ('description', rate.get('description', ''))
+                                ]))
+                            occurrence['rates']['additional_rates'] = additional_rates
+                        
+                        # Update calculated costs
+                        base_rate = Decimal(str(new_rates['base_rate']))
+                        unit_of_time = occurrence.get('unit_of_time', 'Per Visit')
+                        multiple = occurrence.get('multiple', 1)
+                        base_total = base_rate * Decimal(str(multiple))
+                        occurrence['base_total'] = float(base_total)
+                        
+                        # Calculate additional animal rates
+                        additional_animal_rate_total = Decimal('0')
+                        if 'additional_animal_rate' in new_rates and 'applies_after' in new_rates:
+                            num_pets = len(draft.draft_data.get('pets', []))
+                            applies_after = new_rates['applies_after']
+                            if num_pets > applies_after:
+                                additional_pets = num_pets - applies_after
+                                additional_animal_rate = Decimal(str(new_rates['additional_animal_rate']))
+                                additional_animal_rate_total = additional_animal_rate * additional_pets * Decimal(str(multiple))
+                                occurrence['rates']['additional_animal_rate_total'] = float(additional_animal_rate_total)
+                        
+                        # Calculate holiday rates
+                        holiday_rate_total = Decimal('0')
+                        if 'holiday_rate' in new_rates and occurrence['rates'].get('holiday_days', 0) > 0:
+                            holiday_days = occurrence['rates']['holiday_days']
+                            holiday_rate = Decimal(str(new_rates['holiday_rate']))
+                            holiday_rate_total = holiday_rate * Decimal(str(holiday_days))
+                            occurrence['rates']['holiday_rate_total'] = float(holiday_rate_total)
+                        
+                        # Calculate additional rates total
+                        additional_rates_total = Decimal('0')
+                        if 'additional_rates' in new_rates:
+                            for rate in new_rates['additional_rates']:
+                                additional_rates_total += Decimal(str(rate['amount']))
+                        
+                        # Update the calculated total cost for this occurrence
+                        calculated_cost = base_total + additional_animal_rate_total + holiday_rate_total + additional_rates_total
+                        occurrence['calculated_cost'] = float(calculated_cost)
+                        
+                        # Add to updated occurrences
+                        updated_occurrences.append(occurrence)
+                        break
+            
+            # If we didn't update any occurrences, return error
+            if not updated_occurrences:
+                logger.error(f"MBA98765 - No matching occurrences found in draft {draft_id}")
+                return Response(
+                    {"error": "No matching occurrences found in draft data"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update occurrences in draft data
+            draft.draft_data['occurrences'] = updated_occurrences
+            
+            # Get professional's service address for tax calculation
+            address = Address.objects.filter(
+                user=professional.user,
+                address_type=AddressType.SERVICE
+            ).first()
+            
+            # Default tax rate if no address found
+            tax_rate = Decimal('0.00')
+            state = 'CO'  # Default state
+            
+            if address:
+                state = address.state
+            
+            # Get client from the booking
+            client = None
+            if draft.booking:
+                client = draft.booking.client
+            
+            # Calculate cost summary based on updated occurrences
+            subtotal = Decimal('0')
+            for occ in updated_occurrences:
+                subtotal += Decimal(str(occ['calculated_cost']))
+            
+            # Determine platform fees separately for professional and client
+            client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
+            pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
+            
+            # Calculate fees
+            client_platform_fee = (subtotal * client_platform_fee_percentage).quantize(Decimal('0.01'))
+            pro_platform_fee = (subtotal * pro_platform_fee_percentage).quantize(Decimal('0.01'))
+            total_platform_fee = client_platform_fee + pro_platform_fee
+            
+            # Calculate taxes based on state tax info
+            state_tax_info = STATE_TAX_RATES.get(state, {"taxable": False, "state_rate": Decimal('0.00')})
+            
+            if state_tax_info["taxable"] is True:
+                # Regular tax calculation (tax on everything)
+                tax_rate = Decimal(str(state_tax_info["state_rate"]))
+                taxes = (subtotal * tax_rate).quantize(Decimal('0.01'))
+            elif state_tax_info["taxable"] == "service_fee_only":
+                # For DC, only the platform fee is taxed
+                tax_rate = Decimal(str(state_tax_info["state_rate"]))
+                taxes = (total_platform_fee * tax_rate).quantize(Decimal('0.01'))
+            else:
+                # No taxes
+                taxes = Decimal('0.00')
+            
+            # Calculate totals
+            total_client_cost = subtotal + client_platform_fee + taxes
+            total_sitter_payout = (subtotal - pro_platform_fee).quantize(Decimal('0.01'))
+            
+            # Get pro subscription plan if available
+            pro_subscription_plan = 0  # Default value
+            try:
+                # Access the subscription_plan attribute directly from user model
+                pro_subscription_plan = professional.user.subscription_plan
+                logger.info(f"MBA98765 - Retrieved professional subscription plan: {pro_subscription_plan}")
+            except Exception as e:
+                logger.error(f"MBA98765 - Error retrieving professional subscription plan: {str(e)}")
+                # Default to 0 if there's an error
+                pro_subscription_plan = 0
+            
+            # Create cost summary
+            cost_summary = OrderedDict([
+                ('subtotal', float(subtotal)),
+                ('client_platform_fee', float(client_platform_fee)),
+                ('pro_platform_fee', float(pro_platform_fee)),
+                ('total_platform_fee', float(total_platform_fee)),
+                ('taxes', float(taxes)),
+                ('total_client_cost', float(total_client_cost)),
+                ('total_sitter_payout', float(total_sitter_payout)),
+                ('is_prorated', True),
+                ('tax_state', state),
+                ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
+                ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100)),
+                ('pro_subscription_plan', pro_subscription_plan)
+            ])
+            
+            # Update cost summary in draft data
+            draft.draft_data['cost_summary'] = cost_summary
+            
+            # Update draft status if needed
+            if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
+                draft.draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+            
+            # Save the draft
+            draft.save()
+            
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_RATES_UPDATED',
+                target_type='BOOKING_DRAFT',
+                target_id=str(draft_id),
+                metadata={
+                    'draft_id': draft_id,
+                    'updated_occurrences': len(updated_occurrences),
+                    'subtotal': float(subtotal),
+                    'tax_state': state,
+                    'tax_rate': float(tax_rate),
+                    'draft_data': draft.draft_data
+                }
+            )
+            
+            logger.info(f"MBA98765 - Successfully updated booking rates for draft {draft_id}")
+            return Response({
+                'status': 'success',
+                'draft_data': draft.draft_data
+            })
+            
+        except Exception as e:
+            logger.error(f"MBA98765 - Error updating booking rates: {str(e)}")
+            logger.error(f"MBA98765 - Full error traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": f"An error occurred while updating booking rates: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+    def determine_client_platform_fee(self, client_user):
+        """Determine the platform fee percentage for a client"""
+        # Default to 15% if no client user
+        if not client_user:
+            logger.info("MBA98765 - No client user found, using default 15% platform fee")
+            return Decimal('0.15')
+        
+        # Check if the client has a subscription
+        try:
+            # Access the subscription_plan attribute directly from user model
+            subscription_plan = client_user.subscription_plan
+            logger.info(f"MBA98765 - Client subscription plan: {subscription_plan}")
+            
+            # Check subscription plan for client
+            if subscription_plan == 5:  # Dual subscription - no platform fees
+                logger.info("MBA98765 - Client has Dual subscription, applying 0% platform fee")
+                return Decimal('0.0')
+                
+            if subscription_plan == 4:  # Client subscription - reduced platform fees
+                logger.info("MBA98765 - Client has Client subscription, applying 5% platform fee")
+                return Decimal('0.05')
+                
+            if subscription_plan == 1:  # Waitlist tier - unlimited free bookings
+                logger.info("MBA98765 - Client has Waitlist tier, applying 0% platform fee")
+                return Decimal('0.0')
+                
+            if subscription_plan == 0:  # Free tier - check if first booking this month
+                # Get current month start
+                today = timezone.now().date()
+                month_start = today.replace(day=1)
+                
+                # Count client's bookings this month
+                client_bookings_this_month = Booking.objects.filter(
+                    client__user=client_user,
+                    created_at__date__gte=month_start
+                ).count()
+                
+                logger.info(f"MBA98765 - Client bookings this month: {client_bookings_this_month}")
+                
+                # If first booking this month, no platform fee
+                if client_bookings_this_month == 0:
+                    logger.info("MBA98765 - First booking this month for client, applying 0% platform fee")
+                    return Decimal('0.0')
+        except Exception as e:
+            # Log the error
+            logger.error(f"MBA98765 - Error getting client subscription plan: {str(e)}")
+        
+        # All other cases - standard 15% platform fee
+        logger.info("MBA98765 - Client pays standard 15% platform fee")
+        return Decimal('0.15')
+    
+    def determine_professional_platform_fee(self, professional_user):
+        """Determine the platform fee percentage for a professional"""
+        # Default to 0% pro fee
+        pro_fee = Decimal('0.00')
+        
+        # Check if the professional has an active subscription
+        try:
+            # Access the subscription_plan attribute directly from user model
+            subscription_plan = professional_user.subscription_plan
+            logger.info(f"MBA98765 - Professional subscription plan: {subscription_plan}")
+            
+            # Free tier (plan 0) and waitlist tier (plan 1) have 0% fee
+            if subscription_plan == 0 or subscription_plan == 1:
+                logger.info(f"MBA98765 - Professional has subscription plan {subscription_plan}, applying 0% fee")
+                pro_fee = Decimal('0.00')
+            # Commission tier (plan 2) has 15% fee
+            elif subscription_plan == 2:
+                logger.info(f"MBA98765 - Professional has subscription plan {subscription_plan}, applying 15% fee")
+                pro_fee = Decimal('0.15')
+            # Pro tiers (plans 3, 4, ...) have 0% fee
+            else:
+                logger.info(f"MBA98765 - Professional has subscription plan {subscription_plan}, applying 0% fee")
+                pro_fee = Decimal('0.00')
+        except Exception as e:
+            # Log the error
+            logger.error(f"MBA98765 - Error getting subscription plan: {str(e)}")
+            # Default to 15% if there's an error accessing subscription
+            pro_fee = Decimal('0.15')
+        
+        return pro_fee
 
 # Placeholder: Ready for views to be added

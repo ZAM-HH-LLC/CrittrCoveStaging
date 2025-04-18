@@ -23,4 +23,23 @@ class OvernightBookingCalculationSerializer(serializers.Serializer):
 
         if end_dt <= start_dt:
             raise serializers.ValidationError("End date and time must be after start date and time")
-        return data 
+        return data
+
+class AdditionalRateSerializer(serializers.Serializer):
+    title = serializers.CharField(required=True)
+    amount = serializers.DecimalField(required=True, max_digits=10, decimal_places=2)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+class RatesSerializer(serializers.Serializer):
+    base_rate = serializers.DecimalField(max_digits=10, decimal_places=2)
+    additional_animal_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    applies_after = serializers.IntegerField(required=False, default=1)
+    holiday_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    additional_rates = AdditionalRateSerializer(many=True, required=False)
+
+class OccurrenceSerializer(serializers.Serializer):
+    occurrence_id = serializers.CharField(required=True)
+    rates = RatesSerializer(required=True)
+
+class UpdateRatesSerializer(serializers.Serializer):
+    occurrences = OccurrenceSerializer(many=True, required=True) 
