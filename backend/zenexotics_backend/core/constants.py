@@ -17,6 +17,64 @@ class UnitOfTime:
     WEEK = 'Week'
 
 
+STATE_TAX_RATES = {
+  "AL": {"taxable": False, "state_rate": 0.04},
+  "AK": {"taxable": False, "state_rate": 0.00},
+  "AZ": {"taxable": False, "state_rate": 0.056},
+  "AR": {"taxable": True,  "state_rate": 0.065},
+  "CA": {"taxable": False, "state_rate": 0.0725},
+  "CO": {"taxable": False, "state_rate": 0.029},
+  "CT": {"taxable": True,  "state_rate": 0.0635},
+  "DE": {"taxable": False, "state_rate": 0.00},
+  "FL": {"taxable": False, "state_rate": 0.06},
+  "GA": {"taxable": False, "state_rate": 0.04},
+  "HI": {"taxable": True,  "state_rate": 0.04167},
+  "ID": {"taxable": False, "state_rate": 0.06},
+  "IL": {"taxable": False, "state_rate": 0.0625},
+  "IN": {"taxable": False, "state_rate": 0.07},
+  "IA": {"taxable": False, "state_rate": 0.06},
+  "KS": {"taxable": False, "state_rate": 0.065},
+  "KY": {"taxable": True,  "state_rate": 0.06},
+  "LA": {"taxable": False, "state_rate": 0.0445},
+  "ME": {"taxable": False, "state_rate": 0.055},
+  "MD": {"taxable": False, "state_rate": 0.06},
+  "MA": {"taxable": False, "state_rate": 0.0625},
+  "MI": {"taxable": False, "state_rate": 0.06},
+  "MN": {"taxable": True,  "state_rate": 0.06875},
+  "MS": {"taxable": False, "state_rate": 0.07},
+  "MO": {"taxable": False, "state_rate": 0.04225},
+  "MT": {"taxable": False, "state_rate": 0.00},
+  "NE": {"taxable": True,  "state_rate": 0.055},
+  "NV": {"taxable": False, "state_rate": 0.0685},
+  "NH": {"taxable": False, "state_rate": 0.00},
+  "NJ": {"taxable": True,  "state_rate": 0.06625},
+  "NM": {"taxable": True,  "state_rate": 0.0525},
+  "NY": {"taxable": False, "state_rate": 0.04},
+  "NC": {"taxable": False, "state_rate": 0.0475},
+  "ND": {"taxable": False, "state_rate": 0.05},
+  "OH": {"taxable": False, "state_rate": 0.0575},
+  "OK": {"taxable": False, "state_rate": 0.045},
+  "OR": {"taxable": False, "state_rate": 0.00},
+  "PA": {"taxable": False, "state_rate": 0.06},
+  "RI": {"taxable": True,  "state_rate": 0.07},
+  "SC": {"taxable": False, "state_rate": 0.06},
+  "SD": {"taxable": True,  "state_rate": 0.042},
+  "TN": {"taxable": False, "state_rate": 0.07},
+  "TX": {"taxable": False, "state_rate": 0.0625},
+  "UT": {"taxable": False, "state_rate": 0.0485},
+  "VT": {"taxable": False, "state_rate": 0.06},
+  "VA": {"taxable": False, "state_rate": 0.043},
+  "WA": {"taxable": False, "state_rate": 0.065},
+  "WV": {"taxable": True,  "state_rate": 0.06},
+  "WI": {"taxable": False, "state_rate": 0.05},
+  "WY": {"taxable": False, "state_rate": 0.04},
+  "DC": {"taxable": "service_fee_only", "state_rate": 0.06}
+}
+
+
+
+
+
 class Facility:
     YARD = 'yard'
     ROAM = 'roam'

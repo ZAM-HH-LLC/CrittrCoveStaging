@@ -434,17 +434,17 @@ export default function Navigation({ state, descriptors, navigation }) {
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
         { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
         { title: 'Connections', icon: 'account-group', route: 'Connections' },
-        { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
+        // { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
       ];
     } else {
       return [
         { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
-        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
-        { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
+        // { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
+        // { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
-        ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
+        // ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
       ];
     }
   };

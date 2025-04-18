@@ -24,6 +24,8 @@ from engagement_logs.models import EngagementLog
 from error_logs.models import ErrorLog
 from core.time_utils import convert_to_utc, get_formatted_times
 from users.models import UserSettings
+from user_addresses.models import Address, AddressType
+from core.constants import STATE_TAX_RATES
 from core.booking_operations import (
     calculate_occurrence_rates, 
     create_occurrence_data, 
@@ -1408,6 +1410,17 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             # Calculate total cost (base rate per night + additional pet charges per night)
             total_cost = (base_rate * nights) + additional_pet_charges
 
+            # Calculate additional rates total to add to the total cost
+            additional_rates_total = Decimal('0')
+            for rate in service.additional_rates.all():
+                rate_amount = Decimal(str(rate.rate))
+                additional_rates_total += rate_amount
+            
+            # Update total cost with additional rates
+            total_cost += additional_rates_total
+            logger.info(f"MBA1234 - Base cost: {base_rate * nights}, Additional pet charges: {additional_pet_charges}, Additional rates: {additional_rates_total}")
+            logger.info(f"MBA1234 - Total cost after adding additional rates: {total_cost}")
+
             # Create single occurrence for the entire stay
             occurrence = OrderedDict([
                 ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_0"),
@@ -1425,23 +1438,162 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                     ('applies_after', service.applies_after),
                     ('holiday_rate', str(holiday_rate)),
                     ('holiday_days', 0),
-                    ('additional_rates', [])
+                    ('additional_rates', [
+                        OrderedDict([
+                            ('title', rate.title),
+                            ('description', rate.description or ''),
+                            ('amount', str(rate.rate))
+                        ]) for rate in service.additional_rates.all()
+                    ])
                 ]))
             ])
 
-            # Calculate cost summary
-            platform_fee = (total_cost * Decimal('0.10')).quantize(Decimal('0.01'))
-            taxes = ((total_cost + platform_fee) * Decimal('0.08')).quantize(Decimal('0.01'))
-            total_client_cost = total_cost + platform_fee + taxes
-            total_sitter_payout = (total_cost * Decimal('0.90')).quantize(Decimal('0.01'))
+            # Get professional's service address for tax calculation
+            address = Address.objects.filter(
+                user=professional.user,
+                address_type=AddressType.SERVICE
+            ).first()
+            
+            # Default tax rate if no address found
+            tax_rate = Decimal('0.00')
+            state = 'CO'  # Default state
+            
+            if address:
+                state = address.state
+                state_tax_info = STATE_TAX_RATES.get(state, {"taxable": False, "state_rate": Decimal('0.00')})
+                
+                # Check if the service is taxable in this state
+                if state_tax_info["taxable"] is True:
+                    tax_rate = Decimal(str(state_tax_info["state_rate"]))
+                elif state_tax_info["taxable"] == "service_fee_only":
+                    # Get client from the booking
+                    client = None
+                    if draft.booking:
+                        client = draft.booking.client
+                    
+                    # Determine platform fees separately for professional and client
+                    client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
+                    pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
+                    
+                    # Calculate fees
+                    client_platform_fee = (total_cost * client_platform_fee_percentage).quantize(Decimal('0.01'))
+                    pro_platform_fee = (total_cost * pro_platform_fee_percentage).quantize(Decimal('0.01'))
+                    total_platform_fee = client_platform_fee + pro_platform_fee
+                    
+                    # For DC, only the platform fee is taxed
+                    taxes = (total_platform_fee * Decimal(str(state_tax_info["state_rate"]))).quantize(Decimal('0.01'))
+                    total_client_cost = total_cost + total_platform_fee + taxes
+                    total_sitter_payout = (total_cost * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
+                    
+                    logger.info(f"MBA1234 - Using service_fee_only tax calculation for {state}. Tax rate: {state_tax_info['state_rate']}")
+                    logger.info(f"MBA1234 - Client platform fee percentage: {client_platform_fee_percentage}")
+                    logger.info(f"MBA1234 - Pro platform fee percentage: {pro_platform_fee_percentage}")
+                    logger.info(f"MBA1234 - Client platform fee: {client_platform_fee}")
+                    logger.info(f"MBA1234 - Pro platform fee: {pro_platform_fee}")
+                    logger.info(f"MBA1234 - Total platform fee: {total_platform_fee}")
+                    logger.info(f"MBA1234 - Taxes (on platform fee only): {taxes}")
+                    
+                    cost_summary = OrderedDict([
+                        ('subtotal', float(total_cost)),
+                        ('client_platform_fee', float(client_platform_fee)),
+                        ('pro_platform_fee', float(pro_platform_fee)),
+                        ('total_platform_fee', float(total_platform_fee)),
+                        ('taxes', float(taxes)),
+                        ('total_client_cost', float(total_client_cost)),
+                        ('total_sitter_payout', float(total_sitter_payout)),
+                        ('is_prorated', True),
+                        ('tax_state', state),
+                        ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
+                        ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
+                    ])
+                    
+                    # Update draft data
+                    if not draft.draft_data:
+                        draft.draft_data = {}
+
+                    draft.draft_data.update({
+                        'occurrences': [occurrence],
+                        'cost_summary': cost_summary,
+                        'nights': nights
+                    })
+
+                    # Update draft status if needed
+                    if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
+                        draft.draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+
+                    # Save the draft
+                    draft.save()
+
+                    # Log the interaction
+                    InteractionLog.objects.create(
+                        user=request.user,
+                        action='BOOKING_DRAFT_UPDATED',
+                        target_type='BOOKING_DRAFT',
+                        target_id=str(draft_id),
+                        metadata={
+                            'draft_id': draft_id,
+                            'start_date': start_date.isoformat(),
+                            'end_date': end_date.isoformat(),
+                            'nights': nights,
+                            'total_cost': float(total_cost),
+                            'tax_state': state,
+                            'tax_rate': float(tax_rate),
+                            'client_platform_fee_percentage': float(client_platform_fee_percentage * 100),
+                            'pro_platform_fee_percentage': float(pro_platform_fee_percentage * 100)
+                        }
+                    )
+
+                    logger.info(f"MBA1234 - Successfully updated booking draft {draft_id}")
+                    return Response({
+                        'status': 'success',
+                        'draft_data': draft.draft_data
+                    })
+                else:
+                    # Not taxable in this state
+                    tax_rate = Decimal('0.00')
+                
+                logger.info(f"MBA1234 - Using tax rate {tax_rate} for state {state}")
+            else:
+                logger.warning(f"MBA1234 - No service address found for professional {professional.user.email}. Using default tax rate {tax_rate}")
+
+            # Get client from the booking
+            client = None
+            if draft.booking:
+                client = draft.booking.client
+            
+            # Determine platform fees separately for professional and client
+            client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
+            pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
+            pro_subscription_plan = professional.user.subscription_plan
+            
+            # Calculate cost summary with appropriate tax rate
+            client_platform_fee = (total_cost * client_platform_fee_percentage).quantize(Decimal('0.01'))
+            pro_platform_fee = (total_cost * pro_platform_fee_percentage).quantize(Decimal('0.01'))
+            total_platform_fee = client_platform_fee + pro_platform_fee
+            
+            taxes = ((total_cost + total_platform_fee) * tax_rate).quantize(Decimal('0.01'))
+            total_client_cost = total_cost + total_platform_fee + taxes
+            total_sitter_payout = (total_cost * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
+
+            logger.info(f"MBA1234 - Client platform fee percentage: {client_platform_fee_percentage}")
+            logger.info(f"MBA1234 - Pro platform fee percentage: {pro_platform_fee_percentage}")
+            logger.info(f"MBA1234 - Client platform fee: {client_platform_fee}")
+            logger.info(f"MBA1234 - Pro platform fee: {pro_platform_fee}")
+            logger.info(f"MBA1234 - Total platform fee: {total_platform_fee}")
 
             cost_summary = OrderedDict([
                 ('subtotal', float(total_cost)),
-                ('platform_fee', float(platform_fee)),
+                ('client_platform_fee', float(client_platform_fee)),
+                ('pro_platform_fee', float(pro_platform_fee)),
+                ('total_platform_fee', float(total_platform_fee)),
                 ('taxes', float(taxes)),
                 ('total_client_cost', float(total_client_cost)),
                 ('total_sitter_payout', float(total_sitter_payout)),
-                ('is_prorated', True)
+                ('is_prorated', True),
+                ('tax_state', state),
+                ('pro_subscription_plan', pro_subscription_plan),
+                ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
+                ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
             ])
 
             # Update draft data
@@ -1472,7 +1624,11 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                     'start_date': start_date.isoformat(),
                     'end_date': end_date.isoformat(),
                     'nights': nights,
-                    'total_cost': float(total_cost)
+                    'total_cost': float(total_cost),
+                    'tax_state': state,
+                    'tax_rate': float(tax_rate),
+                    'client_platform_fee_percentage': float(client_platform_fee_percentage * 100),
+                    'pro_platform_fee_percentage': float(pro_platform_fee_percentage * 100)
                 }
             )
 
@@ -1489,5 +1645,124 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 {"error": f"An error occurred while updating the booking draft: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def determine_client_platform_fee(self, client_user):
+        """
+        Determine the platform fee percentage for the client based on their subscription plan.
+        
+        Client platform fee rules by subscription plan:
+        - Plan 0 (Free tier): Fee = 0% if first booking this month, else 15%
+        - Plan 1 (Waitlist tier): Fee = 0% (unlimited free bookings)
+        - Plan 2 (Commission tier): Fee = 15%
+        - Plan 3 (Pro subscription): Fee = 15% (follows commission tier rule)
+        - Plan 4 (Client subscription): Fee = 0%
+        - Plan 5 (Dual subscription): Fee = 0% (no platform fees ever)
+        
+        Returns:
+        - Decimal value of platform fee percentage (0.15 or 0.0)
+        """
+        # Default platform fee percentage
+        platform_fee = Decimal('0.15')  # 15%
+        
+        # If we're missing a client user, default to the standard fee
+        if not client_user:
+            logger.warning("MBA1234 - No client user found, using default 15% platform fee")
+            return platform_fee
+        
+        # Get subscription plan
+        client_plan = client_user.subscription_plan
+        logger.info(f"MBA1234 - Client subscription plan: {client_plan}")
+        
+        # Check subscription plan for client
+        if client_plan == 5:  # Dual subscription - no platform fees ever
+            logger.info("MBA1234 - Client has Dual subscription, applying 0% platform fee")
+            return Decimal('0.0')
+            
+        if client_plan == 4:  # Client subscription - no platform fees
+            logger.info("MBA1234 - Client has Client subscription, applying 0% platform fee")
+            return Decimal('0.0')
+            
+        if client_plan == 1:  # Waitlist tier - unlimited free bookings
+            logger.info("MBA1234 - Client has Waitlist tier, applying 0% platform fee")
+            return Decimal('0.0')
+            
+        if client_plan == 0:  # Free tier - check if first booking this month
+            # Get current month start
+            today = timezone.now().date()
+            month_start = today.replace(day=1)
+            
+            # Count client's bookings this month
+            client_bookings_this_month = Booking.objects.filter(
+                client__user=client_user,
+                created_at__date__gte=month_start
+            ).count()
+            
+            logger.info(f"MBA1234 - Client bookings this month: {client_bookings_this_month}")
+            
+            # If first booking this month, no platform fee
+            if client_bookings_this_month == 0:
+                logger.info("MBA1234 - First booking this month for client, applying 0% platform fee")
+                return Decimal('0.0')
+                
+        # All other cases (plan 2, 3, or non-first booking for plan 0) - 15% platform fee
+        logger.info("MBA1234 - Client pays standard 15% platform fee")
+        return platform_fee
+        
+    def determine_professional_platform_fee(self, professional_user):
+        """
+        Determine the platform fee percentage for the professional based on their subscription plan.
+        
+        Professional platform fee rules by subscription plan:
+        - Plan 0 (Free tier): Fee = 0% if first booking this month, else 15%
+        - Plan 1 (Waitlist tier): Fee = 0% (unlimited free bookings)
+        - Plan 2 (Commission tier): Fee = 15%
+        - Plan 3 (Pro subscription): Fee = 0%
+        - Plan 4 (Client subscription): Fee = 15% (follows commission tier rule)
+        - Plan 5 (Dual subscription): Fee = 0% (no platform fees ever)
+        
+        Returns:
+        - Decimal value of platform fee percentage (0.15 or 0.0)
+        """
+        # Default platform fee percentage
+        platform_fee = Decimal('0.15')  # 15%
+        
+        # Get subscription plan
+        pro_plan = professional_user.subscription_plan
+        logger.info(f"MBA1234 - Professional subscription plan: {pro_plan}")
+        
+        # Check subscription plan for professional
+        if pro_plan == 5:  # Dual subscription - no platform fees ever
+            logger.info("MBA1234 - Professional has Dual subscription, applying 0% platform fee")
+            return Decimal('0.0')
+            
+        if pro_plan == 3:  # Pro subscription - no platform fees
+            logger.info("MBA1234 - Professional has Pro subscription, applying 0% platform fee")
+            return Decimal('0.0')
+            
+        if pro_plan == 1:  # Waitlist tier - unlimited free bookings
+            logger.info("MBA1234 - Professional has Waitlist tier, applying 0% platform fee")
+            return Decimal('0.0')
+            
+        if pro_plan == 0:  # Free tier - check if first booking this month
+            # Get current month start
+            today = timezone.now().date()
+            month_start = today.replace(day=1)
+            
+            # Count professional's bookings this month
+            pro_bookings_this_month = Booking.objects.filter(
+                professional__user=professional_user,
+                created_at__date__gte=month_start
+            ).count()
+            
+            logger.info(f"MBA1234 - Professional bookings this month: {pro_bookings_this_month}")
+            
+            # If first booking this month, no platform fee
+            if pro_bookings_this_month == 0:
+                logger.info("MBA1234 - First booking this month for professional, applying 0% platform fee")
+                return Decimal('0.0')
+                
+        # All other cases (plan 2, 4, or non-first booking for plan 0) - 15% platform fee
+        logger.info("MBA1234 - Professional pays standard 15% platform fee")
+        return platform_fee
 
 # Placeholder: Ready for views to be added
