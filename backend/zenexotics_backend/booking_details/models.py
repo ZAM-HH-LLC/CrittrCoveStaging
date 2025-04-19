@@ -16,6 +16,7 @@ class BookingDetails(models.Model):
     calculated_rate = models.DecimalField(max_digits=10, decimal_places=2)
     unit_of_time = models.CharField(max_length=20, default='Per Visit')
     multiple = models.DecimalField(max_digits=10, decimal_places=5, default=1.00000)
+    nights = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return f"Details for Occurrence {self.booking_occurrence.occurrence_id}"
@@ -43,6 +44,7 @@ class BookingDetails(models.Model):
             '24 Hour': 24,
             'Per Day': 24,
             'Per Visit': None,  # Special case - no proration
+            'Per Night': 'Per Night',
             'Week': 168  # 24 * 7
         }
 
@@ -52,6 +54,9 @@ class BookingDetails(models.Model):
         
         # Use exact case matching
         unit_hours = unit_mapping.get(self.unit_of_time)
+
+        if self.unit_of_time == 'Per Night':
+            return Decimal(str(self.nights))
         
         logger.info(f"Calculating prorated multiplier for occurrence {self.booking_occurrence.occurrence_id}:")
         logger.info(f"  Duration: {duration_hours} hours")

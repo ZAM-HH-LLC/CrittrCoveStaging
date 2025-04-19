@@ -1556,9 +1556,26 @@ class CreateFromDraftView(APIView):
                     booking_details.holiday_rate = Decimal(str(rates.get('holiday_rate', 0)))
                     booking_details.unit_of_time = unit_of_time
                     booking_details.multiple = Decimal(str(multiple))
+                    booking_details.nights = int(draft_data.get('nights', 0))
                     booking_details.save()
                     
+                    # Force update the calculated rate based on the supplied multiple
+                    base_rate = booking_details.base_rate
+                    calculated_rate = base_rate * Decimal(str(multiple))
+                    
+                    # Add additional pet costs if applicable
+                    if booking_details.additional_pet_rate and pet_count > booking_details.applies_after:
+                        additional_pets = pet_count - booking_details.applies_after
+                        additional_pet_cost = booking_details.additional_pet_rate * additional_pets * Decimal(str(multiple))
+                        calculated_rate += additional_pet_cost
+                        logger.info(f"MBA66777 Added {additional_pets} additional pets cost: ${additional_pet_cost}")
+                    
+                    # Update calculated_rate directly
+                    booking_details.calculated_rate = calculated_rate.quantize(Decimal('0.01'))
+                    booking_details.save(update_fields=['calculated_rate'])
+                    
                     logger.info(f"MBA66777 Updated booking details for occurrence {occurrence.occurrence_id}")
+                    logger.info(f"MBA66777 Forced calculated_rate to: ${booking_details.calculated_rate}")
                 
                 # Create additional rates if any
                 additional_rates = rates.get('additional_rates', [])
@@ -1581,6 +1598,44 @@ class CreateFromDraftView(APIView):
                     
                     logger.info(f"MBA66777 Added {len(rate_objects)} additional rates for occurrence {occurrence.occurrence_id}")
                 
+                # Force update the occurrence's calculated_cost
+                total_cost = Decimal('0.00')
+                
+                # Get the calculated_cost directly from the draft data if available
+                draft_calculated_cost = occurrence_data.get('calculated_cost')
+                if draft_calculated_cost:
+                    total_cost = Decimal(str(draft_calculated_cost))
+                    logger.info(f"MBA66777 Using draft calculated_cost: ${total_cost}")
+                else:
+                    # Add booking details calculated rate
+                    if booking_details:
+                        total_cost += booking_details.calculated_rate
+                    
+                    # Add additional rates totals
+                    additional_rates_total = Decimal('0.00')
+                    occurrence_rate = getattr(occurrence, 'rates', None)
+                    if occurrence_rate and occurrence_rate.rates:
+                        for rate in occurrence_rate.rates:
+                            amount_str = str(rate.get('amount', '0'))
+                            # Clean the amount string - remove any non-numeric characters except decimal point
+                            try:
+                                # First try to handle currency format (e.g., "$25.23")
+                                amount_str = amount_str.replace('$', '').strip()
+                                amount_value = Decimal(amount_str)
+                                additional_rates_total += amount_value
+                                logger.info(f"MBA66777 Added additional rate amount: ${amount_value}")
+                            except Exception as e:
+                                logger.error(f"MBA66777 Error parsing amount '{amount_str}': {str(e)}")
+                                # Skip this rate if we can't parse it
+                    
+                    total_cost += additional_rates_total
+                    logger.info(f"MBA66777 Calculated total cost: ${total_cost}")
+                
+                occurrence.calculated_cost = total_cost.quantize(Decimal('0.01'))
+                occurrence.save(update_fields=['calculated_cost'])
+                
+                logger.info(f"MBA66777 Updated occurrence calculated_cost to ${occurrence.calculated_cost}")
+                
                 # Add to occurrences list for message
                 occurrences.append({
                     'occurrence_id': occurrence.occurrence_id,
@@ -1589,6 +1644,9 @@ class CreateFromDraftView(APIView):
                     'start_time': start_time.strftime('%H:%M'),
                     'end_time': end_time.strftime('%H:%M')
                 })
+
+            logger.info(f"MBA66777 pro_platform_fee_percentage: {cost_summary.get('pro_platform_fee_percentage', 17)}")
+            logger.info(f"MBA66777 client_platform_fee_percentage: {cost_summary.get('client_platform_fee_percentage', 17)}")
             
             # Create booking summary with platform fee data
             cost_summary = draft_data.get('cost_summary', {})
@@ -1596,7 +1654,7 @@ class CreateFromDraftView(APIView):
                 booking=booking,
                 defaults={
                     'client_platform_fee_percentage': Decimal(str(cost_summary.get('client_platform_fee_percentage', 15))),
-                    'pro_platform_fee_percentage': Decimal(str(cost_summary.get('pro_platform_fee_percentage', 10))),
+                    'pro_platform_fee_percentage': Decimal(str(cost_summary.get('pro_platform_fee_percentage', 15))),
                     'tax_percentage': Decimal(str(cost_summary.get('tax_percentage', 8))),
                     'client_platform_fee': Decimal(str(cost_summary.get('client_platform_fee', 0))),
                     'pro_platform_fee': Decimal(str(cost_summary.get('pro_platform_fee', 0))),

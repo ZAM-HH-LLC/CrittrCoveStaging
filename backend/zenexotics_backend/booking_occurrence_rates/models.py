@@ -119,55 +119,55 @@ def update_occurrence_calculated_cost(sender, instance, created, **kwargs):
     # Update the occurrence's calculated cost
     occurrence.update_calculated_cost()
 
-@receiver(post_save, sender='booking_occurrences.BookingOccurrence')
-def create_occurrence_rates(sender, instance, created, **kwargs):
-    """
-    Signal handler to create BookingOccurrenceRate when a BookingOccurrence is created.
-    Only includes additional rates from ServiceRate table, not the base rates which are handled
-    by the BookingDetails table.
-    """
-    if created:
-        from service_rates.models import ServiceRate
+# @receiver(post_save, sender='booking_occurrences.BookingOccurrence')
+# def create_occurrence_rates(sender, instance, created, **kwargs):
+#     """
+#     Signal handler to create BookingOccurrenceRate when a BookingOccurrence is created.
+#     Only includes additional rates from ServiceRate table, not the base rates which are handled
+#     by the BookingDetails table.
+#     """
+#     if created:
+#         from service_rates.models import ServiceRate
         
-        try:
-            # Get the service from the booking
-            service = instance.booking.service_id
-            if not service:
-                logger.warning(f"No service found for occurrence {instance.occurrence_id}")
-                return
+#         try:
+#             # Get the service from the booking
+#             service = instance.booking.service_id
+#             if not service:
+#                 logger.warning(f"No service found for occurrence {instance.occurrence_id}")
+#                 return
                 
-            # Get service rates (excluding base rates which are handled by BookingDetails)
-            service_rates = ServiceRate.objects.filter(service=service)
+#             # Get service rates (excluding base rates which are handled by BookingDetails)
+#             service_rates = ServiceRate.objects.filter(service=service)
             
-            # Create rates list only from ServiceRate entries
-            rates_list = []
+#             # Create rates list only from ServiceRate entries
+#             rates_list = []
             
-            # Add service rates
-            for rate in service_rates:
-                rate_amount = f"${rate.rate}"
-                if not isinstance(rate_amount, str):
-                    rate_amount = f"${rate_amount}"
-                if not rate_amount.startswith('$'):
-                    rate_amount = f"${rate_amount}"
+#             # Add service rates
+#             for rate in service_rates:
+#                 rate_amount = f"${rate.rate}"
+#                 if not isinstance(rate_amount, str):
+#                     rate_amount = f"${rate_amount}"
+#                 if not rate_amount.startswith('$'):
+#                     rate_amount = f"${rate_amount}"
                     
-                rates_list.append({
-                    'title': str(rate.title),
-                    'description': str(rate.description),
-                    'amount': rate_amount
-                })
+#                 rates_list.append({
+#                     'title': str(rate.title),
+#                     'description': str(rate.description),
+#                     'amount': rate_amount
+#                 })
             
-            # Only create the occurrence rate if there are additional rates
-            if rates_list:
-                occurrence_rate = BookingOccurrenceRate.objects.create(
-                    occurrence=instance,
-                    rates=rates_list
-                )
-                logger.info(f"Created BookingOccurrenceRate for occurrence {instance.occurrence_id}")
+#             # Only create the occurrence rate if there are additional rates
+#             if rates_list:
+#                 occurrence_rate = BookingOccurrenceRate.objects.create(
+#                     occurrence=instance,
+#                     rates=rates_list
+#                 )
+#                 logger.info(f"Created BookingOccurrenceRate for occurrence {instance.occurrence_id}")
             
-        except Exception as e:
-            logger.error(f"Error creating BookingOccurrenceRate: {str(e)}")
-            logger.error(f"Error type: {type(e)}")
-            logger.error(f"Error args: {e.args}")
-            logger.error(f"Rates data that failed: {rates_list}")
-            # Don't re-raise the exception to avoid transaction rollback
-            return None
+#         except Exception as e:
+#             logger.error(f"Error creating BookingOccurrenceRate: {str(e)}")
+#             logger.error(f"Error type: {type(e)}")
+#             logger.error(f"Error args: {e.args}")
+#             logger.error(f"Rates data that failed: {rates_list}")
+#             # Don't re-raise the exception to avoid transaction rollback
+#             return None
