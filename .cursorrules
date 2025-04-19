@@ -1,45 +1,148 @@
-Always respond with what you are fixing, and never remove comments or edit anything that you weren't instructed to edit. at the end of the code generation, make sure to include a little summary of what you did. Don't touch any styling when i don't ask you to. When adding debugging console.log messages in javascript files, make sure to prepend "MBA<random_number>" to the start of the conosle.log for easy searching (only use one random number for multiple console logs made in one change, when next change is requested, then you can change the random number). Make sure to mention what i need to use to filter for the logs. There should be no difference in variable naming conventions on variables that are supposed to match on front/backend. For example, if i have a unit_of_time variable on the backend, and it is sent to the frontend, then that is the variable the frontend should use to display it or for logic calculations. This application contains a front end and a backend. frontend is programmed in React native, and backend is programmed in Django with the rest framework as well. My goal is to get the MVP out to the public, and to do that, i need to connect all of my database tables to my frontend. You will be assisting me in this. If you are tasked with doing something on the frontend, you are allowed to completely ignore, and encouraged to delete, anything to do with is_prototype from AuthContext.js (except for touching it inside of AuthContext.js, or on the signin page). 
+───────────────────────────
+CURSOR PROJECT GUIDELINES
+───────────────────────────
 
-File Locations:
-backend: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend
-frontend: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/CrittrCoveStaging/package.json
+### 0. How Cursor should answer  
+1. Always state exactly what you changed at the end of the response, and give a brief summary of what you're about to implement before implementing it.  
+2. Never edit code, comments, or styling you were not asked to explicitly touch.  
+3. Finish every response with a short “Summary:” line.  
+4. Think about what i ask you in terms of either a senior software engineer, or a senior software architect if i am asking architectural questions.
 
-Time and Date Format Rules:
-1. When sending data from frontend to backend:
-   - Dates should be in "YYYY-MM-DD" format
-   - Times should be in "HH:mm" format (24-hour/military)
-   - All times should be in UTC
-   - Use time_utils.js for all timezone conversions
-2. When receiving data from backend:
-   - Dates will be in "YYYY-MM-DD" format
-   - Times will be in "HH:mm" format (24-hour/military)
-   - All times will be in UTC
-   - Use time_utils.js to convert to user's timezone for display
-3. When any api request is sent to the backend (so when we are creating an api request in a composer session or chat session), if that api request contains a time object, we will need to store that time on the database in UTC (ALWAYS STORE IN UTC ON BACKEND DB). The frontend should be converting this time to/from UTC from the users timezone using the time_utils.js file located in the frontend. The backend will store and respond with this UTC timezone to the client for the client to then convert it again back to the user's timezone.
-4. The same thing needs to happen with military time conversion. The database should always store times in military, but the user will be making the request to the backend always in military time as the frontend should convert the non-military times (if non-military) to military times using the time_utils.js file on the frontend.
-5. When converting times from the backend to the user's timezone/military time preferences, use the formatDateTimeRangeFromUTC function in time_utils.js if it is a date range (just a single start/end time returned for one occurrence), or if it is multiple occurrences, then we will need to use formatFromUTC or maybe formatDateTimeRangeFromUTC if it can handle a date time range between the same days. 
+---
 
-Backend Instructions:
-1. When creating or searching for endpoints, all of my endpoints will be structured like this: /api/<app_name>/v1/<bunch of unique extra stuff in urls past this point>.
-2. When creating an endpoint and checking if the requesting user is a professional, be sure to use the is_professional function inside of backend/zenexotics_backend/core/common_checks.py. if we need to verify the professional is the owner of the service, then use common_checks.py's owns_service function. 
+### 1. Logging & Debugging  
+1. When adding `console.log` in **JS/TS** files, use:  
+   ```js
+   debugLog("MBA<NNNN>: <message>", data);
+   ```  
+   * Use the same X‑digit `<NNNN>` for **all** logs added in one change.  
+2. Remind me to filter logs with `MBA<NNNN>` in your explanation of what you changed at the end.
+3. Replace all use cases of is_DEBUG with the debugLog function. 
+
+---
+
+### 2. Time & Date Rules  
+1. All times stored in DB and sent over API are UTC, “YYYY‑MM‑DD HH:mm”.* Frontend will convert these to MM-DD-YYYY and the user's timezone using time_utils.js 
+
+| Direction |                    Frontend action                          |    Backend action   |
+|-----------|-------------------------------------------------------------|---------------------|
+| To API    |           Convert user TZ ➜ UTC via **time_utils.js**       | Store UTC           |
+| From API  | Receive UTC -> Convert UTC to user TZ using time_utils.js   | Send UTC date times |
+
+2. Use `formatDateTimeRangeFromUTC` for ranges; otherwise `formatFromUTC`.
+3. 
 
 
-Extra instructions:
-1. Try to reduce server load where it makes sense. For example, on the bookingstepmodal's first step: the service and pets editor shouldn't call the backend if the backend got a service and pet, unless and changes were done to it. Only call the backend when needed, or in the above example, when it has changes from the data recieved from the backend. 
-2. When adding any frontend call to the backend, these should be done inside of CrittrCoveStaging/src/api/API.js with a sufficient comment above them with what the function is doing/sending and what the backend should be responding with
-3. When adding new debug messages with console.log on the frontend, make sure to use the authContext.js's debugLog function to print the message to the log, DO NOT USE THE is_DEBUG from AuthContext.js as the debugLog already accounts for this. The function is working for logging, so anytime cursor ai wants to add a console log, instead of console.log("message"), use debugLog("Message", dataForMessage); 
-4. when adding error messages or anything of the sort, NEVER use alerts. Use modals instead for a more friendly user experience, and compatibility across platforms. Any errors or successes from the api responses should result in the toast showing like it does on the profilinfotab.js file. 
-5. Anytime i ask you a question about anything, your job is to respond and think about the architecture like a senior software engineer would. 
-6. Ensure to follow DRY (Do Not Repeat Yourself) principles. Code should not repeat. If an endpoint has similar code as another endpoint, consider centralizing that similar code into a function they both reference. Same with frontend code.
-7. Use Snake Case for Variable Names and Title Case for Values – Prioritize Consistency and Readability Across Backend and Frontend
-    Variable names should always use snake_case. This applies to all keys in your database models, serializers, API responses, and frontend code that references backend data.
-        ✅ unit_of_time, service_type, pet_name
-        ❌ unitOfTime, UnitOfTime, UNIT_OF_TIME
-    Values (i.e., the actual content stored in or returned by these variables) should use Title Case, written exactly as they are displayed to the user.
-        ✅ "Dog", "Cat", "Per Visit", "Every 15 Min"
-        ❌ "DOG", "CAT", "PER_VISIT", "15_MIN"
-    Frontend and backend values should always match exactly. Avoid using internal codes or ALL_CAPS values that require mapping. What the user sees should be what’s stored and transmitted.
-8. Avoid duplicating data in responses. for example, if we are returning base rate = service.base_rate, if we are using service.base_rate for anything else in the response, we shouldn't because we are already returning that value to the client. 
+---
 
-Debugging:
-1. If we encounter a 404 not found after making changes to frontend files, it is not a backend issue 99.999% of the time, even if we edit views and v1/urls.py on the backend, it still isn't the issue with the url being incorrect, it is almost always an import issue, using a variable that doesn't exist, or something like that.
+### 3. Backend (Django + DRF) - /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend
+1. Endpoint pattern: `/api/<app>/v1/...`  
+2. Auth helpers in core/common_checks.py:  
+   * `is_professional(request.user)`  
+   * `owns_service(request.user, service)`  
+3. Avoid code duplication—centralise shared logic.
+4. Add any constants that may be used multiple times to the constants.py. 
+
+---
+
+### 4. Frontend (React Native) - located: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/CrittrCoveStaging/package.json
+1. **Never** reference `is_prototype` outside *AuthContext.js* and the sign‑in page; delete any other occurrences.  
+2. Place new API calls in `src/api/API.js` with a doc‑comment header.
+3. **No `alert()`**—use toasts like `ProfilInfoTab.js` does.  
+4. Error/success responses → show modal + toast.  
+5. Reduce needless round‑trips (e.g., only save pets/services if modified).
+
+---
+
+### 5. Data & Naming Conventions  
+| Aspect | Rule |
+|--------|------|
+| Variables | **snake_case** everywhere (`unit_of_time`) |
+| Values | **Title Case** exactly as user sees (`"Dog"`, `"Per Visit"`) |
+| Front ↔ Back | Names must match 1‑for‑1—no mapping tables if possible. |
+| Duplication | Don’t send the same field twice in JSON. Follow DRY Principles. |
+
+---
+
+### 6. Styling  
+*Cursor MUST NOT change any CSS / Tailwind / StyleSheet unless explicitly told.*
+
+---
+
+### 7. File locations (absolute paths)  
+* backend: `/Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend`  
+* frontend: `/Users/mattaertker/Documents/GitHub/CrittrCoveStaging/CrittrCoveStaging`
+
+---
+
+### 8. Debugging myths  
+1. 404 after a change is almost never the backend URL—check imports & variables first.
+
+---
+
+### 9. Booking Architecture Invariants
+───────────────────────────
+• Booking creation MUST call BookingSummaryService.create_or_update_from_draft().
+• Never hand‑code subtotal / fee maths; rely on BookingSummaryService.
+• Signals on BookingOccurrence & BookingOccurrenceRate MUST trigger
+  BookingSummaryService.recalculate_from_occurrence_change().
+• Taxes are computed ONLY via BookingSummary.taxes → core.tax_utils.calculate_taxes();
+  do not duplicate tax logic.
+• Platform fee overrides come from draft; otherwise auto‑calculated in the service.
+• Treat booking_summary, booking_occurrences, booking_occurrence_rates as
+  single‑source‑of‑truth tables—no direct writes outside the approved services/signals.
+• Python code MUST pass `ruff check` and `black --check`.
+• JS/TS MUST pass `eslint` and `prettier`.
+• Cursor should auto‑fix violations or warn me.
+• For new backend models, Cursor MUST create a migration and list its filename in the Summary.
+
+
+---
+
+### 10. Testing 
+• New backend logic → add pytest unit test(s) under backend/<app>/tests/.
+• New frontend utility functions → add Jest tests in __tests__/
+• Tests must run with `pytest -q` and `npm test --passWithNoTests`.
+
+---
+
+### 11. Security & Secrets
+• No hard‑coded credentials. Use `environ.get("VAR")` in Django settings and
+  `react-native-dotenv` on the frontend.
+• Cursor must warn if new third‑party libs are added without review.
+
+---
+
+### 12. Error Handling & Status Codes
+• DRF views: return 4XX for client errors, 5XX only for unexpected exceptions.
+• Cursor MUST wrap risky DB ops in `transaction.atomic()` and log exceptions
+  with `logger.exception`.
+• Frontend API wrapper must surface `response.data.detail` in toast.
+
+---
+
+### 13. Seed Data & Migrations
+• Whenever a model changes, Cursor must create a Django migration file and
+  list its filename in the Summary block.
+• Seed data or fixtures go in backend/fixtures/; never hard‑code test data
+  in migrations.
+
+---
+
+### 14. TYPESCRIPT & TYPE‑SAFETY
+Frontend (React Native)
+• Any **new** component, hook, context, or util MUST be written in TypeScript
+  (.ts / .tsx). Legacy .js files may stay, but if you touch one you must either
+  convert it or prepend `// @ts-check` and add JSDoc typedefs.
+• Place shared DTO / API‑response interfaces in `src/types/` and import them
+  everywhere (components + API wrapper) – no inline `any`.
+• `tsc --noEmit --strict` must compile cleanly after Cursor’s changes.
+
+Backend (Django + DRF)
+• Serializers MUST declare explicit fields – never use `fields = "__all__"`.
+• New or modified models must specify field types with Django field classes.
+
+Cross‑cutting invariants
+• Key names travelling between back‑end and front‑end must match 1‑for‑1
+  (snake_case).  
+• Cursor must fix or warn about any type errors it introduces.

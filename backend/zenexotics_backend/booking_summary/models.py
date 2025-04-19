@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 import logging
+from core.tax_utils import calculate_taxes
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +61,15 @@ class BookingSummary(models.Model):
         return (self.subtotal * self.pro_platform_fee_percentage / Decimal('100.00')).quantize(Decimal('0.01'))
 
     def calculate_tax(self):
-        """Calculate the tax based on the subtotal and tax percentage"""
+        """
+        Legacy method for calculating tax based on percentage.
+        This is maintained for backward compatibility.
+        """
         return (self.subtotal * self.tax_percentage / Decimal('100.00')).quantize(Decimal('0.01'))
 
     def calculate_total(self):
         """Calculate the total including subtotal, fee, and tax"""
-        return (self.subtotal + self.client_platform_fee + self.calculate_tax()).quantize(Decimal('0.01'))
+        return (self.subtotal + self.client_platform_fee + self.taxes).quantize(Decimal('0.01'))
 
     def update_subtotal(self):
         """Update the subtotal by summing all occurrence calculated costs"""
@@ -89,8 +93,27 @@ class BookingSummary(models.Model):
 
     @property
     def taxes(self):
-        """Calculate taxes based on subtotal and tax percentage"""
-        return ((self.subtotal + self.client_platform_fee) * (self.tax_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+        """
+        Calculate taxes based on the professional's state and tax rules.
+        Uses the core.tax_utils functions to determine the correct tax amount.
+        """
+        try:
+            # Get professional from the booking
+            professional = self.booking.professional
+            
+            # Calculate taxes using the core utility
+            tax_amount = calculate_taxes(
+                subtotal=self.subtotal,
+                platform_fee=self.client_platform_fee,
+                user=professional.user
+            )
+            
+            logger.info(f"Calculated taxes for booking {self.booking.booking_id}: ${tax_amount}")
+            return tax_amount
+        except Exception as e:
+            logger.error(f"Error calculating taxes: {str(e)}")
+            # Fallback to legacy calculation
+            return self.calculate_tax()
 
     @property
     def total_client_cost(self):
@@ -109,16 +132,8 @@ def update_booking_summary(sender, instance, **kwargs):
     Signal handler to update the booking summary when an occurrence's calculated cost changes
     """
     try:
-        # Get or create the summary
-        from booking_summary.models import BookingSummary
-        summary, created = BookingSummary.objects.get_or_create(
-            booking=instance.booking,
-            defaults={
-                'client_platform_fee_percentage': Decimal('10.00'),
-                'pro_platform_fee_percentage': Decimal('10.00'),
-                'tax_percentage': Decimal('8.00')
-            }
-        )
-        summary.update_subtotal()
+        # Use the centralized service to update the booking summary
+        from .services import BookingSummaryService
+        BookingSummaryService.recalculate_from_occurrence_change(instance.booking)
     except Exception as e:
         logger.error(f"Error updating booking summary for occurrence {instance.occurrence_id}: {str(e)}")

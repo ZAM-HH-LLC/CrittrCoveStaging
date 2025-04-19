@@ -1645,21 +1645,15 @@ class CreateFromDraftView(APIView):
                     'end_time': end_time.strftime('%H:%M')
                 })
 
+            # Get cost summary from draft data
+            cost_summary = draft_data.get('cost_summary', {})
+            
             logger.info(f"MBA66777 pro_platform_fee_percentage: {cost_summary.get('pro_platform_fee_percentage', 17)}")
             logger.info(f"MBA66777 client_platform_fee_percentage: {cost_summary.get('client_platform_fee_percentage', 17)}")
             
-            # Create booking summary with platform fee data
-            cost_summary = draft_data.get('cost_summary', {})
-            summary, created = BookingSummary.objects.get_or_create(
-                booking=booking,
-                defaults={
-                    'client_platform_fee_percentage': Decimal(str(cost_summary.get('client_platform_fee_percentage', 15))),
-                    'pro_platform_fee_percentage': Decimal(str(cost_summary.get('pro_platform_fee_percentage', 15))),
-                    'tax_percentage': Decimal(str(cost_summary.get('tax_percentage', 8))),
-                    'client_platform_fee': Decimal(str(cost_summary.get('client_platform_fee', 0))),
-                    'pro_platform_fee': Decimal(str(cost_summary.get('pro_platform_fee', 0))),
-                }
-            )
+            # Create booking summary with platform fee data using the centralized service
+            from booking_summary.services import BookingSummaryService
+            summary = BookingSummaryService.create_or_update_from_draft(booking, draft_data)
             
             logger.info(f"MBA66777 Created/updated booking summary for booking {booking.booking_id}")
             
