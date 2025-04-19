@@ -297,15 +297,49 @@ const BookingStepModal = ({
         
         debugLog('MBA66777 Booking created successfully:', response);
         
+        // Create a booking message from the response data
+        // The booking data is in the message object of the response
+        const bookingMessageData = response.message || {};
+        const bookingId = response.booking_id;
+        
+        const bookingMessage = {
+          id: Date.now().toString(), // Temporary ID for UI purposes
+          type_of_message: 'send_approved_message',
+          metadata: {
+            booking_id: bookingId,
+            service_type: bookingMessageData.service_type || bookingData.service?.service_name,
+            occurrences: bookingMessageData.occurrences || [],
+            cost_summary: bookingMessageData.cost_summary || {
+              total_client_cost: bookingMessageData.occurrences?.[0]?.cost_summary?.total_client_cost,
+              total_sitter_payout: bookingMessageData.occurrences?.[0]?.cost_summary?.total_sitter_payout
+            }
+          },
+          content: 'Approval Request',
+          sent_by_other_user: false,
+          timestamp: new Date().toISOString()
+        };
+        
         // Close the modal and pass the new booking data to the parent component
         onComplete({
           ...bookingData,
-          booking_id: response.booking_id,
-          status: 'Pending Client Approval'
+          booking_id: bookingId,
+          status: 'Pending Client Approval',
+          message: bookingMessage // Include the new message to be added to the message list
         });
       } catch (error) {
         debugLog('MBA66777 Error creating booking:', error);
         setError('Failed to create booking. Please try again.');
+        
+        // Still try to close the modal in case the booking was actually created
+        // The backend handles duplicate bookings, so it's safe to let the user try again if needed
+        setTimeout(() => {
+          // Short timeout to let the user see the error
+          onComplete({
+            ...bookingData,
+            error: true,
+            errorMessage: error.message
+          });
+        }, 3000);
       }
     }
   };

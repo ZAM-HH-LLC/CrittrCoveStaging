@@ -1206,76 +1206,55 @@ const MessageHistory = ({ navigation, route }) => {
         console.log('MBA9876i2ghv93 Message data:', {
           type: item.type_of_message,
           metadata: item.metadata,
+          booking_id: item.metadata?.booking_id,
+          service_type: item.metadata?.service_type,
           totalOwnerCost,
           userTimezone: timeSettings.timezone,
           occurrences: item.metadata.occurrences
         });
       }
 
-      // Format the occurrences with proper timezone handling
-      const formattedOccurrences = (item.metadata.occurrences || []).map(occ => {
-        try {
-          // For initial booking requests, use the pre-formatted dates
-          if (item.type_of_message === 'initial_booking_request') {
-            if (occ.formatted_start && occ.formatted_end && occ.duration && occ.timezone) {
-              if (is_DEBUG) {
-                console.log('MBA9876i2ghv93 Using pre-formatted dates:', occ);
-              }
-              return {
-                ...occ,
-                formatted_start: occ.formatted_start,
-                formatted_end: occ.formatted_end,
-                duration: occ.duration,
-                timezone: occ.timezone,
-                dst_message: ''  // DST message will be handled by the backend
-              };
-            }
-          }
-
-          // For approval messages or unformatted initial requests, use formatOccurrenceFromUTC
-          if (is_DEBUG) {
-            console.log('MBA9876i2ghv93 Converting occurrence using formatOccurrenceFromUTC:', {
-              occurrence: occ,
-              timezone: timeSettings.timezone,
-              messageType: item.type_of_message
-            });
-          }
-
-          return formatOccurrenceFromUTC(occ, timeSettings.timezone);
-        } catch (error) {
-          console.error('MBA9876i2ghv93 Error formatting occurrence:', error, {
-            occurrence: occ,
-            timezone: timeSettings.timezone,
-            messageType: item.type_of_message
-          });
-          return {
-            ...occ,
-            formatted_start: 'Error formatting date',
-            formatted_end: 'Error formatting date',
-            duration: 'Unknown',
-            timezone: timeSettings.timezone,
-            dst_message: ''
-          };
-        }
-      });
-
-      if (is_DEBUG) {
-        console.log('MBA9876i2ghv93 Final formatted occurrences:', {
-          occurrences: formattedOccurrences,
-          messageType: item.type_of_message
-        });
-      }
+      // Determine if we should show edit draft button
+      // Only show for initial_booking_request when we have a draft and user is professional
+      const showEditDraft = item.type_of_message === 'initial_booking_request' && 
+                           hasDraft && 
+                           draftData && 
+                           selectedConversationData?.is_professional;
 
       return (
         <BookingMessageCard
           type={item.type_of_message === 'initial_booking_request' ? 'request' : 'approval'}
           data={{
             ...item.metadata,
-            occurrences: formattedOccurrences,
-            totalOwnerCost
+            booking_id: item.metadata.booking_id,
+            service_type: item.metadata.service_type,
+            total_owner_cost: totalOwnerCost,
+            occurrences: item.metadata.occurrences || []
           }}
           isFromMe={isFromMe}
-          onEditDraft={() => handleEditDraft(item.metadata.draft_id)}
+          onPress={() => {
+            // Navigate to booking details if we have a booking_id
+            if (item.metadata.booking_id) {
+              navigation.navigate('BookingDetails', { 
+                bookingId: item.metadata.booking_id,
+                from: 'MessageHistory'
+              });
+            }
+          }}
+          isProfessional={selectedConversationData?.is_professional}
+          onApproveSuccess={(response) => {
+            // Update the messages list to reflect the approval
+            // You would typically update the booking status here
+            if (response && response.status) {
+              Alert.alert('Success', 'Booking approved successfully');
+              // Refresh messages to update the UI
+              fetchMessages(selectedConversation, 1);
+            }
+          }}
+          onApproveError={(error) => {
+            Alert.alert('Error', error || 'Failed to approve booking');
+          }}
+          onEditDraft={showEditDraft ? () => handleEditDraft(item.metadata.draft_id) : undefined}
         />
       );
     }
@@ -1299,7 +1278,7 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
       </View>
     );
-  }, [navigation, selectedConversationData, timeSettings]);
+  }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages]);
 
   const WebInput = () => {
     const [message, setMessage] = useState('');
@@ -1843,8 +1822,44 @@ const MessageHistory = ({ navigation, route }) => {
         onComplete={(bookingData) => {
           if (is_DEBUG) {
             console.log('MBA98765 Booking completed:', bookingData);
+            console.log('MBA98765 New booking message:', bookingData.message);
+            console.log('MBA98765 Message metadata:', bookingData.message?.metadata);
           }
-          // Just close the modal and clean up, no navigation
+          
+          // Handle error case
+          if (bookingData.error) {
+            Alert.alert(
+              'Error',
+              bookingData.errorMessage || 'Failed to create booking. Please try again.'
+            );
+            
+            // Close the modal and clean up
+            setShowBookingStepModal(false);
+            setCurrentBookingId(null);
+            return;
+          }
+          
+          // Add the newly created booking message to the messages list
+          if (bookingData.message) {
+            setMessages(prevMessages => [bookingData.message, ...prevMessages]);
+            
+            // Update conversation's last message
+            setConversations(prev => prev.map(conv => 
+              conv.conversation_id === selectedConversation 
+                ? {
+                    ...conv,
+                    last_message: "Approval Request",
+                    last_message_time: bookingData.message.timestamp
+                  }
+                : conv
+            ));
+          }
+          
+          // Update draft state since the draft is deleted after booking creation
+          setHasDraft(false);
+          setDraftData(null);
+          
+          // Close the modal and clean up
           setShowBookingStepModal(false);
           setCurrentBookingId(null);
         }}
