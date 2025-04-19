@@ -211,24 +211,36 @@ const SettingsPaymentsTab = ({
   );
 
   const getSubscriptionPlans = () => {
+    const commonPlans = [
+      {
+        id: 'free',
+        title: 'Free Tier',
+        price: 'Free',
+        description: '1 Free Booking/Month, then 15% per booking',
+        features: ['Basic profile listing', 'Up to 1 booking/month', 'Standard support'],
+        isPopular: false,
+      },
+      {
+        id: 'waitlist',
+        title: 'Waitlist Tier',
+        price: 'Free',
+        description: 'No commissions, no subscriptions, no fees',
+        features: ['Early signup discounts', 'Waitlist for early access', 'Unlimited connections', 'Priority support',],
+        isPopular: false,
+      },
+      {
+        id: 'commission',
+        title: 'Commission Based',
+        price: '15% per booking',
+        description: 'Pay as you go',
+        features: ['Unlimited connections', 'Standard support', 'Pay only when you book'],
+        isPopular: false,
+      },
+    ];
+
     if (userRole === 'professional') {
       return [
-        {
-          id: 'waitlist',
-          title: 'Waitlist Tier',
-          price: 'Free',
-          description: 'No commissions',
-          features: ['Early signup discounts', 'Waitlist for early access', 'Unlimited connections', 'Priority support',],
-          isPopular: false,
-        },
-        {
-          id: 'free',
-          title: 'Free Tier',
-          price: 'Free',
-          description: 'Limited to 5 connections per month',
-          features: ['Basic profile listing', 'Up to 5 connections/month', 'Standard support'],
-          isPopular: false,
-        },
+        ...commonPlans,
         {
           id: 'subscription',
           title: 'Pro Subscription',
@@ -236,14 +248,6 @@ const SettingsPaymentsTab = ({
           description: 'No fees as pro',
           features: ['Unlimited connections', 'Priority support', 'Advanced analytics', 'No commission fees'],
           isPopular: true,
-        },
-        {
-          id: 'commission',
-          title: 'Commission Based',
-          price: '15% per booking',
-          description: 'Pay as you go',
-          features: ['Unlimited connections', 'Standard support', 'Pay only when you book'],
-          isPopular: false,
         },
         {
           id: 'dual_subscription',
@@ -255,23 +259,8 @@ const SettingsPaymentsTab = ({
         }
       ];
     } else {
-      const plans = [
-        {
-          id: 'waitlist',
-          title: 'Waitlist Tier',
-          price: 'Free',
-          description: 'No commissions',
-          features: ['Early signup discounts', 'Waitlist for early access', 'Unlimited connections', 'Priority support',],
-          isPopular: false,
-        },
-        {
-          id: 'commission',
-          title: 'Commission Based',
-          price: '15% per booking',
-          description: 'Pay as you go',
-          features: ['Unlimited connections', 'Standard support', 'Pay only when you book'],
-          isPopular: false,
-        },
+      return [
+        ...commonPlans,
         {
           id: 'subscription',
           title: 'Owner Subscription',

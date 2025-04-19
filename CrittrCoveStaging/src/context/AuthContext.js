@@ -6,7 +6,7 @@ import { Dimensions, Platform } from 'react-native';
 import { navigate } from '../../App';
 import { navigateToFrom } from '../components/Navigation';
 import { initStripe } from '../utils/StripeService';
-import { getUserName } from '../api/API';
+import { getUserName, getTimeSettings } from '../api/API';
 
 export const SCREEN_WIDTH = Dimensions.get('window').width;
 export const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -581,6 +581,16 @@ export const AuthProvider = ({ children }) => {
       await authService.current.setTokens(token, refreshTokenValue);
       setIsSignedIn(true);
       
+      // Fetch time settings immediately to ensure they're available
+      try {
+        const timeSettingsData = await getTimeSettings();
+        setTimeSettings(timeSettingsData);
+        debugLog('MBA98765 Time settings fetched during sign in:', timeSettingsData);
+      } catch (timeError) {
+        console.error('MBA98765 Error fetching time settings during sign in:', timeError);
+        // Continue sign in process even if time settings fetch fails
+      }
+      
       const status = await getProfessionalStatus(token);
       const initialRole = status.suggestedRole;
       
@@ -676,23 +686,12 @@ export const AuthProvider = ({ children }) => {
     if (is_prototype) return;
     
     try {
-      const token = await authService.current.getAccessToken();
-      if (!token) {
-        if (is_DEBUG) {
-          debugLog('MBA98765 No token found for time settings');
-        }
-        return;
-      }
+      const settings = await getTimeSettings();
+      setTimeSettings(settings);
       
-      const response = await axios.get(`${API_BASE_URL}/api/users/v1/time-settings/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       
-      if (is_DEBUG) {
-        debugLog('MBA98765 Time settings response:', response.data);
-      }
+      debugLog('MBA98765 Time settings response:', settings);
       
-      setTimeSettings(response.data);
     } catch (error) {
       console.error('MBA98765 Error fetching time settings:', error.response ? error.response.data : error.message);
     }
@@ -746,6 +745,7 @@ export const AuthProvider = ({ children }) => {
         setIsDebug,
         setIsPrototype,
         checkAuthStatus,
+        fetchTimeSettings,
       }}
     >
       {children}
