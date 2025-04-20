@@ -360,6 +360,7 @@ const BookingMessageCard = ({
         onRequestChangesSuccess={handleRequestChangesSuccess}
         onRequestChangesError={handleRequestChangesError}
         initialData={safeInitialData}
+        isProfessional={isProfessional}
       />
     </View>
   );

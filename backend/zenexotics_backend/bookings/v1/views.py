@@ -1965,6 +1965,10 @@ class BookingDetailView(APIView):
                         additional_rates = occurrence_rates.rates
                     except Exception as e:
                         logger.error(f"Error accessing rates for occurrence {occurrence.occurrence_id}: {str(e)}")
+
+                base_rate = booking_details.base_rate
+                multiple = booking_details.multiple
+                base_total = (base_rate * Decimal(str(multiple))).quantize(Decimal('0.01'))
                 
                 # Format the occurrence data - simplified
                 occurrence_data = {
@@ -1974,12 +1978,14 @@ class BookingDetailView(APIView):
                     'start_time': occurrence.start_time.strftime('%H:%M'),
                     'end_time': occurrence.end_time.strftime('%H:%M'),
                     'calculated_cost': str(occurrence.calculated_cost),
+                    'unit_of_time': booking_details.unit_of_time if booking_details else 'Per Visit',
+                    'base_total': str(base_total),
+                    'multiple': Decimal(str(multiple)).quantize(Decimal('0.01')),
                     'rates': {
                         'base_rate': str(booking_details.base_rate) if booking_details else '0.00',
                         'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0.00',
                         'applies_after': booking_details.applies_after if booking_details else 1,
                         'holiday_rate': str(booking_details.holiday_rate) if booking_details else '0.00',
-                        'unit_of_time': booking_details.unit_of_time if booking_details else 'Per Visit',
                         'additional_rates': additional_rates
                     }
                 }

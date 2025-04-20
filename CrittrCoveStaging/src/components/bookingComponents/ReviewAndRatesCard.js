@@ -14,7 +14,7 @@ import { AuthContext, debugLog } from '../../context/AuthContext';
 import { formatDateTimeRangeFromUTC, formatFromUTC, FORMAT_TYPES } from '../../utils/time_utils';
 import { updateBookingDraftRates } from '../../api/API';
 
-const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
+const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditControls = true, isProfessional = true }) => {
   const { timeSettings } = useContext(AuthContext);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAddingRate, setIsAddingRate] = useState(false);
@@ -349,12 +349,14 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
     }
 
     return (
-      <View style={styles.section}>
+      <View style={[styles.section, { marginTop: showEditControls ? 24 : 0 }]}>
         <View style={styles.sectionHeaderContainer}>
           <Text style={styles.sectionHeader}>Booking Breakdown</Text>
-          <TouchableOpacity onPress={toggleAddRate}>
-            <Text style={styles.addRateText}>+ Add Rate</Text>
-          </TouchableOpacity>
+          {showEditControls && (
+            <TouchableOpacity onPress={toggleAddRate}>
+              <Text style={styles.addRateText}>+ Add Rate</Text>
+            </TouchableOpacity>
+          )}
         </View>
         <View style={[styles.card, { paddingTop: 16 }]}>
           <View style={styles.breakdownSection}>
@@ -362,13 +364,15 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
               <View style={styles.dateTextContainer}>
                 <Text style={styles.dateText}>{formattedDateRange}</Text>
               </View>
-              <TouchableOpacity onPress={toggleEditMode}>
-                <MaterialCommunityIcons 
-                  name={isEditMode ? "content-save" : "pencil"} 
-                  size={20} 
-                  color={theme.colors.mainColors.main} 
-                />
-              </TouchableOpacity>
+              {showEditControls && (
+                <TouchableOpacity onPress={toggleEditMode}>
+                  <MaterialCommunityIcons 
+                    name={isEditMode ? "content-save" : "pencil"} 
+                    size={20} 
+                    color={theme.colors.mainColors.main} 
+                  />
+                </TouchableOpacity>
+              )}
             </View>
             
             {/* Base Rate */}
@@ -402,7 +406,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
             </View>
             
             {/* Additional Animal Rate */}
-            {occurrence.rates?.additional_animal_rate && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) && (
+            {occurrence.rates?.additional_animal_rate && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) ? (
               <View style={styles.breakdownItem}>
                 <View style={styles.breakdownLabelContainer}>
                   <View style={styles.rateNameAmountRow}>
@@ -437,10 +441,10 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
                   </Text>
                 )}
               </View>
-            )}
+            ) : null}
             
             {/* Holiday Rate */}
-            {occurrence.rates?.holiday_rate && occurrence.rates?.holiday_days && occurrence.rates.holiday_days > 0 && (
+            {occurrence.rates?.holiday_rate && occurrence.rates?.holiday_days && occurrence.rates.holiday_days > 0 ? (
               <View style={[styles.breakdownItem, { borderBottomWidth: (occurrence.rates?.additional_rates?.length > 0 || isAddingRate) ? 1 : 0 }]}>
                 <View style={styles.breakdownLabelContainer}>
                   <View style={styles.rateNameAmountRow}>
@@ -473,57 +477,59 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
                   </Text>
                 )}
               </View>
-            )}
+            ) : null}
             
             {/* Additional Rates */}
-            {(editedRates?.additional_rates || []).map((rate, index) => (
-              <View key={index} style={styles.breakdownItem}>
-                <View style={styles.breakdownLabelContainer}>
-                  {isEditMode ? (
-                    <View style={styles.editableAdditionalRateRow}>
-                      <View style={styles.rateNameAmountRowWithDelete}>
-                        <TextInput
-                          style={styles.nameInput}
-                          value={rate.name}
-                          onChangeText={(value) => updateAdditionalRate(index, 'name', value)}
-                          placeholder="Rate Name"
-                        />
-                        <View style={styles.amountInputContainer}>
-                          <Text style={styles.currencySymbol}>$</Text>
+            {((isEditMode ? editedRates?.additional_rates : occurrence.rates?.additional_rates) || []).length > 0 ? 
+              ((isEditMode ? editedRates?.additional_rates : occurrence.rates?.additional_rates) || []).map((rate, index) => (
+                <View key={index} style={styles.breakdownItem}>
+                  <View style={styles.breakdownLabelContainer}>
+                    {isEditMode ? (
+                      <View style={styles.editableAdditionalRateRow}>
+                        <View style={styles.rateNameAmountRowWithDelete}>
                           <TextInput
-                            style={styles.rateInput}
-                            keyboardType="numeric"
-                            value={rate.amount?.toString() || '0'}
-                            onChangeText={(value) => updateAdditionalRate(index, 'amount', value)}
+                            style={styles.nameInput}
+                            value={rate.name}
+                            onChangeText={(value) => updateAdditionalRate(index, 'name', value)}
+                            placeholder="Rate Name"
                           />
+                          <View style={styles.amountInputContainer}>
+                            <Text style={styles.currencySymbol}>$</Text>
+                            <TextInput
+                              style={styles.rateInput}
+                              keyboardType="numeric"
+                              value={rate.amount?.toString() || '0'}
+                              onChangeText={(value) => updateAdditionalRate(index, 'amount', value)}
+                            />
+                          </View>
                         </View>
+                        <TouchableOpacity 
+                          style={styles.deleteButton} 
+                          onPress={() => deleteAdditionalRate(index)}
+                        >
+                          <MaterialCommunityIcons 
+                            name="trash-can-outline" 
+                            size={22} 
+                            color={theme.colors.error} 
+                          />
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity 
-                        style={styles.deleteButton} 
-                        onPress={() => deleteAdditionalRate(index)}
-                      >
-                        <MaterialCommunityIcons 
-                          name="trash-can-outline" 
-                          size={22} 
-                          color={theme.colors.error} 
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <>
-                      <Text style={styles.breakdownLabel}>{rate.name || rate.title}</Text>
-                      <Text style={styles.breakdownCalculation}>{rate.description || "Additional Rate"}</Text>
-                    </>
+                    ) : (
+                      <>
+                        <Text style={styles.breakdownLabel}>{rate.name || rate.title}</Text>
+                        <Text style={styles.breakdownCalculation}>{rate.description || "Additional Rate"}</Text>
+                      </>
+                    )}
+                  </View>
+                  {!isEditMode && (
+                    <Text style={styles.breakdownAmount}>+{formatCurrency(rate.amount)}</Text>
                   )}
                 </View>
-                {!isEditMode && (
-                  <Text style={styles.breakdownAmount}>+{formatCurrency(rate.amount)}</Text>
-                )}
-              </View>
-            ))}
+              ))
+            : null}
             
             {/* Add New Rate Form */}
-            {isAddingRate && (
+            {isAddingRate ? (
               <View>
                 <View style={styles.addRateContainer}>
                   <View style={styles.formDivider} />
@@ -568,14 +574,14 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
                   </TouchableOpacity>
                 </View>
               </View>
-            )}
+            ) : null}
             
             {/* Save button for edit mode */}
-            {isEditMode && (
+            {isEditMode ? (
               <TouchableOpacity style={[styles.saveButton, {alignSelf: 'flex-end', marginRight: 16, marginTop: 16, marginBottom: 8}]} onPress={saveRateChanges}>
                 <Text style={styles.saveButtonText}>Save Changes</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         </View>
       </View>
@@ -622,31 +628,33 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
           </View>
 
           {/* Total Owner Cost */}
-          <View style={styles.totalAmountContainer}>
+          <View style={[styles.totalAmountContainer, { paddingBottom: isProfessional ? 16 : 0, marginBottom: isProfessional ? 16 : 0 }]}>
             <Text style={styles.totalLabel}>Total Owner Cost</Text>
             <Text style={styles.totalAmount}>{formatCurrency(costSummary.total_client_cost)}</Text>
           </View>
 
           {/* Divider */}
-          <View style={styles.divider} />
+          {isProfessional ? <View style={styles.divider} /> : null}
 
-          {/* Professional Payout */}
-          <View style={styles.payoutContainer}>
-            <Text style={styles.payoutLabel}>Professional Payout</Text>
-            <Text style={styles.payoutAmount}>{formatCurrency(costSummary.total_sitter_payout)}</Text>
-            <Text style={styles.payoutBreakdown}>
-              (Subtotal {formatCurrency(costSummary.subtotal)} - Service Fee {formatCurrency(costSummary.pro_platform_fee)})
-            </Text>
-            {costSummary.pro_platform_fee === 0 && (
-              <Text style={styles.badge}>{costSummary.pro_subscription_plan === 0 ? 'Free Tier - ' 
-                : costSummary.pro_subscription_plan === 1 ? 'Waitlist Tier - ' 
-                : costSummary.pro_subscription_plan === 2 ? 'Commission Tier - ' 
-                : costSummary.pro_subscription_plan === 3 ? 'Pro Subscription - ' 
-                : costSummary.pro_subscription_plan === 4 ? 'Pro Subscription - ' 
-                :  costSummary.pro_subscription_plan === 5 ? 'Client Subscription - ' 
-                : ''} Saved {formatCurrency(costSummary.subtotal * 0.15)}</Text>
-            )}
-          </View>
+          {/* Professional Payout - Only show when isProfessional is true */}
+          {isProfessional ? (
+            <View style={styles.payoutContainer}>
+              <Text style={styles.payoutLabel}>Professional Payout</Text>
+              <Text style={styles.payoutAmount}>{formatCurrency(costSummary.total_sitter_payout)}</Text>
+              <Text style={styles.payoutBreakdown}>
+                (Subtotal {formatCurrency(costSummary.subtotal)} - Service Fee {formatCurrency(costSummary.pro_platform_fee)})
+              </Text>
+              {costSummary.pro_platform_fee === 0 ? (
+                <Text style={styles.badge}>{costSummary.pro_subscription_plan === 0 ? 'Free Tier - ' 
+                  : costSummary.pro_subscription_plan === 1 ? 'Waitlist Tier - ' 
+                  : costSummary.pro_subscription_plan === 2 ? 'Commission Tier - ' 
+                  : costSummary.pro_subscription_plan === 3 ? 'Pro Subscription - ' 
+                  : costSummary.pro_subscription_plan === 4 ? 'Pro Subscription - ' 
+                  :  costSummary.pro_subscription_plan === 5 ? 'Client Subscription - ' 
+                  : ''} Saved {formatCurrency(costSummary.subtotal * 0.15)}</Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </View>
     );

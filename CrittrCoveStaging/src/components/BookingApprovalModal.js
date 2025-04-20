@@ -17,6 +17,7 @@ import { theme } from '../styles/theme';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import ReviewAndRatesCard from './bookingComponents/ReviewAndRatesCard';
 import { getBookingDetails, approveBooking, requestBookingChanges } from '../api/API';
+import { capitalizeWords } from '../utils/formatStrings';
 
 const BookingApprovalModal = ({ 
   visible, 
@@ -26,7 +27,8 @@ const BookingApprovalModal = ({
   onApproveError,
   onRequestChangesSuccess,
   onRequestChangesError,
-  initialData = null
+  initialData = null,
+  isProfessional = true
 }) => {
   const { screenWidth } = useContext(AuthContext);
   const isDesktop = screenWidth > 768;
@@ -219,39 +221,6 @@ const BookingApprovalModal = ({
     onClose();
   };
 
-  // Render the top section with service and pet information
-  const renderServiceAndPetsSection = () => {
-    if (!bookingData) return null;
-    
-    return (
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Service & Pets</Text>
-        <View style={styles.card}>
-          <View style={styles.serviceContainer}>
-            <Text style={styles.serviceLabel}>Service:</Text>
-            <Text style={styles.serviceValue}>{bookingData.service_type || 'N/A'}</Text>
-          </View>
-          
-          <View style={styles.petsContainer}>
-            <Text style={styles.petsLabel}>Pets:</Text>
-            <View style={styles.petsList}>
-              {bookingData.pets && bookingData.pets.length > 0 ? (
-                bookingData.pets.map((pet, index) => (
-                  <View key={index} style={styles.petItem}>
-                    <Text style={styles.petName}>{pet.name}</Text>
-                    <Text style={styles.petType}>{pet.type} | {pet.breed}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.noPets}>No pets selected</Text>
-              )}
-            </View>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   // Main content of the modal
   const renderContent = () => {
     if (loading) {
@@ -285,7 +254,33 @@ const BookingApprovalModal = ({
 
     return (
       <>
-        {renderServiceAndPetsSection()}
+        <View style={[styles.section, { marginTop: 0 }]}>
+          <Text style={styles.sectionHeader}>Service & Pets</Text>
+          <View style={styles.card}>
+            <View style={styles.serviceContainer}>
+              <Text style={styles.serviceLabel}>Service:</Text>
+              <Text style={styles.serviceValue}>{bookingData.service_details?.service_type || 'N/A'}</Text>
+            </View>
+            
+            <View style={styles.serviceDivider} />
+            
+            <View style={styles.petsContainer}>
+              <Text style={styles.petsLabel}>Pets:</Text>
+              <View style={styles.petsList}>
+                {bookingData.pets && bookingData.pets.length > 0 ? (
+                  bookingData.pets.map((pet, index) => (
+                    <View key={index} style={styles.petItem}>
+                      <Text style={styles.petName}>{pet.name}</Text>
+                      <Text style={styles.petType}>{capitalizeWords(pet.species)} | {pet.breed}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noPets}>No pets selected</Text>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
         
         {/* ReviewAndRatesCard for booking details */}
         {bookingData && (
@@ -293,6 +288,8 @@ const BookingApprovalModal = ({
             bookingData={bookingData} 
             bookingId={bookingId}
             onRatesUpdate={(updatedData) => setBookingData(updatedData)}
+            showEditControls={false}
+            isProfessional={isProfessional}
           />
         )}
       </>
@@ -341,20 +338,25 @@ const BookingApprovalModal = ({
     }
     
     return (
-      <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.requestChangesButton}
-          onPress={handleShowChangeRequest}
-        >
-          <Text style={styles.requestChangesText}>Request Changes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.approveButton}
-          onPress={handleApprove}
-        >
-          <Text style={styles.approveText}>Approve Booking</Text>
-        </TouchableOpacity>
-      </View>
+      <>
+      {!isProfessional ? (
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={styles.requestChangesButton}
+            onPress={handleShowChangeRequest}
+          >
+            <Text style={styles.requestChangesText}>Request Changes</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.approveButton}
+            onPress={handleApprove}
+          >
+            <Text style={styles.approveText}>Approve Booking</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      </>
     );
   };
 
@@ -529,11 +531,12 @@ const styles = StyleSheet.create({
   },
   // Service and Pets section styles
   section: {
-    marginBottom: 24,
+    marginTop: 24,
+    marginHorizontal: 16,
   },
   sectionHeader: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    // fontWeight: 'bold',
     marginBottom: 8,
     color: theme.colors.text,
     fontFamily: theme.fonts.header.fontFamily,
@@ -552,6 +555,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
     alignItems: 'center',
+    paddingBottom: 16,
+  },
+  serviceDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginBottom: 16,
+    width: '100%',
   },
   serviceLabel: {
     fontSize: 16,
