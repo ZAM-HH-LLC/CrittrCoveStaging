@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -6,6 +6,7 @@ import { approveBooking } from '../api/API';
 import { formatDateTimeRangeFromUTC, convertTo24Hour } from '../utils/time_utils';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import moment from 'moment-timezone';
+import BookingApprovalModal from './BookingApprovalModal';
 
 // A simplified version of checkDSTChange that only relies on moment-timezone
 const checkDSTChange = (startDate, startTime, endDate, endTime, timezone) => {
@@ -34,7 +35,29 @@ const BookingMessageCard = ({
 }) => {
   const { timeSettings } = useContext(AuthContext);
   const userTimezone = timeSettings?.timezone || 'US/Mountain';
+  const [approvalModalVisible, setApprovalModalVisible] = useState(false);
+  const [safeInitialData, setSafeInitialData] = useState(null);
   
+  // Create safe data on component load
+  useEffect(() => {
+    // Ensure we have basic rate data for the initial load
+    const preparedData = {
+      ...data,
+      occurrences: data.occurrences?.map(occ => ({
+        ...occ,
+        rates: occ.rates || {
+          base_rate: 0,
+          additional_animal_rate: 0,
+          applies_after: 1,
+          holiday_rate: 0,
+          holiday_days: 0,
+          additional_rates: []
+        }
+      }))
+    };
+    setSafeInitialData(preparedData);
+  }, [data]);
+
   const getIcon = () => {
     switch (type) {
       case 'request':
@@ -92,6 +115,60 @@ const BookingMessageCard = ({
         onApproveError(error.response?.data?.error || 'Failed to approve booking');
       }
     }
+  };
+
+  const handleOpenApprovalModal = () => {
+    // Use the modal for approval type cards
+    if (type === 'approval') {
+      if (!safeInitialData) {
+        // If safeInitialData isn't ready yet, create it now
+        const tempData = {
+          ...data,
+          occurrences: data.occurrences?.map(occ => ({
+            ...occ,
+            rates: occ.rates || {
+              base_rate: 0,
+              additional_animal_rate: 0,
+              applies_after: 1,
+              holiday_rate: 0,
+              holiday_days: 0,
+              additional_rates: []
+            }
+          })) || []
+        };
+        setSafeInitialData(tempData);
+      }
+      
+      debugLog('MBA9876 Opening approval modal with booking ID:', data.booking_id);
+      setApprovalModalVisible(true);
+    } else {
+      // For other types, use the onPress callback
+      if (onPress) {
+        onPress();
+      }
+    }
+  };
+
+  const handleApprovalSuccess = (response) => {
+    if (onApproveSuccess) {
+      onApproveSuccess(response);
+    }
+  };
+
+  const handleApprovalError = (error) => {
+    if (onApproveError) {
+      onApproveError(error);
+    }
+  };
+
+  const handleRequestChangesSuccess = (response) => {
+    debugLog('MBA9999 Change request submitted successfully:', response);
+    // Any additional handling can be added here
+  };
+
+  const handleRequestChangesError = (error) => {
+    debugLog('MBA9999 Error submitting change request:', error);
+    // Any additional error handling can be added here
   };
 
   // Format a date/time range for an occurrence using the time_utils function
@@ -247,7 +324,7 @@ const BookingMessageCard = ({
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
               style={styles.detailsButton}
-              onPress={onPress}
+              onPress={handleOpenApprovalModal}
             >
               <Text style={styles.detailsButtonText}>Review Details</Text>
             </TouchableOpacity>
@@ -272,6 +349,18 @@ const BookingMessageCard = ({
           </View>
         </View>
       </View>
+
+      {/* Approval Modal */}
+      <BookingApprovalModal
+        visible={approvalModalVisible}
+        onClose={() => setApprovalModalVisible(false)}
+        bookingId={data.booking_id}
+        onApproveSuccess={handleApprovalSuccess}
+        onApproveError={handleApprovalError}
+        onRequestChangesSuccess={handleRequestChangesSuccess}
+        onRequestChangesError={handleRequestChangesError}
+        initialData={safeInitialData}
+      />
     </View>
   );
 };

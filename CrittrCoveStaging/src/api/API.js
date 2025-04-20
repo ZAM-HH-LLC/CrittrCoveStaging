@@ -131,6 +131,73 @@ export const approveBooking = async (bookingId) => {
   }
 };
 
+/**
+ * Get detailed booking information by ID
+ * @param {string|number} bookingId - ID of the booking to retrieve
+ * @returns {Promise<Object>} - Detailed booking information
+ */
+export const getBookingDetails = async (bookingId) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    debugLog('MBA88899', 'Fetching booking details for ID:', bookingId);
+
+    const response = await axios.get(
+      `${API_BASE_URL}/api/bookings/v1/${bookingId}/details/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA88899', 'Booking details fetched successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA88899', 'Error fetching booking details:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Request changes to a booking
+ * @param {string|number} bookingId - ID of the booking to request changes for
+ * @param {string} message - Message explaining the requested changes
+ * @returns {Promise<Object>} - Response from the API
+ */
+export const requestBookingChanges = async (bookingId, message) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    debugLog('MBA88899 Requesting changes for booking ID:', bookingId);
+    debugLog('MBA88899 Change request message:', message);
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/api/bookings/v1/${bookingId}/request-changes/`,
+      { message },
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA88899 Change request submitted successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA88899 Error requesting booking changes:', error);
+    throw error;
+  }
+};
+
 export const updateBookingDraftPetsAndServices = async (draftId, data) => {
   try {
     const token = await getStorage('userToken');

@@ -26,8 +26,26 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
   useEffect(() => {
     debugLog('MBA54321 ReviewAndRatesCard received bookingData:', bookingData);
     debugLog('MBA54321 ReviewAndRatesCard received bookingId:', bookingId);
-    if (bookingData?.occurrences?.[0]?.rates) {
-      setEditedRates({ ...bookingData.occurrences[0].rates });
+    
+    if (bookingData?.occurrences?.[0]) {
+      // Create a safe default rates object
+      const defaultRates = {
+        base_rate: 0,
+        additional_animal_rate: 0,
+        applies_after: 1,
+        holiday_rate: 0,
+        holiday_days: 0,
+        additional_rates: []
+      };
+      
+      // Get the occurrence
+      const occurrence = bookingData.occurrences[0];
+      
+      // Use the existing rates or default to our safe defaults
+      const safeRates = occurrence.rates || defaultRates;
+      
+      // Initialize edited rates
+      setEditedRates({ ...safeRates });
     }
   }, [bookingData, bookingId]);
 
@@ -317,6 +335,19 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
 
     debugLog('MBA54321 Formatted date range:', formattedDateRange);
 
+    // Initialize rates object if it doesn't exist
+    if (!occurrence.rates) {
+      debugLog('MBA54321 occurrence.rates is undefined, initializing with defaults');
+      occurrence.rates = {
+        base_rate: 0,
+        additional_animal_rate: 0,
+        applies_after: 1,
+        holiday_rate: 0,
+        holiday_days: 0,
+        additional_rates: []
+      };
+    }
+
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeaderContainer}>
@@ -345,7 +376,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
               <View style={styles.breakdownLabelContainer}>
                 <View style={styles.rateNameAmountRow}>
                   <Text style={styles.breakdownLabel}>
-                    Base Rate ({occurrence.unit_of_time})
+                    Base Rate ({occurrence.unit_of_time || 'visit'})
                   </Text>
                   {isEditMode ? (
                     <View style={styles.amountInputContainer}>
@@ -361,17 +392,17 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
                 </View>
                 {!isEditMode && (
                   <Text style={styles.breakdownCalculation}>
-                    {occurrence.multiple} × {formatCurrency(occurrence.rates.base_rate)} = {formatCurrency(occurrence.base_total)}
+                    {occurrence.multiple || 1} × {formatCurrency(occurrence.rates?.base_rate || 0)} = {formatCurrency(occurrence.base_total || occurrence.rates?.base_rate || 0)}
                   </Text>
                 )}
               </View>
               {!isEditMode && (
-                <Text style={styles.breakdownAmount}>{formatCurrency(occurrence.base_total)}</Text>
+                <Text style={styles.breakdownAmount}>{formatCurrency(occurrence.base_total || occurrence.rates?.base_rate || 0)}</Text>
               )}
             </View>
             
             {/* Additional Animal Rate */}
-            {occurrence?.rates?.additional_animal_rate && occurrence.rates.applies_after < bookingData.pets.length && (
+            {occurrence.rates?.additional_animal_rate && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) && (
               <View style={styles.breakdownItem}>
                 <View style={styles.breakdownLabelContainer}>
                   <View style={styles.rateNameAmountRow}>
@@ -387,27 +418,30 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
                           value={editedRates?.additional_animal_rate?.toString() || '0'}
                           onChangeText={updateAdditionalAnimalRate}
                         />
-                        <Text style={styles.inputLabel}> / pet / {occurrence.unit_of_time}</Text>
+                        <Text style={styles.inputLabel}> / pet / {occurrence.unit_of_time || 'visit'}</Text>
                       </View>
                     ) : null}
                   </View>
                   {!isEditMode && (
                     <Text style={styles.breakdownCalculation}>
-                      ${occurrence.rates.additional_animal_rate} / pet / {occurrence.unit_of_time}
+                      ${occurrence.rates?.additional_animal_rate || 0} / pet / {occurrence.unit_of_time || 'visit'}
                     </Text>
                   )}
                 </View>
                 {!isEditMode && (
                   <Text style={styles.breakdownAmount}>
-                    {occurrence.rates.applies_after < bookingData.pets.length ? '+' : ''}{occurrence.rates.applies_after < bookingData.pets.length ? formatCurrency(occurrence.rates.additional_animal_rate_total || occurrence.rates.additional_animal_rate) : 'NA'}
+                    {(occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0)) ? '+' : ''}
+                    {(occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0)) 
+                      ? formatCurrency(occurrence.rates?.additional_animal_rate_total || occurrence.rates?.additional_animal_rate || 0) 
+                      : 'NA'}
                   </Text>
                 )}
               </View>
             )}
             
             {/* Holiday Rate */}
-            {occurrence?.rates?.holiday_rate && occurrence.rates.holiday_days > 0 && (
-              <View style={[styles.breakdownItem, { borderBottomWidth: occurrence.rates?.additional_rates?.length > 0 || isAddingRate ? 1 : 0 }]}>
+            {occurrence.rates?.holiday_rate && occurrence.rates?.holiday_days && occurrence.rates.holiday_days > 0 && (
+              <View style={[styles.breakdownItem, { borderBottomWidth: (occurrence.rates?.additional_rates?.length > 0 || isAddingRate) ? 1 : 0 }]}>
                 <View style={styles.breakdownLabelContainer}>
                   <View style={styles.rateNameAmountRow}>
                     <Text style={styles.breakdownLabel}>
@@ -422,19 +456,20 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
                           value={editedRates?.holiday_rate?.toString() || '0'}
                           onChangeText={updateHolidayRate}
                         />
-                        <Text style={styles.inputLabel}> × {occurrence.rates.holiday_days} {occurrence.rates?.holiday_days !== 1 ? 'holidays' : 'holiday'}</Text>
+                        <Text style={styles.inputLabel}> × {occurrence.rates?.holiday_days || 0} {occurrence.rates?.holiday_days !== 1 ? 'holidays' : 'holiday'}</Text>
                       </View>
                     ) : null}
                   </View>
                   {!isEditMode && (
                     <Text style={styles.breakdownCalculation}>
-                      {formatCurrency(occurrence.rates.holiday_rate)} × {occurrence.rates.holiday_days} {occurrence.rates?.holiday_days !== 1 ? 'holidays' : 'holiday'}
+                      {formatCurrency(occurrence.rates?.holiday_rate || 0)} × {occurrence.rates?.holiday_days || 0} {occurrence.rates?.holiday_days !== 1 ? 'holidays' : 'holiday'}
                     </Text>
                   )}
                 </View>
                 {!isEditMode && (
                   <Text style={styles.breakdownAmount}>
-                    {occurrence.rates.holiday_days ? '+' : ''}{occurrence.rates.holiday_days ? formatCurrency(occurrence.rates.holiday_rate_total || occurrence.rates.holiday_rate) : 'NA'}
+                    {occurrence.rates?.holiday_days ? '+' : ''}
+                    {occurrence.rates?.holiday_days ? formatCurrency(occurrence.rates?.holiday_rate_total || occurrence.rates?.holiday_rate || 0) : 'NA'}
                   </Text>
                 )}
               </View>
@@ -549,8 +584,21 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId }) => {
 
   const renderTotalAmount = () => {
     debugLog('MBA54321 Rendering total amount with data:', bookingData?.cost_summary);
-    const costSummary = bookingData?.cost_summary;
-    if (!costSummary) return null;
+    
+    // Create default cost summary in case it's missing
+    const defaultCostSummary = {
+      subtotal: 0,
+      client_platform_fee: 0,
+      pro_platform_fee: 0,
+      taxes: 0,
+      tax_state: '',
+      total_client_cost: 0,
+      total_sitter_payout: 0,
+      pro_subscription_plan: 0
+    };
+    
+    // Use the actual cost summary or our default
+    const costSummary = bookingData?.cost_summary || defaultCostSummary;
 
     return (
       <View style={styles.section}>
