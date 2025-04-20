@@ -115,171 +115,7 @@ class BookingListView(APIView):
             },
             'next_page': None  # Since we're not paginating the separated lists
         })
-
-class BookingDetailView(generics.RetrieveAPIView):
-    queryset = Booking.objects.all()
-    serializer_class = BookingDetailSerializer
-    permission_classes = [IsAuthenticated]
-    lookup_field = 'booking_id'
-    lookup_url_kwarg = 'booking_id'
-    renderer_classes = [JSONRenderer]
-
-    def initial(self, request, *args, **kwargs):
-        """This runs before anything else in the view"""
-        logger.info("="*50)
-        logger.info("BOOKING DETAIL REQUEST RECEIVED")
-        logger.info(f"URL: {request.build_absolute_uri()}")
-        logger.info(f"Method: {request.method}")
-        logger.info(f"User: {request.user.email}")
-        logger.info(f"Booking ID: {kwargs.get('booking_id')}")
-        logger.info("="*50)
-        
-        # Now let's check if the booking exists in the database
-        try:
-            booking = Booking.objects.get(booking_id=kwargs.get('booking_id'))
-            logger.info(f"Booking found in database: {booking.booking_id}")
-            logger.info(f"Booking client: {booking.client.user.email if booking.client else 'None'}")
-            logger.info(f"Booking professional: {booking.professional.user.email if booking.professional else 'None'}")
-        except Booking.DoesNotExist:
-            logger.error(f"Booking {kwargs.get('booking_id')} does not exist in database")
-        except Exception as e:
-            logger.error(f"Error checking booking: {str(e)}")
-        
-        super().initial(request, *args, **kwargs)
-
-    def get_queryset(self):
-        logger.info("Building queryset for booking lookup")
-        queryset = Booking.objects.select_related(
-            'service_id',
-            'client',
-            'professional',
-            'bookingsummary'
-        ).prefetch_related(
-            'booking_pets__pet',
-            'occurrences',
-            'occurrences__rates'
-        )
-        logger.info(f"Base queryset SQL: {str(queryset.query)}")
-        return queryset
-
-    def get_object(self):
-        try:
-            booking_id = self.kwargs.get('booking_id')
-            logger.info(f"Attempting to fetch booking with ID: {booking_id}")
-            logger.info(f"Current user: {self.request.user.email}")
-            
-            # Get the booking
-            queryset = self.get_queryset()
-            booking = queryset.get(booking_id=booking_id)
-            logger.info(f"Found booking: {booking.booking_id}")
-            logger.info(f"Client: {booking.client.user.email if booking.client else 'None'}")
-            logger.info(f"Professional: {booking.professional.user.email if booking.professional else 'None'}")
-            
-            # Check if user has permission to view this booking
-            user = self.request.user
-            if not (user == booking.client.user or user == booking.professional.user):
-                logger.error(f"User {user.email} not authorized to view booking {booking_id}")
-                raise PermissionError("Not authorized to view this booking")
-            
-            return booking
-            
-        except Booking.DoesNotExist:
-            logger.error(f"Booking {booking_id} not found in database")
-            raise
-        except Exception as e:
-            logger.error(f"Error in get_object: {str(e)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            raise
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['is_prorated'] = self.request.query_params.get('is_prorated', 'true').lower() == 'true'
-        
-        # Add user role context
-        user = self.request.user
-        try:
-            professional = Professional.objects.get(user=user)
-            context['is_professional'] = True
-            context['professional'] = professional
-            logger.info(f"User {user.email} is a professional")
-        except Professional.DoesNotExist:
-            context['is_professional'] = False
-            context['professional'] = None
-            logger.info(f"User {user.email} is not a professional")
-        
-        return context
-
-    def retrieve(self, request, *args, **kwargs):
-        try:
-            logger.info(f"Retrieving booking with ID: {kwargs.get('booking_id')}")
-            logger.info(f"Request user: {request.user.email}")
-            
-            instance = self.get_object()
-            logger.info(f"Found booking: {instance.booking_id}")
-            
-            context = self.get_serializer_context()
-            logger.info(f"Context: {context}")
-            
-            # If user is a professional, check for draft
-            if context.get('is_professional') and context.get('professional') == instance.professional:
-                try:
-                    draft = BookingDraft.objects.get(booking=instance)
-                    if draft.draft_data:
-                        logger.info(f"Found draft data for booking {instance.booking_id}")
-                        # Use draft data for response
-                        draft_data = draft.draft_data
-                        
-                        # Set original status on instance for serializer
-                        if draft.original_status:
-                            instance.original_status = draft.original_status
-                        
-                        # Create serializer with instance
-                        serializer = self.get_serializer(instance, context=context)
-                        data = serializer.data
-                        
-                        # Override fields from draft data
-                        if 'status' in draft_data:
-                            data['status'] = draft_data['status']
-                        if 'service_details' in draft_data:
-                            data['service_details'] = draft_data['service_details']
-                        if 'pets' in draft_data:
-                            data['pets'] = draft_data['pets']
-                        if 'occurrences' in draft_data:
-                            data['occurrences'] = draft_data['occurrences']
-                        if 'cost_summary' in draft_data:
-                            data['cost_summary'] = draft_data['cost_summary']
-                        
-                        return Response(data)
-                except BookingDraft.DoesNotExist:
-                    logger.info("No draft found for booking")
-                    pass
-            
-            # If no draft or user is client, return original booking data
-            serializer = self.get_serializer(instance, context=context)
-            data = serializer.data
-            logger.info(f"Returning booking data: {data}")
-            return Response(data)
-            
-        except PermissionError as e:
-            logger.error(f"Permission denied: {str(e)}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        except Booking.DoesNotExist:
-            logger.error(f"Booking with ID {kwargs.get('booking_id')} not found")
-            return Response(
-                {"error": f"Booking with ID {kwargs.get('booking_id')} not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            logger.error(f"Error retrieving booking: {str(e)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            return Response(
-                {"error": "An error occurred while retrieving the booking"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
+    
 class BookingUpdatePetsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1208,20 +1044,39 @@ class UpdateBookingView(APIView):
                     booking_details = BookingDetails.objects.filter(booking_occurrence=occurrence).first()
                     occurrence_rates = BookingOccurrenceRate.objects.filter(occurrence=occurrence).first()
                     
-                    # Build the occurrence data structure
+                    # Safely access the rates field
+                    additional_rates = []
+                    if occurrence_rates:
+                        try:
+                            additional_rates = occurrence_rates.rates
+                        except Exception as e:
+                            logger.error(f"Error accessing rates for occurrence {occurrence.occurrence_id}: {str(e)}")
+                    
+                    # Combine date and time for timezone conversion
+                    start_dt = datetime.combine(occurrence.start_date, occurrence.start_time).replace(tzinfo=pytz.UTC)
+                    end_dt = datetime.combine(occurrence.end_date, occurrence.end_time).replace(tzinfo=pytz.UTC)
+                    
+                    # Convert to user's timezone
+                    start_dt_local = start_dt.astimezone(user_tz)
+                    end_dt_local = end_dt.astimezone(user_tz)
+                    
+                    # Format the occurrence data
                     occurrence_data = {
                         'occurrence_id': occurrence.occurrence_id,
                         'start_date': occurrence.start_date.strftime('%Y-%m-%d'),
                         'end_date': occurrence.end_date.strftime('%Y-%m-%d'),
                         'start_time': occurrence.start_time.strftime('%H:%M'),
                         'end_time': occurrence.end_time.strftime('%H:%M'),
+                        'status': occurrence.status,
+                        'calculated_cost': str(occurrence.calculated_cost),
+                        'formatted_times': format_booking_occurrence(start_dt, end_dt, request.user.id),
                         'rates': {
-                            'base_rate': str(booking_details.base_rate) if booking_details else '0',
-                            'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0',
+                            'base_rate': str(booking_details.base_rate) if booking_details else '0.00',
+                            'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0.00',
                             'applies_after': booking_details.applies_after if booking_details else 1,
-                            'holiday_rate': str(booking_details.holiday_rate) if booking_details else '0',
+                            'holiday_rate': str(booking_details.holiday_rate) if booking_details else '0.00',
                             'unit_of_time': booking_details.unit_of_time if booking_details else 'Per Visit',
-                            'additional_rates': occurrence_rates.rates if occurrence_rates else []
+                            'additional_rates': additional_rates
                         }
                     }
                     occurrences.append(occurrence_data)
@@ -1884,7 +1739,7 @@ class ConnectionsView(APIView):
                             {
                                 'pet_id': pet.pet_id,
                                 'name': pet.name,
-                                'type': pet.species,
+                                'species': pet.species,
                                 'breed': pet.breed,
                                 'age': f"{pet.age_years or 0} years, {pet.age_months or 0} months"
                             } for pet in pets
@@ -2050,4 +1905,138 @@ class ConnectionsView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
+class BookingDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, booking_id):
+        """Get simplified booking details"""
+        logger.info(f"BookingDetailView called with booking_id={booking_id}")
+        
+        try:
+            # Get the booking and verify access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            
+            # Check if user has permission to view this booking
+            if not (request.user == booking.client.user or request.user == booking.professional.user):
+                return Response(
+                    {"error": "Not authorized to view this booking"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+                
+            # Get booking summary
+            booking_summary = BookingSummary.objects.filter(booking=booking).first()
+            
+            # Get booking pets
+            booking_pets = BookingPets.objects.filter(booking=booking).select_related('pet')
+            
+            # Get booking occurrences with details and rates
+            occurrences = BookingOccurrence.objects.filter(booking=booking)
+            
+            # Format service details - simplified
+            service_details = {
+                'service_id': booking.service_id.service_id,
+                'service_type': booking.service_id.service_name,
+            }
+            
+            # Format pets - simplified
+            pets_data = []
+            for booking_pet in booking_pets:
+                pet = booking_pet.pet
+                pets_data.append({
+                    'pet_id': pet.pet_id,
+                    'name': pet.name,
+                    'species': pet.species,
+                    'breed': getattr(pet, 'breed', None),
+                })
+            
+            # Format occurrences - simplified
+            occurrences_data = []
+            for occurrence in occurrences:
+                # Get booking details for this occurrence
+                booking_details = BookingDetails.objects.filter(booking_occurrence=occurrence).first()
+                
+                # Get occurrence rates
+                occurrence_rates = BookingOccurrenceRate.objects.filter(occurrence=occurrence).first()
+                
+                # Safely access the rates field
+                additional_rates = []
+                if occurrence_rates:
+                    try:
+                        additional_rates = occurrence_rates.rates
+                    except Exception as e:
+                        logger.error(f"Error accessing rates for occurrence {occurrence.occurrence_id}: {str(e)}")
+                
+                # Format the occurrence data - simplified
+                occurrence_data = {
+                    'occurrence_id': occurrence.occurrence_id,
+                    'start_date': occurrence.start_date.strftime('%Y-%m-%d'),
+                    'end_date': occurrence.end_date.strftime('%Y-%m-%d'),
+                    'start_time': occurrence.start_time.strftime('%H:%M'),
+                    'end_time': occurrence.end_time.strftime('%H:%M'),
+                    'calculated_cost': str(occurrence.calculated_cost),
+                    'rates': {
+                        'base_rate': str(booking_details.base_rate) if booking_details else '0.00',
+                        'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0.00',
+                        'applies_after': booking_details.applies_after if booking_details else 1,
+                        'holiday_rate': str(booking_details.holiday_rate) if booking_details else '0.00',
+                        'unit_of_time': booking_details.unit_of_time if booking_details else 'Per Visit',
+                        'additional_rates': additional_rates
+                    }
+                }
+                occurrences_data.append(occurrence_data)
+            
+            # Format cost summary - simplified
+            cost_summary = {}
+            if booking_summary:
+                cost_summary = {
+                    'subtotal': str(booking_summary.subtotal),
+                    'client_platform_fee': str(booking_summary.client_platform_fee),
+                    'pro_platform_fee': str(booking_summary.pro_platform_fee),
+                    'taxes': str(booking_summary.taxes),
+                    'client_platform_fee_percentage': str(booking_summary.client_platform_fee_percentage),
+                    'pro_platform_fee_percentage': str(booking_summary.pro_platform_fee_percentage),
+                    'total_client_cost': str(booking_summary.total_client_cost),
+                    'total_sitter_payout': str(booking_summary.total_sitter_payout)
+                }
+            
+            # Determine if user can edit the booking
+            can_edit = booking.status in [
+                BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
+                BookingStates.PENDING_PROFESSIONAL_CHANGES,
+                BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+            ] and request.user == booking.professional.user
+            
+            # Create the simplified response
+            response_data = {
+                'booking_id': booking.booking_id,
+                'owner_id': booking.client.user.id,
+                'owner_name': booking.client.user.name,
+                'professional_id': booking.professional.professional_id,
+                'professional_name': booking.professional.user.name,
+                'service_details': service_details,
+                'pets': pets_data,
+                'occurrences': occurrences_data,
+                'cost_summary': cost_summary,
+                'status': BookingStates.get_display_state(booking.status),
+                'can_edit': can_edit
+            }
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            logger.error(f"Error fetching booking details: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Log the error
+            ErrorLog.objects.create(
+                user=request.user,
+                error_message=str(e),
+                endpoint=f'/api/bookings/v1/{booking_id}/details/',
+                metadata={'booking_id': booking_id}
+            )
+            
+            return Response(
+                {"error": "Failed to fetch booking details"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
