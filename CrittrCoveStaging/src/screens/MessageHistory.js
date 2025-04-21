@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, SafeAreaVie
 import { Button, Card, Paragraph, useTheme, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons'; // Import the icon library
 import { theme } from '../styles/theme';
-import { AuthContext, getStorage } from '../context/AuthContext';
+import { AuthContext, getStorage, debugLog } from '../context/AuthContext';
 import RequestBookingModal from '../components/RequestBookingModal';
 import BookingStepModal from '../components/BookingStepModal';
 import { createBooking, BOOKING_STATES, mockConversations, mockMessages, CURRENT_USER_ID } from '../data/mockData';
@@ -1192,10 +1192,32 @@ const MessageHistory = ({ navigation, route }) => {
   };
 
   const renderMessage = useCallback(({ item }) => {
+    // Create a map to keep track of which bookings have change requests
+    // This is defined outside the component to persist between renders
+    if (!renderMessage.changeRequestMap) {
+      renderMessage.changeRequestMap = new Map();
+
+      // Initialize the map with booking IDs that have change requests
+      messages.forEach(msg => {
+        if (msg.type_of_message === 'request_changes' && msg.metadata?.booking_id) {
+          renderMessage.changeRequestMap.set(msg.metadata.booking_id, true);
+        }
+      });
+    }
+
+    // Update the map when we encounter a change request
+    if (item.type_of_message === 'request_changes' && item.metadata?.booking_id) {
+      renderMessage.changeRequestMap.set(item.metadata.booking_id, true);
+    }
+
     // Handle booking messages (both requests and approvals)
     if (item.type_of_message === 'initial_booking_request' || 
         item.type_of_message === 'send_approved_message') {
       const isFromMe = !item.sent_by_other_user;
+
+      // Check if this booking has a change request
+      const bookingId = item.metadata?.booking_id;
+      const hasChangeRequest = bookingId ? renderMessage.changeRequestMap.has(bookingId) : false;
 
       // Safely get total owner cost
       const totalOwnerCost = item.metadata?.cost_summary?.total_owner_cost || 
@@ -1210,7 +1232,8 @@ const MessageHistory = ({ navigation, route }) => {
           service_type: item.metadata?.service_type,
           totalOwnerCost,
           userTimezone: timeSettings.timezone,
-          occurrences: item.metadata.occurrences
+          occurrences: item.metadata.occurrences,
+          hasChangeRequest
         });
       }
 
@@ -1255,6 +1278,70 @@ const MessageHistory = ({ navigation, route }) => {
             Alert.alert('Error', error || 'Failed to approve booking');
           }}
           onEditDraft={showEditDraft ? () => handleEditDraft(item.metadata.draft_id) : undefined}
+          bookingStatus={item.metadata?.booking_status}
+          hasChangeRequest={hasChangeRequest}
+        />
+      );
+    }
+
+    if (item.type_of_message === 'request_changes') {
+      const isFromMe = !item.sent_by_other_user;
+      
+      // Get booking details from metadata
+      const bookingId = item.metadata?.booking_id;
+      const serviceType = item.metadata?.service_type;
+      const bookingStatus = item.metadata?.booking_status;
+      
+      // Log for debugging
+      debugLog('MBA88899 Rendering change request message:', {
+        bookingId,
+        isFromMe,
+        content: item.content,
+        metadata: item.metadata
+      });
+      
+      return (
+        <BookingMessageCard
+          type="request_changes"
+          data={{
+            ...item.metadata,
+            booking_id: bookingId,
+            service_type: serviceType,
+            cost_summary: item.metadata?.cost_summary || {},
+            occurrences: item.metadata?.occurrences || [],
+            content: item.content // Include the message content for display
+          }}
+          isFromMe={isFromMe}
+          onPress={() => {
+            // Navigate to booking details if we have a booking_id
+            if (bookingId) {
+              navigation.navigate('BookingDetails', { 
+                bookingId: bookingId,
+                from: 'MessageHistory'
+              });
+            }
+          }}
+          isProfessional={selectedConversationData?.is_professional}
+          onApproveSuccess={(response) => {
+            if (response && response.status) {
+              Alert.alert('Success', 'Changes handled successfully');
+              fetchMessages(selectedConversation, 1);
+            }
+          }}
+          onApproveError={(error) => {
+            Alert.alert('Error', error || 'Failed to process changes');
+          }}
+          onEditDraft={() => {
+            // Navigate to edit booking if professional
+            if (selectedConversationData?.is_professional && bookingId) {
+              navigation.navigate('EditBooking', { 
+                bookingId: bookingId,
+                from: 'MessageHistory'
+              });
+            }
+          }}
+          bookingStatus={bookingStatus}
+          hasChangeRequest={false} // Change request message itself doesn't need an overlay
         />
       );
     }
@@ -1278,7 +1365,7 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
       </View>
     );
-  }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages]);
+  }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages, messages]);
 
   const WebInput = () => {
     const [message, setMessage] = useState('');

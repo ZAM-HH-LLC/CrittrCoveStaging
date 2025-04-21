@@ -1264,6 +1264,143 @@ class ApproveBookingView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class RequestBookingChangesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, booking_id):
+        """
+        Create a change request message for a booking.
+        
+        This endpoint:
+        1. Validates user access to the booking
+        2. Gets or creates a conversation between the client and professional
+        3. Creates a message with the requested changes
+        4. Updates the booking status if needed
+        5. Returns success response with message details
+        """
+        logger.info(f"MBA88899 Starting RequestBookingChangesView.post for booking {booking_id}")
+        sid = transaction.savepoint()  # Create savepoint for rollback
+        
+        try:
+            # Get the booking and verify access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            
+            # Check if user has permission to view this booking
+            if not (request.user == booking.client.user or request.user == booking.professional.user):
+                return Response(
+                    {"error": "Not authorized to request changes for this booking"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Get the change request message from the request
+            message_text = request.data.get('message')
+            if not message_text or not message_text.strip():
+                return Response(
+                    {"error": "Change request message cannot be empty"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"MBA88899 Change request message: {message_text}")
+            
+            # Determine if user is client or professional
+            is_client = request.user == booking.client.user
+            user_role = 'client' if is_client else 'professional'
+            other_user = booking.professional.user if is_client else booking.client.user
+            
+            # Find or create a conversation between these users
+            conversation, is_professional = find_or_create_conversation(
+                request.user, 
+                other_user, 
+                user_role
+            )
+            
+            logger.info(f"MBA88899 Using conversation {conversation.conversation_id}")
+            
+            # Create a message with change request type
+            change_request_message = UserMessage.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                content=message_text,
+                type_of_message='request_changes',
+                is_clickable=True,
+                status='sent',
+                booking=booking,
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'service_type': booking.service_id.service_name,
+                    'requested_by': user_role,
+                    'timestamp': timezone.now().isoformat(),
+                    'cost_summary': {
+                        'total_client_cost': str(booking.bookingsummary.total_client_cost) if hasattr(booking, 'bookingsummary') else '0.00',
+                        'total_sitter_payout': str(booking.bookingsummary.total_sitter_payout) if hasattr(booking, 'bookingsummary') else '0.00'
+                    }
+                }
+            )
+            
+            logger.info(f"MBA88899 Created message {change_request_message.message_id}")
+            
+            # Update booking status based on who is requesting changes
+            previous_status = booking.status
+            
+            if is_client:
+                # Client requesting changes from the professional
+                if booking.status in [BookingStates.PENDING_CLIENT_APPROVAL, BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL]:
+                    # Client is responding to professional's proposal with requested changes
+                    booking.status = BookingStates.PENDING_PROFESSIONAL_CHANGES
+                    booking.save()
+                # If already confirmed, don't change status - will be handled by professional
+            else:
+                # Professional requesting changes from the client
+                if booking.status in [BookingStates.CONFIRMED, BookingStates.PENDING_PROFESSIONAL_CHANGES]:
+                    # Professional is requesting changes to a confirmed booking
+                    booking.status = BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL
+                    booking.save()
+            
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_CHANGE_REQUESTED',
+                target_type='BOOKING',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'previous_status': previous_status,
+                    'new_status': booking.status,
+                    'message': message_text,
+                    'requested_by': user_role
+                }
+            )
+            
+            # Commit the transaction
+            transaction.savepoint_commit(sid)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Change request submitted successfully',
+                'message_id': change_request_message.message_id,
+                'conversation_id': conversation.conversation_id,
+                'booking_status': BookingStates.get_display_state(booking.status)
+            })
+            
+        except Exception as e:
+            transaction.savepoint_rollback(sid)
+            logger.error(f"MBA88899 Error requesting booking changes: {str(e)}")
+            logger.error(f"MBA88899 Full traceback: {traceback.format_exc()}")
+            
+            # Log the error
+            ErrorLog.objects.create(
+                user=request.user,
+                error_message=str(e),
+                endpoint=f'/api/bookings/v1/{booking_id}/request-changes/',
+                metadata={'booking_id': booking_id}
+            )
+            
+            return Response(
+                {"error": "An error occurred while requesting booking changes"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 class CreateFromDraftView(APIView):
     permission_classes = [IsAuthenticated]
     
