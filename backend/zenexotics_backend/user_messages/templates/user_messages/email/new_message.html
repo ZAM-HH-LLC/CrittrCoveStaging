@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ message_type }} from {{ sender_name }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.5; color: #000000; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+        <tr>
+            <td style="padding: 20px; text-align: center; background-color: #e7f2f2;">
+                <h1 style="color: #008080; margin: 0;">CrittrCove</h1>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 30px 20px; color: #000000;">
+                <p style="color: #000000;">Hello {{ recipient_name }},</p>
+                <p style="color: #000000;"><strong>{{ sender_name }}</strong> has sent you a {{ message_type_display | lower }}.</p>
+                
+                {% if 'normal_message' in message_type %}
+                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="color: #000000; margin: 0; font-style: italic;">{{ message_preview }}</p>
+                </div>
+                {% else %}
+                <p style="color: #000000;">This message requires your attention in the CrittrCove app.</p>
+                {% endif %}
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{{ frontend_url }}" style="background-color: #008080; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px; font-weight: bold;">View Message</a>
+                </div>
+                
+                <p style="color: #000000;">If the button above doesn't work, copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 12px; color: #000000;">{{ frontend_url }}</p>
+                
+                <p style="color: #000000;">Thank you,<br>The CrittrCove Team</p>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 20px; text-align: center; background-color: #f5f5f5; font-size: 12px; color: #666;">
+                <p style="color: #666;">If you prefer not to receive email notifications, you can update your preferences in your account settings.</p>
+                <p style="color: #666;">&copy; 2025 CrittrCove. All rights reserved.</p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html> 

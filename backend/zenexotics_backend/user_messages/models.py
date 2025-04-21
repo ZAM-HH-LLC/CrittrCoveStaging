@@ -35,3 +35,35 @@ class UserMessage(models.Model):
 
     def __str__(self):
         return f'Message from {self.sender} at {self.timestamp}'
+
+
+class MessageMetrics(models.Model):
+    """
+    Model to track performance metrics for messaging
+    """
+    DELIVERY_STATUS_CHOICES = [
+        ('websocket_sent', 'WebSocket Sent'),
+        ('websocket_received', 'WebSocket Received'),
+        ('email_sent', 'Email Sent'),
+        ('email_delivered', 'Email Delivered'),
+        ('email_opened', 'Email Opened'),
+        ('read', 'Message Read'),
+        ('failed', 'Delivery Failed'),
+    ]
+    
+    id = models.AutoField(primary_key=True)
+    message = models.ForeignKey(UserMessage, on_delete=models.CASCADE, related_name='metrics')
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE)
+    delivery_status = models.CharField(max_length=20, choices=DELIVERY_STATUS_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    delivery_latency = models.FloatField(null=True, blank=True, help_text='Delivery time in milliseconds')
+    is_recipient_online = models.BooleanField(default=False)
+    client_info = models.JSONField(null=True, blank=True, help_text='Client browser/device info')
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Message Metric'
+        verbose_name_plural = 'Message Metrics'
+        
+    def __str__(self):
+        return f'Metric for message {self.message_id} - {self.delivery_status}'

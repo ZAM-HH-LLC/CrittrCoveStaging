@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useContext } from 'react';
 import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StatusBar, TextInput, Text, TouchableOpacity, Dimensions, Alert, Image } from 'react-native';
-import { Button, Card, Paragraph, useTheme, ActivityIndicator } from 'react-native-paper';
+import { Button, Card, Paragraph, useTheme, ActivityIndicator, Badge } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons'; // Import the icon library
 import { theme } from '../styles/theme';
 import { AuthContext, getStorage, debugLog } from '../context/AuthContext';
@@ -16,6 +16,7 @@ import { navigateToFrom } from '../components/Navigation';
 import BookingMessageCard from '../components/BookingMessageCard';
 import { formatOccurrenceFromUTC } from '../utils/time_utils';
 import DraftConfirmationModal from '../components/DraftConfirmationModal';
+import useWebSocket from '../hooks/useWebSocket';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
@@ -418,6 +419,11 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     textAlign: 'center',
     fontFamily: theme.fonts.header.fontFamily,
   },
+  mobileHeaderNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   backArrow: {
     position: 'absolute',
     left: 16,
@@ -642,6 +648,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [hasDraft, setHasDraft] = useState(false);
   const [draftData, setDraftData] = useState(null);
   const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
+  const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -651,6 +658,133 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add a ref to track if we need to open booking creation
   const shouldOpenBookingCreationRef = useRef(false);
+  
+  // Add a ref for the markMessagesAsRead function that will come from the useWebSocket hook
+  const markMessagesAsReadRef = useRef(null);
+
+  // WebSocket message handler defined as a memoized callback
+  const handleWebSocketMessage = useCallback((data) => {
+    debugLog('MBA3210: Received WebSocket message:', data);
+    
+    try {
+      // Only handle messages for the currently selected conversation
+      if (selectedConversation && data.conversation_id && 
+          String(data.conversation_id) === String(selectedConversation)) {
+        
+        debugLog('MBA3210: Message is for current conversation, adding to list');
+        
+        // Add the new message to the list (at the beginning since FlatList is inverted)
+        setMessages(prevMessages => {
+          // Check if message already exists to avoid duplicates
+          const exists = prevMessages.some(msg => 
+            msg.message_id && data.message_id && 
+            String(msg.message_id) === String(data.message_id)
+          );
+          
+          if (exists) {
+            debugLog('MBA3210: Message already exists in the list, skipping');
+            return prevMessages;
+          }
+          
+          debugLog('MBA3210: Adding new message to list');
+          return [data, ...prevMessages];
+        });
+        
+        // Mark the message as read if we're viewing this conversation
+        if (data.message_id && markMessagesAsReadRef.current) {
+          debugLog('MBA3210: Marking message as read:', data.message_id);
+          markMessagesAsReadRef.current(selectedConversation, [data.message_id]);
+        }
+      } else if (data.conversation_id) {
+        // Update the conversation list for unread messages in other conversations
+        debugLog('MBA3210: Message is for another conversation, updating conversation list');
+        setConversations(prevConversations => 
+          prevConversations.map(conv => 
+            String(conv.conversation_id) === String(data.conversation_id)
+              ? {
+                  ...conv,
+                  last_message: data.content,
+                  last_message_time: data.timestamp,
+                  unread: true
+                }
+              : conv
+          )
+        );
+      }
+    } catch (error) {
+      debugLog('MBA3210: Error handling WebSocket message:', error);
+    }
+  }, [selectedConversation]);
+
+  // Initialize WebSocket with the message handler
+  const { isConnected, connectionStatus, markMessagesAsRead, reconnect, simulateConnection, isUsingFallback } = useWebSocket(
+    'message', 
+    handleWebSocketMessage,
+    { handlerId: 'message-history' }
+  );
+  
+  // Update our ref when markMessagesAsRead changes
+  useEffect(() => {
+    markMessagesAsReadRef.current = markMessagesAsRead;
+  }, [markMessagesAsRead]);
+  
+  // Add a function to manually force reconnection
+  const handleForceReconnect = useCallback(() => {
+    debugLog('MBA3210: User requested manual WebSocket reconnection');
+    if (typeof reconnect === 'function') {
+      reconnect();
+    }
+  }, [reconnect]);
+  
+  // Add a function to simulate connection for testing
+  const handleSimulateConnection = useCallback(() => {
+    debugLog('MBA3210: User requested simulated connection');
+    if (typeof simulateConnection === 'function') {
+      simulateConnection();
+    }
+  }, [simulateConnection]);
+  
+  // Update connection status UI and log more detailed information
+  useEffect(() => {
+    setWsConnectionStatus(connectionStatus);
+    debugLog(`MBA3210: WebSocket connection status changed to ${connectionStatus}`);
+    debugLog(`MBA3210: isConnected state: ${isConnected}`);
+    debugLog(`MBA3210: isUsingFallback: ${isUsingFallback}`);
+    
+    // Add more debug logs to check actual WebSocket readyState
+    if (window && window.WebSocket) {
+      debugLog(`MBA3210: WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
+    }
+    
+    // Force status verification by checking both values
+    if ((connectionStatus === 'connected' && isConnected) || isUsingFallback) {
+      debugLog('MBA3210: Connection fully verified as connected or using fallback');
+      
+      // If it's connected or using fallback, we should force-fetch conversations
+      // to make sure we have the latest data
+      if (!isLoadingConversations && conversations.length === 0) {
+        fetchConversations().then(() => {
+          debugLog('MBA3210: Fetched conversations after connection established');
+        });
+      }
+    } else {
+      debugLog('MBA3210: Connection not fully verified, status and state mismatch');
+      debugLog(`MBA3210: Connection details - status: ${connectionStatus}, isConnected: ${isConnected}`);
+    }
+  }, [connectionStatus, isConnected, isUsingFallback]);
+  
+  // Force reconnection on component mount to ensure connection
+  useEffect(() => {
+    // Short delay to allow other initializations to complete
+    const timer = setTimeout(() => {
+      debugLog('MBA3210: Forcing reconnection on component mount');
+      if (typeof reconnect === 'function') {
+        reconnect();
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [reconnect]);
 
   // Modify the mount effect to handle initial load
   useEffect(() => {
@@ -1399,7 +1533,30 @@ const MessageHistory = ({ navigation, route }) => {
       if (message.trim() && !isSending) {
         setIsSending(true);
         try {
-          await SendNormalMessage(message.trim());
+          // Optimistically add message to UI immediately
+          const optimisticMessage = {
+            message_id: `temp-${Date.now()}`,
+            content: message.trim(),
+            timestamp: new Date().toISOString(),
+            status: 'sent',
+            type_of_message: 'normal_message',
+            is_clickable: false,
+            sent_by_other_user: false
+          };
+          
+          setMessages(prevMessages => [optimisticMessage, ...prevMessages]);
+          
+          // Actually send the message
+          const sentMessage = await SendNormalMessage(message.trim());
+          
+          // Replace optimistic message with actual one
+          setMessages(prevMessages => 
+            prevMessages.map(msg => 
+              msg.message_id === optimisticMessage.message_id ? sentMessage : msg
+            )
+          );
+          
+          // Clear input
           setMessage('');
           if (inputRef.current) {
             inputRef.current.style.height = '24px';
@@ -1407,6 +1564,14 @@ const MessageHistory = ({ navigation, route }) => {
           }
         } catch (error) {
           console.error('Failed to send message:', error);
+          
+          // Remove optimistic message on error
+          setMessages(prevMessages => 
+            prevMessages.filter(msg => !msg.message_id.toString().startsWith('temp-'))
+          );
+          
+          // Show error
+          Alert.alert('Error', 'Failed to send message. Please try again.');
         } finally {
           setIsSending(false);
         }
@@ -1656,6 +1821,30 @@ const MessageHistory = ({ navigation, route }) => {
         <Text style={styles.messageHeaderName}>
           {selectedConversationData?.other_user_name}
         </Text>
+        <TouchableOpacity onPress={handleForceReconnect} style={{ marginLeft: 8 }}>
+          {(isConnected && connectionStatus === 'connected') ? (
+            <Badge
+              size={8}
+              style={{
+                backgroundColor: isUsingFallback ? '#FFC107' : '#4CAF50', // Yellow for fallback, Green for connected
+                marginLeft: 8
+              }}
+            />
+          ) : (
+            <Badge
+              size={8}
+              style={{
+                backgroundColor: '#F44336', // Red for disconnected
+                marginLeft: 8
+              }}
+            />
+          )}
+        </TouchableOpacity>
+        
+        {isUsingFallback && (
+          <Text style={{ fontSize: 10, color: '#FFC107', marginLeft: 4 }}>Fallback</Text>
+        )}
+        
         {hasDraft && (
           <TouchableOpacity 
             style={styles.editDraftButton}
@@ -1671,6 +1860,23 @@ const MessageHistory = ({ navigation, route }) => {
               color={theme.colors.primary} 
             />
             <Text style={styles.editDraftText}>Edit Draft</Text>
+          </TouchableOpacity>
+        )}
+        
+        {is_DEBUG && (
+          <TouchableOpacity 
+            style={{
+              marginLeft: 'auto',
+              backgroundColor: isConnected ? '#4CAF50' : '#F44336',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 4
+            }}
+            onPress={isConnected ? null : handleSimulateConnection}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 12 }}>
+              {isConnected ? 'Connected' : 'Simulate'}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1787,9 +1993,56 @@ const MessageHistory = ({ navigation, route }) => {
             color={theme.colors.primary} 
           />
         </TouchableOpacity>
-        <Text style={styles.mobileHeaderName}>
-          {selectedConversationData?.name || selectedConversationData?.other_user_name}
-        </Text>
+        
+        <View style={styles.mobileHeaderNameContainer}>
+          <Text style={styles.mobileHeaderName}>
+            {selectedConversationData?.name || selectedConversationData?.other_user_name}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={handleForceReconnect}>
+              {(isConnected && connectionStatus === 'connected') ? (
+                <Badge
+                  size={8}
+                  style={{
+                    backgroundColor: isUsingFallback ? '#FFC107' : '#4CAF50', // Yellow for fallback, Green for connected
+                    marginLeft: 4,
+                    alignSelf: 'center'
+                  }}
+                />
+              ) : (
+                <Badge
+                  size={8}
+                  style={{
+                    backgroundColor: '#F44336', // Red for disconnected
+                    marginLeft: 4,
+                    alignSelf: 'center'
+                  }}
+                />
+              )}
+            </TouchableOpacity>
+            
+            {isUsingFallback && (
+              <Text style={{ fontSize: 10, color: '#FFC107', marginLeft: 4 }}>Fallback</Text>
+            )}
+            
+            {is_DEBUG && (
+              <TouchableOpacity 
+                style={{
+                  marginLeft: 8,
+                  backgroundColor: isConnected ? '#4CAF50' : '#F44336',
+                  paddingHorizontal: 4,
+                  paddingVertical: 2,
+                  borderRadius: 4
+                }}
+                onPress={isConnected ? null : handleSimulateConnection}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 10 }}>
+                  {isConnected ? 'Connected' : 'Simulate'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -1857,12 +2110,63 @@ const MessageHistory = ({ navigation, route }) => {
     }, 100);
   };
 
+  // Add a simulation button that's more prominent for debugging
+  const renderSimulationControls = () => {
+    if (!is_DEBUG) return null;
+    
+    return (
+      <View style={{
+        position: 'absolute',
+        top: 5,
+        right: 5,
+        flexDirection: 'row',
+        backgroundColor: '#333333',
+        borderRadius: 6,
+        padding: 5,
+        zIndex: 1000,
+      }}>
+        <TouchableOpacity 
+          style={{
+            backgroundColor: isConnected ? '#4CAF50' : '#F44336',
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 4,
+            marginRight: isConnected ? 0 : 5,
+          }}
+          onPress={isConnected ? null : handleSimulateConnection}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 12 }}>
+            {isConnected ? 'Connected' : 'Simulate Connection'}
+          </Text>
+        </TouchableOpacity>
+        
+        {isConnected && (
+          <TouchableOpacity 
+            style={{
+              backgroundColor: '#FFC107',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 4,
+              marginLeft: 5,
+            }}
+            onPress={handleForceReconnect}
+          >
+            <Text style={{ color: '#333333', fontSize: 12 }}>
+              Reconnect
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[
       styles.container,
       screenWidth <= 900 && selectedConversation && styles.mobileContainer,
       { marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0 },
     ]}>
+      {is_DEBUG && renderSimulationControls()}
       {isLoadingConversations ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
