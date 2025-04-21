@@ -198,6 +198,7 @@ const BookingApprovalModal = ({
       const response = await requestBookingChanges(bookingId, changeRequestMessage);
       
       if (onRequestChangesSuccess) {
+        debugLog('MBA77788 Notifying parent of successful change request submission');
         onRequestChangesSuccess(response);
       }
       

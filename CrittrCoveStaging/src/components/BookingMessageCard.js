@@ -179,12 +179,18 @@ const BookingMessageCard = ({
 
   const handleRequestChangesSuccess = (response) => {
     debugLog('MBA9999 Change request submitted successfully:', response);
-    // Any additional handling can be added here
+    // Pass along the response to the parent component
+    if (onApproveSuccess) {
+      onApproveSuccess(response);
+    }
   };
 
   const handleRequestChangesError = (error) => {
     debugLog('MBA9999 Error submitting change request:', error);
-    // Any additional error handling can be added here
+    // Pass along the error to the parent component
+    if (onApproveError) {
+      onApproveError(error);
+    }
   };
 
   // Format a date/time range for an occurrence using the time_utils function
