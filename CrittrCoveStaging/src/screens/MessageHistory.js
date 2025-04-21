@@ -688,7 +688,7 @@ const MessageHistory = ({ navigation, route }) => {
 
           // If we have a conversation ID in URL, we'll use that instead of auto-selecting
           if (urlConversationId) {
-            const conversationsData = await fetchConversations();
+            // const conversationsData = await fetchConversations();
             setSelectedConversation(urlConversationId);
             return;
           }
