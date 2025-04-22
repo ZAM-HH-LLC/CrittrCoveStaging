@@ -226,8 +226,6 @@ CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103
                 # Gmail-specific engagement markers
                 'X-Google-Appengine-App-Id': '1',
                 'X-Gmail-Labels': 'IMPORTANT,CATEGORY_PERSONAL',
-                # Add recipient to To header explicitly to help avoid spam
-                'To': f'"{recipient_user.name}" <{recipient_user.email}>'
             }
             
             # Handle reply-to properly
