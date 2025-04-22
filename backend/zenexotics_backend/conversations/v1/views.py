@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.db import models
 from professionals.models import Professional
 from clients.models import Client
+from django.core.cache import cache
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,12 +35,21 @@ def get_conversations(request):
             # Determine if current user is the professional
             is_professional = conversation.role_map.get(str(current_user.user_id)) == 'professional'
 
+            # Check if the other participant is online using cache
+            other_participant_online = cache.get(f"user_{other_user.id}_online", False)
+            
+            # Log for debugging
+            logger.debug(f"User {other_user.id} online status: {other_participant_online}")
+
             conversations_data.append({
                 'conversation_id': conversation.conversation_id,
                 'is_professional': is_professional,
                 'last_message': conversation.last_message,
                 'last_message_time': conversation.last_message_time,
-                'other_user_name': other_user.name
+                'other_user_name': other_user.name,
+                'other_participant_online': other_participant_online,
+                'participant1_id': conversation.participant1.id,
+                'participant2_id': conversation.participant2.id
             })
 
         return Response(conversations_data)

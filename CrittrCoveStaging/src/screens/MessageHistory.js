@@ -668,8 +668,47 @@ const MessageHistory = ({ navigation, route }) => {
     
     try {
       // Validate message data
-      if (!data || (!data.message_id && !data.conversation_id)) {
+      if (!data || (!data.message_id && !data.conversation_id && !data.type)) {
         debugLog('MBA3210: Invalid message data received');
+        return;
+      }
+      
+      // Handle user status updates
+      if (data.type === 'user_status_update' && data.user_id) {
+        debugLog('MBA3210: Received user status update:', data);
+        
+        // Update the conversations list with the new online status
+        setConversations(prevConversations => 
+          prevConversations.map(conv => {
+            // Determine if this conversation involves the user whose status changed
+            const otherUserId = 
+              (conv.participant1_id && conv.participant1_id.toString() === data.user_id.toString()) ||
+              (conv.participant2_id && conv.participant2_id.toString() === data.user_id.toString());
+              
+            if (otherUserId) {
+              // Update this conversation with the new online status
+              return {
+                ...conv,
+                other_participant_online: data.is_online
+              };
+            }
+            return conv;
+          })
+        );
+        
+        // Also update the selected conversation if it's affected
+        if (selectedConversationData && 
+            ((selectedConversationData.participant1_id && 
+              selectedConversationData.participant1_id.toString() === data.user_id.toString()) || 
+             (selectedConversationData.participant2_id && 
+              selectedConversationData.participant2_id.toString() === data.user_id.toString()))) {
+          
+          setSelectedConversationData(prev => ({
+            ...prev,
+            other_participant_online: data.is_online
+          }));
+        }
+        
         return;
       }
       
@@ -1132,8 +1171,14 @@ const MessageHistory = ({ navigation, route }) => {
       });
       
       if (response.data && Array.isArray(response.data)) {
-        setConversations(response.data);
-        return response.data;
+        // Add default false value for other_participant_online if not present
+        const conversationsWithOnlineStatus = response.data.map(conv => ({
+          ...conv,
+          other_participant_online: conv.other_participant_online || false
+        }));
+        
+        setConversations(conversationsWithOnlineStatus);
+        return conversationsWithOnlineStatus;
       }
       return [];
     } catch (error) {
@@ -2003,11 +2048,11 @@ const MessageHistory = ({ navigation, route }) => {
           {selectedConversationData?.other_user_name}
         </Text>
         <TouchableOpacity onPress={handleForceReconnect} style={{ marginLeft: 8 }}>
-          {(isConnected && connectionStatus === 'connected') ? (
+          {selectedConversationData?.other_participant_online ? (
             <Badge
               size={8}
               style={{
-                backgroundColor: isUsingFallback ? '#FFC107' : '#4CAF50', // Yellow for fallback, Green for connected
+                backgroundColor: '#4CAF50', // Green for online
                 marginLeft: 8
               }}
             />
@@ -2015,7 +2060,7 @@ const MessageHistory = ({ navigation, route }) => {
             <Badge
               size={8}
               style={{
-                backgroundColor: '#F44336', // Red for disconnected
+                backgroundColor: '#F44336', // Red for offline
                 marginLeft: 8
               }}
             />
@@ -2164,11 +2209,11 @@ const MessageHistory = ({ navigation, route }) => {
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={handleForceReconnect}>
-              {(isConnected && connectionStatus === 'connected') ? (
+              {selectedConversationData?.other_participant_online ? (
                 <Badge
                   size={8}
                   style={{
-                    backgroundColor: isUsingFallback ? '#FFC107' : '#4CAF50', // Yellow for fallback, Green for connected
+                    backgroundColor: '#4CAF50', // Green for online
                     marginLeft: 4,
                     alignSelf: 'center'
                   }}
@@ -2177,7 +2222,7 @@ const MessageHistory = ({ navigation, route }) => {
                 <Badge
                   size={8}
                   style={{
-                    backgroundColor: '#F44336', // Red for disconnected
+                    backgroundColor: '#F44336', // Red for offline
                     marginLeft: 4,
                     alignSelf: 'center'
                   }}

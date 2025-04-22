@@ -77,6 +77,23 @@ const useWebSocket = (messageType, callback, options = {}) => {
         unregisterHandlers.push(unregisterConn);
         debugLog(`MBA3210: Registered connection status handler`);
         
+        // Always register for user status updates (needed across components for online indicators)
+        const unregisterUserStatus = websocketManager.registerHandler(
+          'user_status_update',
+          (data) => {
+            // Call the callback if we're listening for user_status_update messages,
+            // or if the callback is meant to handle all message types
+            if (messageType === 'user_status_update' || messageType === '*') {
+              callback(data);
+            }
+            
+            debugLog(`MBA3210: Received user status update for user ${data.user_id}: ${data.is_online ? 'online' : 'offline'}`);
+          },
+          `${handlerId}-user_status_update`
+        );
+        unregisterHandlers.push(unregisterUserStatus);
+        debugLog(`MBA3210: Registered user status update handler`);
+        
         // Check initial socket state
         if (websocketManager.isConnected) {
           debugLog('MBA3210: WebSocket manager reports connected on init, updating state');

@@ -27,8 +27,9 @@ fi
 
 echo "Virtual environment activated successfully!"
 
-# Run Django command, passing all arguments
-python manage.py runserver
+
+# Run daphne command, passing all arguments
+daphne -b 0.0.0.0 -p 8000 zenexotics_backend.asgi:application
 
 # Note: The venv activation only affects this script's environment,
 # not the parent shell that called this script 
