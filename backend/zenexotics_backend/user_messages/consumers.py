@@ -35,6 +35,7 @@ class MessageConsumer(AsyncWebsocketConsumer):
         
         # Accept the WebSocket connection
         await self.accept()
+        logger.info(f"WebSocket connection accepted for user {user.id}")
         
         # Set user as online in cache and send status update
         await self.set_user_online(user.id)
@@ -50,6 +51,9 @@ class MessageConsumer(AsyncWebsocketConsumer):
         }))
         
         logger.info(f"User {user.id} connected via WebSocket, channel: {self.channel_name}")
+        
+        # Send a direct status update to all relevant participants
+        await database_sync_to_async(self._broadcast_status_update)(user.id, True)
     
     async def disconnect(self, close_code):
         """
@@ -59,6 +63,8 @@ class MessageConsumer(AsyncWebsocketConsumer):
         user = self.scope['user']
         
         if not user.is_anonymous:
+            logger.info(f"WebSocket disconnecting for user {user.id}, code: {close_code}")
+            
             # Remove this connection from the user's connections list
             await self.remove_user_connection(user.id, self.channel_name)
             
@@ -98,6 +104,9 @@ class MessageConsumer(AsyncWebsocketConsumer):
                         'timestamp': data.get('timestamp', None)
                     }
                 }))
+                
+                # Refresh online status on each heartbeat
+                await self.set_user_online(user.id)
             
             elif message_type == 'mark_read':
                 # Handle marking messages as read
@@ -129,6 +138,7 @@ class MessageConsumer(AsyncWebsocketConsumer):
         Send user status update to WebSocket
         """
         # Send user status update to WebSocket
+        logger.info(f"Sending user status update to client: user_id={event['user_id']}, is_online={event['is_online']}")
         await self.send(text_data=json.dumps({
             'type': 'user_status_update',
             'user_id': event['user_id'],
@@ -157,9 +167,12 @@ class MessageConsumer(AsyncWebsocketConsumer):
         was_online = cache.get(f"user_{user_id}_online", False)
         cache.set(f"user_{user_id}_online", True, 300)
         
+        logger.info(f"User {user_id} marked as online (was_online={was_online}), connections={len(connections)}")
+        
         # Only broadcast status change if it's a change
         if not was_online:
-            self._notify_user_status_change(user_id, True)
+            result = self._notify_user_status_change(user_id, True)
+            logger.info(f"Online status notification result: {result}")
     
     @database_sync_to_async
     def remove_user_connection(self, user_id, channel_name):
@@ -177,6 +190,8 @@ class MessageConsumer(AsyncWebsocketConsumer):
         if channel_name in connections:
             connections.remove(channel_name)
         
+        logger.info(f"Removed connection for user {user_id}, remaining connections: {len(connections)}")
+        
         # If there are still connections, update the cache
         if connections:
             cache.set(f"user_{user_id}_connections", connections, 86400)
@@ -186,9 +201,12 @@ class MessageConsumer(AsyncWebsocketConsumer):
         was_online = cache.get(f"user_{user_id}_online", False)
         cache.delete(f"user_{user_id}_online")
         
+        logger.info(f"No connections left for user {user_id}, marking as offline (was_online={was_online})")
+        
         # Only broadcast status change if it's a change
         if was_online:
-            self._notify_user_status_change(user_id, False)
+            result = self._notify_user_status_change(user_id, False)
+            logger.info(f"Offline status notification result: {result}")
     
     def _notify_user_status_change(self, user_id, is_online):
         """
@@ -205,9 +223,14 @@ class MessageConsumer(AsyncWebsocketConsumer):
                 Q(participant1_id=user_id) | Q(participant2_id=user_id)
             )
             
+            if not conversations.exists():
+                logger.warning(f"No conversations found for user {user_id}")
+                return "No conversations found"
+            
             channel_layer = get_channel_layer()
             
             # For each conversation, notify the other participant
+            notified_count = 0
             for conversation in conversations:
                 # Determine the other participant
                 other_user_id = conversation.participant2_id if conversation.participant1_id == user_id else conversation.participant1_id
@@ -225,10 +248,27 @@ class MessageConsumer(AsyncWebsocketConsumer):
                     }
                 )
                 
-                logger.debug(f"Sent status update for user {user_id} (online: {is_online}) to user {other_user_id}")
+                notified_count += 1
+                logger.info(f"Sent status update for user {user_id} (online: {is_online}) to user {other_user_id}")
+            
+            return f"Notified {notified_count} users"
         
         except Exception as e:
             logger.error(f"Error notifying status change: {str(e)}")
+            return f"Error: {str(e)}"
+    
+    def _broadcast_status_update(self, user_id, is_online):
+        """
+        Immediately broadcast status update to all relevant users
+        """
+        try:
+            logger.info(f"Broadcasting status update for user {user_id}, online={is_online}")
+            result = self._notify_user_status_change(user_id, is_online)
+            logger.info(f"Broadcast result: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Error in _broadcast_status_update: {str(e)}")
+            return f"Error: {str(e)}"
     
     @database_sync_to_async
     def mark_messages_as_read(self, user_id, conversation_id, message_ids):

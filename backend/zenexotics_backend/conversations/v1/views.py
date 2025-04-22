@@ -210,4 +210,59 @@ def open_conversation(request):
         return Response(
             {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_conversation_status(request, conversation_id):
+    """
+    Get the online status of the other participant in a conversation
+    """
+    try:
+        current_user = request.user
+        logger.info(f"User {current_user.id} checking online status for conversation {conversation_id}")
+        
+        # Get the conversation
+        conversation = Conversation.objects.get(conversation_id=conversation_id)
+        
+        # Check if current user is part of the conversation
+        if conversation.participant1 != current_user and conversation.participant2 != current_user:
+            logger.warning(f"User {current_user.id} attempted to access conversation {conversation_id} they are not part of")
+            return Response(
+                {'error': 'Not authorized to access this conversation'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Determine the other user
+        other_user = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
+        
+        # Check if the other participant is online using cache
+        other_participant_online = cache.get(f"user_{other_user.id}_online", False)
+        
+        # Log for debugging
+        logger.info(f"User {other_user.id} online status: {other_participant_online}")
+        
+        # Get active connections if any
+        connections = cache.get(f"user_{other_user.id}_connections", set())
+        connection_count = len(connections) if isinstance(connections, set) else 0
+        
+        return Response({
+            'conversation_id': conversation_id,
+            'other_participant_id': other_user.id,
+            'other_participant_online': other_participant_online,
+            'connection_count': connection_count,
+            'cache_key': f"user_{other_user.id}_online"
+        })
+        
+    except Conversation.DoesNotExist:
+        logger.error(f"Conversation {conversation_id} not found")
+        return Response(
+            {'error': 'Conversation not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error in get_conversation_status: {str(e)}")
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         ) 

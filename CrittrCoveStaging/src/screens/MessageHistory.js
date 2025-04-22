@@ -677,36 +677,67 @@ const MessageHistory = ({ navigation, route }) => {
       if (data.type === 'user_status_update' && data.user_id) {
         debugLog('MBA3210: Received user status update:', data);
         
+        // Normalize the user_id to string for comparison
+        const statusUserId = String(data.user_id);
+        const isOnline = !!data.is_online;
+        
+        debugLog(`MBA3210: Processing status update for user ${statusUserId}, online=${isOnline}`);
+        
         // Update the conversations list with the new online status
-        setConversations(prevConversations => 
-          prevConversations.map(conv => {
-            // Determine if this conversation involves the user whose status changed
-            const otherUserId = 
-              (conv.participant1_id && conv.participant1_id.toString() === data.user_id.toString()) ||
-              (conv.participant2_id && conv.participant2_id.toString() === data.user_id.toString());
+        setConversations(prevConversations => {
+          // Log the current conversations for debugging
+          debugLog(`MBA3210: Updating ${prevConversations.length} conversations with status update`);
+          
+          // Apply the update
+          const updatedConversations = prevConversations.map(conv => {
+            // Normalize participant IDs to strings for comparison
+            const participant1Id = conv.participant1_id ? String(conv.participant1_id) : '';
+            const participant2Id = conv.participant2_id ? String(conv.participant2_id) : '';
+            
+            // Check if this conversation involves the user whose status changed
+            const matchesUser = (statusUserId === participant1Id || statusUserId === participant2Id);
+            
+            if (matchesUser) {
+              debugLog(`MBA3210: Matched user ${statusUserId} in conversation ${conv.conversation_id}, setting online=${isOnline}`);
               
-            if (otherUserId) {
               // Update this conversation with the new online status
               return {
                 ...conv,
-                other_participant_online: data.is_online
+                other_participant_online: isOnline
               };
             }
             return conv;
-          })
-        );
+          });
+          
+          // Check if any conversations were updated
+          const updatedCount = updatedConversations.filter(
+            (conv, i) => conv.other_participant_online !== prevConversations[i].other_participant_online
+          ).length;
+          
+          debugLog(`MBA3210: Updated online status for ${updatedCount} conversations`);
+          
+          return updatedConversations;
+        });
         
         // Also update the selected conversation if it's affected
-        if (selectedConversationData && 
-            ((selectedConversationData.participant1_id && 
-              selectedConversationData.participant1_id.toString() === data.user_id.toString()) || 
-             (selectedConversationData.participant2_id && 
-              selectedConversationData.participant2_id.toString() === data.user_id.toString()))) {
+        if (selectedConversationData) {
+          // Normalize participant IDs to strings
+          const selectedParticipant1Id = selectedConversationData.participant1_id 
+            ? String(selectedConversationData.participant1_id) 
+            : '';
+          const selectedParticipant2Id = selectedConversationData.participant2_id 
+            ? String(selectedConversationData.participant2_id) 
+            : '';
           
-          setSelectedConversationData(prev => ({
-            ...prev,
-            other_participant_online: data.is_online
-          }));
+          // Check if selected conversation involves this user
+          if (statusUserId === selectedParticipant1Id || statusUserId === selectedParticipant2Id) {
+            debugLog(`MBA3210: Updating selected conversation with online status: ${isOnline}`);
+            
+            setSelectedConversationData(prev => ({
+              ...prev,
+              other_participant_online: isOnline
+            }));
+          }
         }
         
         return;
@@ -825,13 +856,67 @@ const MessageHistory = ({ navigation, route }) => {
     markMessagesAsReadRef.current = markMessagesAsRead;
   }, [markMessagesAsRead]);
   
+  // Add a function to manually force a refresh of the online status
+  const refreshOnlineStatus = useCallback(async () => {
+    if (!selectedConversationData) return;
+    
+    debugLog('MBA3210: Manually refreshing online status');
+    
+    try {
+      const token = await getStorage('userToken');
+      // Make a direct API call to check the online status
+      const response = await axios.get(
+        `${API_BASE_URL}/api/conversations/v1/status/${selectedConversation}/`,
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (response.data && response.data.other_participant_online !== undefined) {
+        debugLog(`MBA3210: Got refreshed online status: ${response.data.other_participant_online}`);
+        
+        // Update the selected conversation data
+        setSelectedConversationData(prev => ({
+          ...prev,
+          other_participant_online: response.data.other_participant_online
+        }));
+        
+        // Also update in the conversations list
+        setConversations(prevConversations => 
+          prevConversations.map(conv => 
+            String(conv.conversation_id) === String(selectedConversation)
+              ? {
+                  ...conv,
+                  other_participant_online: response.data.other_participant_online
+                }
+              : conv
+          )
+        );
+        
+        return response.data.other_participant_online;
+      }
+    } catch (error) {
+      debugLog(`MBA3210: Error refreshing online status: ${error.message}`);
+    }
+    
+    return null;
+  }, [selectedConversation, selectedConversationData]);
+
   // Add a function to manually force reconnection
   const handleForceReconnect = useCallback(() => {
     debugLog('MBA3210: User requested manual WebSocket reconnection');
     if (typeof reconnect === 'function') {
       reconnect();
+      
+      // After reconnection, refresh the online status
+      setTimeout(() => {
+        refreshOnlineStatus();
+      }, 1000);
     }
-  }, [reconnect]);
+  }, [reconnect, refreshOnlineStatus]);
   
   // Add a function to simulate connection for testing
   // const handleSimulateConnection = useCallback(() => {
@@ -853,17 +938,9 @@ const MessageHistory = ({ navigation, route }) => {
       debugLog(`MBA3210: WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
     }
     
-    // Force status verification by checking both values
+    // Only log status changes but don't trigger fetches here - that's handled in the mount effect
     if ((connectionStatus === 'connected' && isConnected) || isUsingFallback) {
       debugLog('MBA3210: Connection fully verified as connected or using fallback');
-      
-      // If it's connected or using fallback, we should force-fetch conversations
-      // to make sure we have the latest data
-      if (!isLoadingConversations && conversations.length === 0) {
-        fetchConversations().then(() => {
-          debugLog('MBA3210: Fetched conversations after connection established');
-        });
-      }
     } else {
       debugLog('MBA3210: Connection not fully verified, status and state mismatch');
       debugLog(`MBA3210: Connection details - status: ${connectionStatus}, isConnected: ${isConnected}`);
@@ -882,15 +959,13 @@ const MessageHistory = ({ navigation, route }) => {
     
     return () => clearTimeout(timer);
   }, [reconnect]);
-
-  // Modify the mount effect to handle initial load
+  
+  // Remove the problematic effect and instead add a proper mount effect to load initial data
   useEffect(() => {
-    if (!initialLoadRef.current) return; // Only run on first mount
-    
-    if (is_DEBUG) {
-      console.log('MBA98765 Component mounted - initializing data');
-    }
+    if (!initialLoadRef.current) return; // Skip if not initial load
 
+    debugLog('MBA3210: Component mounted - initializing data');
+    
     const initializeData = async () => {
       try {
         // Reset states
@@ -912,14 +987,12 @@ const MessageHistory = ({ navigation, route }) => {
           if (currentUrl.searchParams.has('conversationId')) {
             currentUrl.searchParams.delete('conversationId');
             window.history.replaceState({}, '', currentUrl.toString());
-            if (is_DEBUG) {
-              console.log('MBA98765 Cleared URL parameters on initial load');
-            }
+            debugLog('MBA3210: Cleared URL parameters on initial load');
           }
 
           // If we have a conversation ID in URL, we'll use that instead of auto-selecting
           if (urlConversationId) {
-            // const conversationsData = await fetchConversations();
+            const conversationsData = await fetchConversations();
             setSelectedConversation(urlConversationId);
             return;
           }
@@ -932,9 +1005,7 @@ const MessageHistory = ({ navigation, route }) => {
           // Check if we should open booking creation (coming from Connections)
           if (route.params.isProfessional === true) {
             shouldOpenBookingCreationRef.current = true;
-            if (is_DEBUG) {
-              console.log('MBA98765 Will open booking creation after data loads');
-            }
+            debugLog('MBA3210: Will open booking creation after data loads');
           }
           
           const conversationsData = await fetchConversations();
@@ -967,9 +1038,7 @@ const MessageHistory = ({ navigation, route }) => {
     initializeData();
 
     return () => {
-      if (is_DEBUG) {
-        console.log('MBA98765 Component unmounting - cleaning up');
-      }
+      debugLog('MBA3210: Component unmounting - cleaning up');
       setConversations([]);
       setMessages([]);
       setSelectedConversation(null);
@@ -981,7 +1050,7 @@ const MessageHistory = ({ navigation, route }) => {
       shouldOpenBookingCreationRef.current = false;
     };
   }, []); // Empty dependency array means this runs once on mount
-
+  
   // Modify route params effect to only handle non-reload cases
   useEffect(() => {
     // Skip if this is the initial load/reload or if we're already handling route params
