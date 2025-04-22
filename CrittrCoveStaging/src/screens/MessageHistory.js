@@ -667,7 +667,13 @@ const MessageHistory = ({ navigation, route }) => {
     debugLog('MBA3210: Received WebSocket message:', data);
     
     try {
-      // Only handle messages for the currently selected conversation
+      // Validate message data
+      if (!data || (!data.message_id && !data.conversation_id)) {
+        debugLog('MBA3210: Invalid message data received');
+        return;
+      }
+      
+      // If this message is for our current conversation
       if (selectedConversation && data.conversation_id && 
           String(data.conversation_id) === String(selectedConversation)) {
         
@@ -675,23 +681,75 @@ const MessageHistory = ({ navigation, route }) => {
         
         // Add the new message to the list (at the beginning since FlatList is inverted)
         setMessages(prevMessages => {
-          // Check if message already exists to avoid duplicates
-          const exists = prevMessages.some(msg => 
-            msg.message_id && data.message_id && 
-            String(msg.message_id) === String(data.message_id)
-          );
+          // Check if message already exists to avoid duplicates - be more thorough
+          const messageExists = prevMessages.some(msg => {
+            // Check by ID if available (most reliable)
+            if (msg.message_id && data.message_id && 
+                String(msg.message_id) === String(data.message_id)) {
+              debugLog('MBA3210: Duplicate detected by ID');
+              return true;
+            }
+            
+            // Also check for messages with the same content, timestamp and sender
+            // to catch duplicates that might have different/temporary IDs
+            if (msg.content === data.content && 
+                msg.sent_by_other_user === data.sent_by_other_user) {
+              
+              // If the timestamp exists, compare with some tolerance
+              if (msg.timestamp && data.timestamp) {
+                const timeDiff = Math.abs(
+                  new Date(msg.timestamp).getTime() - 
+                  new Date(data.timestamp).getTime()
+                );
+                
+                // 5 seconds tolerance (messages sent close to each other)
+                if (timeDiff < 5000) {
+                  debugLog('MBA3210: Duplicate detected by content+timestamp');
+                  return true;
+                }
+              } else {
+                // If no timestamp, just assume it's the same message
+                debugLog('MBA3210: Duplicate detected by content+sender');
+                return true;
+              }
+            }
+            
+            // Check for optimistic messages that match
+            if (msg._isOptimistic && 
+                msg.content === data.content && 
+                !data.sent_by_other_user) {
+              debugLog('MBA3210: Found matching optimistic message, replacing');
+              return true;
+            }
+            
+            return false;
+          });
           
-          if (exists) {
+          if (messageExists) {
             debugLog('MBA3210: Message already exists in the list, skipping');
+            
+            // For optimistic messages that now have a real ID, update them
+            if (data.message_id) {
+              return prevMessages.map(msg => {
+                if (msg._isOptimistic && 
+                    msg.content === data.content && 
+                    !data.sent_by_other_user) {
+                  // Replace the optimistic message with the real one
+                  return { ...data, _wasOptimistic: true };
+                }
+                return msg;
+              });
+            }
+            
             return prevMessages;
           }
           
-          debugLog('MBA3210: Adding new message to list');
+          debugLog('MBA3210: Adding new message to list:', data.message_id);
           return [data, ...prevMessages];
         });
         
         // Mark the message as read if we're viewing this conversation
-        if (data.message_id && markMessagesAsReadRef.current) {
+        if (data.message_id && markMessagesAsReadRef.current && data.sent_by_other_user) {
           debugLog('MBA3210: Marking message as read:', data.message_id);
           markMessagesAsReadRef.current(selectedConversation, [data.message_id]);
         }
@@ -737,12 +795,12 @@ const MessageHistory = ({ navigation, route }) => {
   }, [reconnect]);
   
   // Add a function to simulate connection for testing
-  const handleSimulateConnection = useCallback(() => {
-    debugLog('MBA3210: User requested simulated connection');
-    if (typeof simulateConnection === 'function') {
-      simulateConnection();
-    }
-  }, [simulateConnection]);
+  // const handleSimulateConnection = useCallback(() => {
+  //   debugLog('MBA3210: User requested simulated connection');
+  //   if (typeof simulateConnection === 'function') {
+  //     simulateConnection();
+  //   }
+  // }, [simulateConnection]);
   
   // Update connection status UI and log more detailed information
   useEffect(() => {
@@ -1504,6 +1562,7 @@ const MessageHistory = ({ navigation, route }) => {
   const WebInput = () => {
     const [message, setMessage] = useState('');
     const inputRef = useRef(null);
+    const isProcessingRef = useRef(false);
 
     const adjustHeight = () => {
       if (inputRef.current) {
@@ -1530,50 +1589,95 @@ const MessageHistory = ({ navigation, route }) => {
     };
 
     const handleSend = async () => {
-      if (message.trim() && !isSending) {
+      // Prevent duplicate sends by checking if we're already sending
+      if (message.trim() && !isSending && !isProcessingRef.current) {
+        isProcessingRef.current = true;
         setIsSending(true);
+        
         try {
-          // Optimistically add message to UI immediately
-          const optimisticMessage = {
-            message_id: `temp-${Date.now()}`,
-            content: message.trim(),
-            timestamp: new Date().toISOString(),
-            status: 'sent',
-            type_of_message: 'normal_message',
-            is_clickable: false,
-            sent_by_other_user: false
-          };
-          
-          setMessages(prevMessages => [optimisticMessage, ...prevMessages]);
-          
-          // Actually send the message
-          const sentMessage = await SendNormalMessage(message.trim());
-          
-          // Replace optimistic message with actual one
-          setMessages(prevMessages => 
-            prevMessages.map(msg => 
-              msg.message_id === optimisticMessage.message_id ? sentMessage : msg
-            )
-          );
-          
-          // Clear input
-          setMessage('');
+          // Clear input right away before API call to prevent double-sending
+          const messageToSend = message.trim(); // Save message content
+          setMessage(''); // Clear input field
           if (inputRef.current) {
             inputRef.current.style.height = '24px';
             inputRef.current.scrollTop = 0;
           }
+          
+          // Generate a unique temporary ID for optimistic update
+          const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          
+          // Optimistically add message to UI immediately
+          const optimisticMessage = {
+            message_id: tempId,
+            content: messageToSend,
+            timestamp: new Date().toISOString(),
+            status: 'sent',
+            type_of_message: 'normal_message',
+            is_clickable: false,
+            sent_by_other_user: false,
+            _isOptimistic: true // Flag to identify this as an optimistic update
+          };
+          
+          // Add to messages state
+          setMessages(prevMessages => {
+            // First check if we already have this message (prevent doubles)
+            const messageExists = prevMessages.some(msg => 
+              msg._isOptimistic && msg.content === messageToSend
+            );
+            
+            if (messageExists) {
+              debugLog('MBA3210: Skipping duplicate optimistic message');
+              return prevMessages;
+            }
+            
+            return [optimisticMessage, ...prevMessages];
+          });
+          
+          // Actually send the message to the server
+          const sentMessage = await SendNormalMessage(messageToSend);
+          
+          // Replace optimistic message with actual one
+          setMessages(prevMessages => {
+            // Remove optimistic message and add real one, ensuring no duplicates
+            const filteredMessages = prevMessages.filter(msg => 
+              // Keep all messages that are NOT our optimistic update
+              !(msg._isOptimistic && msg.content === messageToSend)
+            );
+            
+            // Check if the real message is already in the list
+            const realMessageExists = filteredMessages.some(msg => 
+              msg.message_id && sentMessage.message_id && 
+              String(msg.message_id) === String(sentMessage.message_id)
+            );
+            
+            if (realMessageExists) {
+              debugLog('MBA3210: Real message already exists, skipping');
+              return filteredMessages;
+            }
+            
+            // Add the real message
+            return [sentMessage, ...filteredMessages];
+          });
         } catch (error) {
           console.error('Failed to send message:', error);
           
+          // Restore the message in the input field on error
+          setMessage(message);
+          
           // Remove optimistic message on error
           setMessages(prevMessages => 
-            prevMessages.filter(msg => !msg.message_id.toString().startsWith('temp-'))
+            prevMessages.filter(msg => !msg._isOptimistic)
           );
           
           // Show error
           Alert.alert('Error', 'Failed to send message. Please try again.');
         } finally {
           setIsSending(false);
+          
+          // Add delay before allowing another send
+          setTimeout(() => {
+            isProcessingRef.current = false;
+          }, 300);
         }
       }
     };
@@ -1616,17 +1720,94 @@ const MessageHistory = ({ navigation, route }) => {
   const MobileInput = () => {
     const [message, setMessage] = useState('');
     const inputRef = useRef(null);
+    const isProcessingRef = useRef(false);
 
     const handleSend = async () => {
-      if (message.trim() && !isSending) {
+      // Prevent duplicate sends by checking if we're already sending
+      if (message.trim() && !isSending && !isProcessingRef.current) {
+        isProcessingRef.current = true;
         setIsSending(true);
+        
         try {
-          await SendNormalMessage(message.trim());
-          setMessage('');
+          // Clear input right away before API call to prevent double-sending
+          const messageToSend = message.trim(); // Save message content
+          setMessage(''); // Clear input field immediately
+          
+          // Generate a unique temporary ID for optimistic update
+          const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          
+          // Optimistically add message to UI immediately
+          const optimisticMessage = {
+            message_id: tempId,
+            content: messageToSend,
+            timestamp: new Date().toISOString(),
+            status: 'sent',
+            type_of_message: 'normal_message',
+            is_clickable: false,
+            sent_by_other_user: false,
+            _isOptimistic: true // Flag to identify this as an optimistic update
+          };
+          
+          // Add to messages state
+          setMessages(prevMessages => {
+            // First check if we already have this message (prevent doubles)
+            const messageExists = prevMessages.some(msg => 
+              msg._isOptimistic && msg.content === messageToSend
+            );
+            
+            if (messageExists) {
+              debugLog('MBA3210: Skipping duplicate optimistic message');
+              return prevMessages;
+            }
+            
+            return [optimisticMessage, ...prevMessages];
+          });
+          
+          // Actually send the message to the server
+          const sentMessage = await SendNormalMessage(messageToSend);
+          
+          // Replace optimistic message with actual one
+          setMessages(prevMessages => {
+            // Remove optimistic message and add real one, ensuring no duplicates
+            const filteredMessages = prevMessages.filter(msg => 
+              // Keep all messages that are NOT our optimistic update
+              !(msg._isOptimistic && msg.content === messageToSend)
+            );
+            
+            // Check if the real message is already in the list
+            const realMessageExists = filteredMessages.some(msg => 
+              msg.message_id && sentMessage.message_id && 
+              String(msg.message_id) === String(sentMessage.message_id)
+            );
+            
+            if (realMessageExists) {
+              debugLog('MBA3210: Real message already exists, skipping');
+              return filteredMessages;
+            }
+            
+            // Add the real message
+            return [sentMessage, ...filteredMessages];
+          });
         } catch (error) {
           console.error('Failed to send message:', error);
+          
+          // Restore the message in the input field on error
+          setMessage(message);
+          
+          // Remove optimistic message on error
+          setMessages(prevMessages => 
+            prevMessages.filter(msg => !msg._isOptimistic)
+          );
+          
+          // Show error
+          Alert.alert('Error', 'Failed to send message. Please try again.');
         } finally {
           setIsSending(false);
+          
+          // Add delay before allowing another send
+          setTimeout(() => {
+            isProcessingRef.current = false;
+          }, 300);
         }
       }
     };
@@ -1862,23 +2043,6 @@ const MessageHistory = ({ navigation, route }) => {
             <Text style={styles.editDraftText}>Edit Draft</Text>
           </TouchableOpacity>
         )}
-        
-        {is_DEBUG && (
-          <TouchableOpacity 
-            style={{
-              marginLeft: 'auto',
-              backgroundColor: isConnected ? '#4CAF50' : '#F44336',
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              borderRadius: 4
-            }}
-            onPress={isConnected ? null : handleSimulateConnection}
-          >
-            <Text style={{ color: '#FFFFFF', fontSize: 12 }}>
-              {isConnected ? 'Connected' : 'Simulate'}
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
@@ -2024,23 +2188,6 @@ const MessageHistory = ({ navigation, route }) => {
             {isUsingFallback && (
               <Text style={{ fontSize: 10, color: '#FFC107', marginLeft: 4 }}>Fallback</Text>
             )}
-            
-            {is_DEBUG && (
-              <TouchableOpacity 
-                style={{
-                  marginLeft: 8,
-                  backgroundColor: isConnected ? '#4CAF50' : '#F44336',
-                  paddingHorizontal: 4,
-                  paddingVertical: 2,
-                  borderRadius: 4
-                }}
-                onPress={isConnected ? null : handleSimulateConnection}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 10 }}>
-                  {isConnected ? 'Connected' : 'Simulate'}
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
       </View>
@@ -2166,7 +2313,6 @@ const MessageHistory = ({ navigation, route }) => {
       screenWidth <= 900 && selectedConversation && styles.mobileContainer,
       { marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0 },
     ]}>
-      {is_DEBUG && renderSimulationControls()}
       {isLoadingConversations ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={theme.colors.primary} />

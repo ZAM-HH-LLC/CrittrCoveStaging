@@ -18,61 +18,6 @@ const useWebSocket = (messageType, callback, options = {}) => {
   const statusUpdateTimeRef = useRef(Date.now());
   const handlerRegisteredRef = useRef(false);
   const failedAttemptsRef = useRef(0);
-  const pollingIntervalRef = useRef(null);
-  const isUsingPollingFallbackRef = useRef(false);
-
-  // Function to check user online status through REST API as fallback
-  const checkUserStatusViaREST = useCallback(async () => {
-    try {
-      debugLog('MBA3210: Checking user status via REST API fallback');
-      const token = await getStorage('userToken');
-      
-      if (!token) {
-        debugLog('MBA3210: No token available for REST status check');
-        return;
-      }
-      
-      const response = await axios.get(`${API_BASE_URL}/api/users/v1/online_status/`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.data && response.data.status === 'success') {
-        debugLog('MBA3210: REST API reports user as online');
-        
-        // If we're in polling mode but weren't connected before, update status
-        if (!isConnected) {
-          setIsConnected(true);
-          setConnectionStatus('connected');
-          statusUpdateTimeRef.current = Date.now();
-          debugLog('MBA3210: Setting connection status to connected via REST fallback');
-        }
-        
-        // If there are new messages, process them
-        if (response.data.new_messages && Array.isArray(response.data.new_messages)) {
-          response.data.new_messages.forEach(message => {
-            if (typeof callback === 'function') {
-              callback(message);
-            }
-          });
-        }
-      } else {
-        debugLog('MBA3210: REST API reports user as offline or error');
-        
-        // Only update if we thought we were connected
-        if (isConnected) {
-          setIsConnected(false);
-          setConnectionStatus('disconnected');
-          statusUpdateTimeRef.current = Date.now();
-          debugLog('MBA3210: Setting connection status to disconnected via REST fallback');
-        }
-      }
-    } catch (error) {
-      debugLog(`MBA3210: Error checking status via REST: ${error.message}`);
-    }
-  }, [isConnected, callback]);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -118,30 +63,10 @@ const useWebSocket = (messageType, callback, options = {}) => {
               setIsConnected(true);
               setConnectionStatus('connected');
               failedAttemptsRef.current = 0; // Reset failed attempts counter
-              
-              // If we were using polling fallback, clear it
-              if (isUsingPollingFallbackRef.current && pollingIntervalRef.current) {
-                debugLog('MBA3210: WebSocket connected, clearing polling fallback');
-                clearInterval(pollingIntervalRef.current);
-                pollingIntervalRef.current = null;
-                isUsingPollingFallbackRef.current = false;
-              }
             } else {
               debugLog('MBA3210: Setting connection status to disconnected');
               setIsConnected(false);
               setConnectionStatus('disconnected');
-              
-              // Increment failed attempts if this was due to a connection problem
-              if (data.code !== 1000) {
-                failedAttemptsRef.current++;
-                debugLog(`MBA3210: Connection failed, attempt #${failedAttemptsRef.current}`);
-              }
-              
-              // If we've failed too many times, switch to polling fallback
-              if (failedAttemptsRef.current >= 3 && !isUsingPollingFallbackRef.current) {
-                debugLog('MBA3210: Too many failed attempts, switching to polling fallback');
-                setupPollingFallback();
-              }
             }
             
             debugLog(`MBA3210: Connection status changed in hook: ${prevStatus} -> ${data.status}`);
@@ -161,32 +86,7 @@ const useWebSocket = (messageType, callback, options = {}) => {
         
       } catch (error) {
         debugLog(`MBA3210: Error initializing WebSocket in hook: ${error.message}`);
-        failedAttemptsRef.current++;
-        
-        // If we've failed too many times during initialization, switch to polling
-        if (failedAttemptsRef.current >= 3 && !isUsingPollingFallbackRef.current) {
-          debugLog('MBA3210: Too many initialization failures, switching to polling fallback');
-          setupPollingFallback();
-        }
       }
-    };
-    
-    // Helper function to set up polling fallback
-    const setupPollingFallback = () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-      
-      isUsingPollingFallbackRef.current = true;
-      debugLog('MBA3210: Setting up polling fallback for connection status');
-      
-      // Poll for status every 10 seconds
-      pollingIntervalRef.current = setInterval(() => {
-        checkUserStatusViaREST();
-      }, 10000);
-      
-      // Immediately check status
-      checkUserStatusViaREST();
     };
     
     initialize();
@@ -206,18 +106,6 @@ const useWebSocket = (messageType, callback, options = {}) => {
     // Clear the interval after 5 seconds if it hasn't been cleared already
     const initialCheckTimeout = setTimeout(() => {
       clearInterval(initialConnectionCheck);
-      
-      // If still not connected after 5 seconds, increment failed attempts
-      if (!isConnected && failedAttemptsRef.current < 3) {
-        failedAttemptsRef.current++;
-        debugLog(`MBA3210: Initial connection failed, attempt #${failedAttemptsRef.current}`);
-      }
-      
-      // Switch to polling fallback if we've failed multiple times
-      if (failedAttemptsRef.current >= 3 && !isUsingPollingFallbackRef.current) {
-        debugLog('MBA3210: Failed initial connection multiple times, switching to polling fallback');
-        setupPollingFallback();
-      }
     }, 5000);
     
     // Cleanup handlers on unmount
@@ -227,26 +115,15 @@ const useWebSocket = (messageType, callback, options = {}) => {
       clearInterval(initialConnectionCheck);
       clearTimeout(initialCheckTimeout);
       
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      
       handlerRegisteredRef.current = false;
-      isUsingPollingFallbackRef.current = false;
     };
-  }, [disabled, messageType, callback, handlerId, checkUserStatusViaREST]);
+  }, [disabled, messageType, callback, handlerId]);
   
   // Add periodic check for connection status
   useEffect(() => {
     if (disabled) return;
     
     const checkStatus = setInterval(() => {
-      // Skip if we're using polling fallback
-      if (isUsingPollingFallbackRef.current) {
-        return;
-      }
-      
       const now = Date.now();
       const lastUpdate = statusUpdateTimeRef.current;
       const secondsSinceUpdate = (now - lastUpdate) / 1000;
@@ -289,10 +166,8 @@ const useWebSocket = (messageType, callback, options = {}) => {
   const sendMessage = useCallback((type, data) => {
     debugLog(`MBA3210: Sending message of type ${type}`);
     
-    // If we're using the polling fallback, send via REST API instead
-    if (isUsingPollingFallbackRef.current) {
-      debugLog('MBA3210: Using REST API to send message due to WebSocket fallback');
-      
+    if (!isConnected) {
+      debugLog('MBA3210: Cannot send message, WebSocket not connected');
       // Return a promise that resolves when the message is sent
       return (async () => {
         try {
@@ -302,18 +177,39 @@ const useWebSocket = (messageType, callback, options = {}) => {
             return false;
           }
           
-          const response = await axios.post(`${API_BASE_URL}/api/messages/v1/send_norm_message/`, {
+          // Handle different message types
+          let endpoint = `${API_BASE_URL}/api/messages/v1/send_norm_message/`;
+          let payload = {
             conversation_id: data.conversation_id,
-            content: data.content,
-            type: 'normal_message'
-          }, {
+            content: data.content
+          };
+          
+          // Modify endpoint based on message type
+          if (type === 'request_booking') {
+            endpoint = `${API_BASE_URL}/api/messages/v1/send_request_booking/`;
+            // Add any additional booking request data
+            payload = {
+              ...payload,
+              ...data
+            };
+          }
+          
+          debugLog(`MBA3210: Sending message via REST API to ${endpoint}`);
+          const response = await axios.post(endpoint, payload, {
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json'
             }
           });
           
-          return response.data && response.data.status === 'success';
+          // Try WebSocket reconnection after sending message
+          setTimeout(() => {
+            if (websocketManager.reconnect) {
+              websocketManager.reconnect();
+            }
+          }, 1000);
+          
+          return response.data;
         } catch (error) {
           debugLog(`MBA3210: Error sending message via REST: ${error.message}`);
           return false;
@@ -322,15 +218,20 @@ const useWebSocket = (messageType, callback, options = {}) => {
     }
     
     return websocketManager.send(type, data);
-  }, []);
+  }, [isConnected]);
 
   // Mark messages as read
   const markMessagesAsRead = useCallback((conversationId, messageIds) => {
+    // Skip if no conversation or message IDs
+    if (!conversationId || !messageIds || messageIds.length === 0) {
+      debugLog('MBA3210: Skipping markMessagesAsRead - missing data');
+      return Promise.resolve(false);
+    }
+    
     debugLog(`MBA3210: Marking messages as read for conversation ${conversationId}`);
     
-    // If we're using the polling fallback, use REST API instead
-    if (isUsingPollingFallbackRef.current) {
-      debugLog('MBA3210: Using REST API to mark messages as read due to WebSocket fallback');
+    if (!isConnected) {
+      debugLog('MBA3210: Cannot mark messages as read, using REST API instead');
       
       // Return a promise that resolves when the messages are marked as read
       return (async () => {
@@ -341,6 +242,7 @@ const useWebSocket = (messageType, callback, options = {}) => {
             return false;
           }
           
+          debugLog(`MBA3210: Sending mark_read via REST API for ${messageIds.length} messages`);
           const response = await axios.post(`${API_BASE_URL}/api/messages/v1/mark_read/`, {
             conversation_id: conversationId,
             message_ids: messageIds
@@ -351,7 +253,7 @@ const useWebSocket = (messageType, callback, options = {}) => {
             }
           });
           
-          return response.data && response.data.status === 'success';
+          return response.data;
         } catch (error) {
           debugLog(`MBA3210: Error marking messages as read via REST: ${error.message}`);
           return false;
@@ -360,39 +262,44 @@ const useWebSocket = (messageType, callback, options = {}) => {
     }
     
     return websocketManager.markMessagesAsRead(conversationId, messageIds);
-  }, []);
+  }, [isConnected]);
 
   // Force a reconnection attempt
   const reconnect = useCallback(() => {
     debugLog('MBA3210: Hook requesting WebSocket reconnection');
     
-    // Reset the fallback state to try WebSocket again
-    if (isUsingPollingFallbackRef.current) {
-      debugLog('MBA3210: Resetting fallback state to try WebSocket again');
-      
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
+    try {
+      // First reinitialize the connection
+      if (websocketManager.disconnect) {
+        debugLog('MBA3210: Disconnecting existing WebSocket before reconnect');
+        websocketManager.disconnect();
       }
       
-      isUsingPollingFallbackRef.current = false;
-      failedAttemptsRef.current = 0;
+      // Then attempt reconnection with a short delay
+      setTimeout(() => {
+        if (websocketManager.reconnect) {
+          debugLog('MBA3210: Calling websocketManager.reconnect()');
+          websocketManager.reconnect();
+        } else if (websocketManager.connect) {
+          debugLog('MBA3210: Calling websocketManager.connect() as fallback');
+          websocketManager.connect();
+        } else {
+          // If neither method exists, reinitialize the connection
+          debugLog('MBA3210: No reconnect method found, reinitializing connection');
+          getStorage('userToken').then(token => {
+            if (token) {
+              websocketManager.init(token);
+            } else {
+              debugLog('MBA3210: No token available for WebSocket reconnection');
+            }
+          }).catch(error => {
+            debugLog(`MBA3210: Error getting token for reconnection: ${error.message}`);
+          });
+        }
+      }, 300);  // Short delay to ensure disconnect completes
+    } catch (error) {
+      debugLog(`MBA3210: Error during reconnection: ${error.message}`);
     }
-    
-    if (websocketManager.reconnect) {
-      websocketManager.reconnect();
-    } else {
-      // Fallback if reconnect method doesn't exist
-      websocketManager.connect();
-    }
-  }, []);
-
-  // Simulate connection for testing/development when WebSockets are failing
-  const simulateConnection = useCallback(() => {
-    debugLog('MBA3210: Simulating WebSocket connection for testing');
-    setIsConnected(true);
-    setConnectionStatus('connected');
-    statusUpdateTimeRef.current = Date.now();
   }, []);
 
   return {
@@ -400,9 +307,7 @@ const useWebSocket = (messageType, callback, options = {}) => {
     connectionStatus,
     sendMessage,
     markMessagesAsRead,
-    reconnect,
-    simulateConnection,
-    isUsingFallback: isUsingPollingFallbackRef.current
+    reconnect
   };
 };
 
