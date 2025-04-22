@@ -25,13 +25,13 @@ class WebSocketManager {
    */
   init(token) {
     if (!token) {
-      debugLog('MBA3210: Cannot initialize WebSocket without a token');
+      debugLog('MBA3210: [MY CONNECTION] Cannot initialize WebSocket without a token');
       return false;
     }
 
     // Save token for reconnection attempts
     this.token = token;
-    debugLog('MBA3210: WebSocket token set, token exists: ' + (!!token));
+    debugLog('MBA3210: [MY CONNECTION] WebSocket token set, token exists: ' + (!!token));
     
     // Connect to WebSocket
     return this.connect();
@@ -46,11 +46,11 @@ class WebSocketManager {
       if (this.socket.readyState === WebSocket.CLOSING || this.socket.readyState === WebSocket.CLOSED) {
         this.socket = null;
       } else if (this.isConnected && this.socket.readyState === WebSocket.OPEN) {
-        debugLog('MBA3210: Already connected with open socket');
+        debugLog('MBA3210: [MY CONNECTION] Already connected with open socket');
         return true;
       } else {
         // Socket exists but not properly connected, clean it up
-        debugLog('MBA3210: Socket exists but not in OPEN state, recreating');
+        debugLog('MBA3210: [MY CONNECTION] Socket exists but not in OPEN state, recreating');
         this.socket.onclose = null; // Remove existing handlers to prevent reconnect loops
         this.socket.onerror = null;
         this.socket.onmessage = null;
@@ -63,17 +63,17 @@ class WebSocketManager {
     // If we're still connected, disconnect first
     if (this.isConnected) {
       this.isConnected = false;
-      debugLog('MBA3210: Resetting isConnected flag before new connection');
+      debugLog('MBA3210: [MY CONNECTION] Resetting isConnected flag before new connection');
     }
     
     try {
       this.connectionAttempts++;
       
       const wsEndpoint = `${this.wsUrl}/ws/messages/?token=${this.token}`;
-      debugLog(`MBA3210: Connecting to WebSocket at ${wsEndpoint} (attempt ${this.connectionAttempts})`);
+      debugLog(`MBA3210: [MY CONNECTION] Connecting MY OWN WebSocket at ${wsEndpoint} (attempt ${this.connectionAttempts})`);
       
       this.socket = new WebSocket(wsEndpoint);
-      debugLog('MBA3210: WebSocket instance created');
+      debugLog('MBA3210: [MY CONNECTION] WebSocket instance created');
       
       // Setup event handlers
       this.socket.onopen = this.handleOpen.bind(this);
@@ -83,7 +83,7 @@ class WebSocketManager {
       
       return true;
     } catch (error) {
-      debugLog(`MBA3210: WebSocket connection error: ${error.message}`);
+      debugLog(`MBA3210: [MY CONNECTION] WebSocket connection error: ${error.message}`);
       this.scheduleReconnect();
       return false;
     }
@@ -93,7 +93,7 @@ class WebSocketManager {
    * Handle WebSocket connection open
    */
   handleOpen(event) {
-    debugLog('MBA3210: WebSocket connection established');
+    debugLog('MBA3210: [MY CONNECTION] MY OWN WebSocket connection established');
     this.isConnected = true;
     this.connectionAttempts = 0; // Reset connection attempts on successful connection
     
@@ -101,7 +101,7 @@ class WebSocketManager {
     this.startHeartbeat();
     
     // Log connection status for debugging
-    debugLog(`MBA3210: isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
+    debugLog(`MBA3210: [MY CONNECTION] MY OWN isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
     
     // Notify all handlers of connection
     this.notifyHandlers('connection', { 
@@ -112,7 +112,7 @@ class WebSocketManager {
     // Send immediate heartbeat to verify connection on both sides
     setTimeout(() => {
       if (this.isConnected) {
-        debugLog('MBA3210: Sending initial heartbeat after connection');
+        debugLog('MBA3210: [MY CONNECTION] Sending initial heartbeat after MY OWN connection');
         this.send('heartbeat');
       }
     }, 500);
@@ -122,14 +122,14 @@ class WebSocketManager {
    * Handle WebSocket connection close
    */
   handleClose(event) {
-    debugLog(`MBA3210: WebSocket closed with code ${event.code}, reason: ${event.reason || 'No reason provided'}`);
+    debugLog(`MBA3210: [MY CONNECTION] MY OWN WebSocket closed with code ${event.code}, reason: ${event.reason || 'No reason provided'}`);
     
     // Only change state if we were previously connected or if this is an unexpected closure
     if (this.isConnected || event.code !== 1000) {
       this.isConnected = false;
       
       // Log disconnection for debugging
-      debugLog(`MBA3210: isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
+      debugLog(`MBA3210: [MY CONNECTION] MY OWN isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
       
       // Notify all handlers of disconnection
       this.notifyHandlers('connection', { 
@@ -146,7 +146,7 @@ class WebSocketManager {
     if (event.code !== 1000) {
       // For code 1006 (abnormal closure), reconnect immediately
       if (event.code === 1006) {
-        debugLog('MBA3210: Abnormal closure (1006) detected, reconnecting immediately');
+        debugLog('MBA3210: [MY CONNECTION] Abnormal closure (1006) detected, reconnecting MY OWN connection immediately');
         // Small timeout to prevent rapid reconnection attempts
         setTimeout(() => this.connect(), 1000);
       } else {
@@ -156,26 +156,29 @@ class WebSocketManager {
   }
 
   /**
-   * Handle messages received from WebSocket
+   * Handle WebSocket messages
    */
   handleMessage(event) {
     try {
-      const data = JSON.parse(event.data);
-      debugLog(`MBA3210: WebSocket message received: ${data.type}`);
-      debugLog(`MBA3210: WebSocket message content:`, JSON.stringify(data));
+      const message = JSON.parse(event.data);
+      debugLog(`MBA3210: [MY CONNECTION] WebSocket message received: ${message.type}`);
       
-      // Store connection ID if this is a connection established message
-      if (data.type === 'connection_established' && data.data && data.data.connection_id) {
-        this.connectionId = data.data.connection_id;
-        debugLog(`MBA3210: Connection ID: ${this.connectionId}`);
+      // For detailed message logging, use debugLog instead of is_DEBUG check
+      debugLog(`MBA3210: [MY CONNECTION] WebSocket message content: ${event.data}`);
+      
+      // For heartbeat responses, just log and return
+      if (message.type === 'heartbeat_ack') {
+        return;
       }
       
-      // Notify specific handlers for this message type
-      this.notifyHandlers(data.type, data.data);
+      // Notify handlers based on message type
+      this.notifyHandlers(message.type, message.data || {});
+      
+      // Also notify global handlers
+      this.notifyHandlers('all', { type: message.type, data: message.data || {} });
       
     } catch (error) {
-      debugLog(`MBA3210: Error parsing WebSocket message: ${error.message}`);
-      debugLog(`MBA3210: Raw message data: ${event.data}`);
+      debugLog(`MBA3210: [MY CONNECTION] Error handling WebSocket message: ${error.message}`);
     }
   }
 
@@ -183,23 +186,24 @@ class WebSocketManager {
    * Handle WebSocket errors
    */
   handleError(error) {
-    debugLog(`MBA3210: WebSocket error: ${error.message || 'Unknown error'}`);
+    debugLog(`MBA3210: [MY CONNECTION] MY OWN WebSocket error: ${error.message || 'Unknown error'}`);
     
-    // Notify handlers of error
+    // Notify handlers of the error
     this.notifyHandlers('error', { 
-      message: error.message || 'Unknown WebSocket error',
+      error: error.message || 'Unknown error',
       timestamp: new Date().toISOString()
     });
+    
+    // Try to reconnect on error
+    this.scheduleReconnect();
   }
 
   /**
-   * Send data through the WebSocket
-   * @param {string} type - Message type
-   * @param {object} data - Message data
+   * Send a message through the WebSocket
    */
   send(type, data = {}) {
     if (!this.isConnected || !this.socket) {
-      debugLog('MBA3210: Cannot send message, WebSocket not connected');
+      debugLog('MBA3210: [MY CONNECTION] Cannot send message, MY OWN WebSocket not connected');
       return false;
     }
 
@@ -210,10 +214,10 @@ class WebSocketManager {
       });
       
       this.socket.send(message);
-      debugLog(`MBA3210: Sent ${type} message`);
+      debugLog(`MBA3210: [MY CONNECTION] Sent ${type} message through MY OWN connection`);
       return true;
     } catch (error) {
-      debugLog(`MBA3210: Error sending message: ${error.message}`);
+      debugLog(`MBA3210: [MY CONNECTION] Error sending message through MY OWN connection: ${error.message}`);
       return false;
     }
   }
@@ -228,10 +232,10 @@ class WebSocketManager {
     // Send heartbeat every 15 seconds (reduced from 30)
     this.heartbeatInterval = setInterval(() => {
       if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
-        debugLog('MBA3210: Sending heartbeat');
+        debugLog('MBA3210: [MY CONNECTION] Sending heartbeat to maintain MY OWN WebSocket connection');
         this.send('heartbeat');
       } else if (this.isConnected) {
-        debugLog('MBA3210: Skipping heartbeat - socket not OPEN');
+        debugLog('MBA3210: [MY CONNECTION] Skipping heartbeat - MY OWN socket not OPEN');
         // If we think we're connected but socket isn't open, fix the mismatch
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
           this.isConnected = false;
@@ -245,7 +249,7 @@ class WebSocketManager {
           this.reconnect();
         }
       } else {
-        debugLog('MBA3210: Skipping heartbeat - not connected');
+        debugLog('MBA3210: [MY CONNECTION] Skipping heartbeat - MY OWN connection not connected');
       }
     }, 15000);
     
@@ -254,13 +258,13 @@ class WebSocketManager {
       if (this.socket) {
         const socketState = this.socket.readyState;
         const stateNames = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
-        debugLog(`MBA3210: Connection verification - isConnected: ${this.isConnected}, socketState: ${stateNames[socketState]}`);
+        debugLog(`MBA3210: [MY CONNECTION] Verifying MY OWN connection - isConnected: ${this.isConnected}, socketState: ${stateNames[socketState]}`);
         
         if (this.isConnected && socketState === WebSocket.OPEN) {
           // All good
         } else if (this.isConnected && socketState !== WebSocket.OPEN) {
           // Mismatch - we think we're connected but socket isn't open
-          debugLog('MBA3210: Connection state mismatch detected - socket not OPEN');
+          debugLog('MBA3210: [MY CONNECTION] State mismatch detected - MY OWN socket not OPEN');
           this.isConnected = false;
           this.notifyHandlers('connection', { 
             status: 'disconnected',
@@ -271,7 +275,7 @@ class WebSocketManager {
           this.reconnect();
         } else if (!this.isConnected && socketState === WebSocket.OPEN) {
           // Mismatch - socket is open but we don't think we're connected
-          debugLog('MBA3210: Connection state mismatch detected - socket OPEN but isConnected false');
+          debugLog('MBA3210: [MY CONNECTION] State mismatch detected - MY OWN socket OPEN but isConnected false');
           this.isConnected = true;
           this.notifyHandlers('connection', { 
             status: 'connected',
@@ -280,7 +284,7 @@ class WebSocketManager {
         }
       } else if (this.isConnected) {
         // Mismatch - we think we're connected but socket doesn't exist
-        debugLog('MBA3210: Connection state mismatch - no socket but isConnected is true');
+        debugLog('MBA3210: [MY CONNECTION] State mismatch - no socket but MY OWN isConnected is true');
         this.isConnected = false;
         this.notifyHandlers('connection', { 
           status: 'disconnected',
@@ -297,7 +301,7 @@ class WebSocketManager {
    * Force an immediate reconnection attempt
    */
   reconnect() {
-    debugLog('MBA3210: Forcing reconnection');
+    debugLog('MBA3210: [MY CONNECTION] Forcing reconnection of MY OWN WebSocket');
     
     // Clean up existing socket if any
     if (this.socket) {
@@ -308,7 +312,7 @@ class WebSocketManager {
       try {
         this.socket.close();
       } catch (e) {
-        debugLog(`MBA3210: Error closing socket during reconnect: ${e.message}`);
+        debugLog(`MBA3210: [MY CONNECTION] Error closing MY OWN socket during reconnect: ${e.message}`);
       }
       this.socket = null;
     }

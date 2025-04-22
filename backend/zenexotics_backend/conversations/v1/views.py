@@ -11,6 +11,7 @@ from professionals.models import Professional
 from clients.models import Client
 from django.core.cache import cache
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -236,22 +237,35 @@ def get_conversation_status(request, conversation_id):
         # Determine the other user
         other_user = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
         
-        # Check if the other participant is online using cache
-        other_participant_online = cache.get(f"user_{other_user.id}_online", False)
+        # Get the cache keys
+        online_cache_key = f"user_{other_user.id}_online"
+        connections_cache_key = f"user_{other_user.id}_connections"
         
-        # Log for debugging
-        logger.info(f"User {other_user.id} online status: {other_participant_online}")
+        # Check if the other participant is online using cache
+        other_participant_online = cache.get(online_cache_key, False)
         
         # Get active connections if any
-        connections = cache.get(f"user_{other_user.id}_connections", set())
+        connections = cache.get(connections_cache_key, set())
         connection_count = len(connections) if isinstance(connections, set) else 0
+        
+        # Get the cache TTL (time to live) to show when the status will expire
+        online_ttl = cache.ttl(online_cache_key)  # Returns seconds remaining or None if key doesn't exist
+        online_expires_in = online_ttl if online_ttl is not None else 0
+        
+        logger.info(f"User {other_user.id} online status: {other_participant_online}, connections: {connection_count}, TTL: {online_expires_in}s")
         
         return Response({
             'conversation_id': conversation_id,
             'other_participant_id': other_user.id,
+            'other_participant_name': other_user.name,
             'other_participant_online': other_participant_online,
             'connection_count': connection_count,
-            'cache_key': f"user_{other_user.id}_online"
+            'online_expires_in_seconds': online_expires_in,
+            'cache_keys': {
+                'online': online_cache_key,
+                'connections': connections_cache_key
+            },
+            'checked_at': datetime.now().isoformat()
         })
         
     except Conversation.DoesNotExist:

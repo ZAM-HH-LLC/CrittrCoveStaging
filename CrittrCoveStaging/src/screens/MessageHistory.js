@@ -675,18 +675,18 @@ const MessageHistory = ({ navigation, route }) => {
       
       // Handle user status updates
       if (data.type === 'user_status_update' && data.user_id) {
-        debugLog('MBA3210: Received user status update:', data);
+        debugLog('MBA3210: [OTHER USER STATUS] Received online status update for user ID:', data.user_id);
         
         // Normalize the user_id to string for comparison
         const statusUserId = String(data.user_id);
         const isOnline = !!data.is_online;
         
-        debugLog(`MBA3210: Processing status update for user ${statusUserId}, online=${isOnline}`);
+        debugLog(`MBA3210: [OTHER USER STATUS] Processing status change for user ${statusUserId}, online=${isOnline}`);
         
         // Update the conversations list with the new online status
         setConversations(prevConversations => {
           // Log the current conversations for debugging
-          debugLog(`MBA3210: Updating ${prevConversations.length} conversations with status update`);
+          debugLog(`MBA3210: [OTHER USER STATUS] Checking ${prevConversations.length} conversations for user ${statusUserId}`);
           
           // Apply the update
           const updatedConversations = prevConversations.map(conv => {
@@ -698,7 +698,7 @@ const MessageHistory = ({ navigation, route }) => {
             const matchesUser = (statusUserId === participant1Id || statusUserId === participant2Id);
             
             if (matchesUser) {
-              debugLog(`MBA3210: Matched user ${statusUserId} in conversation ${conv.conversation_id}, setting online=${isOnline}`);
+              debugLog(`MBA3210: [OTHER USER STATUS] Found match in conversation ${conv.conversation_id}, setting other_participant_online=${isOnline}`);
               
               // Update this conversation with the new online status
               return {
@@ -714,7 +714,7 @@ const MessageHistory = ({ navigation, route }) => {
             (conv, i) => conv.other_participant_online !== prevConversations[i].other_participant_online
           ).length;
           
-          debugLog(`MBA3210: Updated online status for ${updatedCount} conversations`);
+          debugLog(`MBA3210: [OTHER USER STATUS] Updated ${updatedCount} conversations with new status for user ${statusUserId}`);
           
           return updatedConversations;
         });
@@ -731,7 +731,7 @@ const MessageHistory = ({ navigation, route }) => {
           
           // Check if selected conversation involves this user
           if (statusUserId === selectedParticipant1Id || statusUserId === selectedParticipant2Id) {
-            debugLog(`MBA3210: Updating selected conversation with online status: ${isOnline}`);
+            debugLog(`MBA3210: [OTHER USER STATUS] Updating selected conversation with online status: ${isOnline} for user ${statusUserId}`);
             
             setSelectedConversationData(prev => ({
               ...prev,
@@ -860,28 +860,40 @@ const MessageHistory = ({ navigation, route }) => {
   const refreshOnlineStatus = useCallback(async () => {
     if (!selectedConversationData) return;
     
-    debugLog('MBA3210: Manually refreshing online status');
+    const otherUserName = selectedConversationData.other_user_name || 'Unknown user';
+    debugLog(`MBA3210: [OTHER USER STATUS] Manually polling online status for "${otherUserName}"`);
     
     try {
       const token = await getStorage('userToken');
       // Make a direct API call to check the online status
-      const response = await axios.get(
-        `${API_BASE_URL}/api/conversations/v1/status/${selectedConversation}/`,
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+      const endpoint = `${API_BASE_URL}/api/conversations/v1/status/${selectedConversation}/`;
+      debugLog(`MBA3210: [OTHER USER STATUS] Making API request to ${endpoint} to check if "${otherUserName}" is online`);
+      
+      const response = await axios.get(endpoint, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      );
+      });
       
       if (response.data && response.data.other_participant_online !== undefined) {
-        debugLog(`MBA3210: Got refreshed online status: ${response.data.other_participant_online}`);
+        const isOnline = response.data.other_participant_online;
+        const expiresIn = response.data.online_expires_in_seconds || 0;
+        
+        debugLog(`MBA3210: [OTHER USER STATUS] Poll result: "${otherUserName}" is ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+        
+        if (isOnline) {
+          debugLog(`MBA3210: [OTHER USER STATUS] "${otherUserName}" online status will expire in ${expiresIn} seconds`);
+        }
+        
+        if (response.data.connection_count !== undefined) {
+          debugLog(`MBA3210: [OTHER USER STATUS] "${otherUserName}" has ${response.data.connection_count} active connections`);
+        }
         
         // Update the selected conversation data
         setSelectedConversationData(prev => ({
           ...prev,
-          other_participant_online: response.data.other_participant_online
+          other_participant_online: isOnline
         }));
         
         // Also update in the conversations list
@@ -890,16 +902,18 @@ const MessageHistory = ({ navigation, route }) => {
             String(conv.conversation_id) === String(selectedConversation)
               ? {
                   ...conv,
-                  other_participant_online: response.data.other_participant_online
+                  other_participant_online: isOnline
                 }
               : conv
           )
         );
         
-        return response.data.other_participant_online;
+        return isOnline;
+      } else {
+        debugLog(`MBA3210: [OTHER USER STATUS] No valid status data received for "${otherUserName}"`);
       }
     } catch (error) {
-      debugLog(`MBA3210: Error refreshing online status: ${error.message}`);
+      debugLog(`MBA3210: [OTHER USER STATUS] Error polling online status for "${otherUserName}": ${error.message}`);
     }
     
     return null;
@@ -907,16 +921,21 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add a function to manually force reconnection
   const handleForceReconnect = useCallback(() => {
-    debugLog('MBA3210: User requested manual WebSocket reconnection');
+    debugLog('MBA3210: [CONNECTION] User manually requested WebSocket reconnection');
     if (typeof reconnect === 'function') {
       reconnect();
       
-      // After reconnection, refresh the online status
+      // After reconnection, refresh the online status of the current conversant
       setTimeout(() => {
-        refreshOnlineStatus();
+        if (selectedConversationData && selectedConversationData.other_user_name) {
+          debugLog(`MBA3210: [OTHER USER STATUS] Checking online status for "${selectedConversationData.other_user_name}" after manual reconnection`);
+          refreshOnlineStatus();
+        } else {
+          debugLog('MBA3210: [OTHER USER STATUS] No conversation selected, cannot check other user status after reconnection');
+        }
       }, 1000);
     }
-  }, [reconnect, refreshOnlineStatus]);
+  }, [reconnect, refreshOnlineStatus, selectedConversationData]);
   
   // Add a function to simulate connection for testing
   // const handleSimulateConnection = useCallback(() => {
@@ -929,21 +948,21 @@ const MessageHistory = ({ navigation, route }) => {
   // Update connection status UI and log more detailed information
   useEffect(() => {
     setWsConnectionStatus(connectionStatus);
-    debugLog(`MBA3210: WebSocket connection status changed to ${connectionStatus}`);
-    debugLog(`MBA3210: isConnected state: ${isConnected}`);
-    debugLog(`MBA3210: isUsingFallback: ${isUsingFallback}`);
+    debugLog(`MBA3210: [MY CONNECTION] WebSocket connection status changed to ${connectionStatus}`);
+    debugLog(`MBA3210: [MY CONNECTION] isConnected state: ${isConnected}`);
+    debugLog(`MBA3210: [MY CONNECTION] isUsingFallback: ${isUsingFallback}`);
     
     // Add more debug logs to check actual WebSocket readyState
     if (window && window.WebSocket) {
-      debugLog(`MBA3210: WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
+      debugLog(`MBA3210: [MY CONNECTION] WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
     }
     
     // Only log status changes but don't trigger fetches here - that's handled in the mount effect
     if ((connectionStatus === 'connected' && isConnected) || isUsingFallback) {
-      debugLog('MBA3210: Connection fully verified as connected or using fallback');
+      debugLog('MBA3210: [MY CONNECTION] Connection fully verified as connected or using fallback');
     } else {
-      debugLog('MBA3210: Connection not fully verified, status and state mismatch');
-      debugLog(`MBA3210: Connection details - status: ${connectionStatus}, isConnected: ${isConnected}`);
+      debugLog('MBA3210: [MY CONNECTION] Connection not fully verified, status and state mismatch');
+      debugLog(`MBA3210: [MY CONNECTION] Details - status: ${connectionStatus}, isConnected: ${isConnected}`);
     }
   }, [connectionStatus, isConnected, isUsingFallback]);
   
@@ -951,7 +970,7 @@ const MessageHistory = ({ navigation, route }) => {
   useEffect(() => {
     // Short delay to allow other initializations to complete
     const timer = setTimeout(() => {
-      debugLog('MBA3210: Forcing reconnection on component mount');
+      debugLog('MBA3210: [MY CONNECTION] Forcing reconnection on component mount');
       if (typeof reconnect === 'function') {
         reconnect();
       }
@@ -1144,6 +1163,9 @@ const MessageHistory = ({ navigation, route }) => {
     const conversation = conversations.find(conv => String(conv.conversation_id) === String(selectedConversation));
     
     if (conversation) {
+      debugLog(`MBA3210: [OTHER USER STATUS] Setting selected conversation to ${conversation.conversation_id} with user "${conversation.other_user_name}"`);
+      debugLog(`MBA3210: [OTHER USER STATUS] Initial online status for "${conversation.other_user_name}": ${conversation.other_participant_online ? 'ONLINE' : 'OFFLINE'}`);
+      
       setSelectedConversationData(conversation);
       
       // Update URL on web platform
@@ -1159,12 +1181,20 @@ const MessageHistory = ({ navigation, route }) => {
       
       // Reset message loading flag for new conversation
       hasLoadedMessagesRef.current = false;
+      
+      // Manually check online status for the other user to get the latest status
+      setTimeout(() => {
+        debugLog(`MBA3210: [OTHER USER STATUS] Polling for fresh online status of "${conversation.other_user_name}" after conversation selection`);
+        refreshOnlineStatus(); // This will update the status if it has changed
+      }, 500);
+      
     } else {
       if (is_DEBUG) {
         console.log('MBA98765 Could not find conversation data for ID:', selectedConversation);
       }
+      debugLog(`MBA3210: [OTHER USER STATUS] Could not find conversation data for ID: ${selectedConversation}`);
     }
-  }, [selectedConversation, conversations, isInitialLoad]);
+  }, [selectedConversation, conversations, isInitialLoad, refreshOnlineStatus]);
 
   // Add dedicated effect for message fetching
   useEffect(() => {
@@ -1224,14 +1254,16 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [screenWidth]);
 
-  // Modify fetchConversations to return the data
+  // Modify fetchConversations to include better logging
   const fetchConversations = async () => {
     try {
       setIsLoadingConversations(true);
+      debugLog('MBA3210: [OTHER USERS STATUS] Starting to fetch conversations with online status data');
 
       const token = await getStorage('userToken');
       const requestUrl = `${API_BASE_URL}/api/conversations/v1/`;
       
+      debugLog('MBA3210: [OTHER USERS STATUS] Making API request to get conversations with online statuses');
       const response = await axios.get(requestUrl, {
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -1246,12 +1278,21 @@ const MessageHistory = ({ navigation, route }) => {
           other_participant_online: conv.other_participant_online || false
         }));
         
+        // Log each conversation's online status for debugging
+        conversationsWithOnlineStatus.forEach(conv => {
+          const otherUserName = conv.other_user_name || 'Unknown';
+          debugLog(`MBA3210: [OTHER USERS STATUS] User "${otherUserName}" (conversation ${conv.conversation_id}) online status: ${conv.other_participant_online ? 'ONLINE' : 'OFFLINE'}`);
+        });
+        
+        debugLog(`MBA3210: [OTHER USERS STATUS] Fetched ${conversationsWithOnlineStatus.length} conversations with online status data`);
+        
         setConversations(conversationsWithOnlineStatus);
         return conversationsWithOnlineStatus;
       }
       return [];
     } catch (error) {
       console.error('Error fetching conversations:', error);
+      debugLog(`MBA3210: [OTHER USERS STATUS] Error fetching conversation status data: ${error.message}`);
       return [];
     } finally {
       setIsLoadingConversations(false);
@@ -2420,6 +2461,27 @@ const MessageHistory = ({ navigation, route }) => {
       </View>
     );
   };
+
+  // Add polling for online status of the other participant
+  useEffect(() => {
+    if (!selectedConversationData || !selectedConversation) {
+      return; // No conversation selected, nothing to poll
+    }
+    
+    const otherUserName = selectedConversationData.other_user_name || 'Unknown user';
+    debugLog(`MBA3210: [OTHER USER STATUS] Setting up polling for "${otherUserName}" online status`);
+    
+    // Poll every 30 seconds for the online status of the other user
+    const statusPollingInterval = setInterval(() => {
+      debugLog(`MBA3210: [OTHER USER STATUS] Polling interval triggered for "${otherUserName}"`);
+      refreshOnlineStatus();
+    }, 30000); // 30 seconds
+    
+    return () => {
+      debugLog(`MBA3210: [OTHER USER STATUS] Cleaning up polling interval for "${otherUserName}"`);
+      clearInterval(statusPollingInterval);
+    };
+  }, [selectedConversationData, selectedConversation, refreshOnlineStatus]);
 
   return (
     <SafeAreaView style={[

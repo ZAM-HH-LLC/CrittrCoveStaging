@@ -147,13 +147,13 @@ const useWebSocket = (messageType, callback, options = {}) => {
       
       // If it's been more than 30 seconds since we got a status update, check connection manually
       if (secondsSinceUpdate > 30) {
-        debugLog(`MBA3210: No connection updates in ${secondsSinceUpdate.toFixed(0)} seconds, verifying status`);
+        debugLog(`MBA3210: [MY CONNECTION] No updates on MY OWN connection in ${secondsSinceUpdate.toFixed(0)} seconds, verifying status`);
         
         // Check actual connection state from the WebSocket manager
         const actuallyConnected = websocketManager.isConnected;
         
         if (actuallyConnected !== isConnected) {
-          debugLog(`MBA3210: Connection state mismatch detected - WebSocket manager: ${actuallyConnected}, hook state: ${isConnected}`);
+          debugLog(`MBA3210: [MY CONNECTION] State mismatch detected - WebSocket manager: ${actuallyConnected}, hook state: ${isConnected}`);
           
           // Update our state to match reality
           setIsConnected(actuallyConnected);
@@ -162,12 +162,12 @@ const useWebSocket = (messageType, callback, options = {}) => {
         
         // Try to send heartbeat if we think we're connected
         if (isConnected) {
-          debugLog('MBA3210: Sending heartbeat to verify connection');
+          debugLog('MBA3210: [MY CONNECTION] Sending heartbeat to verify MY OWN connection');
           websocketManager.send('heartbeat');
         } else if (actuallyConnected) {
           // Try to send heartbeat even if our state says we're not connected
           // This helps ensure the backend knows we're still here
-          debugLog('MBA3210: Sending heartbeat despite disconnected state in hook');
+          debugLog('MBA3210: [MY CONNECTION] Sending heartbeat despite disconnected state in hook');
           websocketManager.send('heartbeat');
         }
         
@@ -181,16 +181,16 @@ const useWebSocket = (messageType, callback, options = {}) => {
 
   // Send a message through the WebSocket
   const sendMessage = useCallback((type, data) => {
-    debugLog(`MBA3210: Sending message of type ${type}`);
+    debugLog(`MBA3210: [MY CONNECTION] Attempting to send ${type} message through MY OWN WebSocket`);
     
     if (!isConnected) {
-      debugLog('MBA3210: Cannot send message, WebSocket not connected');
+      debugLog('MBA3210: [MY CONNECTION] Cannot send message, MY OWN WebSocket not connected, falling back to REST');
       // Return a promise that resolves when the message is sent
       return (async () => {
         try {
           const token = await getStorage('userToken');
           if (!token) {
-            debugLog('MBA3210: No token available for REST message send');
+            debugLog('MBA3210: [MY CONNECTION] No token available for REST message send');
             return false;
           }
           
@@ -211,7 +211,7 @@ const useWebSocket = (messageType, callback, options = {}) => {
             };
           }
           
-          debugLog(`MBA3210: Sending message via REST API to ${endpoint}`);
+          debugLog(`MBA3210: [MY CONNECTION] Sending message via REST API to ${endpoint} (fallback for failed WebSocket)`);
           const response = await axios.post(endpoint, payload, {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -222,13 +222,14 @@ const useWebSocket = (messageType, callback, options = {}) => {
           // Try WebSocket reconnection after sending message
           setTimeout(() => {
             if (websocketManager.reconnect) {
+              debugLog('MBA3210: [MY CONNECTION] Attempting reconnection after REST fallback');
               websocketManager.reconnect();
             }
           }, 1000);
           
           return response.data;
         } catch (error) {
-          debugLog(`MBA3210: Error sending message via REST: ${error.message}`);
+          debugLog(`MBA3210: [MY CONNECTION] Error sending message via REST fallback: ${error.message}`);
           return false;
         }
       })();
@@ -241,25 +242,25 @@ const useWebSocket = (messageType, callback, options = {}) => {
   const markMessagesAsRead = useCallback((conversationId, messageIds) => {
     // Skip if no conversation or message IDs
     if (!conversationId || !messageIds || messageIds.length === 0) {
-      debugLog('MBA3210: Skipping markMessagesAsRead - missing data');
+      debugLog('MBA3210: [MY CONNECTION] Skipping markMessagesAsRead - missing data');
       return Promise.resolve(false);
     }
     
-    debugLog(`MBA3210: Marking messages as read for conversation ${conversationId}`);
+    debugLog(`MBA3210: [MY CONNECTION] Marking messages as read for conversation ${conversationId}`);
     
     if (!isConnected) {
-      debugLog('MBA3210: Cannot mark messages as read, using REST API instead');
+      debugLog('MBA3210: [MY CONNECTION] Cannot mark messages as read through WebSocket, using REST API instead');
       
       // Return a promise that resolves when the messages are marked as read
       return (async () => {
         try {
           const token = await getStorage('userToken');
           if (!token) {
-            debugLog('MBA3210: No token available for REST mark as read');
+            debugLog('MBA3210: [MY CONNECTION] No token available for REST mark as read');
             return false;
           }
           
-          debugLog(`MBA3210: Sending mark_read via REST API for ${messageIds.length} messages`);
+          debugLog(`MBA3210: [MY CONNECTION] Sending mark_read via REST API for ${messageIds.length} messages (fallback)`);
           const response = await axios.post(`${API_BASE_URL}/api/messages/v1/mark_read/`, {
             conversation_id: conversationId,
             message_ids: messageIds
@@ -272,7 +273,7 @@ const useWebSocket = (messageType, callback, options = {}) => {
           
           return response.data;
         } catch (error) {
-          debugLog(`MBA3210: Error marking messages as read via REST: ${error.message}`);
+          debugLog(`MBA3210: [MY CONNECTION] Error marking messages as read via REST fallback: ${error.message}`);
           return false;
         }
       })();
@@ -283,39 +284,39 @@ const useWebSocket = (messageType, callback, options = {}) => {
 
   // Force a reconnection attempt
   const reconnect = useCallback(() => {
-    debugLog('MBA3210: Hook requesting WebSocket reconnection');
+    debugLog('MBA3210: [MY CONNECTION] Hook requesting reconnection of MY OWN WebSocket');
     
     try {
       // First reinitialize the connection
       if (websocketManager.disconnect) {
-        debugLog('MBA3210: Disconnecting existing WebSocket before reconnect');
+        debugLog('MBA3210: [MY CONNECTION] Disconnecting MY OWN existing WebSocket before reconnect');
         websocketManager.disconnect();
       }
       
       // Then attempt reconnection with a short delay
       setTimeout(() => {
         if (websocketManager.reconnect) {
-          debugLog('MBA3210: Calling websocketManager.reconnect()');
+          debugLog('MBA3210: [MY CONNECTION] Calling websocketManager.reconnect() for MY OWN connection');
           websocketManager.reconnect();
         } else if (websocketManager.connect) {
-          debugLog('MBA3210: Calling websocketManager.connect() as fallback');
+          debugLog('MBA3210: [MY CONNECTION] Calling websocketManager.connect() as fallback for MY OWN connection');
           websocketManager.connect();
         } else {
           // If neither method exists, reinitialize the connection
-          debugLog('MBA3210: No reconnect method found, reinitializing connection');
+          debugLog('MBA3210: [MY CONNECTION] No reconnect method found, reinitializing MY OWN connection');
           getStorage('userToken').then(token => {
             if (token) {
               websocketManager.init(token);
             } else {
-              debugLog('MBA3210: No token available for WebSocket reconnection');
+              debugLog('MBA3210: [MY CONNECTION] No token available for WebSocket reconnection');
             }
           }).catch(error => {
-            debugLog(`MBA3210: Error getting token for reconnection: ${error.message}`);
+            debugLog(`MBA3210: [MY CONNECTION] Error getting token for reconnection: ${error.message}`);
           });
         }
       }, 300);  // Short delay to ensure disconnect completes
     } catch (error) {
-      debugLog(`MBA3210: Error during reconnection: ${error.message}`);
+      debugLog(`MBA3210: [MY CONNECTION] Error during reconnection of MY OWN connection: ${error.message}`);
     }
   }, []);
 

@@ -5,10 +5,10 @@ from django.utils import timezone
 
 class CustomUserAdmin(UserAdmin):
     model = User
-    list_display = ('user_id', 'email', 'name', 'is_staff', 'is_active', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta')
+    list_display = ('id', 'user_id', 'email', 'name', 'is_staff', 'is_active', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta')
     list_filter = ('is_staff', 'is_active', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta')
     fieldsets = (
-        (None, {'fields': ('user_id', 'email', 'password')}),
+        (None, {'fields': ('id', 'user_id', 'email', 'password')}),
         ('Personal info', {'fields': ('name', 'profile_picture', 'phone_number', 'birthday')}),
         ('Status', {'fields': ('is_active', 'is_staff', 'is_superuser', 'email_is_verified', 'identity_verified')}),
         ('Subscription', {'fields': ('subscription_plan', 'is_waitlister', 'signed_up_on_beta')}),
@@ -21,14 +21,14 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('email', 'name', 'password1', 'password2', 'is_staff', 'is_active')}
         ),
     )
-    search_fields = ('email', 'name', 'user_id')
+    search_fields = ('id', 'email', 'name', 'user_id')
     ordering = ('email',)
-    readonly_fields = ('created_at', 'user_id')
+    readonly_fields = ('id', 'created_at', 'user_id')
 
 @admin.register(UserSettings)
 class UserSettingsAdmin(admin.ModelAdmin):
-    list_display = ('user_id_display', 'user', 'timezone', 'use_military_time', 'created_at', 'updated_at')
-    list_filter = ('timezone', 'use_military_time')
+    list_display = ('user_id_display', 'user', 'timezone', 'use_military_time', 'push_notifications', 'email_updates', 'marketing_communications', 'created_at', 'updated_at')
+    list_filter = ('timezone', 'use_military_time', 'push_notifications', 'email_updates', 'marketing_communications')
     search_fields = ('user__email', 'user__name', 'timezone', 'user__user_id')
     readonly_fields = ('created_at', 'updated_at', 'user_id_display')
     fieldsets = (
@@ -37,6 +37,12 @@ class UserSettingsAdmin(admin.ModelAdmin):
         }),
         ('Time Settings', {
             'fields': ('timezone', 'use_military_time')
+        }),
+        ('Notification Settings', {
+            'fields': ('push_notifications', 'email_updates', 'marketing_communications')
+        }),
+        ('Other Settings', {
+            'fields': ('privacy_settings',)
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
