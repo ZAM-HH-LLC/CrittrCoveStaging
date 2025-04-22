@@ -649,6 +649,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [draftData, setDraftData] = useState(null);
   const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
+  const [forceRerender, setForceRerender] = useState(0); // Add this state to help with scroll issues
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -856,86 +857,14 @@ const MessageHistory = ({ navigation, route }) => {
     markMessagesAsReadRef.current = markMessagesAsRead;
   }, [markMessagesAsRead]);
   
-  // Add a function to manually force a refresh of the online status
-  const refreshOnlineStatus = useCallback(async () => {
-    if (!selectedConversationData) return;
-    
-    const otherUserName = selectedConversationData.other_user_name || 'Unknown user';
-    debugLog(`MBA3210: [OTHER USER STATUS] Manually polling online status for "${otherUserName}"`);
-    
-    try {
-      const token = await getStorage('userToken');
-      // Make a direct API call to check the online status
-      const endpoint = `${API_BASE_URL}/api/conversations/v1/status/${selectedConversation}/`;
-      debugLog(`MBA3210: [OTHER USER STATUS] Making API request to ${endpoint} to check if "${otherUserName}" is online`);
-      
-      const response = await axios.get(endpoint, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.data && response.data.other_participant_online !== undefined) {
-        const isOnline = response.data.other_participant_online;
-        const expiresIn = response.data.online_expires_in_seconds || 0;
-        
-        debugLog(`MBA3210: [OTHER USER STATUS] Poll result: "${otherUserName}" is ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
-        
-        if (isOnline) {
-          debugLog(`MBA3210: [OTHER USER STATUS] "${otherUserName}" online status will expire in ${expiresIn} seconds`);
-        }
-        
-        if (response.data.connection_count !== undefined) {
-          debugLog(`MBA3210: [OTHER USER STATUS] "${otherUserName}" has ${response.data.connection_count} active connections`);
-        }
-        
-        // Update the selected conversation data
-        setSelectedConversationData(prev => ({
-          ...prev,
-          other_participant_online: isOnline
-        }));
-        
-        // Also update in the conversations list
-        setConversations(prevConversations => 
-          prevConversations.map(conv => 
-            String(conv.conversation_id) === String(selectedConversation)
-              ? {
-                  ...conv,
-                  other_participant_online: isOnline
-                }
-              : conv
-          )
-        );
-        
-        return isOnline;
-      } else {
-        debugLog(`MBA3210: [OTHER USER STATUS] No valid status data received for "${otherUserName}"`);
-      }
-    } catch (error) {
-      debugLog(`MBA3210: [OTHER USER STATUS] Error polling online status for "${otherUserName}": ${error.message}`);
-    }
-    
-    return null;
-  }, [selectedConversation, selectedConversationData]);
 
   // Add a function to manually force reconnection
   const handleForceReconnect = useCallback(() => {
     debugLog('MBA3210: [CONNECTION] User manually requested WebSocket reconnection');
     if (typeof reconnect === 'function') {
       reconnect();
-      
-      // After reconnection, refresh the online status of the current conversant
-      setTimeout(() => {
-        if (selectedConversationData && selectedConversationData.other_user_name) {
-          debugLog(`MBA3210: [OTHER USER STATUS] Checking online status for "${selectedConversationData.other_user_name}" after manual reconnection`);
-          refreshOnlineStatus();
-        } else {
-          debugLog('MBA3210: [OTHER USER STATUS] No conversation selected, cannot check other user status after reconnection');
-        }
-      }, 1000);
     }
-  }, [reconnect, refreshOnlineStatus, selectedConversationData]);
+  }, [reconnect, selectedConversationData]);
   
   // Add a function to simulate connection for testing
   // const handleSimulateConnection = useCallback(() => {
@@ -1182,11 +1111,6 @@ const MessageHistory = ({ navigation, route }) => {
       // Reset message loading flag for new conversation
       hasLoadedMessagesRef.current = false;
       
-      // Manually check online status for the other user to get the latest status
-      setTimeout(() => {
-        debugLog(`MBA3210: [OTHER USER STATUS] Polling for fresh online status of "${conversation.other_user_name}" after conversation selection`);
-        refreshOnlineStatus(); // This will update the status if it has changed
-      }, 500);
       
     } else {
       if (is_DEBUG) {
@@ -1194,11 +1118,11 @@ const MessageHistory = ({ navigation, route }) => {
       }
       debugLog(`MBA3210: [OTHER USER STATUS] Could not find conversation data for ID: ${selectedConversation}`);
     }
-  }, [selectedConversation, conversations, isInitialLoad, refreshOnlineStatus]);
+  }, [selectedConversation, conversations, isInitialLoad]);
 
   // Add dedicated effect for message fetching
   useEffect(() => {
-    if (!selectedConversation || isInitialLoad || hasLoadedMessagesRef.current) {
+    if (!selectedConversation || isInitialLoad) {
       return;
     }
 
@@ -1220,6 +1144,9 @@ const MessageHistory = ({ navigation, route }) => {
             console.log('MBA98765 Messages loaded, now draft data is available');
           }
         }
+        
+        // Force a rerender to fix scrolling issues
+        setForceRerender(prev => prev + 1);
       })
       .catch(error => {
         console.error('Error fetching messages:', error);
@@ -1338,6 +1265,11 @@ const MessageHistory = ({ navigation, route }) => {
         // Set draft data only on first page load
         setHasDraft(response.data.has_draft || false);
         setDraftData(response.data.draft_data || null);
+        
+        // Force a rerender after setting messages to fix scroll issues
+        setTimeout(() => {
+          setForceRerender(prev => prev + 1);
+        }, 100);
       } else {
         console.log('MBABOSS [8] Appending messages for page:', page);
         setMessages(prev => [...prev, ...(response.data.messages || [])]);
@@ -2239,7 +2171,8 @@ const MessageHistory = ({ navigation, route }) => {
                 inverted={true}
                 contentContainerStyle={{
                   flexGrow: 1,
-                  justifyContent: 'flex-end'
+                  justifyContent: 'flex-end',
+                  paddingTop: 16, // Add padding to ensure scrolling works properly
                 }}
                 maintainVisibleContentPosition={{
                   minIndexForVisible: 0,
@@ -2252,6 +2185,10 @@ const MessageHistory = ({ navigation, route }) => {
                     style={styles.loadingMore}
                   />
                 )}
+                initialNumToRender={20} // Render more items initially
+                windowSize={21} // Increase window size for better performance
+                removeClippedSubviews={false} // Disable clipping for web performance
+                extraData={forceRerender} // Add this to force FlatList to re-render when needed
               />
             )}
           </View>
@@ -2412,56 +2349,6 @@ const MessageHistory = ({ navigation, route }) => {
     }, 100);
   };
 
-  // Add a simulation button that's more prominent for debugging
-  const renderSimulationControls = () => {
-    if (!is_DEBUG) return null;
-    
-    return (
-      <View style={{
-        position: 'absolute',
-        top: 5,
-        right: 5,
-        flexDirection: 'row',
-        backgroundColor: '#333333',
-        borderRadius: 6,
-        padding: 5,
-        zIndex: 1000,
-      }}>
-        <TouchableOpacity 
-          style={{
-            backgroundColor: isConnected ? '#4CAF50' : '#F44336',
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            borderRadius: 4,
-            marginRight: isConnected ? 0 : 5,
-          }}
-          onPress={isConnected ? null : handleSimulateConnection}
-        >
-          <Text style={{ color: '#FFFFFF', fontSize: 12 }}>
-            {isConnected ? 'Connected' : 'Simulate Connection'}
-          </Text>
-        </TouchableOpacity>
-        
-        {isConnected && (
-          <TouchableOpacity 
-            style={{
-              backgroundColor: '#FFC107',
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              borderRadius: 4,
-              marginLeft: 5,
-            }}
-            onPress={handleForceReconnect}
-          >
-            <Text style={{ color: '#333333', fontSize: 12 }}>
-              Reconnect
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
-
   // Add polling for online status of the other participant
   useEffect(() => {
     if (!selectedConversationData || !selectedConversation) {
@@ -2471,17 +2358,12 @@ const MessageHistory = ({ navigation, route }) => {
     const otherUserName = selectedConversationData.other_user_name || 'Unknown user';
     debugLog(`MBA3210: [OTHER USER STATUS] Setting up polling for "${otherUserName}" online status`);
     
-    // Poll every 30 seconds for the online status of the other user
-    const statusPollingInterval = setInterval(() => {
-      debugLog(`MBA3210: [OTHER USER STATUS] Polling interval triggered for "${otherUserName}"`);
-      refreshOnlineStatus();
-    }, 30000); // 30 seconds
     
     return () => {
       debugLog(`MBA3210: [OTHER USER STATUS] Cleaning up polling interval for "${otherUserName}"`);
-      clearInterval(statusPollingInterval);
+      // clearInterval(statusPollingInterval);
     };
-  }, [selectedConversationData, selectedConversation, refreshOnlineStatus]);
+  }, [selectedConversationData, selectedConversation]);
 
   return (
     <SafeAreaView style={[

@@ -243,16 +243,16 @@ CORS_ALLOWED_ORIGINS = [
 
 # Email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.zoho.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-EMAIL_USE_SSL = False
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL') == 'True'
 
 # Contact and sender emails
 CONTACT_EMAIL = EMAIL_HOST_USER
-DEFAULT_FROM_EMAIL = f'CrittrCove <{EMAIL_HOST_USER}>'  # Format with name for better deliverability
+DEFAULT_FROM_EMAIL = f'CrittrCove <{EMAIL_HOST_USER}>'
 
 # Email deliverability settings
 EMAIL_TIMEOUT = 30  # Timeout in seconds
