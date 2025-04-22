@@ -846,7 +846,7 @@ const MessageHistory = ({ navigation, route }) => {
   }, [selectedConversation]);
 
   // Initialize WebSocket with the message handler
-  const { isConnected, connectionStatus, markMessagesAsRead, reconnect, simulateConnection, isUsingFallback } = useWebSocket(
+  const { isConnected, connectionStatus, markMessagesAsRead, reconnect, disconnect, simulateConnection, isUsingFallback } = useWebSocket(
     'message', 
     handleWebSocketMessage,
     { handlerId: 'message-history' }
@@ -877,13 +877,13 @@ const MessageHistory = ({ navigation, route }) => {
   // Update connection status UI and log more detailed information
   useEffect(() => {
     setWsConnectionStatus(connectionStatus);
-    debugLog(`MBA3210: [MY CONNECTION] WebSocket connection status changed to ${connectionStatus}`);
-    debugLog(`MBA3210: [MY CONNECTION] isConnected state: ${isConnected}`);
-    debugLog(`MBA3210: [MY CONNECTION] isUsingFallback: ${isUsingFallback}`);
+    // debugLog(`MBA3210: [MY CONNECTION] WebSocket connection status changed to ${connectionStatus}`);
+    // debugLog(`MBA3210: [MY CONNECTION] isConnected state: ${isConnected}`);
+    // debugLog(`MBA3210: [MY CONNECTION] isUsingFallback: ${isUsingFallback}`);
     
     // Add more debug logs to check actual WebSocket readyState
     if (window && window.WebSocket) {
-      debugLog(`MBA3210: [MY CONNECTION] WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
+      // debugLog(`MBA3210: [MY CONNECTION] WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
     }
     
     // Only log status changes but don't trigger fetches here - that's handled in the mount effect
@@ -891,7 +891,7 @@ const MessageHistory = ({ navigation, route }) => {
       debugLog('MBA3210: [MY CONNECTION] Connection fully verified as connected or using fallback');
     } else {
       debugLog('MBA3210: [MY CONNECTION] Connection not fully verified, status and state mismatch');
-      debugLog(`MBA3210: [MY CONNECTION] Details - status: ${connectionStatus}, isConnected: ${isConnected}`);
+      // debugLog(`MBA3210: [MY CONNECTION] Details - status: ${connectionStatus}, isConnected: ${isConnected}`);
     }
   }, [connectionStatus, isConnected, isUsingFallback]);
   
@@ -987,6 +987,13 @@ const MessageHistory = ({ navigation, route }) => {
 
     return () => {
       debugLog('MBA3210: Component unmounting - cleaning up');
+      
+      // Ensure WebSocket is disconnected when component unmounts
+      if (disconnect) {
+        debugLog('MBA3210: Disconnecting WebSocket on component unmount');
+        disconnect();
+      }
+      
       setConversations([]);
       setMessages([]);
       setSelectedConversation(null);
@@ -1228,26 +1235,19 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Modify fetchMessages to handle pagination better
   const fetchMessages = async (conversationId, page = 1) => {
-    console.log('MBABOSS [1] Starting fetchMessages with conversationId:', conversationId, 'page:', page);
     try {
-      console.log('MBABOSS [2] Entered try block');
       
       if (page === 1) {
-        console.log('MBABOSS [3] Setting loading messages for page 1');
         setIsLoadingMessages(true);
         // Reset messages when fetching first page
         setMessages([]);
       } else {
-        console.log('MBABOSS [3] Setting loading more for page:', page);
         setIsLoadingMore(true);
       }
       
-      console.log('MBABOSS [4] Getting storage token');
       const token = await getStorage('userToken');
-      console.log('MBABOSS [5] Got token:', token ? 'Token exists' : 'No token');
       
       const url = `${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/?page=${page}`;
-      console.log('MBABOSS [6] Making request to URL:', url);
 
       const response = await axios.get(url, {
         headers: { 
@@ -1256,11 +1256,9 @@ const MessageHistory = ({ navigation, route }) => {
         }
       });
       
-      console.log('MBABOSS [7] Got response:', response.status);
       
       // Update the messages state based on the page
       if (page === 1) {
-        console.log('MBABOSS [8] Setting messages for page 1');
         setMessages(response.data.messages || []);
         // Set draft data only on first page load
         setHasDraft(response.data.has_draft || false);
@@ -1271,7 +1269,6 @@ const MessageHistory = ({ navigation, route }) => {
           setForceRerender(prev => prev + 1);
         }, 100);
       } else {
-        console.log('MBABOSS [8] Appending messages for page:', page);
         setMessages(prev => [...prev, ...(response.data.messages || [])]);
       }
       
@@ -1279,9 +1276,8 @@ const MessageHistory = ({ navigation, route }) => {
       setHasMore(response.data.has_more);
       setCurrentPage(page);
 
-      console.log('MBABOSS [9] Successfully completed fetchMessages');
     } catch (error) {
-      console.error('MBABOSS [ERROR] Error in fetchMessages:', {
+      debugLog('MBABOSS [ERROR] Error in fetchMessages:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
@@ -1289,11 +1285,9 @@ const MessageHistory = ({ navigation, route }) => {
         method: error.config?.method
       });
     } finally {
-      console.log('MBABOSS [10] In finally block, cleaning up');
       setIsLoadingMessages(false);
       setIsLoadingMore(false);
     }
-    console.log('MBABOSS [11] Exiting fetchMessages');
   };
 
   // Function to send a message
@@ -2089,7 +2083,7 @@ const MessageHistory = ({ navigation, route }) => {
         <Text style={styles.messageHeaderName}>
           {selectedConversationData?.other_user_name}
         </Text>
-        <TouchableOpacity onPress={handleForceReconnect} style={{ marginLeft: 8 }}>
+        {/* <TouchableOpacity onPress={handleForceReconnect} style={{ marginLeft: 8 }}>
           {selectedConversationData?.other_participant_online ? (
             <Badge
               size={8}
@@ -2111,7 +2105,7 @@ const MessageHistory = ({ navigation, route }) => {
         
         {isUsingFallback && (
           <Text style={{ fontSize: 10, color: '#FFC107', marginLeft: 4 }}>Fallback</Text>
-        )}
+        )} */}
         
         {hasDraft && (
           <TouchableOpacity 
@@ -2254,6 +2248,7 @@ const MessageHistory = ({ navigation, route }) => {
           <Text style={styles.mobileHeaderName}>
             {selectedConversationData?.name || selectedConversationData?.other_user_name}
           </Text>
+          {/* TODO: Add back after MVP
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={handleForceReconnect}>
               {selectedConversationData?.other_participant_online ? (
@@ -2279,8 +2274,8 @@ const MessageHistory = ({ navigation, route }) => {
             
             {isUsingFallback && (
               <Text style={{ fontSize: 10, color: '#FFC107', marginLeft: 4 }}>Fallback</Text>
-            )}
-          </View>
+            )} 
+          </View>*/}
         </View>
       </View>
     </View>
@@ -2364,6 +2359,34 @@ const MessageHistory = ({ navigation, route }) => {
       // clearInterval(statusPollingInterval);
     };
   }, [selectedConversationData, selectedConversation]);
+
+  useEffect(() => {
+    // Clean up on component unmount
+    return () => {
+      debugLog('MBA3210: MessageHistory unmounting, cleaning up websocket references');
+      // No need to explicitly disconnect here - the hook will handle it
+    };
+  }, []);
+
+  useEffect(() => {
+    // When a user signs out or navigates away, make sure to disconnect
+    const handleBeforeUnload = () => {
+      debugLog('MBA3210: Page unloading, disconnecting websocket');
+      if (disconnect) {
+        disconnect();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      }
+    };
+  }, [disconnect]);
 
   return (
     <SafeAreaView style={[

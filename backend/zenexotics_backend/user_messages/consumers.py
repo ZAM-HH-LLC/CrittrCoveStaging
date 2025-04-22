@@ -63,7 +63,7 @@ class MessageConsumer(AsyncWebsocketConsumer):
         user = self.scope['user']
         
         if not user.is_anonymous:
-            logger.info(f"WebSocket disconnecting for user {user.id}, code: {close_code}")
+            # logger.info(f"WebSocket disconnecting for user {user.id}, code: {close_code}")
             
             # Remove this connection from the user's connections list
             await self.remove_user_connection(user.id, self.channel_name)
@@ -75,9 +75,9 @@ class MessageConsumer(AsyncWebsocketConsumer):
                     self.channel_name
                 )
             
-            logger.info(f"User {user.id} disconnected from WebSocket, code: {close_code}")
-        else:
-            logger.warning(f"Anonymous user disconnected from WebSocket, code: {close_code}")
+            # logger.info(f"User {user.id} disconnected from WebSocket, code: {close_code}")
+        # else:
+            # logger.warning(f"Anonymous user disconnected from WebSocket, code: {close_code}")
     
     async def receive(self, text_data):
         """
@@ -167,12 +167,12 @@ class MessageConsumer(AsyncWebsocketConsumer):
         was_online = cache.get(f"user_{user_id}_online", False)
         cache.set(f"user_{user_id}_online", True, 300)
         
-        logger.info(f"User {user_id} marked as online (was_online={was_online}), connections={len(connections)}")
+        # MBA3210:logger.info(f"User {user_id} marked as online (was_online={was_online}), connections={len(connections)}")
         
         # Only broadcast status change if it's a change
         if not was_online:
             result = self._notify_user_status_change(user_id, True)
-            logger.info(f"Online status notification result: {result}")
+            # MBA3210:logger.info(f"Online status notification result: {result}")
     
     @database_sync_to_async
     def remove_user_connection(self, user_id, channel_name):
@@ -190,7 +190,7 @@ class MessageConsumer(AsyncWebsocketConsumer):
         if channel_name in connections:
             connections.remove(channel_name)
         
-        logger.info(f"Removed connection for user {user_id}, remaining connections: {len(connections)}")
+        # MBA3210: logger.info(f"Removed connection for user {user_id}, remaining connections: {len(connections)}")
         
         # If there are still connections, update the cache
         if connections:
@@ -201,12 +201,12 @@ class MessageConsumer(AsyncWebsocketConsumer):
         was_online = cache.get(f"user_{user_id}_online", False)
         cache.delete(f"user_{user_id}_online")
         
-        logger.info(f"No connections left for user {user_id}, marking as offline (was_online={was_online})")
+        # MBA3210: logger.info(f"No connections left for user {user_id}, marking as offline (was_online={was_online})")
         
         # Only broadcast status change if it's a change
         if was_online:
             result = self._notify_user_status_change(user_id, False)
-            logger.info(f"Offline status notification result: {result}")
+            # MBA3210: logger.info(f"Offline status notification result: {result}")
     
     def _notify_user_status_change(self, user_id, is_online):
         """
@@ -249,7 +249,7 @@ class MessageConsumer(AsyncWebsocketConsumer):
                 )
                 
                 notified_count += 1
-                logger.info(f"Sent status update for user {user_id} (online: {is_online}) to user {other_user_id}")
+                # MBA3210: logger.info(f"Sent status update for user {user_id} (online: {is_online}) to user {other_user_id}")
             
             return f"Notified {notified_count} users"
         
@@ -262,9 +262,9 @@ class MessageConsumer(AsyncWebsocketConsumer):
         Immediately broadcast status update to all relevant users
         """
         try:
-            logger.info(f"Broadcasting status update for user {user_id}, online={is_online}")
+            # logger.info(f"Broadcasting status update for user {user_id}, online={is_online}")
             result = self._notify_user_status_change(user_id, is_online)
-            logger.info(f"Broadcast result: {result}")
+            # logger.info(f"Broadcast result: {result}")
             return result
         except Exception as e:
             logger.error(f"Error in _broadcast_status_update: {str(e)}")

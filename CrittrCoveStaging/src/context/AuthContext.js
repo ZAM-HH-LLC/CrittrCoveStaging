@@ -19,7 +19,7 @@ export const setDebugEnabled = (enabled) => {
 };
 
 export const debugLog = (message, ...data) => {
-  if (debugEnabled) {
+  if (debugEnabled && !message.includes('MBA3210')) {
     if (data.length > 0) {
       console.log(`${message}:`, ...data);
     } else {
@@ -628,12 +628,19 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async () => {
     try {
+      // Close websocket connection first
+      const websocketManager = (await import('../utils/websocket')).default;
+      websocketManager.disconnect();
+      debugLog('MBA3210: WebSocket disconnected during signOut');
+      
+      // Then clear tokens and storage
       await authService.current.clearTokens();
       await AsyncStorage.multiRemove(['userRole', 'isApprovedProfessional']);
       await sessionStorage.removeItem('userRole');
       await sessionStorage.removeItem('isApprovedProfessional');
     } catch (error) {
-      console.error('Error clearing storage:', error);
+      // TODO: implement an error handler for this instead of debugLog
+      debugLog('Error during sign out:', error);
     }
 
     setIsSignedIn(false);
@@ -652,9 +659,8 @@ export const AuthProvider = ({ children }) => {
 
   const switchRole = async (navigation) => {
     if (isApprovedProfessional) {
-      if (is_DEBUG) {
-        debugLog('MBA98765 Switching role, current role:', userRole);
-      }
+      debugLog('MBA98765 Switching role, current role:', userRole);
+      
       const newRole = userRole === 'professional' ? 'petOwner' : 'professional';
       setUserRole(newRole);
       try {
@@ -671,9 +677,7 @@ export const AuthProvider = ({ children }) => {
           navigate('Dashboard');
         }
         
-        if (is_DEBUG) {
-          debugLog('MBA98765 Role switched to:', newRole);
-        }
+        debugLog('MBA98765 Role switched to:', newRole);
       } catch (error) {
         console.error('Error updating role in storage:', error);
       }
@@ -688,7 +692,6 @@ export const AuthProvider = ({ children }) => {
     try {
       const settings = await getTimeSettings();
       setTimeSettings(settings);
-      
       
       debugLog('MBA98765 Time settings response:', settings);
       

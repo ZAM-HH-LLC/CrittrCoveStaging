@@ -320,12 +320,29 @@ const useWebSocket = (messageType, callback, options = {}) => {
     }
   }, []);
 
+  // Explicitly disconnect the WebSocket
+  const disconnect = useCallback(() => {
+    if (disabled) return;
+    
+    debugLog(`MBA3210: useWebSocket hook explicitly disconnecting for ${messageType}, handler ${handlerId}`);
+    websocketManager.disconnect();
+    
+    // Update local state
+    setIsConnected(false);
+    setConnectionStatus('disconnected');
+    failedAttemptsRef.current = 0;
+  }, [disabled, messageType, handlerId]);
+
+  // Return WebSocket state and methods
   return {
     isConnected,
     connectionStatus,
     sendMessage,
-    markMessagesAsRead,
-    reconnect
+    markMessagesAsRead, 
+    reconnect: websocketManager.reconnect ? websocketManager.reconnect.bind(websocketManager) : null,
+    disconnect,
+    simulateConnection: websocketManager.connect ? websocketManager.connect.bind(websocketManager) : null,
+    isUsingFallback: !isConnected
   };
 };
 
