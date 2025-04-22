@@ -32,6 +32,7 @@ venv/*
 ENV/
 env.bak/
 venv.bak/
+backend/zenexotics_backend/.env
 
 # dependencies
 node_modules/
