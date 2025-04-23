@@ -154,11 +154,8 @@ export const MessageNotificationProvider = ({ children }) => {
     debugLog('MBA4321: Updating route to:', routeName);
     setCurrentRoute(routeName);
     
-    // Reset notifications if navigating to MessageHistory
-    if (routeName === 'MessageHistory' && hasUnreadMessages) {
-      setHasUnreadMessages(false);
-      setUnreadCount(0);
-    }
+    // Don't reset all notifications when navigating to MessageHistory
+    // Individual conversations will be marked as read when they are opened
   };
 
   // Initialize WebSocket connection when signed in
@@ -285,15 +282,23 @@ export const MessageNotificationProvider = ({ children }) => {
     checkUnreadMessages,
     onNewMessage,
     markConversationAsRead,
-    resetNotifications: (routeName) => {
+    resetNotifications: (routeName, conversationId) => {
       // If a route is provided, set it as the current route
       if (routeName && routeName !== currentRoute) {
         setCurrentRoute(routeName);
       }
       
-      // Only reset notifications if we're on or going to the MessageHistory screen
+      // If a specific conversation ID is provided, only clear that conversation's notifications
+      if (conversationId) {
+        debugLog(`MBA4321: Resetting notifications for specific conversation: ${conversationId}`);
+        markConversationAsRead(conversationId);
+        return;
+      }
+      
+      // Only reset all notifications if explicitly requested (no conversationId)
+      // and we're on the MessageHistory screen
       if (currentRoute === 'MessageHistory' || routeName === 'MessageHistory') {
-        debugLog('MBA4321: Resetting message notifications');
+        debugLog('MBA4321: Resetting all message notifications (deprecated, use markConversationAsRead instead)');
         setHasUnreadMessages(false);
         setUnreadCount(0);
         setConversationCounts({});

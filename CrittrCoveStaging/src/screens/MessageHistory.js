@@ -92,6 +92,7 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   conversationName: {
     fontSize: 16,
     fontFamily: theme.fonts.header.fontFamily,
+    flex: 1,
   },
   messageSection: {
     flex: 1,
@@ -269,22 +270,47 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   },
   conversationContent: {
     flex: 1,
+    width: '100%',
   },
   conversationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+    width: '100%',
+  },
+  conversationNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   conversationTime: {
     fontSize: 12,
     color: theme.colors.placeholder,
   },
+  conversationLastMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 6,
+  },
   conversationLastMessage: {
     fontSize: 14,
     color: theme.colors.placeholder,
-    marginBottom: 8,
+    flex: 1,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  conversationUnreadBadge: {
+    position: 'relative',
+    backgroundColor: theme.colors.error,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginLeft: 8,
   },
   unreadMessage: {
     color: theme.colors.text,
@@ -295,6 +321,7 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     padding: 4,
     borderRadius: 4,
     alignSelf: 'flex-start',
+    marginTop: 2,
   },
   bookingStatus: {
     fontSize: 12,
@@ -617,6 +644,28 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     fontSize: 14,
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  conversationUnreadBadge: {
+    position: 'relative',
+    // marginTop: 4,
+    backgroundColor: theme.colors.error,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  conversationUnreadText: {
+    color: theme.colors.whiteText,
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  timeContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
 });
 
 const MessageHistory = ({ navigation, route }) => {
@@ -651,7 +700,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
   const [forceRerender, setForceRerender] = useState(0); // Add this state to help with scroll issues
-  const { resetNotifications, updateRoute, markConversationAsRead } = useContext(MessageNotificationContext);
+  const { resetNotifications, updateRoute, markConversationAsRead, getConversationUnreadCount } = useContext(MessageNotificationContext);
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -1106,6 +1155,12 @@ const MessageHistory = ({ navigation, route }) => {
       
       setSelectedConversationData(conversation);
       
+      // Mark this conversation as read in the notification context
+      if (markConversationAsRead) {
+        debugLog(`MBA4321: Marking conversation ${selectedConversation} as read when selected`);
+        markConversationAsRead(selectedConversation);
+      }
+      
       // Update URL on web platform
       if (Platform.OS === 'web') {
         const newUrl = new URL(window.location.href);
@@ -1120,14 +1175,13 @@ const MessageHistory = ({ navigation, route }) => {
       // Reset message loading flag for new conversation
       hasLoadedMessagesRef.current = false;
       
-      
     } else {
       if (is_DEBUG) {
         console.log('MBA98765 Could not find conversation data for ID:', selectedConversation);
       }
       debugLog(`MBA3210: [OTHER USER STATUS] Could not find conversation data for ID: ${selectedConversation}`);
     }
-  }, [selectedConversation, conversations, isInitialLoad]);
+  }, [selectedConversation, conversations, isInitialLoad, markConversationAsRead]);
 
   // Add dedicated effect for message fetching
   useEffect(() => {
@@ -1243,12 +1297,6 @@ const MessageHistory = ({ navigation, route }) => {
         setIsLoadingMessages(true);
         // Reset messages when fetching first page
         setMessages([]);
-        
-        // Mark this conversation as read in the notification context
-        if (markConversationAsRead) {
-          debugLog(`MBA4321: Marking conversation ${conversationId} as read when fetching messages`);
-          markConversationAsRead(conversationId);
-        }
       } else {
         setIsLoadingMore(true);
       }
@@ -2025,6 +2073,10 @@ const MessageHistory = ({ navigation, route }) => {
         
         const isSelected = String(conv.conversation_id) === String(selectedConversation);
         
+        // Get unread count for this conversation from MessageNotificationContext
+        const unreadCount = getConversationUnreadCount ? 
+          getConversationUnreadCount(String(conv.conversation_id)) : 0;
+        
         return (
           <TouchableOpacity
             key={conv.conversation_id}
@@ -2039,30 +2091,44 @@ const MessageHistory = ({ navigation, route }) => {
                   type: typeof conv.conversation_id
                 });
               }
+              
+              // Set the selected conversation
               setSelectedConversation(conv.conversation_id);
+              
+              // Mark this conversation as read when clicked
+              if (markConversationAsRead && unreadCount > 0) {
+                debugLog(`MBA4321: Explicitly marking conversation ${conv.conversation_id} as read when clicked`);
+                markConversationAsRead(conv.conversation_id);
+              }
             }}
           >
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
-                <Text style={[
-                  styles.conversationName
-                ]}>
+                <Text style={styles.conversationName}>
                   {otherParticipantName || conv.name || conv.other_user_name || 'Unknown'}
                 </Text>
                 <Text style={styles.conversationTime}>
-                  {new Date(conv.last_message_time).toLocaleTimeString()}
+                  {new Date(conv.last_message_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                 </Text>
               </View>
-              <Text 
-                style={[
-                  styles.conversationLastMessage,
-                  isSelected && styles.activeConversationText,
-                  conv.unread && styles.unreadMessage
-                ]} 
-                numberOfLines={1}
-              >
-                {conv.last_message}
-              </Text>
+              <View style={styles.conversationLastMessageContainer}>
+                <Text 
+                  style={[
+                    styles.conversationLastMessage,
+                    isSelected && styles.activeConversationText,
+                    (conv.unread || unreadCount > 0) && !isSelected && styles.unreadMessage
+                  ]} 
+                  numberOfLines={1}
+                >
+                  {conv.last_message}
+                </Text>
+                {/* Display unread count badge on same line as last message */}
+                {unreadCount > 0 && !isSelected && (
+                  <View style={styles.conversationUnreadBadge}>
+                    <Text style={styles.conversationUnreadText}>{unreadCount}</Text>
+                  </View>
+                )}
+              </View>
               {conv.bookingStatus && (
                 <View style={[
                   styles.bookingStatusContainer,
@@ -2400,7 +2466,8 @@ const MessageHistory = ({ navigation, route }) => {
   useEffect(() => {
     // Only reset notifications once when the component mounts
     updateRoute && updateRoute('MessageHistory');
-    resetNotifications && resetNotifications();
+    
+    // No need to reset all notifications, individual conversations will be marked as read when selected
     
     // Return cleanup function
     return () => {

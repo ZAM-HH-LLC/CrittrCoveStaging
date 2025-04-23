@@ -625,7 +625,7 @@ export default function Navigation({ state, descriptors, navigation }) {
                            (item.route === 'More' && item.title === 'Settings' && currentRoute === 'More');
             
             // Check if this is the Messages tab and we have unread messages
-            const showNotification = item.title === 'Messages' && hasUnreadMessages && screenWidth > 900;
+            const showNotification = item.title === 'Messages' && hasUnreadMessages;
 
             return (
               <TouchableOpacity
