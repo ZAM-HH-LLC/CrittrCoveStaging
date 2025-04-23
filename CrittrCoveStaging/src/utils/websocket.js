@@ -16,6 +16,7 @@ class WebSocketManager {
     this.messageHandlers = new Map();
     this.connectionId = null;
     this.wsUrl = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
+    this._reconnectTimeout = null;
     debugLog('MBA4321: WebSocketManager initialized, wsUrl is ' + this.wsUrl);
   }
 
@@ -60,8 +61,14 @@ class WebSocketManager {
     }
     
     // If already connected, no need to reconnect
-    if (this.isConnected && this.socket) {
-      debugLog('MBA4321: WebSocket already connected');
+    if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
+      debugLog('MBA4321: WebSocket already connected and open');
+      return true;
+    }
+    
+    // If socket exists but is in CONNECTING state, don't start another connection
+    if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
+      debugLog('MBA4321: WebSocket already connecting, skipping duplicate connect');
       return true;
     }
     
@@ -239,10 +246,17 @@ class WebSocketManager {
    * Schedule a reconnection attempt
    */
   scheduleReconnect() {
+    // Skip if a reconnection is already scheduled
+    if (this._reconnectTimeout) {
+      debugLog('MBA4321: Reconnect already scheduled, skipping duplicate');
+      return;
+    }
+    
     const delay = Math.min(1000 * Math.pow(2, this.connectionAttempts - 1), 30000);
     debugLog(`MBA4321: Scheduling reconnect in ${delay}ms (attempt ${this.connectionAttempts})`);
     
-    setTimeout(() => {
+    this._reconnectTimeout = setTimeout(() => {
+      this._reconnectTimeout = null;
       if (!this.isConnected) {
         this.connect();
       }
@@ -274,39 +288,52 @@ class WebSocketManager {
   }
 
   /**
-   * Disconnect from the WebSocket server
+   * Disconnect the WebSocket
    */
   disconnect() {
-    debugLog('MBA4321: Disconnecting WebSocket');
+    debugLog('MBA4321: [MY CONNECTION] Disconnecting WebSocket connection');
     
-    // Clear intervals
+    // Clear heartbeat interval
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
     
-    // Clear timeout
+    // Clear disconnect timeout
     if (this.disconnectTimeout) {
       clearTimeout(this.disconnectTimeout);
       this.disconnectTimeout = null;
     }
     
-    // Close socket if it exists
+    // Close the socket if it exists
     if (this.socket) {
       try {
-        if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
-          this.socket.close(1000, "Client disconnecting");
-        }
+        // Remove all event handlers to prevent reconnection attempts from them
+        this.socket.onopen = null;
+        this.socket.onclose = null;
+        this.socket.onmessage = null;
+        this.socket.onerror = null;
+        
+        // Close the connection
+        this.socket.close();
+        this.socket = null;
+        
+        debugLog('MBA4321: [MY CONNECTION] WebSocket connection closed successfully');
       } catch (error) {
-        debugLog(`MBA4321: Error closing WebSocket: ${error.message}`);
+        debugLog(`MBA4321: [MY CONNECTION] Error closing WebSocket: ${error.message}`);
       }
-      
-      this.socket = null;
     }
     
+    // Reset connection state
     this.isConnected = false;
-    this.connectionAttempts = 0;
-    debugLog('MBA4321: WebSocket disconnected');
+    
+    // Notify handlers of the disconnection
+    this.notifyHandlers('connection', { 
+      status: 'disconnected',
+      timestamp: new Date().toISOString()
+    });
+    
+    return true;
   }
 
   /**
@@ -409,6 +436,62 @@ class WebSocketManager {
       conversation_id: conversationId,
       message_ids: messageIds
     });
+  }
+
+  /**
+   * Check if WebSocket is connected and reconnect if needed
+   * @returns {boolean} Whether a reconnection was attempted
+   */
+  reconnectIfNeeded() {
+    debugLog('MBA4321: [MY CONNECTION] Checking if WebSocket reconnection needed');
+    
+    // If we don't have a token, can't reconnect
+    if (!this.token) {
+      debugLog('MBA4321: [MY CONNECTION] No token available, cannot reconnect');
+      return false;
+    }
+    
+    // Check if we need to reconnect
+    const needsReconnect = (
+      !this.isConnected || 
+      !this.socket || 
+      (this.socket && (
+        this.socket.readyState === WebSocket.CLOSED || 
+        this.socket.readyState === WebSocket.CLOSING
+      ))
+    );
+    
+    if (needsReconnect) {
+      debugLog('MBA4321: [MY CONNECTION] WebSocket needs reconnection, attempting now');
+      
+      // Ensure old connection is properly closed
+      if (this.socket) {
+        try {
+          this.socket.onclose = null; // Prevent recursive reconnection
+          this.socket.close();
+          this.socket = null;
+        } catch (e) {
+          debugLog(`MBA4321: [MY CONNECTION] Error closing existing socket: ${e.message}`);
+        }
+      }
+      
+      this.isConnected = false;
+      
+      // Reconnect
+      setTimeout(() => {
+        this.connect();
+      }, 100);
+      
+      return true;
+    }
+    
+    // If we're connected, send a heartbeat to verify connection
+    if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
+      debugLog('MBA4321: [MY CONNECTION] WebSocket appears connected, sending heartbeat to verify');
+      this.send('heartbeat');
+    }
+    
+    return false;
   }
 }
 

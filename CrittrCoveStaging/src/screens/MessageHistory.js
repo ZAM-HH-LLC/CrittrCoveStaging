@@ -714,6 +714,9 @@ const MessageHistory = ({ navigation, route }) => {
   // Add a ref for the markMessagesAsRead function that will come from the useWebSocket hook
   const markMessagesAsReadRef = useRef(null);
 
+  // Add a ref to track the last viewed conversation to avoid redundant API calls
+  const lastViewedConversationRef = useRef(null);
+
   // WebSocket message handler defined as a memoized callback
   const handleWebSocketMessage = useCallback((data) => {
     debugLog('MBA3210: Received WebSocket message:', data);
@@ -976,6 +979,7 @@ const MessageHistory = ({ navigation, route }) => {
         setIsLoadingMessages(false);
         setCurrentPage(1);
         setHasMore(true);
+        lastViewedConversationRef.current = null;
 
         // Handle URL parameters on web
         if (Platform.OS === 'web') {
@@ -1020,7 +1024,7 @@ const MessageHistory = ({ navigation, route }) => {
           return;
         }
 
-        // Normal initialization
+        // Normal initialization - only fetch conversations once
         const conversationsData = await fetchConversations();
         if (Platform.OS === 'web' && screenWidth > 900 && conversationsData?.length > 0) {
           setSelectedConversation(conversationsData[0].conversation_id);
@@ -1038,8 +1042,14 @@ const MessageHistory = ({ navigation, route }) => {
 
     return () => {
       debugLog('MBA3210: Component unmounting - cleaning up');
+      lastViewedConversationRef.current = null;
       
-      // Ensure WebSocket is disconnected when component unmounts
+      // Clear the global selected conversation tracking
+      if (typeof window !== 'undefined') {
+        window.selectedConversationId = null;
+      }
+      
+      // Reset everything else as before
       if (disconnect) {
         debugLog('MBA3210: Disconnecting WebSocket on component unmount');
         disconnect();
@@ -1138,12 +1148,26 @@ const MessageHistory = ({ navigation, route }) => {
       return;
     }
 
+    // Skip redundant updates if we're already viewing this conversation
+    if (lastViewedConversationRef.current === selectedConversation) {
+      if (is_DEBUG) {
+        console.log('MBA98765 Skipping redundant conversation update - already viewing this conversation');
+      }
+      return;
+    }
+
     if (is_DEBUG) {
       console.log('MBA98765 Selected conversation changed:', {
         id: selectedConversation,
         type: typeof selectedConversation,
         isHandlingRouteParams: isHandlingRouteParamsRef.current
       });
+    }
+
+    // Update global tracking of selected conversation
+    if (typeof window !== 'undefined') {
+      window.selectedConversationId = selectedConversation;
+      debugLog(`MBA4321: Updated global selectedConversationId to ${selectedConversation}`);
     }
 
     // Find the conversation in our list
@@ -1175,6 +1199,8 @@ const MessageHistory = ({ navigation, route }) => {
       // Reset message loading flag for new conversation
       hasLoadedMessagesRef.current = false;
       
+      // Update the last viewed conversation
+      lastViewedConversationRef.current = selectedConversation;
     } else {
       if (is_DEBUG) {
         console.log('MBA98765 Could not find conversation data for ID:', selectedConversation);
@@ -1183,9 +1209,30 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [selectedConversation, conversations, isInitialLoad, markConversationAsRead]);
 
-  // Add dedicated effect for message fetching
+  // Add cleanup when unmounting the component
+  useEffect(() => {
+    return () => {
+      // Clear the selected conversation tracking when unmounting
+      if (typeof window !== 'undefined') {
+        window.selectedConversationId = null;
+        debugLog('MBA4321: Cleared global selectedConversationId on unmount');
+      }
+    };
+  }, []);
+
+  // Add dedicated effect for message fetching with optimizations
   useEffect(() => {
     if (!selectedConversation || isInitialLoad) {
+      return;
+    }
+
+    // Skip if we've already loaded messages for this conversation and nothing has changed
+    const hasSelectedConversationChanged = lastViewedConversationRef.current !== selectedConversation;
+    
+    if (!hasSelectedConversationChanged && hasLoadedMessagesRef.current) {
+      if (is_DEBUG) {
+        console.log('MBA98765 Skipping message fetch - conversation unchanged and messages already loaded');
+      }
       return;
     }
 
@@ -1193,13 +1240,23 @@ const MessageHistory = ({ navigation, route }) => {
       console.log('MBA98765 Fetching messages for conversation:', {
         id: selectedConversation,
         hasLoaded: hasLoadedMessagesRef.current,
+        hasChanged: hasSelectedConversationChanged,
         shouldOpenBookingCreation: shouldOpenBookingCreationRef.current
       });
     }
 
+    // Create a flag to track if this effect's async operation is still relevant
+    let isCurrentOperation = true;
+    
+    // Set loading flags
     hasLoadedMessagesRef.current = true;
+    
+    // Fetch messages
     fetchMessages(selectedConversation, 1)
       .then(() => {
+        // Skip updates if component unmounted or conversation changed
+        if (!isCurrentOperation) return;
+        
         // After messages are loaded, if we need to open booking creation,
         // we now have hasDraft and draftData set properly
         if (shouldOpenBookingCreationRef.current && selectedConversationData) {
@@ -1212,8 +1269,14 @@ const MessageHistory = ({ navigation, route }) => {
         setForceRerender(prev => prev + 1);
       })
       .catch(error => {
+        if (!isCurrentOperation) return;
         console.error('Error fetching messages:', error);
       });
+    
+    // Cleanup function
+    return () => {
+      isCurrentOperation = false;
+    };
   }, [selectedConversation, isInitialLoad]);
 
   // Modify existing screen width effect
@@ -1247,6 +1310,12 @@ const MessageHistory = ({ navigation, route }) => {
   // Modify fetchConversations to include better logging
   const fetchConversations = async () => {
     try {
+      // Don't reload if already loading or if conversations are already loaded and this isn't initialization
+      if (isLoadingConversations && conversations.length > 0 && !initialLoadRef.current) {
+        debugLog('MBA3210: [OTHER USERS STATUS] Skipping duplicate conversation fetch - already loading');
+        return conversations;
+      }
+      
       setIsLoadingConversations(true);
       debugLog('MBA3210: [OTHER USERS STATUS] Starting to fetch conversations with online status data');
 
