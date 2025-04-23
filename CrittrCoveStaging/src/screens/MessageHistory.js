@@ -17,6 +17,7 @@ import BookingMessageCard from '../components/BookingMessageCard';
 import { formatOccurrenceFromUTC } from '../utils/time_utils';
 import DraftConfirmationModal from '../components/DraftConfirmationModal';
 import useWebSocket from '../hooks/useWebSocket';
+import MessageNotificationContext from '../context/MessageNotificationContext';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
@@ -650,6 +651,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
   const [forceRerender, setForceRerender] = useState(0); // Add this state to help with scroll issues
+  const { resetNotifications, updateRoute } = useContext(MessageNotificationContext);
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -1241,6 +1243,9 @@ const MessageHistory = ({ navigation, route }) => {
         setIsLoadingMessages(true);
         // Reset messages when fetching first page
         setMessages([]);
+        
+        // Reset message notifications when fetching messages
+        resetNotifications();
       } else {
         setIsLoadingMore(true);
       }
@@ -2387,6 +2392,18 @@ const MessageHistory = ({ navigation, route }) => {
       }
     };
   }, [disconnect]);
+
+  // Add a useEffect to reset notifications when component mounts
+  useEffect(() => {
+    // Only reset notifications once when the component mounts
+    updateRoute && updateRoute('MessageHistory');
+    resetNotifications && resetNotifications();
+    
+    // Return cleanup function
+    return () => {
+      // If needed, add cleanup code here
+    };
+  }, []); // Empty dependency array to run only once on mount
 
   return (
     <SafeAreaView style={[

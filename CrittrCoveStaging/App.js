@@ -7,6 +7,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Navigation from './src/components/Navigation';
 import { theme } from './src/styles/theme';
 import { AuthProvider, AuthContext, debugLog } from './src/context/AuthContext';
+import { MessageNotificationProvider } from './src/context/MessageNotificationContext';
 import { API_BASE_URL } from './src/config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createNavigationContainerRef } from '@react-navigation/native';
@@ -445,13 +446,15 @@ export default function App() {
       }}
     >
       <AuthProvider>
-        <TutorialProvider>
-          <PaperProvider theme={theme}>
-            <ToastProvider>
-              <AppContent />
-            </ToastProvider>
-          </PaperProvider>
-        </TutorialProvider>
+        <MessageNotificationProvider>
+          <TutorialProvider>
+            <PaperProvider theme={theme}>
+              <ToastProvider>
+                <AppContent />
+              </ToastProvider>
+            </PaperProvider>
+          </TutorialProvider>
+        </MessageNotificationProvider>
       </AuthProvider>
     </NavigationContainer>
   );

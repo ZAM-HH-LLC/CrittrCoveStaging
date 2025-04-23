@@ -15,7 +15,7 @@ from datetime import datetime
 from bookings.models import Booking
 from booking_summary.models import BookingSummary
 from booking_drafts.models import BookingDraft
-from django.db.models import Q
+from django.db.models import Q, Sum
 from core.time_utils import (
     convert_to_utc,
     convert_from_utc,
@@ -464,5 +464,64 @@ def send_request_booking(request):
         logger.exception("Full traceback:")
         return Response(
             {'error': 'An error occurred while sending the booking request'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_unread_message_count(request):
+    """
+    Get count of unread messages for the current user across all conversations.
+    Returns:
+    - unread_count: Total number of unread messages
+    - unread_conversations: Number of conversations with unread messages
+    """
+    try:
+        current_user = request.user
+        logger.info(f"Fetching unread message count for user: {current_user.id}")
+        
+        # Get all conversations where the user is a participant
+        conversations = Conversation.objects.filter(
+            Q(participant1=current_user) | Q(participant2=current_user)
+        )
+        
+        if not conversations.exists():
+            logger.info(f"No conversations found for user {current_user.id}")
+            return Response({
+                'unread_count': 0,
+                'unread_conversations': 0
+            })
+        
+        # Calculate total unread messages and conversations with unread messages
+        total_unread = 0
+        conversations_with_unread = 0
+        
+        for conversation in conversations:
+            # Only count messages where:
+            # 1. Current user is not the sender (sent by other participant)
+            # 2. Status is 'sent' (not 'read')
+            other_participant = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
+            unread_count = UserMessage.objects.filter(
+                conversation=conversation,
+                sender=other_participant,
+                status='sent'
+            ).count()
+            
+            if unread_count > 0:
+                total_unread += unread_count
+                conversations_with_unread += 1
+                
+        logger.info(f"User {current_user.id} has {total_unread} unread messages in {conversations_with_unread} conversations")
+        
+        return Response({
+            'unread_count': total_unread,
+            'unread_conversations': conversations_with_unread
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting unread message count: {str(e)}")
+        logger.exception("Full traceback:")
+        return Response(
+            {'error': 'An error occurred while fetching unread message count'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

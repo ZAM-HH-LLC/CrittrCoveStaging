@@ -8,6 +8,7 @@ CURSOR PROJECT GUIDELINES
 3. Finish every response with a short “Summary:” line.  
 4. Think about what i ask you in terms of either a senior software engineer, or a senior software architect if i am asking architectural questions.
 5. Cursor MUST NOT output or execute any Git commands (add/commit/push/pull) or removal commands without permission, other than that, you can run the commands.
+6. Cursor MUST NOT try to run the frontend server themselves when responding unless asked to.
 
 ---
 
@@ -17,6 +18,7 @@ CURSOR PROJECT GUIDELINES
    debugLog("MBA<NNNN>: <message>", data);
    ```  
    * Use the same X‑digit `<NNNN>` for **all** logs added in one change or in one chat session if that whole session is discussing the same issue.  
+   * DO NOT use the MBA3210 anymore. 
 2. Remind me to filter logs with `MBA<NNNN>` in your explanation of what you changed at the end.
 3. Replace all use cases of is_DEBUG with the debugLog function. 
 
@@ -54,6 +56,7 @@ CURSOR PROJECT GUIDELINES
 4. Error/success responses → show modal + toast.  
 5. Reduce needless round‑trips (e.g., only save pets/services if modified).
 6. DO NOT EVER create new components in the ui or edit the styling of the ui unless explicitly told to do so.
+7. NEVER try to run the frontend server yourself in your responses to me.
 
 ---
 

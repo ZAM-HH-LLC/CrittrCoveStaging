@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, SafeAre
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
+import MessageNotificationContext from '../context/MessageNotificationContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appbar, Menu, useTheme, Avatar } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -161,6 +162,15 @@ export default function Navigation({ state, descriptors, navigation }) {
     signOut,
     isApprovedProfessional 
   } = useContext(AuthContext);
+  
+  // Get message notification state
+  const {
+    hasUnreadMessages,
+    unreadCount,
+    resetNotifications,
+    updateRoute
+  } = useContext(MessageNotificationContext);
+  
   const [currentRoute, setCurrentRoute] = useState('');
   const [notificationCount, setNotificationCount] = useState(3); // We can make this dynamic later
 
@@ -194,14 +204,35 @@ export default function Navigation({ state, descriptors, navigation }) {
 
   useEffect(() => {
     const updateCurrentRoute = async () => {
-      if (Platform.OS === 'web') {
-        const route = sessionStorage.getItem('currentRoute');
-        if (is_DEBUG) console.log('MBA98386196v Current Route Updated:', route);
-        setCurrentRoute(route || '');
-      } else {
-        const route = await AsyncStorage.getItem('currentRoute');
-        if (is_DEBUG) console.log('MBA98386196v Current Route Updated:', route);
-        setCurrentRoute(route || '');
+      try {
+        let route;
+        
+        if (Platform.OS === 'web') {
+          route = sessionStorage.getItem('currentRoute');
+        } else {
+          route = await AsyncStorage.getItem('currentRoute');
+        }
+        
+        // Only log in debug mode, not every time
+        if (is_DEBUG && route !== currentRoute) {
+          console.log('MBA98386196v Current Route Updated:', route);
+        }
+        
+        // Only update if the route has actually changed
+        if (route && route !== currentRoute) {
+          setCurrentRoute(route);
+          
+          // Update message notification context with new route
+          // Avoiding infinite loops by checking if the route changed
+          updateRoute && updateRoute(route);
+          
+          // Only reset notifications when navigating to MessageHistory
+          if (route === 'MessageHistory' && hasUnreadMessages) {
+            resetNotifications && resetNotifications(route);
+          }
+        }
+      } catch (error) {
+        console.error('Error updating current route:', error);
       }
     };
 
@@ -209,18 +240,30 @@ export default function Navigation({ state, descriptors, navigation }) {
     // Add navigation state listener
     const unsubscribe = navigation.addListener('state', updateCurrentRoute);
     return unsubscribe;
-  }, [navigation, is_DEBUG]);
+  }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, is_DEBUG]);
 
   const professionalsTitle = Platform.OS === 'web' ? 'Search Pros' : 'Professionals';
 
   const handleNavigation = async (screenName, tabName = null) => {
     closeMenu();
+    
+    // Only log in debug mode to reduce console spam
     if (is_DEBUG) {
       console.log('MBA98386196v Navigating to:', screenName, tabName ? `with tab: ${tabName}` : '');
       console.log('MBA98386196v Current route before:', currentRoute);
     }
     
     try {
+      // Don't do anything if we're already on this screen
+      if (screenName === currentRoute) {
+        // Special case: if we're on MessageHistory and have unread messages, reset notifications
+        if (screenName === 'MessageHistory' && hasUnreadMessages) {
+          resetNotifications && resetNotifications();
+        }
+        
+        return;
+      }
+      
       if (Platform.OS === 'web') {
         sessionStorage.setItem('previousRoute', currentRoute);
         sessionStorage.setItem('currentRoute', screenName);
@@ -229,7 +272,16 @@ export default function Navigation({ state, descriptors, navigation }) {
         await AsyncStorage.setItem('currentRoute', screenName);
       }
       
+      // Update local state
       setCurrentRoute(screenName);
+      
+      // Update the MessageNotificationContext with the new route
+      updateRoute && updateRoute(screenName);
+      
+      // Reset message notifications when navigating to MessageHistory
+      if (screenName === 'MessageHistory' && hasUnreadMessages) {
+        resetNotifications && resetNotifications();
+      }
       
       // If we have a tab parameter, pass it in the params
       if (tabName) {
@@ -571,6 +623,9 @@ export default function Navigation({ state, descriptors, navigation }) {
           {menuItems.map((item, index) => {
             const isActive = currentRoute === item.route || 
                            (item.route === 'More' && item.title === 'Settings' && currentRoute === 'More');
+            
+            // Check if this is the Messages tab and we have unread messages
+            const showNotification = item.title === 'Messages' && hasUnreadMessages && screenWidth > 900;
 
             return (
               <TouchableOpacity
@@ -581,11 +636,16 @@ export default function Navigation({ state, descriptors, navigation }) {
                 ]}
                 onPress={() => handleNavigation(item.route, item.tab || 'Overview')}
               >
-                <MaterialCommunityIcons 
-                  name={item.icon} 
-                  size={24} 
-                  color={isActive ? theme.colors.primary : "#4B5563"}
-                />
+                <View style={{ position: 'relative' }}>
+                  <MaterialCommunityIcons 
+                    name={item.icon} 
+                    size={24} 
+                    color={isActive ? theme.colors.primary : "#4B5563"}
+                  />
+                  {showNotification && (
+                    <View style={styles.messageNotificationDot} />
+                  )}
+                </View>
                 {!isCollapsed && (
                   <Text style={[
                     styles.sidebarItemText, 
@@ -633,6 +693,9 @@ export default function Navigation({ state, descriptors, navigation }) {
     const isProfessionalRole = userRole === 'professional';
     const isOwnerRole = userRole === 'petOwner';
     
+    // Update notification count to include message notifications
+    const totalNotifications = hasUnreadMessages ? (notificationCount + unreadCount) : notificationCount;
+    
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.mobileHeaderContent}>
@@ -649,9 +712,9 @@ export default function Navigation({ state, descriptors, navigation }) {
           <View style={styles.mobileRightContent}>
             <TouchableOpacity onPress={() => handleNavigation('Notifications', 'Overview')} style={styles.iconButton}>
               <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
-              {notificationCount > 0 && (
+              {totalNotifications > 0 && (
                 <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationText}>{notificationCount}</Text>
+                  <Text style={styles.notificationText}>{totalNotifications}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -727,19 +790,28 @@ export default function Navigation({ state, descriptors, navigation }) {
                 </View>
               </View>
             )}
-            {renderMenuItems().map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.mobileMenuItem}
-                onPress={() => {
-                  handleNavigation(item.route, item.tab || 'Overview');
-                  setIsMenuOpen(false);
-                }}
-              >
-                <MaterialCommunityIcons name={item.icon} size={24} color={theme.colors.text} />
-                <Text style={styles.mobileMenuItemText}>{item.title}</Text>
-              </TouchableOpacity>
-            ))}
+            {renderMenuItems().map((item, index) => {
+              const showNotification = item.title === 'Messages' && hasUnreadMessages;
+              
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.mobileMenuItem}
+                  onPress={() => {
+                    handleNavigation(item.route, item.tab || 'Overview');
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+                    <MaterialCommunityIcons name={item.icon} size={24} color={theme.colors.text} />
+                    {showNotification && (
+                      <View style={styles.mobileMessageNotificationDot} />
+                    )}
+                  </View>
+                  <Text style={styles.mobileMenuItemText}>{item.title}</Text>
+                </TouchableOpacity>
+              );
+            })}
             {isSignedIn && (
               <TouchableOpacity
                 style={[styles.mobileMenuItem, styles.mobileLogoutItem]}
@@ -1149,5 +1221,28 @@ const styles = StyleSheet.create({
   },
   mobileLogoutText: {
     color: '#F26969',
+  },
+  messageNotificationDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.surface,
+  },
+  
+  mobileMessageNotificationDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceContrast,
   },
 });

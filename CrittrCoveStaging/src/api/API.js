@@ -1022,3 +1022,29 @@ export const createBookingFromDraft = async (conversationId) => {
         throw error;
     }
 };
+
+/**
+ * Get count of unread messages for the current user
+ * @returns {Promise<Object>} - Object containing unread message count
+ */
+export const getUnreadMessageCount = async () => {
+  try {
+    const apiClient = await getApiClient();
+    debugLog("MBA4321: Fetching unread message count");
+    
+    const response = await apiClient.get('/api/messages/v1/unread-count/');
+    
+    debugLog("MBA4321: Unread count fetched:", response.data);
+    return response.data;
+  } catch (error) {
+    debugLog("MBA4321: Error with unread message count:", error.message);
+    
+    // Handle auth error gracefully
+    if (error.response?.status === 401) {
+      throw handleAuthError(error);
+    }
+    
+    // Return 0 as default in case of error
+    return { unread_count: 0, unread_conversations: 0 };
+  }
+};
