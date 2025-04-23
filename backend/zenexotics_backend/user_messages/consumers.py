@@ -133,6 +133,16 @@ class MessageConsumer(AsyncWebsocketConsumer):
             'data': event['data']
         }))
     
+    async def unread_update(self, event):
+        """
+        Send unread message count update to WebSocket
+        """
+        # Send unread update to WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'unread_update',
+            'data': event['data']
+        }))
+    
     async def user_status_update(self, event):
         """
         Send user status update to WebSocket

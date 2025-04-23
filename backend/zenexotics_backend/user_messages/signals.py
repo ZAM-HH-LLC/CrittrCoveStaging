@@ -13,6 +13,7 @@ from asgiref.sync import async_to_sync
 from users.models import User, UserSettings
 from .models import UserMessage, MessageMetrics
 from django.utils import timezone
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -25,35 +26,32 @@ def handle_new_message(sender, instance, created, **kwargs):
         return  # Only handle newly created messages
     
     try:
-        # Get conversation and identify the recipient
+        # Start timing for performance metrics
+        start_time = time.time()
+        
+        # Get the conversation and participants
         conversation = instance.conversation
         sender_user = instance.sender
         
-        # Determine the recipient user
-        recipient_user = conversation.participant1 if conversation.participant1 != sender_user else conversation.participant2
+        # Determine the recipient (the other participant)
+        recipient_user = conversation.participant2 if conversation.participant1 == sender_user else conversation.participant1
         
-        # Start tracking message delivery time
-        start_time = time.time()
-        
-        # Check if recipient is online - more reliable check
+        # Check if recipient is online based on cache
         is_online = cache.get(f"user_{recipient_user.id}_online", False)
         
-        # Log this information to help debug
-        logger.info(f"User {recipient_user.id} online status: {is_online}")
-        
-        # Prepare notification data
+        # Prepare message data for notification
         message_data = {
-            "message_id": instance.message_id,
-            "conversation_id": conversation.conversation_id,
-            "sender_id": sender_user.id,
-            "sender_name": sender_user.name,
-            "content": instance.content,
-            "timestamp": instance.timestamp.isoformat(),
-            "type_of_message": instance.type_of_message,
-            "is_clickable": instance.is_clickable,
-            "status": instance.status,
-            "sent_by_other_user": True,  # From recipient's perspective
-            "metadata": instance.metadata
+            'message_id': instance.message_id,
+            'content': instance.content,
+            'conversation_id': conversation.conversation_id,
+            'sender_id': sender_user.id,
+            'sender_name': sender_user.name,
+            'timestamp': instance.timestamp.isoformat(),
+            'status': instance.status,
+            'type_of_message': instance.type_of_message,
+            'is_clickable': instance.is_clickable,
+            'metadata': instance.metadata,
+            'sent_by_other_user': True  # From recipient's perspective, this is sent by the other user
         }
         
         # Send real-time notification via WebSocket
@@ -68,6 +66,46 @@ def handle_new_message(sender, instance, created, **kwargs):
                 {
                     "type": "message_notification",
                     "data": message_data
+                }
+            )
+            
+            # Also send updated unread counts to recipient
+            # Get the recipient's unread message counts
+            from conversations.models import Conversation
+            from django.db.models import Count
+            
+            conversations = Conversation.objects.filter(
+                Q(participant1=recipient_user) | Q(participant2=recipient_user)
+            )
+            
+            total_unread = 0
+            conversation_counts = {}
+            
+            for conv in conversations:
+                # Get the other user in each conversation
+                other_user = conv.participant2 if conv.participant1 == recipient_user else conv.participant1
+                
+                # Count unread messages
+                unread_count = UserMessage.objects.filter(
+                    conversation=conv,
+                    sender=other_user,
+                    status='sent'
+                ).count()
+                
+                if unread_count > 0:
+                    total_unread += unread_count
+                    conversation_counts[str(conv.conversation_id)] = unread_count
+            
+            # Send unread update via WebSocket
+            async_to_sync(channel_layer.group_send)(
+                recipient_group,
+                {
+                    "type": "unread_update",
+                    "data": {
+                        "unread_count": total_unread,
+                        "unread_conversations": len(conversation_counts),
+                        "conversation_counts": conversation_counts
+                    }
                 }
             )
             

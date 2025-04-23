@@ -643,7 +643,11 @@ export default function Navigation({ state, descriptors, navigation }) {
                     color={isActive ? theme.colors.primary : "#4B5563"}
                   />
                   {showNotification && (
-                    <View style={styles.messageNotificationDot} />
+                    <View style={styles.messageNotificationBadge}>
+                      {unreadCount > 0 && (
+                        <Text style={styles.messageNotificationText}>{unreadCount}</Text>
+                      )}
+                    </View>
                   )}
                 </View>
                 {!isCollapsed && (
@@ -652,6 +656,9 @@ export default function Navigation({ state, descriptors, navigation }) {
                     { color: isActive ? theme.colors.primary : "#4B5563" }
                   ]}>
                     {item.title}
+                    {item.title === 'Messages' && hasUnreadMessages && unreadCount > 0 && (
+                      <Text style={{ color: theme.colors.error }}>{` (${unreadCount})`}</Text>
+                    )}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -805,10 +812,19 @@ export default function Navigation({ state, descriptors, navigation }) {
                   <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
                     <MaterialCommunityIcons name={item.icon} size={24} color={theme.colors.text} />
                     {showNotification && (
-                      <View style={styles.mobileMessageNotificationDot} />
+                      <View style={styles.mobileMessageNotificationBadge}>
+                        {unreadCount > 0 && (
+                          <Text style={styles.mobileMessageNotificationText}>{unreadCount}</Text>
+                        )}
+                      </View>
                     )}
                   </View>
-                  <Text style={styles.mobileMenuItemText}>{item.title}</Text>
+                  <Text style={styles.mobileMenuItemText}>
+                    {item.title}
+                    {item.title === 'Messages' && hasUnreadMessages && unreadCount > 0 && (
+                      <Text style={{ color: theme.colors.error }}>{` (${unreadCount})`}</Text>
+                    )}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -1244,5 +1260,43 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.error,
     borderWidth: 1,
     borderColor: theme.colors.surfaceContrast,
+  },
+  messageNotificationBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  messageNotificationText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  mobileMessageNotificationBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceContrast,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  mobileMessageNotificationText: {
+    color: 'white',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
 });

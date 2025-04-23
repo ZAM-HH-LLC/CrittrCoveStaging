@@ -651,7 +651,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
   const [forceRerender, setForceRerender] = useState(0); // Add this state to help with scroll issues
-  const { resetNotifications, updateRoute } = useContext(MessageNotificationContext);
+  const { resetNotifications, updateRoute, markConversationAsRead } = useContext(MessageNotificationContext);
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -1244,8 +1244,11 @@ const MessageHistory = ({ navigation, route }) => {
         // Reset messages when fetching first page
         setMessages([]);
         
-        // Reset message notifications when fetching messages
-        resetNotifications();
+        // Mark this conversation as read in the notification context
+        if (markConversationAsRead) {
+          debugLog(`MBA4321: Marking conversation ${conversationId} as read when fetching messages`);
+          markConversationAsRead(conversationId);
+        }
       } else {
         setIsLoadingMore(true);
       }
@@ -2404,6 +2407,28 @@ const MessageHistory = ({ navigation, route }) => {
       // If needed, add cleanup code here
     };
   }, []); // Empty dependency array to run only once on mount
+
+  // Add a useEffect to handle route updates and message notification resets when component mounts
+  useEffect(() => {
+    // Tell the notification context we're on the Messages screen
+    if (updateRoute) {
+      debugLog('MBA4321: Updating route in MessageNotificationContext');
+      updateRoute('MessageHistory');
+    }
+    
+    // Return cleanup function
+    return () => {
+      debugLog('MBA4321: Cleaning up message notification tracking');
+    };
+  }, [updateRoute]);
+  
+  // Add an effect to mark the current conversation as read when selected
+  useEffect(() => {
+    if (selectedConversation && markConversationAsRead) {
+      debugLog(`MBA4321: Marking conversation ${selectedConversation} as read`);
+      markConversationAsRead(selectedConversation);
+    }
+  }, [selectedConversation, markConversationAsRead]);
 
   return (
     <SafeAreaView style={[

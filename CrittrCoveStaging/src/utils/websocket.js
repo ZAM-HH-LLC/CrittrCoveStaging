@@ -16,25 +16,37 @@ class WebSocketManager {
     this.messageHandlers = new Map();
     this.connectionId = null;
     this.wsUrl = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
-    debugLog('MBA3210: WebSocketManager initialized, wsUrl is ' + this.wsUrl);
+    debugLog('MBA4321: WebSocketManager initialized, wsUrl is ' + this.wsUrl);
   }
 
   /**
-   * Initialize the WebSocket connection with the provided token
-   * @param {string} token - JWT authentication token
+   * Initialize the WebSocket connection with authentication token
+   * @param {string} token - JWT token for authentication
    */
   init(token) {
     if (!token) {
-      debugLog('MBA3210: [MY CONNECTION] Cannot initialize WebSocket without a token');
-      return false;
+      debugLog('MBA4321: Cannot initialize WebSocket without a valid token');
+      return;
     }
-
-    // Save token for reconnection attempts
-    this.token = token;
-    debugLog('MBA3210: [MY CONNECTION] WebSocket token set, token exists: ' + (!!token));
     
-    // Connect to WebSocket
-    return this.connect();
+    // If we already have this token, no need to reconnect
+    if (this.token === token && this.isConnected) {
+      debugLog('MBA4321: WebSocket already connected with this token');
+      return;
+    }
+    
+    this.token = token;
+    
+    // If we already have a socket, close it first
+    if (this.socket) {
+      this.disconnect();
+    }
+    
+    // Connect with the new token
+    this.connect();
+    
+    // We also start a disconnect timeout (10 minutes of inactivity)
+    this.resetDisconnectTimeout();
   }
 
   /**
@@ -43,43 +55,40 @@ class WebSocketManager {
   connect() {
     // Skip connection if token is null or empty
     if (!this.token) {
-      debugLog('MBA3210: [MY CONNECTION] Cannot connect to WebSocket without a token');
+      debugLog('MBA4321: Cannot connect WebSocket without a valid token');
       return false;
     }
     
-    if (this.socket) {
-      // Check if socket is in a closing or closed state before trying to reconnect
-      if (this.socket.readyState === WebSocket.CLOSING || this.socket.readyState === WebSocket.CLOSED) {
-        this.socket = null;
-      } else if (this.isConnected && this.socket.readyState === WebSocket.OPEN) {
-        debugLog('MBA3210: [MY CONNECTION] Already connected with open socket');
-        return true;
-      } else {
-        // Socket exists but not properly connected, clean it up
-        debugLog('MBA3210: [MY CONNECTION] Socket exists but not in OPEN state, recreating');
-        this.socket.onclose = null; // Remove existing handlers to prevent reconnect loops
-        this.socket.onerror = null;
-        this.socket.onmessage = null;
-        this.socket.onopen = null;
-        this.socket.close();
-        this.socket = null;
-      }
+    // If already connected, no need to reconnect
+    if (this.isConnected && this.socket) {
+      debugLog('MBA4321: WebSocket already connected');
+      return true;
     }
     
-    // If we're still connected, disconnect first
-    if (this.isConnected) {
-      this.isConnected = false;
-      debugLog('MBA3210: [MY CONNECTION] Resetting isConnected flag before new connection');
+    // Clear any existing heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    
+    // If too many connection attempts, back off
+    if (this.connectionAttempts >= this.maxConnectionAttempts) {
+      debugLog(`MBA4321: Too many connection attempts (${this.connectionAttempts}), backing off`);
+      setTimeout(() => {
+        this.connectionAttempts = 0;
+        this.connect();
+      }, 60000);
+      return false;
     }
     
     try {
       this.connectionAttempts++;
       
       const wsEndpoint = `${this.wsUrl}/ws/messages/?token=${this.token}`;
-      debugLog(`MBA3210: [MY CONNECTION] Connecting MY OWN WebSocket at ${wsEndpoint} (attempt ${this.connectionAttempts})`);
+      debugLog(`MBA4321: [MY CONNECTION] Connecting WebSocket at ${wsEndpoint} (attempt ${this.connectionAttempts})`);
       
       this.socket = new WebSocket(wsEndpoint);
-      debugLog('MBA3210: [MY CONNECTION] WebSocket instance created');
+      debugLog('MBA4321: [MY CONNECTION] WebSocket instance created');
       
       // Setup event handlers
       this.socket.onopen = this.handleOpen.bind(this);
@@ -89,7 +98,7 @@ class WebSocketManager {
       
       return true;
     } catch (error) {
-      debugLog(`MBA3210: [MY CONNECTION] WebSocket connection error: ${error.message}`);
+      debugLog(`MBA4321: [MY CONNECTION] WebSocket connection error: ${error.message}`);
       this.scheduleReconnect();
       return false;
     }
@@ -99,7 +108,7 @@ class WebSocketManager {
    * Handle WebSocket connection open
    */
   handleOpen(event) {
-    debugLog('MBA3210: [MY CONNECTION] MY OWN WebSocket connection established');
+    debugLog('MBA4321: [MY CONNECTION] WebSocket connection established');
     this.isConnected = true;
     this.connectionAttempts = 0; // Reset connection attempts on successful connection
     
@@ -107,7 +116,7 @@ class WebSocketManager {
     this.startHeartbeat();
     
     // Log connection status for debugging
-    debugLog(`MBA3210: [MY CONNECTION] MY OWN isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
+    debugLog(`MBA4321: [MY CONNECTION] isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
     
     // Notify all handlers of connection
     this.notifyHandlers('connection', { 
@@ -118,7 +127,7 @@ class WebSocketManager {
     // Send immediate heartbeat to verify connection on both sides
     setTimeout(() => {
       if (this.isConnected) {
-        debugLog('MBA3210: [MY CONNECTION] Sending initial heartbeat after MY OWN connection');
+        debugLog('MBA4321: [MY CONNECTION] Sending initial heartbeat after connection');
         this.send('heartbeat');
       }
     }, 500);
@@ -128,39 +137,34 @@ class WebSocketManager {
    * Handle WebSocket connection close
    */
   handleClose(event) {
-    debugLog(`MBA3210: [MY CONNECTION] MY OWN WebSocket closed with code ${event.code}, reason: ${event.reason || 'No reason provided'}`);
+    // Skip redundant close events
+    if (!this.isConnected && !this.socket) {
+      return;
+    }
+
+    const wasConnected = this.isConnected;
+    this.isConnected = false;
+    this.socket = null;
     
-    // Only change state if we were previously connected or if this is an unexpected closure
-    if (this.isConnected || event.code !== 1000) {
-      this.isConnected = false;
-      
-      // Log disconnection for debugging
-      debugLog(`MBA3210: [MY CONNECTION] MY OWN isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
-      
-      // Notify all handlers of disconnection
-      this.notifyHandlers('connection', { 
-        status: 'disconnected',
+    debugLog(`MBA4321: [MY CONNECTION] WebSocket connection closed: code=${event.code}, reason=${event.reason}`);
+    
+    // Clear heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    
+    // Notify handlers of the disconnection, but only if we were previously connected
+    if (wasConnected) {
+      this.notifyHandlers('disconnection', {
         code: event.code,
-        reason: event.reason || 'Connection closed',
+        reason: event.reason,
         timestamp: new Date().toISOString()
       });
     }
     
-    this.clearTimers();
-    
-    // Only attempt to reconnect if token is available and it's an unexpected closure
-    if (event.code !== 1000 && this.token) {
-      // For code 1006 (abnormal closure), reconnect immediately
-      if (event.code === 1006) {
-        debugLog('MBA3210: [MY CONNECTION] Abnormal closure (1006) detected, reconnecting MY OWN connection immediately');
-        // Small timeout to prevent rapid reconnection attempts
-        setTimeout(() => this.connect(), 1000);
-      } else {
-        this.scheduleReconnect();
-      }
-    } else if (!this.token) {
-      debugLog('MBA3210: [MY CONNECTION] Not attempting reconnection after close - no valid token');
-    }
+    // Attempt to reconnect
+    this.scheduleReconnect();
   }
 
   /**
@@ -169,10 +173,10 @@ class WebSocketManager {
   handleMessage(event) {
     try {
       const message = JSON.parse(event.data);
-      debugLog(`MBA3210: [MY CONNECTION] WebSocket message received: ${message.type}`);
+      debugLog(`MBA4321: [MY CONNECTION] WebSocket message received: ${message.type}`);
       
       // For detailed message logging, use debugLog instead of is_DEBUG check
-      debugLog(`MBA3210: [MY CONNECTION] WebSocket message content: ${event.data}`);
+      debugLog(`MBA4321: [MY CONNECTION] WebSocket message content: ${event.data}`);
       
       // For heartbeat responses, just log and return
       if (message.type === 'heartbeat_ack') {
@@ -186,7 +190,7 @@ class WebSocketManager {
       this.notifyHandlers('all', { type: message.type, data: message.data || {} });
       
     } catch (error) {
-      debugLog(`MBA3210: [MY CONNECTION] Error handling WebSocket message: ${error.message}`);
+      debugLog(`MBA4321: [MY CONNECTION] Error handling WebSocket message: ${error.message}`);
     }
   }
 
@@ -194,7 +198,7 @@ class WebSocketManager {
    * Handle WebSocket errors
    */
   handleError(error) {
-    debugLog(`MBA3210: [MY CONNECTION] MY OWN WebSocket error: ${error.message || 'Unknown error'}`);
+    debugLog(`MBA4321: [MY CONNECTION] WebSocket error: ${error.message || 'Unknown error'}`);
     
     // Notify handlers of the error
     this.notifyHandlers('error', { 
@@ -211,240 +215,123 @@ class WebSocketManager {
    */
   send(type, data = {}) {
     if (!this.isConnected || !this.socket) {
-      debugLog('MBA3210: [MY CONNECTION] Cannot send message, MY OWN WebSocket not connected');
+      debugLog('MBA4321: [MY CONNECTION] Cannot send message, WebSocket not connected');
       return false;
     }
 
     try {
       const message = JSON.stringify({
         type,
-        data
+        data,
+        timestamp: Date.now()
       });
       
       this.socket.send(message);
-      debugLog(`MBA3210: [MY CONNECTION] Sent ${type} message through MY OWN connection`);
+      debugLog(`MBA4321: [MY CONNECTION] Sent ${type} message through connection`);
       return true;
     } catch (error) {
-      debugLog(`MBA3210: [MY CONNECTION] Error sending message through MY OWN connection: ${error.message}`);
+      debugLog(`MBA4321: [MY CONNECTION] Error sending message through connection: ${error.message}`);
       return false;
     }
-  }
-
-  /**
-   * Start sending heartbeat messages to keep the connection alive
-   */
-  startHeartbeat() {
-    // Clear any existing heartbeat
-    this.clearTimers();
-    
-    // Send heartbeat every 15 seconds (reduced from 30)
-    this.heartbeatInterval = setInterval(() => {
-      if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
-        debugLog('MBA3210: [MY CONNECTION] Sending heartbeat to maintain MY OWN WebSocket connection');
-        this.send('heartbeat');
-      } else if (this.isConnected) {
-        debugLog('MBA3210: [MY CONNECTION] Skipping heartbeat - MY OWN socket not OPEN');
-        // If we think we're connected but socket isn't open, fix the mismatch
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-          this.isConnected = false;
-          this.notifyHandlers('connection', { 
-            status: 'disconnected',
-            code: 'internal',
-            reason: 'Socket not in OPEN state but isConnected is true',
-            timestamp: new Date().toISOString()
-          });
-          // Force reconnect only if we have a token
-          if (this.token) {
-            this.reconnect();
-          } else {
-            debugLog('MBA3210: [MY CONNECTION] Not reconnecting after heartbeat - no token available');
-          }
-        }
-      } else {
-        debugLog('MBA3210: [MY CONNECTION] Skipping heartbeat - MY OWN connection not connected');
-      }
-    }, 15000);
-    
-    // Add a connection verification interval that runs more frequently (every 3 seconds)
-    this.connectionVerification = setInterval(() => {
-      if (this.socket) {
-        const socketState = this.socket.readyState;
-        const stateNames = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
-        debugLog(`MBA3210: [MY CONNECTION] Verifying MY OWN connection - isConnected: ${this.isConnected}, socketState: ${stateNames[socketState]}`);
-        
-        if (this.isConnected && socketState === WebSocket.OPEN) {
-          // All good
-        } else if (this.isConnected && socketState !== WebSocket.OPEN) {
-          // Mismatch - we think we're connected but socket isn't open
-          debugLog('MBA3210: [MY CONNECTION] State mismatch detected - MY OWN socket not OPEN');
-          this.isConnected = false;
-          this.notifyHandlers('connection', { 
-            status: 'disconnected',
-            code: 'internal',
-            reason: 'Socket state mismatch',
-            timestamp: new Date().toISOString()
-          });
-          // Only reconnect if we have a token
-          if (this.token) {
-            this.reconnect();
-          } else {
-            debugLog('MBA3210: [MY CONNECTION] Not reconnecting after state mismatch - no token available');
-          }
-        } else if (!this.isConnected && socketState === WebSocket.OPEN) {
-          // Mismatch - socket is open but we don't think we're connected
-          debugLog('MBA3210: [MY CONNECTION] State mismatch detected - MY OWN socket OPEN but isConnected false');
-          this.isConnected = true;
-          this.notifyHandlers('connection', { 
-            status: 'connected',
-            timestamp: new Date().toISOString()
-          });
-        }
-      } else if (this.isConnected) {
-        // Mismatch - we think we're connected but socket doesn't exist
-        debugLog('MBA3210: [MY CONNECTION] State mismatch - no socket but MY OWN isConnected is true');
-        this.isConnected = false;
-        this.notifyHandlers('connection', { 
-          status: 'disconnected',
-          code: 'internal',
-          reason: 'Socket does not exist',
-          timestamp: new Date().toISOString()
-        });
-        // Only reconnect if we have a token
-        if (this.token) {
-          this.reconnect();
-        } else {
-          debugLog('MBA3210: [MY CONNECTION] Not reconnecting after socket missing - no token available');
-        }
-      }
-    }, 3000);
-  }
-  
-  /**
-   * Force an immediate reconnection attempt
-   */
-  reconnect() {
-    debugLog('MBA3210: [MY CONNECTION] Forcing reconnection of MY OWN WebSocket');
-    
-    // Don't attempt to reconnect if we don't have a token
-    if (!this.token) {
-      debugLog('MBA3210: [MY CONNECTION] Not reconnecting - no valid token available');
-      return false;
-    }
-    
-    // Clean up existing socket if any
-    if (this.socket) {
-      this.socket.onclose = null;
-      this.socket.onerror = null;
-      this.socket.onmessage = null;
-      this.socket.onopen = null;
-      try {
-        this.socket.close();
-      } catch (e) {
-        debugLog(`MBA3210: [MY CONNECTION] Error closing MY OWN socket during reconnect: ${e.message}`);
-      }
-      this.socket = null;
-    }
-    
-    // Clear timers
-    this.clearTimers();
-    
-    // Small delay before reconnecting
-    setTimeout(() => {
-      this.connect();
-    }, 500);
   }
 
   /**
    * Schedule a reconnection attempt
    */
   scheduleReconnect() {
-    // Skip reconnect if no token is available
-    if (!this.token) {
-      debugLog('MBA3210: Not scheduling reconnect - no token available');
-      return;
-    }
-    
-    // Clear any existing reconnect timer
-    if (this.disconnectTimeout) {
-      clearTimeout(this.disconnectTimeout);
-    }
-    
-    // Check if max attempts reached
-    if (this.connectionAttempts >= this.maxConnectionAttempts) {
-      debugLog('MBA3210: Maximum reconnection attempts reached');
-      this.notifyHandlers('connection', { 
-        status: 'failed',
-        reason: 'Max reconnection attempts reached',
-        timestamp: new Date().toISOString()
-      });
-      return;
-    }
-    
-    // Calculate backoff delay (exponential backoff)
     const delay = Math.min(1000 * Math.pow(2, this.connectionAttempts - 1), 30000);
+    debugLog(`MBA4321: Scheduling reconnect in ${delay}ms (attempt ${this.connectionAttempts})`);
     
-    debugLog(`MBA3210: Scheduling reconnect in ${delay}ms (attempt ${this.connectionAttempts})`);
-    
-    this.disconnectTimeout = setTimeout(() => {
-      this.connect();
+    setTimeout(() => {
+      if (!this.isConnected) {
+        this.connect();
+      }
     }, delay);
   }
 
   /**
-   * Clear all timers
+   * Start sending heartbeat messages
    */
-  clearTimers() {
+  startHeartbeat() {
+    // Clear any existing interval
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    // Start a new interval
+    this.heartbeatInterval = setInterval(() => {
+      if (this.isConnected) {
+        this.send('heartbeat', { timestamp: Date.now() });
+        debugLog('MBA4321: Heartbeat sent');
+      } else {
+        debugLog('MBA4321: Skipping heartbeat, not connected');
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+    }, 30000); // 30 seconds
+
+    debugLog('MBA4321: Heartbeat mechanism started');
+  }
+
+  /**
+   * Disconnect from the WebSocket server
+   */
+  disconnect() {
+    debugLog('MBA4321: Disconnecting WebSocket');
+    
+    // Clear intervals
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
     
+    // Clear timeout
     if (this.disconnectTimeout) {
       clearTimeout(this.disconnectTimeout);
       this.disconnectTimeout = null;
     }
     
-    if (this.connectionVerification) {
-      clearInterval(this.connectionVerification);
-      this.connectionVerification = null;
-    }
-  }
-
-  /**
-   * Close the WebSocket connection
-   */
-  disconnect() {
-    debugLog('MBA3210: Disconnecting WebSocket');
-    this.clearTimers();
-    
-    // Clear token first to prevent any reconnection attempts
-    this.token = null;
-    
+    // Close socket if it exists
     if (this.socket) {
-      // Remove all event handlers to prevent reconnection attempts
-      this.socket.onclose = null;
-      this.socket.onerror = null;
-      this.socket.onmessage = null;
-      this.socket.onopen = null;
+      try {
+        if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
+          this.socket.close(1000, "Client disconnecting");
+        }
+      } catch (error) {
+        debugLog(`MBA4321: Error closing WebSocket: ${error.message}`);
+      }
       
-      // Close with normal closure code
-      this.socket.close(1000, 'User disconnected');
       this.socket = null;
     }
     
-    // Reset connection state
     this.isConnected = false;
     this.connectionAttempts = 0;
+    debugLog('MBA4321: WebSocket disconnected');
+  }
+
+  /**
+   * Reset the disconnect timeout
+   * This timeout will disconnect the WebSocket after 10 minutes of inactivity
+   */
+  resetDisconnectTimeout() {
+    // Clear any existing timeout
+    if (this.disconnectTimeout) {
+      clearTimeout(this.disconnectTimeout);
+    }
     
-    // Notify handlers of disconnection
-    this.notifyHandlers('connection', { 
-      status: 'disconnected',
-      code: 1000,
-      reason: 'User initiated disconnect',
-      timestamp: new Date().toISOString()
-    });
-    
-    debugLog('MBA3210: WebSocket successfully disconnected');
+    // Set a new timeout
+    this.disconnectTimeout = setTimeout(() => {
+      debugLog('MBA4321: Disconnecting due to inactivity');
+      this.disconnect();
+    }, 600000); // 10 minutes
+  }
+
+  /**
+   * Check if WebSocket is connected
+   * @returns {boolean} Connection status
+   */
+  isWebSocketConnected() {
+    return this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN;
   }
 
   /**
@@ -459,7 +346,7 @@ class WebSocketManager {
     }
     
     this.messageHandlers.get(messageType).set(handlerId, handler);
-    debugLog(`MBA3210: Registered handler ${handlerId} for ${messageType} messages`);
+    debugLog(`MBA4321: Registered handler ${handlerId} for ${messageType} messages`);
     
     return () => this.unregisterHandler(messageType, handlerId);
   }
@@ -472,7 +359,7 @@ class WebSocketManager {
   unregisterHandler(messageType, handlerId) {
     if (this.messageHandlers.has(messageType)) {
       this.messageHandlers.get(messageType).delete(handlerId);
-      debugLog(`MBA3210: Unregistered handler ${handlerId} for ${messageType} messages`);
+      debugLog(`MBA4321: Unregistered handler ${handlerId} for ${messageType} messages`);
     }
   }
 
@@ -489,7 +376,7 @@ class WebSocketManager {
         try {
           handler(data);
         } catch (error) {
-          debugLog(`MBA3210: Error in ${messageType} handler ${id}: ${error.message}`);
+          debugLog(`MBA4321: Error in ${messageType} handler ${id}: ${error.message}`);
         }
       });
     }
@@ -502,7 +389,7 @@ class WebSocketManager {
         try {
           handler({ type: messageType, data });
         } catch (error) {
-          debugLog(`MBA3210: Error in global handler ${id}: ${error.message}`);
+          debugLog(`MBA4321: Error in global handler ${id}: ${error.message}`);
         }
       });
     }
@@ -528,4 +415,5 @@ class WebSocketManager {
 // Create a singleton instance
 const websocketManager = new WebSocketManager();
 
+// Export the singleton
 export default websocketManager; 

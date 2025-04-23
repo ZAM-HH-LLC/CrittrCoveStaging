@@ -475,6 +475,7 @@ def get_unread_message_count(request):
     Returns:
     - unread_count: Total number of unread messages
     - unread_conversations: Number of conversations with unread messages
+    - conversation_counts: Object mapping conversation_id to unread message count
     """
     try:
         current_user = request.user
@@ -489,12 +490,14 @@ def get_unread_message_count(request):
             logger.info(f"No conversations found for user {current_user.id}")
             return Response({
                 'unread_count': 0,
-                'unread_conversations': 0
+                'unread_conversations': 0,
+                'conversation_counts': {}
             })
         
         # Calculate total unread messages and conversations with unread messages
         total_unread = 0
         conversations_with_unread = 0
+        conversation_counts = {}
         
         for conversation in conversations:
             # Only count messages where:
@@ -510,12 +513,14 @@ def get_unread_message_count(request):
             if unread_count > 0:
                 total_unread += unread_count
                 conversations_with_unread += 1
+                conversation_counts[str(conversation.conversation_id)] = unread_count
                 
         logger.info(f"User {current_user.id} has {total_unread} unread messages in {conversations_with_unread} conversations")
         
         return Response({
             'unread_count': total_unread,
-            'unread_conversations': conversations_with_unread
+            'unread_conversations': conversations_with_unread,
+            'conversation_counts': conversation_counts
         })
         
     except Exception as e:
