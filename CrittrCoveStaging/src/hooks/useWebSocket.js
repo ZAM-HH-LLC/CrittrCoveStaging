@@ -133,6 +133,9 @@ const useWebSocket = (messageType, callback, options = {}) => {
       clearTimeout(initialCheckTimeout);
       
       handlerRegisteredRef.current = false;
+      
+      // We no longer disconnect WebSocket on unmount
+      // This allows the connection to persist when navigating between screens
     };
   }, [disabled, messageType, callback, handlerId]);
   

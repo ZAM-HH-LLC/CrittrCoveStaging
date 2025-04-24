@@ -17,6 +17,8 @@ class WebSocketManager {
     this.connectionId = null;
     this.wsUrl = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
     this._reconnectTimeout = null;
+    this.forceDisconnect = false;
+    this._hasVisibilityListener = false;
     debugLog('MBA4321: WebSocketManager initialized, wsUrl is ' + this.wsUrl);
   }
 
@@ -30,24 +32,75 @@ class WebSocketManager {
       return;
     }
     
-    // If we already have this token, no need to reconnect
-    if (this.token === token && this.isConnected) {
+    // If we already have this token and connection, no need to reconnect
+    if (this.token === token && this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
       debugLog('MBA4321: WebSocket already connected with this token');
       return;
     }
     
-    this.token = token;
-    
-    // If we already have a socket, close it first
-    if (this.socket) {
-      this.disconnect();
+    // If we already had a token and it's different, this is a re-login, so force disconnect
+    if (this.token && this.token !== token) {
+      debugLog('MBA4321: Token changed, force disconnecting before reconnecting');
+      this.disconnect(true); // Force disconnect on token change
     }
     
-    // Connect with the new token
+    this.token = token;
+    this.forceDisconnect = false; // Reset force disconnect flag
+    
+    // If we already have a socket but it's not working, close it first
+    if (this.socket && (this.socket.readyState === WebSocket.CLOSING || this.socket.readyState === WebSocket.CLOSED)) {
+      debugLog('MBA4321: Closing existing non-functional socket');
+      this.disconnect(false); // Non-forced disconnect
+    }
+    
+    // Connect with the token
     this.connect();
     
-    // We also start a disconnect timeout (10 minutes of inactivity)
+    // Set up disconnect timeout (10 minutes of inactivity)
     this.resetDisconnectTimeout();
+    
+    // Set up visibility change listener if in browser environment
+    this.setupVisibilityListener();
+  }
+
+  /**
+   * Set up visibility change listener to reconnect when tab becomes visible again
+   */
+  setupVisibilityListener() {
+    // Only run in browser environment
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+    
+    // Skip if we've already set up the listener
+    if (this._hasVisibilityListener) {
+      return;
+    }
+    
+    debugLog('MBA4321: Setting up visibility change listener');
+    
+    // Create the handler function
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        debugLog('MBA4321: Document became visible, checking WebSocket connection');
+        
+        // Only reconnect if we have a token and weren't explicitly disconnected
+        if (this.token && !this.forceDisconnect) {
+          this.reconnectIfNeeded();
+        }
+      }
+    };
+    
+    // Add the listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    this._hasVisibilityListener = true;
+    
+    // Set up cleanup on page unload if needed
+    window.addEventListener('beforeunload', () => {
+      // Note: we deliberately don't disconnect here, as this would prevent
+      // browser session restoration from working properly
+      debugLog('MBA4321: Page unloading, connection may persist for session restore');
+    });
   }
 
   /**
@@ -289,9 +342,18 @@ class WebSocketManager {
 
   /**
    * Disconnect the WebSocket
+   * @param {boolean} force - Whether to force disconnect (true) or allow reconnect on visibility change (false)
    */
-  disconnect() {
-    debugLog('MBA4321: [MY CONNECTION] Disconnecting WebSocket connection');
+  disconnect(force = false) {
+    debugLog(`MBA4321: [MY CONNECTION] Disconnecting WebSocket connection (force=${force})`);
+    
+    // Set the force disconnect flag if requested
+    this.forceDisconnect = force;
+    
+    // If this is just a tab change and not a forced disconnect,
+    // we'll preserve the token to allow reconnection
+    const preserveToken = !force;
+    const savedToken = preserveToken ? this.token : null;
     
     // Clear heartbeat interval
     if (this.heartbeatInterval) {
@@ -327,9 +389,16 @@ class WebSocketManager {
     // Reset connection state
     this.isConnected = false;
     
+    // Restore token if this wasn't a forced disconnect (just a tab change)
+    if (preserveToken && savedToken) {
+      this.token = savedToken;
+      debugLog('MBA4321: [MY CONNECTION] Preserved token for reconnection on tab visibility change');
+    }
+    
     // Notify handlers of the disconnection
     this.notifyHandlers('connection', { 
       status: 'disconnected',
+      forced: force,
       timestamp: new Date().toISOString()
     });
     
@@ -445,9 +514,9 @@ class WebSocketManager {
   reconnectIfNeeded() {
     debugLog('MBA4321: [MY CONNECTION] Checking if WebSocket reconnection needed');
     
-    // If we don't have a token, can't reconnect
-    if (!this.token) {
-      debugLog('MBA4321: [MY CONNECTION] No token available, cannot reconnect');
+    // If we don't have a token or were force disconnected, don't try to reconnect
+    if (!this.token || this.forceDisconnect) {
+      debugLog(`MBA4321: [MY CONNECTION] Cannot reconnect - ${!this.token ? 'no token' : 'force disconnected'}`);
       return false;
     }
     
@@ -463,6 +532,9 @@ class WebSocketManager {
     
     if (needsReconnect) {
       debugLog('MBA4321: [MY CONNECTION] WebSocket needs reconnection, attempting now');
+      
+      // Reset the force disconnect flag
+      this.forceDisconnect = false;
       
       // Ensure old connection is properly closed
       if (this.socket) {
@@ -489,6 +561,9 @@ class WebSocketManager {
     if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
       debugLog('MBA4321: [MY CONNECTION] WebSocket appears connected, sending heartbeat to verify');
       this.send('heartbeat');
+      
+      // Reset the disconnect timeout to prevent inactivity disconnection
+      this.resetDisconnectTimeout();
     }
     
     return false;

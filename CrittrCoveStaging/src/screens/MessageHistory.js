@@ -291,7 +291,6 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   conversationLastMessageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     width: '100%',
     marginBottom: 6,
   },
@@ -646,7 +645,6 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   },
   conversationUnreadBadge: {
     position: 'relative',
-    // marginTop: 4,
     backgroundColor: theme.colors.error,
     borderRadius: 10,
     minWidth: 18,
@@ -665,6 +663,30 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
+  },
+  unreadBadge: {
+    backgroundColor: theme.colors.error,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginLeft: 8,
+    alignSelf: 'flex-start',
+  },
+  
+  unreadBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  
+  conversationNameRow: {
+    flexDirection: 'row', 
+    alignItems: 'center',
+    marginBottom: 4,
   },
 });
 
@@ -1042,19 +1064,11 @@ const MessageHistory = ({ navigation, route }) => {
 
     return () => {
       debugLog('MBA3210: Component unmounting - cleaning up');
-      lastViewedConversationRef.current = null;
       
-      // Clear the global selected conversation tracking
-      if (typeof window !== 'undefined') {
-        window.selectedConversationId = null;
-      }
+      // No longer disconnect on component unmount
+      // This was causing message loss when switching tabs
       
-      // Reset everything else as before
-      if (disconnect) {
-        debugLog('MBA3210: Disconnecting WebSocket on component unmount');
-        disconnect();
-      }
-      
+      // Reset everything for future component mount
       setConversations([]);
       setMessages([]);
       setSelectedConversation(null);
@@ -1064,6 +1078,12 @@ const MessageHistory = ({ navigation, route }) => {
       isHandlingRouteParamsRef.current = false;
       hasLoadedMessagesRef.current = false;
       shouldOpenBookingCreationRef.current = false;
+      lastViewedConversationRef.current = null;
+      
+      // Clear the global selected conversation tracking
+      if (typeof window !== 'undefined') {
+        window.selectedConversationId = null;
+      }
     };
   }, []); // Empty dependency array means this runs once on mount
   
@@ -1181,7 +1201,7 @@ const MessageHistory = ({ navigation, route }) => {
       
       // Mark this conversation as read in the notification context
       if (markConversationAsRead) {
-        debugLog(`MBA4321: Marking conversation ${selectedConversation} as read when selected`);
+        debugLog(`MBA4321: Marking ONLY conversation ${selectedConversation} as read when selected`);
         markConversationAsRead(selectedConversation);
       }
       
@@ -1230,9 +1250,7 @@ const MessageHistory = ({ navigation, route }) => {
     const hasSelectedConversationChanged = lastViewedConversationRef.current !== selectedConversation;
     
     if (!hasSelectedConversationChanged && hasLoadedMessagesRef.current) {
-      if (is_DEBUG) {
-        console.log('MBA98765 Skipping message fetch - conversation unchanged and messages already loaded');
-      }
+      debugLog('MBA4321: Skipping message fetch - conversation unchanged and messages already loaded');
       return;
     }
 
@@ -1250,12 +1268,15 @@ const MessageHistory = ({ navigation, route }) => {
     
     // Set loading flags
     hasLoadedMessagesRef.current = true;
+    setIsLoadingMessages(true);
     
     // Fetch messages
     fetchMessages(selectedConversation, 1)
       .then(() => {
         // Skip updates if component unmounted or conversation changed
         if (!isCurrentOperation) return;
+        
+        setIsLoadingMessages(false);
         
         // After messages are loaded, if we need to open booking creation,
         // we now have hasDraft and draftData set properly
@@ -1265,11 +1286,19 @@ const MessageHistory = ({ navigation, route }) => {
           }
         }
         
+        // Mark this specific conversation's notifications as read 
+        // We do this here after successful message fetch to ensure it actually happened
+        if (markConversationAsRead && hasSelectedConversationChanged) {
+          debugLog(`MBA4321: Marking conversation ${selectedConversation} as read after successful message fetch`);
+          markConversationAsRead(selectedConversation);
+        }
+        
         // Force a rerender to fix scrolling issues
         setForceRerender(prev => prev + 1);
       })
       .catch(error => {
         if (!isCurrentOperation) return;
+        setIsLoadingMessages(false);
         console.error('Error fetching messages:', error);
       });
     
@@ -1277,7 +1306,7 @@ const MessageHistory = ({ navigation, route }) => {
     return () => {
       isCurrentOperation = false;
     };
-  }, [selectedConversation, isInitialLoad]);
+  }, [selectedConversation, isInitialLoad, markConversationAsRead]);
 
   // Modify existing screen width effect
   useEffect(() => {
@@ -2141,11 +2170,16 @@ const MessageHistory = ({ navigation, route }) => {
         }
         
         const isSelected = String(conv.conversation_id) === String(selectedConversation);
-        
+          
         // Get unread count for this conversation from MessageNotificationContext
         const unreadCount = getConversationUnreadCount ? 
           getConversationUnreadCount(String(conv.conversation_id)) : 0;
         
+        // Only log if there are unread messages to reduce noise in logs
+        if (unreadCount > 0) {
+          debugLog(`MBA4321: Conversation ${conv.conversation_id} has ${unreadCount} unread messages`);
+        }
+          
         return (
           <TouchableOpacity
             key={conv.conversation_id}
@@ -2166,16 +2200,19 @@ const MessageHistory = ({ navigation, route }) => {
               
               // Mark this conversation as read when clicked
               if (markConversationAsRead && unreadCount > 0) {
-                debugLog(`MBA4321: Explicitly marking conversation ${conv.conversation_id} as read when clicked`);
+                debugLog(`MBA4321: Explicitly marking ONLY conversation ${conv.conversation_id} as read when clicked`);
                 markConversationAsRead(conv.conversation_id);
               }
             }}
           >
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
-                <Text style={styles.conversationName}>
-                  {otherParticipantName || conv.name || conv.other_user_name || 'Unknown'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <Text style={styles.conversationName}>
+                    {otherParticipantName || conv.name || conv.other_user_name || 'Unknown'}
+                  </Text>
+                </View>
+                
                 <Text style={styles.conversationTime}>
                   {new Date(conv.last_message_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                 </Text>
@@ -2191,10 +2228,11 @@ const MessageHistory = ({ navigation, route }) => {
                 >
                   {conv.last_message}
                 </Text>
-                {/* Display unread count badge on same line as last message */}
+                
+                {/* Show unread count badge next to the last message */}
                 {unreadCount > 0 && !isSelected && (
-                  <View style={styles.conversationUnreadBadge}>
-                    <Text style={styles.conversationUnreadText}>{unreadCount}</Text>
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
                   </View>
                 )}
               </View>
@@ -2511,13 +2549,13 @@ const MessageHistory = ({ navigation, route }) => {
     };
   }, []);
 
+  // Replace the existing beforeunload effect that disconnects the WebSocket
   useEffect(() => {
     // When a user signs out or navigates away, make sure to disconnect
     const handleBeforeUnload = () => {
-      debugLog('MBA3210: Page unloading, disconnecting websocket');
-      if (disconnect) {
-        disconnect();
-      }
+      debugLog('MBA3210: Page unloading, but keeping websocket alive for session restore');
+      // Deliberately NOT disconnecting websocket on page unload
+      // This was causing message loss when refreshing or switching tabs
     };
 
     if (typeof window !== 'undefined') {
@@ -2529,7 +2567,7 @@ const MessageHistory = ({ navigation, route }) => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
       }
     };
-  }, [disconnect]);
+  }, []);
 
   // Add a useEffect to reset notifications when component mounts
   useEffect(() => {
@@ -2548,13 +2586,17 @@ const MessageHistory = ({ navigation, route }) => {
   useEffect(() => {
     // Tell the notification context we're on the Messages screen
     if (updateRoute) {
-      debugLog('MBA4321: Updating route in MessageNotificationContext');
+      debugLog('MBA4321: Updating route in MessageNotificationContext to MessageHistory');
       updateRoute('MessageHistory');
+      
+      // Important: DO NOT call resetNotifications() here
+      // That was causing all notifications to be cleared when opening MessageHistory
+      // Instead, we only mark the selected conversation as read when it's selected
     }
     
     // Return cleanup function
     return () => {
-      debugLog('MBA4321: Cleaning up message notification tracking');
+      debugLog('MBA4321: Cleaning up message notification tracking for MessageHistory');
     };
   }, [updateRoute]);
   
@@ -2565,6 +2607,104 @@ const MessageHistory = ({ navigation, route }) => {
       markConversationAsRead(selectedConversation);
     }
   }, [selectedConversation, markConversationAsRead]);
+
+  // When component initializes, ensure we properly handle any route parameters
+  // that specify a conversation to open, but don't reset all notifications
+  useEffect(() => {
+    if (!initialLoadRef.current) return; // Skip if not initial load
+    
+    const initializeData = async () => {
+      try {
+        // Reset states
+        setConversations([]);
+        setMessages([]);
+        setSelectedConversation(null);
+        setSelectedConversationData(null);
+        setIsLoadingConversations(true);
+        setIsLoadingMessages(false);
+        setCurrentPage(1);
+        setHasMore(true);
+        lastViewedConversationRef.current = null;
+        
+        // Handle parameters first
+        let initialConversationId = null;
+        
+        // First check URL parameters on web
+        if (Platform.OS === 'web') {
+          const currentUrl = new URL(window.location.href);
+          const urlConversationId = currentUrl.searchParams.get('conversationId');
+          
+          if (urlConversationId) {
+            initialConversationId = urlConversationId;
+            debugLog(`MBA4321: Using conversation ID ${urlConversationId} from URL parameters`);
+          }
+        }
+        
+        // Next check route params if no URL param was found
+        if (!initialConversationId && route.params?.conversationId) {
+          initialConversationId = route.params.conversationId;
+          debugLog(`MBA4321: Using conversation ID ${initialConversationId} from route parameters`);
+          
+          // Check if we should open booking creation (coming from Services)
+          if (route.params.isProfessional === true) {
+            shouldOpenBookingCreationRef.current = true;
+          }
+        }
+        
+        // Fetch conversations
+        const conversationsData = await fetchConversations();
+        
+        // Set initial selected conversation - either from params or first one
+        if (initialConversationId) {
+          setSelectedConversation(initialConversationId);
+          debugLog(`MBA4321: Setting initially selected conversation to ${initialConversationId}`);
+        } else if (Platform.OS === 'web' && screenWidth > 900 && conversationsData?.length > 0) {
+          setSelectedConversation(conversationsData[0].conversation_id);
+          debugLog(`MBA4321: Auto-selecting first conversation ${conversationsData[0].conversation_id} on desktop`);
+        }
+        
+        // Important: We DON'T mark all conversations as read here
+        // Only the selected conversation will be marked as read when it's selected
+      } catch (error) {
+        console.error('Error initializing MessageHistory:', error);
+      } finally {
+        initialLoadRef.current = false;
+        setIsInitialLoad(false);
+      }
+    };
+    
+    initializeData();
+    
+    return () => {
+      debugLog('MBA4321: Cleaning up MessageHistory component');
+      lastViewedConversationRef.current = null;
+      
+      // Clear the global selected conversation tracking
+      if (typeof window !== 'undefined') {
+        window.selectedConversationId = null;
+      }
+      
+      // IMPORTANT: We no longer disconnect the WebSocket here
+      // This allows the connection to persist when navigating away from this screen
+    };
+  }, []);
+  
+  // Fix the beforeunload effect
+  useEffect(() => {
+    // Only run in browser environment
+    if (typeof window !== 'undefined') {
+      const handleBeforeUnload = () => {
+        debugLog('MBA3210: Page unloading, but keeping websocket alive for session restore');
+        // No longer disconnect WebSocket on page unload
+      };
+      
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
+    }
+  }, []);
 
   return (
     <SafeAreaView style={[
