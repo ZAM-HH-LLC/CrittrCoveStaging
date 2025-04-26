@@ -55,7 +55,7 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                     isWideScreen && styles.petsTextWide
                   ]}>
                     {connection.pets?.length > 0 
-                      ? connection.pets.map(pet => `${pet.name} (${pet.type})`).join(', ') 
+                      ? connection.pets.map(pet => `${pet.name} (${pet.species})`).join(', ') 
                       : 'No pets added yet'}
                   </Text>
                 </View>

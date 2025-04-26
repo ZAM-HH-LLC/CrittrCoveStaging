@@ -935,7 +935,8 @@ const ProfileInfoTab = ({
   };
 
   const renderFacilitiesSection = () => {
-    if (isProfessional) return null;
+    // TODO: Remove the !isProfessional once we have a way to edit facilities
+    if (isProfessional || !isProfessional) return null;
 
     return (
       <View style={styles.section}>

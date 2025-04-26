@@ -2055,7 +2055,8 @@ const PetsPreferencesTab = ({
         </View>
       </View>
 
-      <View style={[styles.section, { backgroundColor: theme.colors.surfaceContrast }]}>
+      {/* TODO: uncomment this once we have implemented edit facilities */}
+      {/* <View style={[styles.section, { backgroundColor: theme.colors.surfaceContrast }]}>
         <Text style={styles.sectionTitle}>
           {userRole === 'professional' ? 'My Home & Environment Facilities' : 'Home & Environment Preferences'}
         </Text>
@@ -2103,7 +2104,7 @@ const PetsPreferencesTab = ({
       </View>
 
       {renderEmergencyContactsSection()}
-      {renderHouseholdMembersSection()}
+      {renderHouseholdMembersSection()} */}
     </ScrollView>
   );
 };
