@@ -1820,7 +1820,7 @@ class ConnectionsView(APIView):
                         'about_me': client.about_me,
                         'last_booking_date': last_booking_date,
                         'last_booking_status': last_booking_status,
-                        'pets': [{'id': pet.pet_id, 'name': pet.name} for pet in pets],
+                        'pets': [{'id': pet.pet_id, 'name': pet.name, 'species': pet.species} for pet in pets],
                         'active_bookings_count': active_bookings_count,
                         'completed_bookings_count': completed_bookings_count,
                         'conversation_id': conversation_id if conversation_id else None
