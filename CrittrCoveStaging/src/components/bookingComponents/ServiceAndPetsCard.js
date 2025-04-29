@@ -15,6 +15,7 @@ import { theme } from '../../styles/theme';
 import { AuthContext } from '../../context/AuthContext';
 import { getBookingAvailableServices, getBookingAvailablePets } from '../../api/API';
 import axios from 'axios';
+import { navigateToFrom } from '../Navigation';
 
 const ServiceAndPetsCard = ({ 
   bookingId, 
@@ -25,7 +26,9 @@ const ServiceAndPetsCard = ({
   isLoading,
   error,
   onNext,
-  currentBookingId
+  currentBookingId,
+  navigation,
+  onClose
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
   const [availableServices, setAvailableServices] = useState([]);
@@ -294,9 +297,22 @@ const ServiceAndPetsCard = ({
           <Text style={styles.errorText}>{serviceError}</Text>
         ) : isLoadingServices ? (
           <ActivityIndicator size="small" color={theme.colors.mainColors.main} />
-        ) : (
+        ) : availableServices.length > 0 ? (
           <View style={styles.servicesGrid}>
             {availableServices.map(service => renderServiceCard(service))}
+          </View>
+        ) : (
+          <View style={styles.noServicesContainer}>
+            <Text style={styles.errorText}>No services available. Please add services to create a booking.</Text>
+            <TouchableOpacity 
+              style={styles.createServiceButton} 
+              onPress={() => {
+                onClose();
+                navigateToFrom(navigation, 'ServiceManager', 'MessageHistory');
+              }}
+            >
+              <Text style={styles.createServiceButtonText}>Create Services</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -308,9 +324,13 @@ const ServiceAndPetsCard = ({
         ) : isLoadingPets ? (
           <ActivityIndicator size="small" color={theme.colors.mainColors.main} />
         ) : (
-          <View style={styles.petsContainer}>
-            {availablePets.map(pet => renderPetCard(pet))}
-          </View>
+          availablePets.length > 0 ? (
+            <View style={styles.petsContainer}>
+              {availablePets.map(pet => renderPetCard(pet))}
+            </View>
+          ) : (
+            <Text style={styles.errorText}>Please instruct client to add pets to their account so you can create a booking for their pets.</Text>
+          )
         )}
       </View>
     </ScrollView>
@@ -476,6 +496,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
+  },
+  createServiceButton: {
+    backgroundColor: theme.colors.mainColors.main,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  createServiceButtonText: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 

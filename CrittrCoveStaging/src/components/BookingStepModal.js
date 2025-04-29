@@ -46,7 +46,8 @@ const BookingStepModal = ({
   onClose,
   bookingId,
   onComplete,
-  initialData = {}
+  initialData = {},
+  navigation
 }) => {
   const { is_DEBUG, screenWidth } = useContext(AuthContext);
   const isDesktop = screenWidth > 768;
@@ -364,6 +365,8 @@ const BookingStepModal = ({
             onPetSelect={handlePetSelect}
             selectedService={bookingData.service}
             selectedPets={bookingData.pets}
+            navigation={navigation}
+            onClose={onClose}
           />
         );
       case STEPS.DATE_SELECTION.id:

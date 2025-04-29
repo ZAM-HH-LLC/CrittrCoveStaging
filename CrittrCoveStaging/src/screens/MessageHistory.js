@@ -2754,6 +2754,7 @@ const MessageHistory = ({ navigation, route }) => {
           setShowBookingStepModal(false);
           setCurrentBookingId(null);
         }}
+        navigation={navigation}
         bookingId={currentBookingId}
         onComplete={(bookingData) => {
           if (is_DEBUG) {
