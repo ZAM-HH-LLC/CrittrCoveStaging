@@ -81,15 +81,16 @@ const Connections = () => {
   }, [userRole, navigation]);
 
   const fetchConnections = async (pageNum = 1, isLoadMore = false) => {
-    if (isLoadingMore) {
-      setIsLoadingMore(true);
-    } else {
-      setLoading(true);
-      setError(null);
-    }
+    setLoading(!isLoadMore);
+    isLoadMore && setIsLoadingMore(true);
+    
+    debugLog('MBA4321 Fetching connections:', {
+      page: pageNum,
+      isLoadMore
+    });
 
     try {
-      const response = await getUserConnections(activeTab, activeFilter, pageNum, 20);
+      const response = await getUserConnections(pageNum);
       
       debugLog('MBA4321 Response from API:', response);
 
@@ -115,34 +116,105 @@ const Connections = () => {
     }
   };
 
-  // Fetch connections when component mounts or when dependencies change
+  // Update useEffect to only fetch once and not refetch when filter changes
   useEffect(() => {
     debugLog('MBA4321 Fetching connections due to dependency change:', {
       activeTab,
-      userRole,
-      activeFilter
+      userRole
     });
     setPage(1);
     setConnections([]);
     fetchConnections(1);
-  }, [activeTab, userRole, activeFilter]);
+  }, [activeTab, userRole]);
+
+  // Add new useEffect to filter connections locally when filter changes
+  useEffect(() => {
+    debugLog('MBA4321 Filtering connections locally based on:', {
+      activeFilter
+    });
+    if (allConnections.length > 0) {
+      filterConnectionsLocally();
+    }
+  }, [activeFilter, allConnections]);
+
+  // Add function to filter connections locally
+  const filterConnectionsLocally = () => {
+    if (!allConnections.length) return;
+    
+    debugLog('MBA4321 Filtering connections locally with filter:', activeFilter);
+    
+    if (activeFilter === 'all') {
+      setConnections(allConnections);
+      return;
+    }
+    
+    // Filter based on activeFilter
+    let filtered = [];
+    
+    switch (activeFilter) {
+      case 'active_bookings':
+        filtered = allConnections.filter(connection => 
+          connection.upcoming_booking_date != null
+        );
+        break;
+      case 'no_bookings':
+        filtered = allConnections.filter(connection => 
+          connection.upcoming_booking_date == null
+        );
+        break;
+      case 'past_bookings':
+        // This would require additional data from the API to implement properly
+        // For now, we'll just show all connections
+        filtered = allConnections;
+        break;
+      default:
+        filtered = allConnections;
+    }
+    
+    setConnections(filtered);
+  };
 
   // Handle search
   const handleSearch = (query) => {
     setSearchQuery(query);
     
-    // If query is empty, restore the original connections
+    // If query is empty, reapply the current filter
     if (!query.trim()) {
-      debugLog('MBA4321 Empty search query, restoring all connections');
-      setConnections(allConnections);
+      debugLog('MBA4321 Empty search query, reapplying current filter');
+      filterConnectionsLocally();
       return;
     }
 
     debugLog('MBA4321 Searching connections with query:', query);
     
-    // Filter from the allConnections list without making API calls
+    // Get the base set of connections to search from (already filtered by activeFilter)
+    let baseConnections = [];
+    if (activeFilter === 'all') {
+      baseConnections = allConnections;
+    } else {
+      // Re-apply the active filter to get the current filtered set
+      switch (activeFilter) {
+        case 'active_bookings':
+          baseConnections = allConnections.filter(connection => 
+            connection.upcoming_booking_date != null
+          );
+          break;
+        case 'no_bookings':
+          baseConnections = allConnections.filter(connection => 
+            connection.upcoming_booking_date == null
+          );
+          break;
+        case 'past_bookings':
+          baseConnections = allConnections;
+          break;
+        default:
+          baseConnections = allConnections;
+      }
+    }
+    
+    // Filter the already filtered list based on search query
     const searchLower = query.toLowerCase();
-    const filtered = allConnections.filter(connection => 
+    const filtered = baseConnections.filter(connection => 
       connection.name.toLowerCase().includes(searchLower) || 
       connection.email.toLowerCase().includes(searchLower) ||
       (activeTab === 'clients' && connection.pets?.some(pet => 
@@ -417,7 +489,7 @@ const Connections = () => {
                           <TouchableOpacity 
                             onPress={() => {
                               setSearchQuery('');
-                              setConnections(allConnections);
+                              filterConnectionsLocally();
                             }}
                           >
                             <MaterialCommunityIcons name="close-circle" size={20} color="#777" />
@@ -577,7 +649,7 @@ const Connections = () => {
                   <FlatList
                     data={connections}
                     renderItem={renderItem}
-                    keyExtractor={item => item.id.toString()}
+                    keyExtractor={item => item.client_id.toString()}
                     contentContainerStyle={styles.listContainer}
                     onEndReached={handleLoadMore}
                     onEndReachedThreshold={0.5}
@@ -602,7 +674,7 @@ const Connections = () => {
                       style={styles.inviteButton}
                       onPress={() => {
                         setSearchQuery('');
-                        setConnections(allConnections);
+                        filterConnectionsLocally();
                       }}
                     >
                       <Text style={styles.inviteButtonText}>Clear Search</Text>

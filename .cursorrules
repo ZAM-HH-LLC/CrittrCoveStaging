@@ -19,6 +19,7 @@ CURSOR PROJECT GUIDELINES
    ```  
    * Use the same X‑digit `<NNNN>` for **all** logs added in one change or in one chat session if that whole session is discussing the same issue.  
    * DO NOT use the MBA3210 anymore. 
+   * DO NOT use the debugLog function in the backend.
 2. Remind me to filter logs with `MBA<NNNN>` in your explanation of what you changed at the end.
 3. Replace all use cases of is_DEBUG with the debugLog function. 
 

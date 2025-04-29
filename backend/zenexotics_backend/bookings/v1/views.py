@@ -39,6 +39,7 @@ from collections import OrderedDict
 from django.utils import timezone
 from user_messages.models import UserMessage
 from conversations.v1.views import find_or_create_conversation
+from django.core.paginator import Paginator, EmptyPage
 
 logger = logging.getLogger(__name__)
 
@@ -1718,61 +1719,71 @@ class ConnectionsView(APIView):
 
     def get(self, request):
         try:
-            # Get query parameters
-            connection_type = request.GET.get('type', 'clients')  # Default to clients
-            filter_type = request.GET.get('filter', 'all')  # Default to all
-            page = int(request.GET.get('page', 1))
-            page_size = int(request.GET.get('page_size', 20))
-            
-            # Calculate offset for pagination
-            offset = (page - 1) * page_size
-            limit = page_size
-            
-            # Get user information
             user = request.user
-            
-            logger.info(f"MBA7893 Fetching connections for user {user.email} - Type: {connection_type}, Filter: {filter_type}")
+            page = request.query_params.get('page', 1)
             
             # Determine if user is professional or client
             is_professional = False
-            is_client = False
             professional = None
-            client = None
             
             try:
                 professional = Professional.objects.get(user=user)
                 is_professional = True
-                logger.info(f"MBA7893 User is a professional with ID {professional.professional_id}")
+                logger.info(f"MBA78vebt393 User is a professional with ID {professional.professional_id}")
             except Professional.DoesNotExist:
-                pass
+                return Response(
+                    {"error": "User must be a professional to access connections"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            if is_professional:
+                # Get all clients for this professional (both invited and with bookings)
+                clients = Client.objects.filter(
+                    Q(booking__professional=professional) |  # Clients who have bookings with this professional
+                    Q(invited_by=professional)  # Clients who were invited by this professional
+                ).distinct().select_related('user')
                 
-            try:
-                client = Client.objects.get(user=user)
-                is_client = True
-                logger.info(f"MBA7893 User is a client")
-            except Client.DoesNotExist:
-                pass
-            
-            connections = []
-            
-            # CASE 1: Professional looking for their clients
-            if is_professional and connection_type == 'clients':
-                logger.info(f"MBA7893 Professional looking for clients")
-
-                # Base query for clients
-                if filter_type == 'all':
-                    # All clients: with bookings, invited by this professional, or in conversations
-                    client_query = Client.objects.filter(
-                        Q(booking__professional=professional) |  # Clients who have bookings with this professional
-                        Q(invited_by=professional) |  # Clients who were invited by this professional
-                        Q(user__conversations_as_participant1__participant2=user) |  # Clients in conversations (as participant1)
-                        Q(user__conversations_as_participant2__participant1=user)    # Clients in conversations (as participant2)
-                    ).distinct().select_related('user')
-                elif filter_type == 'active_bookings':
-                    # Clients with active bookings (not completed, not cancelled)
-                    client_query = Client.objects.filter(
-                        booking__professional=professional,
-                        booking__status__in=[
+                connections = []
+                for client in clients:
+                    # Find all conversations between these users
+                    conversations = Conversation.objects.filter(
+                        (Q(participant1=request.user) & Q(participant2=client.user)) |
+                        (Q(participant1=client.user) & Q(participant2=request.user))
+                    ).order_by('last_message_time')
+                    
+                    logger.info(f"MBA78vebt393 Found {conversations.count()} conversations between user {request.user.id} and client {client.user.id}")
+                    
+                    # Find the conversation where the requesting user is the professional
+                    conversations = Conversation.objects.filter(
+                        (Q(participant1=request.user) & Q(participant2=client.user)) |
+                        (Q(participant1=client.user) & Q(participant2=request.user))
+                    )
+                    
+                    conversation_id = None
+                    for conversation in conversations:
+                        # Check the role map to ensure the requesting user is the professional
+                        role_map = conversation.role_map
+                        logger.info(f"MBA78vebt393 Checking conversation role map: {role_map}")
+                        
+                        # Check if any key in the role map has "professional" as its value
+                        for key, role in role_map.items():
+                            if role == "professional":
+                                # If we found a professional role, check if this is our user
+                                if key.startswith('user_') or key == str(request.user.id):
+                                    conversation_id = conversation.conversation_id
+                                    logger.info(f"MBA78vebt393 Found conversation where user is professional: conversation_id={conversation_id}, role_map={role_map}")
+                                    break
+                        else:
+                            logger.info(f"MBA78vebt393 Skipping conversation - user is not professional: conversation_id={conversation.conversation_id}, role_map={role_map}")
+                        
+                        if not conversation_id:
+                            logger.info(f"MBA78vebt393 No conversation found where user is professional for client: user_id={request.user.id}, client_id={client.id}, conversations_checked={list(conversations.values_list('conversation_id', flat=True))}")
+                    
+                    # Get active and completed bookings counts
+                    active_bookings_count = Booking.objects.filter(
+                        client=client,
+                        professional=professional,
+                        status__in=[
                             BookingStates.CONFIRMED,
                             BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL,
                             BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
@@ -1780,268 +1791,68 @@ class ConnectionsView(APIView):
                             BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
                             BookingStates.PENDING_PROFESSIONAL_CHANGES
                         ]
-                    ).distinct()
-                elif filter_type == 'no_bookings':
-                    # Clients invited by professional or in conversations but no bookings
-                    client_query = Client.objects.filter(
-                        Q(invited_by=professional) |
-                        Q(user__conversations_as_participant1__participant2=user) |
-                        Q(user__conversations_as_participant2__participant1=user)
-                    ).exclude(
-                        booking__professional=professional
-                    ).distinct()
-                elif filter_type == 'past_bookings':
-                    # Clients with only completed or cancelled bookings
-                    client_query = Client.objects.filter(
-                        booking__professional=professional,
-                        booking__status__in=[
-                            BookingStates.COMPLETED,
-                            BookingStates.CANCELLED,
-                            BookingStates.DENIED
-                        ]
-                    ).exclude(
-                        booking__professional=professional,
-                        booking__status__in=[
-                            BookingStates.CONFIRMED,
-                            BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL,
-                            BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_CLIENT_APPROVAL,
-                            BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_PROFESSIONAL_CHANGES
-                        ]
-                    ).distinct()
-                
-                # Apply pagination
-                paginated_clients = client_query[offset:offset+limit]
-                
-                # Serialize the client information
-                for client in paginated_clients:
-                    # Get pets for this client
+                    ).count()
+                    
+                    completed_bookings_count = Booking.objects.filter(
+                        client=client,
+                        professional=professional,
+                        status=BookingStates.COMPLETED
+                    ).count()
+                    
+                    # Get the client's pets
                     pets = Pet.objects.filter(owner=client.user)
                     
-                    # Get the last active booking with this client
+                    # Get the last booking date and status
                     last_booking = Booking.objects.filter(
                         client=client,
                         professional=professional
                     ).order_by('-created_at').first()
                     
-                    # Get services used by this client from bookings
-                    services = list(Booking.objects.filter(
-                        client=client,
-                        professional=professional
-                    ).values_list('service_id__service_name', flat=True).distinct())
+                    last_booking_date = last_booking.created_at.date() if last_booking else None
+                    last_booking_status = last_booking.status if last_booking else None
                     
-                    # Get booking status counts
-                    active_bookings_count = Booking.objects.filter(
-                        client=client,
-                        professional=professional,
-                        status__in=[
-                            BookingStates.CONFIRMED,
-                            BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL,
-                            BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_CLIENT_APPROVAL,
-                            BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_PROFESSIONAL_CHANGES
-                        ]
-                    ).count()
-                    
-                    completed_bookings_count = Booking.objects.filter(
-                        client=client,
-                        professional=professional,
-                        status=BookingStates.COMPLETED
-                    ).count()
-                    
-                    # Check if there's a conversation with this client
-                    has_conversation = Conversation.objects.filter(
-                        (Q(participant1=user) & Q(participant2=client.user)) |
-                        (Q(participant1=client.user) & Q(participant2=user))
-                    ).exists()
-                    
-                    # Get or create a conversation with this client
-                    conversation, is_professional_in_convo = find_or_create_conversation(
-                        user, client.user, 'professional'
-                    )
-                    
-                    # Build client connection data
-                    connection = {
+                    # Build the connection data
+                    connection_data = {
                         'id': client.user.id,
-                        'client_id': client.id,  # Add the actual client ID
+                        'client_id': client.id,
                         'name': client.user.name,
-                        'email': client.user.email,
                         'profile_image': client.user.profile_image_url if hasattr(client.user, 'profile_image_url') else None,
                         'about_me': client.about_me,
-                        'last_booking_date': last_booking.created_at.strftime('%Y-%m-%d') if last_booking else None,
-                        'last_booking_status': BookingStates.get_display_state(last_booking.status) if last_booking else None,
-                        'pets': [
-                            {
-                                'pet_id': pet.pet_id,
-                                'name': pet.name,
-                                'species': pet.species,
-                                'breed': pet.breed,
-                                'age': f"{pet.age_years or 0} years, {pet.age_months or 0} months"
-                            } for pet in pets
-                        ],
-                        'services': services,
+                        'last_booking_date': last_booking_date,
+                        'last_booking_status': last_booking_status,
+                        'pets': [{'id': pet.pet_id, 'name': pet.name} for pet in pets],
                         'active_bookings_count': active_bookings_count,
                         'completed_bookings_count': completed_bookings_count,
-                        'has_conversation': has_conversation,
-                        'conversation_id': conversation.conversation_id
+                        'conversation_id': conversation_id if conversation_id else None
                     }
-                    connections.append(connection)
-            
-            # CASE 2: Client looking for their professionals
-            elif is_client and connection_type == 'professionals':
-                logger.info(f"MBA7893 Client looking for professionals")
+                    
+                    logger.info(f"MBA78vebt393 Built connection data for client {client.user.id}: {connection_data}")
+                    
+                    connections.append(connection_data)
                 
-                # Base query for client's professionals
-                if filter_type == 'all':
-                    professional_query = Professional.objects.filter(
-                        Q(booking__client=client) |  # Professionals who have bookings with this client
-                        Q(user__conversations_as_participant1__participant2=user) |  # Professionals in conversations (as participant1)
-                        Q(user__conversations_as_participant2__participant1=user)    # Professionals in conversations (as participant2)
-                    ).distinct().select_related('user')
-                elif filter_type == 'active_bookings':
-                    # Professionals with active bookings (not completed, not cancelled)
-                    professional_query = Professional.objects.filter(
-                        booking__client=client,
-                        booking__status__in=[
-                            BookingStates.CONFIRMED,
-                            BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL,
-                            BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_CLIENT_APPROVAL,
-                            BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_PROFESSIONAL_CHANGES
-                        ]
-                    ).distinct()
-                elif filter_type == 'past_bookings':
-                    # Professionals with only completed or cancelled bookings
-                    professional_query = Professional.objects.filter(
-                        booking__client=client,
-                        booking__status__in=[
-                            BookingStates.COMPLETED,
-                            BookingStates.CANCELLED,
-                            BookingStates.DENIED
-                        ]
-                    ).exclude(
-                        booking__client=client,
-                        booking__status__in=[
-                            BookingStates.CONFIRMED,
-                            BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL,
-                            BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_CLIENT_APPROVAL,
-                            BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_PROFESSIONAL_CHANGES
-                        ]
-                    ).distinct()
-                elif filter_type == 'no_bookings':
-                    # Professionals with conversations but no bookings
-                    professional_query = Professional.objects.filter(
-                        Q(user__conversations_as_participant1__participant2=user) |
-                        Q(user__conversations_as_participant2__participant1=user)
-                    ).exclude(
-                        booking__client=client
-                    ).distinct()
-                else:
-                    # Default case
-                    professional_query = Professional.objects.filter(
-                        Q(booking__client=client) |
-                        Q(user__conversations_as_participant1__participant2=user) |
-                        Q(user__conversations_as_participant2__participant1=user)
-                    ).distinct().select_related('user')
+                # Paginate results
+                paginator = Paginator(connections, 20)
+                try:
+                    page_obj = paginator.page(page)
+                except EmptyPage:
+                    page_obj = paginator.page(paginator.num_pages)
                 
-                # Apply pagination
-                paginated_professionals = professional_query[offset:offset+limit]
+                return Response({
+                    'connections': page_obj.object_list,
+                    'total_count': paginator.count,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous(),
+                    'current_page': page_obj.number,
+                    'total_pages': paginator.num_pages
+                })
                 
-                # Serialize the professional information
-                for prof in paginated_professionals:
-                    # Get services offered by this professional
-                    services = list(Service.objects.filter(
-                        professional=prof,
-                        moderation_status='APPROVED'
-                    ).values_list('service_name', flat=True))
-                    
-                    # Get the last active booking with this professional
-                    last_booking = Booking.objects.filter(
-                        client=client,
-                        professional=prof
-                    ).order_by('-created_at').first()
-                    
-                    # Get booking status counts
-                    active_bookings_count = Booking.objects.filter(
-                        client=client,
-                        professional=prof,
-                        status__in=[
-                            BookingStates.CONFIRMED,
-                            BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL,
-                            BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_CLIENT_APPROVAL,
-                            BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_PROFESSIONAL_CHANGES
-                        ]
-                    ).count()
-                    
-                    completed_bookings_count = Booking.objects.filter(
-                        client=client,
-                        professional=prof,
-                        status=BookingStates.COMPLETED
-                    ).count()
-                    
-                    # Check if there's a conversation with this professional
-                    has_conversation = Conversation.objects.filter(
-                        (Q(participant1=user) & Q(participant2=prof.user)) |
-                        (Q(participant1=prof.user) & Q(participant2=user))
-                    ).exists()
-                    
-                    # Get or create a conversation with this professional
-                    conversation, is_professional_in_convo = find_or_create_conversation(
-                        user, prof.user, 'client'
-                    )
-                    
-                    # Build professional connection data
-                    connection = {
-                        'id': prof.user.id,
-                        'professional_id': prof.professional_id,  # Add the actual professional ID
-                        'name': prof.user.name,
-                        'email': prof.user.email,
-                        'profile_image': prof.user.profile_image_url if hasattr(prof.user, 'profile_image_url') else None,
-                        'about_me': prof.about_me if hasattr(prof, 'about_me') else '',
-                        'last_booking_date': last_booking.created_at.strftime('%Y-%m-%d') if last_booking else None,
-                        'last_booking_status': BookingStates.get_display_state(last_booking.status) if last_booking else None,
-                        'services': services,
-                        'active_bookings_count': active_bookings_count,
-                        'completed_bookings_count': completed_bookings_count,
-                        'has_conversation': has_conversation,
-                        'conversation_id': conversation.conversation_id
-                    }
-                    connections.append(connection)
-            
-            # Return response
-            logger.info(f"MBA7893 Returning {len(connections)} connections")
-            return Response({
-                'connections': connections,
-                'has_more': len(connections) == page_size  # Indicates if there are more connections to load
-            })
-            
         except Exception as e:
-            logger.error(f"MBA7893 Error fetching connections: {str(e)}")
-            logger.error(f"MBA7893 Full traceback: {traceback.format_exc()}")
-            
-            # Log the error
-            ErrorLog.objects.create(
-                user=request.user,
-                error_message=str(e),
-                endpoint='/api/bookings/v1/connections/',
-                metadata={
-                    'connection_type': request.GET.get('type'),
-                    'filter_type': request.GET.get('filter')
-                }
-            )
-            
+            logger.error(f"MBA78vebt393 Error in ConnectionsView: {str(e)}")
             return Response(
-                {"error": "Failed to fetch connections"},
+                {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
+
 class BookingDetailView(APIView):
     permission_classes = [IsAuthenticated]
 

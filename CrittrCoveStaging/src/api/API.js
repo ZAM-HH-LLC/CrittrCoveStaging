@@ -647,24 +647,18 @@ export const updateService = async (serviceData) => {
 };
 
 /**
- * Get user connections (clients for professionals, professionals for pet owners)
- * @param {string} type - The type of connections to fetch ('clients' or 'professionals')
- * @param {string} filter - Optional filter to apply ('all', 'active_bookings', 'no_bookings', 'past_bookings')
+ * Get professional's client connections, returning necessary client data
  * @param {number} page - Page number for pagination
- * @param {number} pageSize - Number of results per page
  * @returns {Promise<Object>} Object containing connections and pagination info
  */
-export const getUserConnections = async (type = 'clients', filter = 'all', page = 1, pageSize = 20) => {
+export const getUserConnections = async (page = 1) => {
   try {
-    debugLog('MBA4321 Fetching user connections:', { type, filter, page, pageSize });
+    debugLog('MBA4321 Fetching client connections, page:', page);
     
     const apiClient = await getApiClient();
     const response = await apiClient.get('/api/bookings/v1/connections/', {
       params: {
-        type,
-        filter,
-        page,
-        page_size: pageSize
+        page
       }
     });
     
