@@ -2,6 +2,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { getStorage, debugLog } from '../context/AuthContext';
 import { Platform } from 'react-native';
+import { convertToUTC, formatDateForAPI, formatTimeForAPI } from '../utils/time_utils';
 
 /**
  * Handles authentication errors (401) gracefully
@@ -227,7 +228,7 @@ export const updateBookingDraftPetsAndServices = async (draftId, data) => {
 
 export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate, startTime, endTime) => {
     try {
-        debugLog('MBA1234 - Updating booking draft time and date:', {
+        debugLog('MBA5asdt3f4321 - Updating booking draft time and date:', {
             draftId,
             startDate,
             endDate,
@@ -251,10 +252,89 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
             }
         );
 
-        debugLog('MBA1234 - Booking draft time and date update response:', response.data);
+        debugLog('MBA5asdt3f4321 - Booking draft time and date update response:', response.data);
         return response.data;
     } catch (error) {
-        debugLog('MBA98765 Error updating booking draft time and date:', error);
+        debugLog('MBA5asdt3f4321 Error updating booking draft time and date:', error);
+        throw error;
+    }
+};
+
+export const updateBookingDraftMultipleDays = async (draftId, data) => {
+    try {
+        debugLog('MBA5asdt3f4321 - Updating booking draft multiple days:', {
+            draftId,
+            data
+        });
+
+        // Convert each date's times to UTC
+        const utcDates = data.dates.map(date => {
+            // Format the date for API
+            const dateStr = formatDateForAPI(date);
+            
+            // Format and convert times to UTC
+            const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+                dateStr,
+                data.times.startTime,
+                'US/Mountain'
+            );
+
+            const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+                dateStr,
+                data.times.endTime,
+                'US/Mountain'
+            );
+
+            return {
+                date: utcStartDate,
+                startTime: utcStartTime,
+                endTime: utcEndTime
+            };
+        });
+
+        debugLog('MBA5asdt3f4321 - Converted UTC dates:', utcDates);
+
+        const response = await axios.post(
+            `${API_BASE_URL}/api/booking_drafts/v1/update-multiple-days/${draftId}/`,
+            { dates: utcDates },
+            {
+                headers: {
+                    Authorization: `Bearer ${await getStorage('userToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        debugLog('MBA5asdt3f4321 - Booking draft multiple days update response:', response.data);
+        return response.data;
+    } catch (error) {
+        debugLog('MBA5asdt3f4321 Error updating booking draft multiple days:', error);
+        throw error;
+    }
+};
+
+export const updateBookingDraftRecurring = async (draftId, recurringData) => {
+    try {
+        debugLog('MBA5asdt3f4321 - Updating booking draft recurring dates:', {
+            draftId,
+            recurringData
+        });
+
+        const response = await axios.post(
+            `${API_BASE_URL}/api/booking_drafts/v1/update-recurring/${draftId}/`,
+            recurringData,
+            {
+                headers: {
+                    Authorization: `Bearer ${await getStorage('userToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        debugLog('MBA5asdt3f4321 - Booking draft recurring update response:', response.data);
+        return response.data;
+    } catch (error) {
+        debugLog('MBA5asdt3f4321 Error updating booking draft recurring dates:', error);
         throw error;
     }
 };

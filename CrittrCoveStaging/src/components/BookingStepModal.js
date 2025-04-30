@@ -18,7 +18,12 @@ import DateSelectionCard from './bookingComponents/DateSelectionCard';
 import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
 import ReviewAndRatesCard from './bookingComponents/ReviewAndRatesCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
-import { updateBookingDraftPetsAndServices, updateBookingDraftTimeAndDate, createBookingFromDraft } from '../api/API';
+import { updateBookingDraftPetsAndServices, 
+         updateBookingDraftTimeAndDate, 
+         updateBookingDraftMultipleDays,
+         updateBookingDraftRecurring,
+         createBookingFromDraft 
+} from '../api/API';
 import { convertToUTC, formatDateForAPI, formatTimeForAPI } from '../utils/time_utils';
 import { debugLog } from '../context/AuthContext';
 
@@ -199,7 +204,7 @@ const BookingStepModal = ({
             pets: bookingData.pets
           });
         } catch (error) {
-          debugLog('MBA54321 Error updating booking draft:', error);
+          debugLog('MBA5asdt3f4321 Error updating booking draft:', error);
           setError('Failed to save service and pet selections');
           return;
         }
@@ -208,68 +213,123 @@ const BookingStepModal = ({
       // Handle time selection calculations before proceeding
       if (currentStep === STEPS.TIME_SELECTION.id) {
         try {
-          debugLog('MBA54321 Original booking data:', bookingData);
+          debugLog('MBA5asdt3f4321 Original booking data:', bookingData);
 
-          // Format dates for API
-          const startDate = formatDateForAPI(bookingData.dateRange.startDate);
-          const endDate = formatDateForAPI(bookingData.dateRange.endDate);
+          if (bookingData.dateRangeType === 'date-range') {
+            // Handle date range selection (existing logic)
+            const startDate = formatDateForAPI(bookingData.dateRange.startDate);
+            const endDate = formatDateForAPI(bookingData.dateRange.endDate);
+            const startTime = formatTimeForAPI(bookingData.times.startTime);
+            const endTime = formatTimeForAPI(bookingData.times.endTime);
 
-          // Format times for API (in 24-hour format)
-          const startTime = formatTimeForAPI(bookingData.times.startTime);
-          const endTime = formatTimeForAPI(bookingData.times.endTime);
+            debugLog('MBA5asdt3f4321 Local dates and times:', {
+              startDate,
+              endDate,
+              startTime,
+              endTime
+            });
 
-          debugLog('MBA54321 Local dates and times:', {
-            startDate,
-            endDate,
-            startTime,
-            endTime
-          });
+            // Convert local times to UTC before sending to backend
+            const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+              startDate,
+              startTime,
+              'US/Mountain'
+            );
 
-          // Convert local times to UTC before sending to backend
-          const { date: utcStartDate, time: utcStartTime } = convertToUTC(
-            startDate,
-            startTime,
-            'US/Mountain'
-          );
+            const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+              endDate,
+              endTime,
+              'US/Mountain'
+            );
 
-          const { date: utcEndDate, time: utcEndTime } = convertToUTC(
-            endDate,
-            endTime,
-            'US/Mountain'
-          );
+            debugLog('MBA5asdt3f4321 UTC dates and times:', {
+              utcStartDate,
+              utcStartTime,
+              utcEndDate,
+              utcEndTime
+            });
 
-          debugLog('MBA54321 UTC dates and times:', {
-            utcStartDate,
-            utcStartTime,
-            utcEndDate,
-            utcEndTime
-          });
+            // Call the API with UTC times and dates
+            const response = await updateBookingDraftTimeAndDate(
+              bookingId,
+              utcStartDate,
+              utcEndDate,
+              utcStartTime,
+              utcEndTime
+            );
 
-          // Call the API with UTC times and dates
-          const response = await updateBookingDraftTimeAndDate(
-            bookingId,
-            utcStartDate,
-            utcEndDate,
-            utcStartTime,
-            utcEndTime
-          );
+            debugLog('MBA5asdt3f4321 Received response from updateBookingDraftTimeAndDate:', response);
 
-          debugLog('MBA54321 Received response from updateBookingDraftTimeAndDate:', response);
+            // Update booking data with the response's draft_data
+            if (response?.draft_data) {
+              setBookingData(prev => ({
+                ...prev,
+                ...response.draft_data
+              }));
+            } else {
+              debugLog('MBA5asdt3f4321 No draft_data in response:', response);
+            }
+          } else if (bookingData.dateRangeType === 'multiple-days') {
+            // Handle multiple individual days
+            debugLog('MBA5asdt3f4321 Multiple days selection:', {
+              dates: bookingData.dates,
+              times: bookingData.times
+            });
 
-          // Update booking data with the response's draft_data
-          if (response?.draft_data) {
-            setBookingData(prev => ({
-              ...prev,
-              ...response.draft_data
-            }));
-          } else {
-            debugLog('MBA54321 No draft_data in response:', response);
+            // Call the API for multiple individual days
+            const response = await updateBookingDraftMultipleDays(
+              bookingId,
+              {
+                dates: bookingData.dates,
+                times: bookingData.times
+              }
+            );
+
+            debugLog('MBA5asdt3f4321 Received response from updateBookingDraftMultipleDays:', response);
+
+            if (response?.draft_data) {
+              setBookingData(prev => ({
+                ...prev,
+                ...response.draft_data
+              }));
+            }
+          } else if (bookingData.bookingType === 'recurring') {
+            // Handle recurring dates
+            debugLog('MBA5asdt3f4321 Recurring dates selection:', {
+              startDate: bookingData.recurringStartDate,
+              endDate: bookingData.recurringEndDate,
+              daysOfWeek: bookingData.selectedDaysOfWeek,
+              frequency: bookingData.selectedFrequency,
+              times: bookingData.times
+            });
+
+            // Call the API for recurring dates
+            const response = await updateBookingDraftRecurring(
+              bookingId,
+              {
+                startDate: bookingData.recurringStartDate,
+                endDate: bookingData.recurringEndDate,
+                daysOfWeek: bookingData.selectedDaysOfWeek,
+                frequency: bookingData.selectedFrequency,
+                startTime: bookingData.times.startTime,
+                endTime: bookingData.times.endTime
+              }
+            );
+
+            debugLog('MBA5asdt3f4321 Received response from updateBookingDraftRecurring:', response);
+
+            if (response?.draft_data) {
+              setBookingData(prev => ({
+                ...prev,
+                ...response.draft_data
+              }));
+            }
           }
 
         } catch (error) {
-          debugLog('MBA54321 Error calculating booking totals:', error);
-          debugLog('MBA54321 Error stack:', error.stack);
-          debugLog('MBA54321 Error details:', {
+          debugLog('MBA5asdt3f4321 Error calculating booking totals:', error);
+          debugLog('MBA5asdt3f4321 Error stack:', error.stack);
+          debugLog('MBA5asdt3f4321 Error details:', {
             message: error.message,
             name: error.name,
             response: error.response?.data

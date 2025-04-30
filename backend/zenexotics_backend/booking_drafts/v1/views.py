@@ -2097,4 +2097,438 @@ class UpdateBookingRatesView(APIView):
         
         return pro_fee
 
+class UpdateBookingDraftMultipleDaysView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, draft_id):
+        logger.info("MBA5asdt3f4321 - Starting UpdateBookingDraftMultipleDaysView.post")
+        logger.info(f"MBA5asdt3f4321 - Request data: {request.data}")
+        
+        try:
+            # Get the draft and verify professional access
+            draft = get_object_or_404(BookingDraft, draft_id=draft_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if draft.booking and draft.booking.professional != professional:
+                logger.error(f"MBA5asdt3f4321 - Unauthorized access attempt by {request.user.email} for draft {draft_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Initialize draft_data if it doesn't exist
+            if not draft.draft_data:
+                draft.draft_data = {}
+
+            # Get dates from request
+            dates_data = request.data.get('dates', [])
+            if not dates_data:
+                return Response(
+                    {"error": "No dates provided"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get service from draft or booking
+            service = None
+            if 'service_details' in draft.draft_data:
+                try:
+                    service = Service.objects.get(
+                        service_name=draft.draft_data['service_details']['service_type'],
+                        professional=professional,
+                        moderation_status='APPROVED'
+                    )
+                except Service.DoesNotExist:
+                    service = draft.booking.service_id if draft.booking else None
+            elif draft.booking:
+                service = draft.booking.service_id
+
+            if not service:
+                return Response(
+                    {"error": "No service found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Get number of pets
+            num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
+
+            # Process each date and create occurrences
+            processed_occurrences = []
+            for date_data in dates_data:
+                try:
+                    # Parse date and times
+                    date_obj = datetime.strptime(date_data['date'], '%Y-%m-%d').date()
+                    start_time = datetime.strptime(date_data['startTime'], '%H:%M').time()
+                    end_time = datetime.strptime(date_data['endTime'], '%H:%M').time()
+
+                    # Create temporary occurrence for rate calculation
+                    class TempOccurrence:
+                        def __init__(self, start_date, end_date, start_time, end_time):
+                            self.start_date = start_date
+                            self.end_date = end_date
+                            self.start_time = start_time
+                            self.end_time = end_time
+
+                    temp_occurrence = TempOccurrence(
+                        start_date=date_obj,
+                        end_date=date_obj,
+                        start_time=start_time,
+                        end_time=end_time
+                    )
+
+                    # Calculate rates
+                    rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
+                    if not rate_data:
+                        raise Exception(f"Failed to calculate rates for date {date_obj}")
+
+                    # Convert string values to Decimal for rounding
+                    calculated_cost = Decimal(str(rate_data['calculated_cost']))
+                    base_total = Decimal(str(rate_data['base_total']))
+
+                    # Create occurrence data
+                    occurrence = OrderedDict([
+                        ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"),
+                        ('start_date', date_obj.isoformat()),
+                        ('end_date', date_obj.isoformat()),
+                        ('start_time', start_time.strftime('%H:%M')),
+                        ('end_time', end_time.strftime('%H:%M')),
+                        ('calculated_cost', float(round(calculated_cost, 2))),
+                        ('base_total', float(round(base_total, 2))),
+                        ('multiple', rate_data['multiple']),
+                        ('rates', rate_data['rates'])
+                    ])
+
+                    processed_occurrences.append(occurrence)
+
+                except Exception as e:
+                    logger.error(f"MBA5asdt3f4321 - Error processing date: {str(e)}")
+                    return Response(
+                        {"error": f"Error processing date: {str(e)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Calculate cost summary with rounded values
+            subtotal = Decimal('0')
+            for occ in processed_occurrences:
+                subtotal += Decimal(str(occ['calculated_cost']))
+            
+            subtotal = round(subtotal, 2)
+
+            # Calculate platform fees using helper methods
+            client = draft.booking.client if draft.booking else None
+            client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
+            pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
+
+            client_platform_fee = (subtotal * client_platform_fee_percentage).quantize(Decimal('0.01'))
+            pro_platform_fee = (subtotal * pro_platform_fee_percentage).quantize(Decimal('0.01'))
+            total_platform_fee = client_platform_fee + pro_platform_fee
+
+            taxes = ((subtotal + total_platform_fee) * Decimal('0.08')).quantize(Decimal('0.01'))  # 8% tax
+            total_client_cost = (subtotal + total_platform_fee + taxes).quantize(Decimal('0.01'))
+            total_sitter_payout = (subtotal * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
+
+            cost_summary = OrderedDict([
+                ('subtotal', float(subtotal)),
+                ('client_platform_fee', float(client_platform_fee)),
+                ('pro_platform_fee', float(pro_platform_fee)),
+                ('total_platform_fee', float(total_platform_fee)),
+                ('taxes', float(taxes)),
+                ('total_client_cost', float(total_client_cost)),
+                ('total_sitter_payout', float(total_sitter_payout)),
+                ('is_prorated', True),
+                ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
+                ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
+            ])
+
+            # Create draft data structure
+            draft_data = OrderedDict([
+                ('booking_id', draft.booking.booking_id if draft.booking else None),
+                ('status', draft.booking.status if draft.booking else 'DRAFT'),
+                ('client_name', draft.booking.client.user.name if draft.booking and draft.booking.client else None),
+                ('client_id', draft.booking.client.id if draft.booking and draft.booking.client else None),
+                ('professional_name', professional.user.name),
+                ('professional_id', professional.professional_id),
+                ('pets', draft.draft_data.get('pets', [])),
+                ('can_edit', True),
+                ('occurrences', processed_occurrences),
+                ('cost_summary', cost_summary),
+                ('service_details', OrderedDict([
+                    ('service_type', service.service_name),
+                    ('service_id', service.service_id)
+                ])),
+                ('conversation_id', draft.booking.conversation_id if draft.booking else None)
+            ])
+
+            # Update draft status if needed
+            if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
+                draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+
+            # Save the draft
+            draft.draft_data = draft_data
+            draft.save()
+
+            logger.info(f"MBA5asdt3f4321 - Successfully updated booking draft {draft_id}")
+            return Response({
+                'status': 'success',
+                'draft_data': draft_data
+            })
+
+        except Exception as e:
+            logger.error(f"MBA5asdt3f4321 - Error in UpdateBookingDraftMultipleDaysView: {str(e)}")
+            logger.error(f"MBA5asdt3f4321 - Full error traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": f"An error occurred while updating the booking draft: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def determine_client_platform_fee(self, client_user):
+        """
+        Determine the platform fee percentage for the client based on their subscription plan.
+        Returns Decimal value of platform fee percentage (0.15 or 0.0)
+        """
+        platform_fee = Decimal('0.15')
+        if not client_user:
+            logger.warning("MBA5asdt3f4321 - No client user found, using default 15% platform fee")
+            return platform_fee
+        client_plan = client_user.subscription_plan
+        logger.info(f"MBA5asdt3f4321 - Client subscription plan: {client_plan}")
+        if client_plan == 5:
+            logger.info("MBA5asdt3f4321 - Client has Dual subscription, applying 0% platform fee")
+            return Decimal('0.0')
+        if client_plan == 4:
+            logger.info("MBA5asdt3f4321 - Client has Client subscription, applying 0% platform fee")
+            return Decimal('0.0')
+        if client_plan == 1:
+            logger.info("MBA5asdt3f4321 - Client has Waitlist tier, applying 0% platform fee")
+            return Decimal('0.0')
+        if client_plan == 0:
+            today = timezone.now().date()
+            month_start = today.replace(day=1)
+            pro_bookings_this_month = Booking.objects.filter(
+                professional__user=client_user,
+                created_at__date__gte=month_start
+            ).count()
+            logger.info(f"MBA5asdt3f4321 - Professional bookings this month: {pro_bookings_this_month}")
+            if pro_bookings_this_month == 0:
+                logger.info("MBA5asdt3f4321 - First booking this month for professional, applying 0% platform fee")
+                return Decimal('0.0')
+        logger.info("MBA5asdt3f4321 - Professional pays standard 15% platform fee")
+        return platform_fee
+
+    def determine_professional_platform_fee(self, professional_user):
+        """
+        Determine the platform fee percentage for the professional based on their subscription plan.
+        Returns Decimal value of platform fee percentage (0.15 or 0.0)
+        """
+        platform_fee = Decimal('0.15')
+        pro_plan = professional_user.subscription_plan
+        logger.info(f"MBA5asdt3f4321 - Professional subscription plan: {pro_plan}")
+        if pro_plan == 5:
+            logger.info("MBA5asdt3f4321 - Professional has Dual subscription, applying 0% platform fee")
+            return Decimal('0.0')
+        if pro_plan == 3:
+            logger.info("MBA5asdt3f4321 - Professional has Pro subscription, applying 0% platform fee")
+            return Decimal('0.0')
+        if pro_plan == 1:
+            logger.info("MBA5asdt3f4321 - Professional has Waitlist tier, applying 0% platform fee")
+            return Decimal('0.0')
+        if pro_plan == 0:
+            today = timezone.now().date()
+            month_start = today.replace(day=1)
+            pro_bookings_this_month = Booking.objects.filter(
+                professional__user=professional_user,
+                created_at__date__gte=month_start
+            ).count()
+            logger.info(f"MBA5asdt3f4321 - Professional bookings this month: {pro_bookings_this_month}")
+            if pro_bookings_this_month == 0:
+                logger.info("MBA5asdt3f4321 - First booking this month for professional, applying 0% platform fee")
+                return Decimal('0.0')
+        logger.info("MBA5asdt3f4321 - Professional pays standard 15% platform fee")
+        return platform_fee
+
+class UpdateBookingDraftRecurringView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, draft_id):
+        logger.info("MBA5asdt3f4321 - Starting UpdateBookingDraftRecurringView.post")
+        logger.info(f"MBA5asdt3f4321 - Request data: {request.data}")
+        
+        try:
+            # Get the draft and verify professional access
+            draft = get_object_or_404(BookingDraft, draft_id=draft_id)
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            if draft.booking and draft.booking.professional != professional:
+                logger.error(f"MBA5asdt3f4321 - Unauthorized access attempt by {request.user.email} for draft {draft_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            # Get recurring data
+            recurring_data = request.data
+            if not recurring_data:
+                return Response(
+                    {"error": "No recurring data provided"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get service from draft or booking
+            service = None
+            if draft.draft_data and 'service_details' in draft.draft_data:
+                try:
+                    service = Service.objects.get(
+                        service_name=draft.draft_data['service_details']['service_type'],
+                        professional=professional,
+                        moderation_status='APPROVED'
+                    )
+                except Service.DoesNotExist:
+                    service = draft.booking.service_id if draft.booking else None
+            else:
+                service = draft.booking.service_id if draft.booking else None
+
+            if not service:
+                return Response(
+                    {"error": "No service found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Get number of pets
+            num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
+
+            # Generate recurring dates
+            start_date = datetime.strptime(recurring_data['startDate'], '%Y-%m-%d').date()
+            end_date = datetime.strptime(recurring_data['endDate'], '%Y-%m-%d').date()
+            days_of_week = recurring_data['daysOfWeek']
+            frequency = recurring_data['frequency']
+            start_time = datetime.strptime(recurring_data['startTime'], '%H:%M').time()
+            end_time = datetime.strptime(recurring_data['endTime'], '%H:%M').time()
+
+            # Generate all dates between start and end that match the days of week
+            current_date = start_date
+            recurring_dates = []
+            week_count = 0
+
+            while current_date <= end_date:
+                # Check if this date's day of week is selected
+                if current_date.weekday() in days_of_week:
+                    # For bi-weekly, only include if it's an even week number
+                    if frequency == 'bi-weekly' and week_count % 2 != 0:
+                        current_date += timedelta(days=1)
+                        continue
+
+                    recurring_dates.append(current_date)
+
+                current_date += timedelta(days=1)
+                if current_date.weekday() == 0:  # Monday
+                    week_count += 1
+
+            # Process each recurring date
+            processed_occurrences = []
+            for date_obj in recurring_dates:
+                try:
+                    # Create temporary occurrence for rate calculation
+                    class TempOccurrence:
+                        def __init__(self, start_date, end_date, start_time, end_time):
+                            self.start_date = start_date
+                            self.end_date = end_date
+                            self.start_time = start_time
+                            self.end_time = end_time
+
+                    temp_occurrence = TempOccurrence(
+                        start_date=date_obj,
+                        end_date=date_obj,
+                        start_time=start_time,
+                        end_time=end_time
+                    )
+
+                    # Calculate rates
+                    rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
+                    if not rate_data:
+                        raise Exception(f"Failed to calculate rates for date {date_obj}")
+
+                    # Get formatted times
+                    formatted_times = get_formatted_times(
+                        occurrence=temp_occurrence,
+                        user_id=draft.booking.client.user.id if draft.booking else None
+                    )
+
+                    # Create occurrence data
+                    occurrence = OrderedDict([
+                        ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"),
+                        ('start_date', date_obj.isoformat()),
+                        ('end_date', date_obj.isoformat()),
+                        ('start_time', start_time.strftime('%H:%M')),
+                        ('end_time', end_time.strftime('%H:%M')),
+                        ('calculated_cost', rate_data['calculated_cost']),
+                        ('base_total', rate_data['base_total']),
+                        ('multiple', rate_data['multiple']),
+                        ('rates', rate_data['rates']),
+                        ('formatted_start', formatted_times['formatted_start']),
+                        ('formatted_end', formatted_times['formatted_end']),
+                        ('duration', formatted_times['duration']),
+                        ('timezone', formatted_times['timezone'])
+                    ])
+
+                    processed_occurrences.append(occurrence)
+
+                except Exception as e:
+                    logger.error(f"MBA5asdt3f4321 - Error processing recurring date: {str(e)}")
+                    return Response(
+                        {"error": f"Error processing recurring date: {str(e)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Calculate cost summary
+            cost_summary = calculate_cost_summary(processed_occurrences)
+            if not cost_summary:
+                raise Exception("Failed to calculate cost summary")
+
+            # Get current pets from draft or booking
+            pets_data = []
+            if 'pets' in draft.draft_data:
+                pets_data = draft.draft_data['pets']
+            elif draft.booking:
+                for bp in draft.booking.booking_pets.select_related('pet').all():
+                    pets_data.append(OrderedDict([
+                        ('name', bp.pet.name),
+                        ('breed', bp.pet.breed),
+                        ('pet_id', bp.pet.pet_id),
+                        ('species', bp.pet.species)
+                    ]))
+
+            # Create draft data
+            draft_data = create_draft_data(
+                booking=draft.booking,
+                request_pets=pets_data,
+                occurrences=processed_occurrences,
+                cost_summary=cost_summary,
+                service=service
+            )
+
+            # Add recurring metadata
+            draft_data['recurring_metadata'] = {
+                'frequency': frequency,
+                'days_of_week': days_of_week,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat()
+            }
+
+            # Update draft status if needed
+            if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
+                draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
+
+            # Save the draft
+            draft.draft_data = draft_data
+            draft.save()
+
+            logger.info(f"MBA5asdt3f4321 - Successfully updated booking draft {draft_id}")
+            return Response({
+                'status': 'success',
+                'draft_data': draft_data
+            })
+
+        except Exception as e:
+            logger.error(f"MBA5asdt3f4321 - Error in UpdateBookingDraftRecurringView: {str(e)}")
+            logger.error(f"MBA5asdt3f4321 - Full error traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": f"An error occurred while updating the booking draft: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 # Placeholder: Ready for views to be added

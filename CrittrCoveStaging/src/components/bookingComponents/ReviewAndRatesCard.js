@@ -22,6 +22,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const [newRate, setNewRate] = useState({ name: '', amount: '', description: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [expandedRates, setExpandedRates] = useState(new Set());
 
   useEffect(() => {
     debugLog('MBA54321 ReviewAndRatesCard received bookingData:', bookingData);
@@ -315,13 +316,153 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
 
   const renderBookingBreakdown = () => {
     debugLog('MBA54321 Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
-    const occurrence = bookingData?.occurrences?.[0];
-    if (!occurrence) return null;
+    const occurrences = bookingData?.occurrences;
+    if (!occurrences || occurrences.length === 0) return null;
 
     // Get the user's timezone from context
     const { timeSettings } = useContext(AuthContext);
     const userTimezone = timeSettings?.timezone || 'US/Mountain';
     debugLog('MBA54321 userTimezone: ', userTimezone);
+
+    // Check if we're dealing with multiple individual dates
+    const isMultipleDates = occurrences.length > 1 && 
+      occurrences.every(occ => occ.start_date === occ.end_date);
+
+    if (isMultipleDates) {
+      return (
+        <View style={[styles.section, { marginTop: showEditControls ? 24 : 0 }]}>
+          <View style={styles.sectionHeaderContainer}>
+            <Text style={styles.sectionHeader}>Booking Breakdown</Text>
+            {showEditControls && (
+              <TouchableOpacity onPress={toggleAddRate}>
+                <Text style={styles.addRateText}>+ Add Rate</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={[styles.card, { paddingTop: 16 }]}>
+            {occurrences.map((occurrence, index) => (
+              <View key={occurrence.occurrence_id} style={styles.multipleDatesContainer}>
+                <View style={styles.dateHeader}>
+                  <View style={styles.dateTextContainer}>
+                    <Text style={styles.dateText}>
+                      {formatDateTimeRangeFromUTC({
+                        startDate: occurrence.start_date,
+                        startTime: occurrence.start_time,
+                        endDate: occurrence.end_date,
+                        endTime: occurrence.end_time,
+                        userTimezone: userTimezone,
+                        includeTimes: true,
+                        includeTimezone: true
+                      })}
+                    </Text>
+                  </View>
+                  <Text style={styles.occurrenceCost}>
+                    {formatCurrency(occurrence.calculated_cost)}
+                  </Text>
+                  {showEditControls && (
+                    <TouchableOpacity onPress={() => {
+                      setEditedRates(occurrence.rates);
+                      setIsEditMode(true);
+                    }}>
+                      <MaterialCommunityIcons 
+                        name="pencil" 
+                        size={20} 
+                        color={theme.colors.mainColors.main} 
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Collapsible Rates Section */}
+                <TouchableOpacity 
+                  style={styles.ratesToggleButton}
+                  onPress={() => {
+                    const newExpandedRates = new Set(expandedRates);
+                    if (newExpandedRates.has(occurrence.occurrence_id)) {
+                      newExpandedRates.delete(occurrence.occurrence_id);
+                    } else {
+                      newExpandedRates.add(occurrence.occurrence_id);
+                    }
+                    setExpandedRates(newExpandedRates);
+                  }}
+                >
+                  <Text style={styles.ratesToggleText}>
+                    {expandedRates.has(occurrence.occurrence_id) ? 'Hide Rates' : 'Show Rates'}
+                  </Text>
+                  <MaterialCommunityIcons 
+                    name={expandedRates.has(occurrence.occurrence_id) ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={theme.colors.mainColors.main} 
+                  />
+                </TouchableOpacity>
+
+                {expandedRates.has(occurrence.occurrence_id) && (
+                  <View style={styles.ratesBreakdown}>
+                    {/* Base Rate */}
+                    <View style={styles.rateItem}>
+                      <View>
+                        <Text style={styles.rateLabel}>Base Rate ({occurrence.rates.unit_of_time})</Text>
+                        <Text style={styles.breakdownCalculation}>
+                          {formatCurrency(occurrence.rates.base_rate)} × {occurrence.multiple} = {formatCurrency(occurrence.base_total)}
+                        </Text>
+                      </View>
+                      <Text style={styles.rateAmount}>{formatCurrency(occurrence.base_total)}</Text>
+                    </View>
+
+                    {/* Additional Animal Rate */}
+                    {occurrence.rates?.additional_animal_rate && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) && (
+                      <View style={styles.rateItem}>
+                        <Text style={styles.rateLabel}>
+                          Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
+                        </Text>
+                        <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.additional_animal_rate)}</Text>
+                      </View>
+                    )}
+
+                    {/* Holiday Rate */}
+                    {occurrence.rates?.holiday_rate && occurrence.rates?.holiday_days !== 0 && (
+                      <View style={styles.rateItem}>
+                        <Text style={styles.rateLabel}>Holiday Rate</Text>
+                        <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.holiday_rate)}</Text>
+                      </View>
+                    )}
+
+                    {/* Additional Rates */}
+                    {occurrence.rates?.additional_rates?.map((rate, rateIndex) => (
+                      <View key={rateIndex} style={styles.rateItem}>
+                        <View>
+                          <Text style={styles.rateLabel}>{rate.title}</Text>
+                          {rate.description && (
+                            <Text style={styles.rateDescription}>{rate.description}</Text>
+                          )}
+                        </View>
+                        <Text style={styles.rateAmount}>{formatCurrency(rate.amount)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {index < occurrences.length - 1 && <View style={styles.occurrenceDivider} />}
+              </View>
+            ))}
+
+            {/* Save button for edit mode */}
+            {isEditMode && (
+              <TouchableOpacity 
+                style={[styles.saveButton, {alignSelf: 'flex-end', marginRight: 16, marginTop: 16, marginBottom: 8}]} 
+                onPress={saveRateChanges}
+              >
+                <Text style={styles.saveButtonText}>Save Changes</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    // Original rendering for date range
+    const occurrence = occurrences[0];
+    if (!occurrence) return null;
 
     const formattedDateRange = formatDateTimeRangeFromUTC({
       startDate: occurrence.start_date,
@@ -987,6 +1128,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  multipleDatesContainer: {
+    marginBottom: 16,
+  },
+  occurrenceCost: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+  },
+  ratesToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 8,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 4,
+  },
+  ratesToggleText: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  ratesBreakdown: {
+    padding: 16,
+  },
+  rateItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  rateLabel: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  rateAmount: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+  },
+  rateDescription: {
+    fontSize: 14,
+    color: theme.colors.placeHolderText,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  occurrenceDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginBottom: 16,
   },
 });
 
