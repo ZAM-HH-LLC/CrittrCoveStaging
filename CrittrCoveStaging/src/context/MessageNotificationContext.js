@@ -46,6 +46,9 @@ export const MessageNotificationProvider = ({ children }) => {
   const WEBSOCKET_DATA_LIFETIME = 30000; // Consider WebSocket data valid for 30 seconds
   const CACHE_LIFETIME = 300000; // Consider API cache valid for 5 minutes (increased from 2)
 
+  // Add a lastApiCheckRef at the top of the component with other refs
+  const lastApiCheckRef = useRef(0);
+
   // Function to check if we have unread messages based on conversations
   const checkUnreadMessages = async (force = false) => {
     try {
@@ -64,7 +67,7 @@ export const MessageNotificationProvider = ({ children }) => {
       
       // For forced refreshes, we should just make the API call immediately
       if (force) {
-        debugLog('MBA4321: Forced API call for unread messages');
+        debugLog('MBA432wihe21: Forced API call for unread messages');
         return await makeApiCall();
       }
 
@@ -113,7 +116,7 @@ export const MessageNotificationProvider = ({ children }) => {
     // The problem was that we would rely only on WebSocket which might miss messages that arrived
     // while the user was offline
     if (!initialApiCallMadeRef.current) {
-      debugLog('MBA4321: Fresh page load - making initial API call to get accurate unread count');
+      debugLog('MBA432wihe21: Fresh page load - making initial API call to get accurate unread count');
       return await makeApiCall();
     }
     
@@ -144,7 +147,7 @@ export const MessageNotificationProvider = ({ children }) => {
         
         // If reached max attempts, fall back to API
         if (websocketRetryAttemptsRef.current >= MAX_WEBSOCKET_RETRIES) {
-          debugLog('MBA4321: Max WebSocket wait attempts reached, falling back to API');
+          debugLog('MBA432wihe21: Max WebSocket wait attempts reached, falling back to API');
           // Make the API call and resolve with its result
           makeApiCall().then(result => resolve(result));
           return;
@@ -161,16 +164,29 @@ export const MessageNotificationProvider = ({ children }) => {
   
   // Extract API call logic to separate function
   const makeApiCall = async () => {
-    debugLog('MBA4321: Making API call for unread messages');
+    // Add new logging with the special prefix
+    debugLog('MBA432wihe21: makeApiCall called, checking if necessary');
+    
+    // Check if we've made an API call in the last minute (60000ms)
+    // This prevents frequent API calls which can disrupt components like BookingApprovalModal
+    const now = Date.now();
+    const timeSinceLastCheck = now - lastApiCheckRef.current;
+    
+    // Skip API calls if we've checked in the last minute, unless the connection is unhealthy
+    if (timeSinceLastCheck < 60000 && websocketDataReceivedRef.current && connectionHealthyRef.current) {
+      debugLog('MBA432wihe21: Skipping API call - checked recently and connection is healthy');
+      return hasUnreadMessages;
+    }
+    
+    debugLog('MBA432wihe21: Making API call for unread messages');
     
     try {
       // Call the API to get unread message count
       const result = await getUnreadMessageCount();
       const count = result.unread_count || 0;
       const conversationUnreadCounts = result.conversation_counts || {};
-      const now = Date.now();
       
-      debugLog('MBA4321: Unread message count from API:', count);
+      debugLog('MBA432wihe21: Unread message count from API:', count);
       
       // Update the API response cache
       setLastApiResponse({
@@ -185,6 +201,7 @@ export const MessageNotificationProvider = ({ children }) => {
       setConversationCounts(conversationUnreadCounts);
       setLastApiCheck(now);
       lastCheckTimeRef.current = now;
+      lastApiCheckRef.current = now;
       
       // Mark initialization as complete
       initialCheckDoneRef.current = true;
@@ -200,7 +217,7 @@ export const MessageNotificationProvider = ({ children }) => {
       
       return count > 0;
     } catch (error) {
-      debugLog('MBA4321: Error in API call:', error);
+      debugLog('MBA432wihe21: Error in API call:', error);
       pendingCheckRef.current = false;
       return hasUnreadMessages;
     }
@@ -421,7 +438,7 @@ export const MessageNotificationProvider = ({ children }) => {
         // IMPORTANT: Always make an initial API call on page load/refresh to get accurate count
         // This ensures we start with the correct server state
         setTimeout(() => {
-          debugLog('MBA4321: Forcing initial API check on page load to get accurate count');
+          debugLog('MBA432wihe21: Forcing initial API check on page load to get accurate count');
           makeApiCall();
         }, 500);
       } catch (error) {
@@ -496,7 +513,7 @@ export const MessageNotificationProvider = ({ children }) => {
         // Set a single timeout to check if we got heartbeat response
         websocketTimeoutRef.current = setTimeout(() => {
           if (!websocketDataReceivedRef.current) {
-            debugLog('MBA4321: No heartbeat response received, falling back to API');
+            debugLog('MBA432wihe21: No heartbeat response received, falling back to API');
             checkUnreadMessages(true);
           }
         }, 5000); // Wait 5 seconds for heartbeat response
@@ -560,7 +577,7 @@ export const MessageNotificationProvider = ({ children }) => {
       
       // First check if we need to make an initial API call to ensure correct state
       if (!initialApiCallMadeRef.current) {
-        debugLog('MBA4321: No initial API call made yet, making one now to ensure correct state');
+        debugLog('MBA432wihe21: No initial API call made yet, making one now to ensure correct state');
         makeApiCall();
         return;
       }
@@ -638,6 +655,7 @@ export const MessageNotificationProvider = ({ children }) => {
         setTimeout(() => {
           // Only call API if we haven't received WebSocket data yet
           if (!websocketDataReceivedRef.current) {
+            debugLog('MBA432wihe21: in connection handler');
             checkUnreadMessages(true);
           }
         }, 1000);
@@ -661,47 +679,67 @@ export const MessageNotificationProvider = ({ children }) => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         debugLog('MBA4321: Tab became visible, ensuring WebSocket connection');
+        
+        // First check if the WebSocket is already connected
+        const isWSConnected = websocketManager && websocketManager.isWebSocketConnected();
+        debugLog(`MBA4321: WebSocket connection status on visibility change: ${isWSConnected ? 'Connected' : 'Disconnected'}`);
+        
+        // If WebSocket is already connected, we don't need to do anything
+        if (isWSConnected) {
+          debugLog('MBA4321: WebSocket is already connected, no reconnection needed');
+          
+          // Optionally send a heartbeat to verify connection is still good
+          websocketManager.send('heartbeat', { timestamp: Date.now() });
+          lastHeartbeatSentRef.current = Date.now();
+          
+          // Reset the WebSocket data received flag since we have a good connection
+          websocketDataReceivedRef.current = true;
+          connectionHealthyRef.current = true;
+          
+          return;
+        }
+        
+        // WebSocket isn't connected, try to reconnect
         if (websocketManager && typeof websocketManager.reconnectIfNeeded === 'function') {
+          debugLog('MBA4321: WebSocket not connected, attempting reconnection');
           websocketManager.reconnectIfNeeded();
           
-          // Only reset if the connection is truly unhealthy
-          const now = Date.now();
-          const timeSinceLastHeartbeat = now - lastHeartbeatReceivedRef.current;
+          // Start progressive retry instead of immediate API call
+          // Reset retry attempts counter first
+          websocketRetryAttemptsRef.current = 0;
           
-          if (timeSinceLastHeartbeat > HEARTBEAT_TIMEOUT) {
-            debugLog('MBA4321: Connection seems unhealthy after tab visibility change');
+          const startProgressiveRetry = () => {
+            // Check if WebSocket connected during the retry process
+            const nowConnected = websocketManager && websocketManager.isWebSocketConnected();
             
-            // Reset WebSocket data flag only if connection is unhealthy
-            websocketDataReceivedRef.current = false;
-            connectionHealthyRef.current = false;
-            
-            // Start progressive retry instead of immediate API call
-            // Reset retry attempts counter first
-            websocketRetryAttemptsRef.current = 0;
-            const startProgressiveRetry = () => {
-              // If WebSocket data is received, we're done
-              if (websocketDataReceivedRef.current) {
-                return;
+            // If WebSocket is now connected or data is received, we're done
+            if (nowConnected || websocketDataReceivedRef.current) {
+              debugLog('MBA4321: WebSocket reconnected successfully, stopping retry process');
+              // Clear any scheduled retry
+              if (websocketTimeoutRef.current) {
+                clearTimeout(websocketTimeoutRef.current);
+                websocketTimeoutRef.current = null;
               }
-              
-              // Increment retry counter
-              websocketRetryAttemptsRef.current++;
-              
-              if (websocketRetryAttemptsRef.current >= MAX_WEBSOCKET_RETRIES) {
-                // Max retries reached, fall back to API
-                debouncedCheckUnreadMessages(true);
-                return;
-              }
-              
-              // Try to reconnect again after interval
-              websocketTimeoutRef.current = setTimeout(startProgressiveRetry, WEBSOCKET_RETRY_INTERVAL);
-            };
+              return;
+            }
             
-            // Start the retry process
-            startProgressiveRetry();
-          } else {
-            debugLog('MBA4321: Connection seems healthy after tab visibility change, skipping retry');
-          }
+            // Increment retry counter
+            websocketRetryAttemptsRef.current++;
+            debugLog(`MBA4321: WebSocket reconnection attempt ${websocketRetryAttemptsRef.current}/${MAX_WEBSOCKET_RETRIES}`);
+            
+            if (websocketRetryAttemptsRef.current >= MAX_WEBSOCKET_RETRIES) {
+              // Max retries reached, fall back to API
+              debugLog('MBA432wihe21: Max retries reached, fall back to API');
+              debouncedCheckUnreadMessages(true);
+              return;
+            }
+            
+            // Try to reconnect again after interval
+            websocketTimeoutRef.current = setTimeout(startProgressiveRetry, WEBSOCKET_RETRY_INTERVAL);
+          };
+          
+          // Start the retry process after a short delay to allow immediate reconnection to complete
+          setTimeout(startProgressiveRetry, 1000);
         }
       }
     };
@@ -754,7 +792,7 @@ export const MessageNotificationProvider = ({ children }) => {
       
       const initialCheckTimeout = setTimeout(() => {
         if (!initialApiCallMadeRef.current) {
-          debugLog('MBA4321: Making initial API call to get fresh unread count');
+          debugLog('MBA432wihe21: Making initial API call to get fresh unread count');
           makeApiCall();
         }
       }, 1000); // Short delay to allow WebSocket initialization

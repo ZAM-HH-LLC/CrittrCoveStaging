@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import {
   Modal,
   View,
@@ -57,6 +57,11 @@ const BookingApprovalModal = ({
   const [error, setError] = useState(null);
   const [changeRequestMessage, setChangeRequestMessage] = useState('');
   const [showChangeRequestInput, setShowChangeRequestInput] = useState(false);
+  
+  // Use a ref to store a cached copy of the booking data that won't be affected by re-renders
+  const bookingDataRef = useRef(defaultInitialData);
+  // Flag to track if data has been fully loaded
+  const dataLoadedRef = useRef(false);
 
   useEffect(() => {
     if (visible && bookingId) {
@@ -66,11 +71,40 @@ const BookingApprovalModal = ({
 
   // Update bookingData when initialData changes
   useEffect(() => {
-    if (initialData) {
-      debugLog('MBA77788 Updating bookingData from new initialData');
+    if (initialData && !dataLoadedRef.current) {
+      debugLog('MBAio3htg5uohg: Updating bookingData from initialData');
       setBookingData(initialData);
+      bookingDataRef.current = initialData;
     }
   }, [initialData]);
+
+  // Add this useEffect to detect when a websocket update or unread count changes might occur
+  // and protect the bookingData from being affected
+  useEffect(() => {
+    // This sets a regular interval to check if bookingData is still intact
+    const dataProtectionInterval = setInterval(() => {
+      if (visible && dataLoadedRef.current) {
+        // Check if booking data has been unexpectedly cleared
+        const hasNoData = !bookingData || 
+                         !bookingData.occurrences || 
+                         bookingData.occurrences.length === 0;
+                         
+        const hasRefData = bookingDataRef.current && 
+                          bookingDataRef.current.occurrences && 
+                          bookingDataRef.current.occurrences.length > 0;
+        
+        if (hasNoData && hasRefData) {
+          debugLog('MBAio3htg5uohg: Detected that bookingData was cleared unexpectedly, restoring from cache');
+          setBookingData({...bookingDataRef.current});
+        }
+      }
+    }, 1000); // Check every second
+    
+    return () => {
+      // Clean up interval on unmount
+      clearInterval(dataProtectionInterval);
+    };
+  }, [visible, bookingData]);
 
   const fetchBookingDetails = async () => {
     if (!bookingId) return;
@@ -80,10 +114,10 @@ const BookingApprovalModal = ({
       setError(null);
       setLoadingText("Loading booking details...");
       
-      debugLog('MBA77788 Fetching booking details for ID:', bookingId);
+      debugLog('MBAio3htg5uohg: Fetching booking details for ID:', bookingId);
       const response = await getBookingDetails(bookingId);
       
-      debugLog('MBA77788 Booking details fetched:', response);
+      debugLog('MBAio3htg5uohg: Booking details fetched:', response);
       
       // Ensure the response has the expected structure
       const safeResponse = {
@@ -124,31 +158,60 @@ const BookingApprovalModal = ({
           }
         }];
       } else {
-        // Ensure each occurrence has a rates object
-        safeResponse.occurrences = safeResponse.occurrences.map(occ => ({
-          ...occ,
-          unit_of_time: occ.unit_of_time || 'visit',
-          multiple: occ.multiple || 1,
-          base_total: occ.base_total || 0,
-          rates: occ.rates || {
-            base_rate: 0,
-            additional_animal_rate: 0,
-            applies_after: 1,
-            holiday_rate: 0,
-            holiday_days: 0,
-            additional_rates: []
-          }
-        }));
+        // Ensure each occurrence has a rates object and that unit_of_time is preserved
+        safeResponse.occurrences = safeResponse.occurrences.map(occ => {
+          // Log detailed info about each occurrence for debugging
+          debugLog('MBAio3htg5uohg: Processing occurrence:', {
+            id: occ.occurrence_id,
+            unit_of_time: occ.unit_of_time,
+            multiple: occ.multiple
+          });
+          
+          return {
+            ...occ,
+            unit_of_time: occ.unit_of_time || 'visit',
+            multiple: parseFloat(occ.multiple) || 1,
+            base_total: occ.base_total || 0,
+            rates: occ.rates || {
+              base_rate: 0,
+              additional_animal_rate: 0,
+              applies_after: 1,
+              holiday_rate: 0,
+              holiday_days: 0,
+              additional_rates: []
+            }
+          };
+        });
       }
       
+      // Store the processed response both in state and ref
       setBookingData(safeResponse);
+      bookingDataRef.current = safeResponse;
+      dataLoadedRef.current = true;
+      
+      debugLog('MBAio3htg5uohg: Booking data processed and stored');
     } catch (err) {
-      debugLog('MBA77788 Error fetching booking details:', err);
+      debugLog('MBAio3htg5uohg: Error fetching booking details:', err);
       setError('Failed to load booking details. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+  
+  // Add a safety effect that restores booking data from ref if it's cleared unexpectedly
+  useEffect(() => {
+    // Only run this check if we have actually loaded data before
+    if (dataLoadedRef.current) {
+      // Check if booking data was cleared but we have a cache in the ref
+      const hasNoData = !bookingData || !bookingData.occurrences || bookingData.occurrences.length === 0;
+      const hasRefData = bookingDataRef.current && bookingDataRef.current.occurrences && bookingDataRef.current.occurrences.length > 0;
+      
+      if (hasNoData && hasRefData) {
+        debugLog('MBAio3htg5uohg: Booking data was cleared unexpectedly, restoring from cache');
+        setBookingData(bookingDataRef.current);
+      }
+    }
+  }, [bookingData]);
 
   const handleApprove = async () => {
     try {

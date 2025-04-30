@@ -473,14 +473,14 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const renderBookingBreakdown = () => {
-    debugLog('MBA54321 Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
+    debugLog('MBAio3htg5uohg: Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
     const occurrences = bookingData?.occurrences;
     if (!occurrences || occurrences.length === 0) return null;
 
     // Get the user's timezone from context
     const { timeSettings } = useContext(AuthContext);
     const userTimezone = timeSettings?.timezone || 'US/Mountain';
-    debugLog('MBA54321 userTimezone: ', userTimezone);
+    debugLog('MBAio3htg5uohg: userTimezone: ', userTimezone);
 
     // Check if we're dealing with multiple individual dates
     const isMultipleDates = occurrences.length > 1 && 
@@ -498,103 +498,87 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
             )}
           </View>
           <View style={[styles.card, { paddingTop: 16 }]}>
-            {occurrences.map((occurrence, index) => (
-              <View key={occurrence.occurrence_id} style={styles.multipleDatesContainer}>
-                <View style={styles.dateHeader}>
-                  <View style={styles.dateTextContainer}>
-                    <Text style={styles.dateText}>
-                      {formatDateTimeRangeFromUTC({
-                        startDate: occurrence.start_date,
-                        startTime: occurrence.start_time,
-                        endDate: occurrence.end_date,
-                        endTime: occurrence.end_time,
-                        userTimezone: userTimezone,
-                        includeTimes: true,
-                        includeTimezone: true
-                      })}
-                    </Text>
-                  </View>
-                  <Text style={styles.occurrenceCost}>
-                    {formatCurrency(occurrence.calculated_cost)}
-                  </Text>
-                  {/* Edit/Cancel Button - moved here, only one icon */}
-                  {editingOccurrenceId === occurrence.occurrence_id ? (
-                    <TouchableOpacity onPress={handleCancelEdit}>
-                      <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
-                    </TouchableOpacity>
-                  ) : (
-                    showEditControls && (
-                      <TouchableOpacity onPress={() => handleEditOccurrence(occurrence)}>
-                        <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
-                      </TouchableOpacity>
-                    )
-                  )}
-                </View>
-
-                {/* Collapsible Rates Section */}
-                <TouchableOpacity 
-                  style={styles.ratesToggleButton}
-                  onPress={() => {
-                    const newExpandedRates = new Set(expandedRates);
-                    if (newExpandedRates.has(occurrence.occurrence_id)) {
-                      newExpandedRates.delete(occurrence.occurrence_id);
-                    } else {
-                      newExpandedRates.add(occurrence.occurrence_id);
-                    }
-                    setExpandedRates(newExpandedRates);
-                  }}
-                >
-                  <Text style={styles.ratesToggleText}>
-                    {expandedRates.has(occurrence.occurrence_id) ? 'Hide Rates' : 'Show Rates'}
-                  </Text>
-                  <MaterialCommunityIcons 
-                    name={expandedRates.has(occurrence.occurrence_id) ? "chevron-up" : "chevron-down"} 
-                    size={20} 
-                    color={theme.colors.mainColors.main} 
-                  />
-                </TouchableOpacity>
-
-                {expandedRates.has(occurrence.occurrence_id) && (
-                  <View style={styles.ratesBreakdown}>
-                    {/* Base Rate */}
-                    <View style={styles.rateItem}>
-                      {editingOccurrenceId === occurrence.occurrence_id ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                          <Text style={styles.rateLabel}>Base Rate ({occurrence.rates.unit_of_time})</Text>
-                          <TextInput
-                            style={{ 
-                              width: 80, 
-                              borderWidth: 1,
-                              borderColor: theme.colors.border,
-                              borderRadius: 4,
-                              padding: 8
-                            }}
-                            keyboardType="numeric"
-                            value={occurrenceEdits.base_rate?.toString() || ''}
-                            onChangeText={v => handleOccurrenceInputChange('base_rate', v)}
-                          />
-                        </View>
-                      ) : (
-                        <View>
-                          <Text style={styles.rateLabel}>Base Rate ({occurrence.rates.unit_of_time})</Text>
-                          <Text style={styles.breakdownCalculation}>
-                            {formatCurrency(occurrence.rates.base_rate)} × {occurrence.multiple} = {formatCurrency(occurrence.base_total)}
-                          </Text>
-                        </View>
-                      )}
-                      {editingOccurrenceId === occurrence.occurrence_id ? null : (
-                        <Text style={styles.rateAmount}>{formatCurrency(occurrence.base_total)}</Text>
-                      )}
+            {occurrences.map((occurrence, index) => {
+              // Ensure we have a valid unit_of_time - check in multiple places
+              const unitOfTime = 
+                (occurrence.unit_of_time) || 
+                (occurrence.rates && occurrence.rates.unit_of_time) || 
+                'Per Visit';
+                
+              // Ensure multiple is properly formatted as a number
+              const multiple = parseFloat(occurrence.multiple) || 1;
+              
+              // Log each occurrence for debugging
+              debugLog('MBAio3htg5uohg: Processing occurrence in UI:', {
+                id: occurrence.occurrence_id,
+                unit_of_time: unitOfTime,
+                multiple: multiple,
+                calculated_cost: occurrence.calculated_cost
+              });
+              
+              return (
+                <View key={occurrence.occurrence_id} style={styles.multipleDatesContainer}>
+                  <View style={styles.dateHeader}>
+                    <View style={styles.dateTextContainer}>
+                      <Text style={styles.dateText}>
+                        {formatDateTimeRangeFromUTC({
+                          startDate: occurrence.start_date,
+                          startTime: occurrence.start_time,
+                          endDate: occurrence.end_date,
+                          endTime: occurrence.end_time,
+                          userTimezone: userTimezone,
+                          includeTimes: true,
+                          includeTimezone: true
+                        })}
+                      </Text>
                     </View>
+                    <Text style={styles.occurrenceCost}>
+                      {formatCurrency(occurrence.calculated_cost)}
+                    </Text>
+                    {/* Edit/Cancel Button - moved here, only one icon */}
+                    {editingOccurrenceId === occurrence.occurrence_id ? (
+                      <TouchableOpacity onPress={handleCancelEdit}>
+                        <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
+                      </TouchableOpacity>
+                    ) : (
+                      showEditControls && (
+                        <TouchableOpacity onPress={() => handleEditOccurrence(occurrence)}>
+                          <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
 
-                    {/* Additional Animal Rate */}
-                    {occurrence.rates?.additional_animal_rate && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) && (
+                  {/* Collapsible Rates Section */}
+                  <TouchableOpacity 
+                    style={styles.ratesToggleButton}
+                    onPress={() => {
+                      const newExpandedRates = new Set(expandedRates);
+                      if (newExpandedRates.has(occurrence.occurrence_id)) {
+                        newExpandedRates.delete(occurrence.occurrence_id);
+                      } else {
+                        newExpandedRates.add(occurrence.occurrence_id);
+                      }
+                      setExpandedRates(newExpandedRates);
+                    }}
+                  >
+                    <Text style={styles.ratesToggleText}>
+                      {expandedRates.has(occurrence.occurrence_id) ? 'Hide Rates' : 'Show Rates'}
+                    </Text>
+                    <MaterialCommunityIcons 
+                      name={expandedRates.has(occurrence.occurrence_id) ? "chevron-up" : "chevron-down"} 
+                      size={20} 
+                      color={theme.colors.mainColors.main} 
+                    />
+                  </TouchableOpacity>
+
+                  {expandedRates.has(occurrence.occurrence_id) && (
+                    <View style={styles.ratesBreakdown}>
+                      {/* Base Rate */}
                       <View style={styles.rateItem}>
                         {editingOccurrenceId === occurrence.occurrence_id ? (
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <Text style={styles.rateLabel}>
-                              Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
-                            </Text>
+                            <Text style={styles.rateLabel}>Base Rate ({unitOfTime})</Text>
                             <TextInput
                               style={{ 
                                 width: 80, 
@@ -604,114 +588,127 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                 padding: 8
                               }}
                               keyboardType="numeric"
-                              value={occurrenceEdits.additional_animal_rate?.toString() || ''}
-                              onChangeText={v => handleOccurrenceInputChange('additional_animal_rate', v)}
-                            />
-                          </View>
-                        ) : (
-                          <Text style={styles.rateLabel}>
-                            Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
-                          </Text>
-                        )}
-                        {editingOccurrenceId === occurrence.occurrence_id ? null : (
-                          <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.additional_animal_rate)}</Text>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Holiday Rate */}
-                    {occurrence.rates?.holiday_rate && occurrence.rates?.holiday_days !== 0 && (
-                      <View style={styles.rateItem}>
-                        {editingOccurrenceId === occurrence.occurrence_id ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <Text style={styles.rateLabel}>Holiday Rate</Text>
-                            <TextInput
-                              style={{ 
-                                width: 80, 
-                                borderWidth: 1,
-                                borderColor: theme.colors.border,
-                                borderRadius: 4,
-                                padding: 8
-                              }}
-                              keyboardType="numeric"
-                              value={occurrenceEdits.holiday_rate?.toString() || ''}
-                              onChangeText={v => handleOccurrenceInputChange('holiday_rate', v)}
-                            />
-                          </View>
-                        ) : (
-                          <Text style={styles.rateLabel}>Holiday Rate</Text>
-                        )}
-                        {editingOccurrenceId === occurrence.occurrence_id ? null : (
-                          <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.holiday_rate)}</Text>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Additional Rates */}
-                    {occurrence.rates?.additional_rates?.map((rate, rateIndex) => (
-                      <View key={rateIndex} style={styles.rateItem}>
-                        {editingOccurrenceId === occurrence.occurrence_id ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <Text style={styles.rateLabel}>{rate.title}</Text>
-                            <TextInput
-                              style={{ 
-                                width: 80, 
-                                borderWidth: 1,
-                                borderColor: theme.colors.border,
-                                borderRadius: 4,
-                                padding: 8
-                              }}
-                              keyboardType="numeric"
-                              value={occurrenceEdits.additional_rates?.[rateIndex]?.amount?.toString() || ''}
-                              onChangeText={v => handleAdditionalRateChange(rateIndex, 'amount', v)}
+                              value={occurrenceEdits.base_rate?.toString() || ''}
+                              onChangeText={v => handleOccurrenceInputChange('base_rate', v)}
                             />
                           </View>
                         ) : (
                           <View>
-                            <Text style={styles.rateLabel}>{rate.title}</Text>
-                            {rate.description && (
-                              <Text style={styles.rateDescription}>{rate.description}</Text>
-                            )}
+                            <Text style={styles.rateLabel}>Base Rate ({unitOfTime})</Text>
+                            <Text style={styles.breakdownCalculation}>
+                              {formatCurrency(occurrence.rates.base_rate)} × {multiple} = {formatCurrency(occurrence.base_total)}
+                            </Text>
                           </View>
                         )}
                         {editingOccurrenceId === occurrence.occurrence_id ? null : (
-                          <Text style={styles.rateAmount}>{formatCurrency(rate.amount)}</Text>
+                          <Text style={styles.rateAmount}>{formatCurrency(occurrence.base_total)}</Text>
                         )}
                       </View>
-                    ))}
 
-                    {/* Save button for edit mode */}
-                    {editingOccurrenceId === occurrence.occurrence_id && (
-                      <TouchableOpacity 
-                        style={[styles.saveButton, {alignSelf: 'flex-end', marginTop: 16, marginBottom: 8}]} 
-                        onPress={() => handleSaveOccurrenceRates(occurrence)}
-                        disabled={isLoading}
-                      >
-                        <Text style={styles.saveButtonText}>Save Changes</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
+                      {/* Additional Animal Rate */}
+                      {occurrence.rates?.additional_animal_rate && parseFloat(occurrence.rates.additional_animal_rate) > 0 && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) && (
+                        <View style={styles.rateItem}>
+                          {editingOccurrenceId === occurrence.occurrence_id ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                              <Text style={styles.rateLabel}>
+                                Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
+                              </Text>
+                              <TextInput
+                                style={{ 
+                                  width: 80, 
+                                  borderWidth: 1,
+                                  borderColor: theme.colors.border,
+                                  borderRadius: 4,
+                                  padding: 8
+                                }}
+                                keyboardType="numeric"
+                                value={occurrenceEdits.additional_animal_rate?.toString() || ''}
+                                onChangeText={v => handleOccurrenceInputChange('additional_animal_rate', v)}
+                              />
+                            </View>
+                          ) : (
+                            <Text style={styles.rateLabel}>
+                              Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
+                            </Text>
+                          )}
+                          {editingOccurrenceId === occurrence.occurrence_id ? null : (
+                            <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.additional_animal_rate)}</Text>
+                          )}
+                        </View>
+                      )}
 
-                {index < occurrences.length - 1 && <View style={styles.occurrenceDivider} />}
-              </View>
-            ))}
+                      {/* Holiday Rate - only show if there are actually holiday days */}
+                      {occurrence.rates?.holiday_rate && parseFloat(occurrence.rates.holiday_rate) > 0 && 
+                       (occurrence.rates?.holiday_days > 0 || !('holiday_days' in occurrence.rates)) && (
+                        <View style={styles.rateItem}>
+                          {editingOccurrenceId === occurrence.occurrence_id ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                              <Text style={styles.rateLabel}>Holiday Rate</Text>
+                              <TextInput
+                                style={{ 
+                                  width: 80, 
+                                  borderWidth: 1,
+                                  borderColor: theme.colors.border,
+                                  borderRadius: 4,
+                                  padding: 8
+                                }}
+                                keyboardType="numeric"
+                                value={occurrenceEdits.holiday_rate?.toString() || ''}
+                                onChangeText={v => handleOccurrenceInputChange('holiday_rate', v)}
+                              />
+                            </View>
+                          ) : (
+                            <Text style={styles.rateLabel}>Holiday Rate</Text>
+                          )}
+                          {editingOccurrenceId === occurrence.occurrence_id ? null : (
+                            <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.holiday_rate)}</Text>
+                          )}
+                        </View>
+                      )}
 
-            {/* Save button for edit mode */}
-            {isEditMode && (
-              <TouchableOpacity 
-                style={[styles.saveButton, {alignSelf: 'flex-end', marginRight: 16, marginTop: 16, marginBottom: 8}]} 
-                onPress={saveRateChanges}
-              >
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
-            )}
+                      {/* Additional Rates */}
+                      {occurrence.rates?.additional_rates?.map((rate, rateIndex) => (
+                        <View key={rateIndex} style={styles.rateItem}>
+                          {editingOccurrenceId === occurrence.occurrence_id ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                              <Text style={styles.rateLabel}>{rate.title}</Text>
+                              <TextInput
+                                style={{ 
+                                  width: 80, 
+                                  borderWidth: 1,
+                                  borderColor: theme.colors.border,
+                                  borderRadius: 4,
+                                  padding: 8
+                                }}
+                                keyboardType="numeric"
+                                value={occurrenceEdits.additional_rates?.[rateIndex]?.amount?.toString() || ''}
+                                onChangeText={v => handleAdditionalRateChange(rateIndex, 'amount', v)}
+                              />
+                            </View>
+                          ) : (
+                            <View>
+                              <Text style={styles.rateLabel}>{rate.title}</Text>
+                              {rate.description && (
+                                <Text style={styles.rateDescription}>{rate.description}</Text>
+                              )}
+                            </View>
+                          )}
+                          {editingOccurrenceId === occurrence.occurrence_id ? null : (
+                            <Text style={styles.rateAmount}>{formatCurrency(rate.amount)}</Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </View>
         </View>
       );
     }
-
-    // Original rendering for date range
+   
+    // Rest of the function for non-multiple dates case
     const occurrence = occurrences[0];
     if (!occurrence) return null;
 
@@ -788,7 +785,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
               <View style={styles.breakdownLabelContainer}>
                 <View style={styles.rateNameAmountRow}>
                   <Text style={styles.breakdownLabel}>
-                    Base Rate ({occurrence.unit_of_time || 'visit'})
+                    Base Rate ({(occurrence.unit_of_time) || 
+                              (occurrence.rates && occurrence.rates.unit_of_time) || 
+                              'Per Visit'})
                   </Text>
                   {isEditMode ? (
                     <View style={styles.amountInputContainer}>
@@ -830,13 +829,17 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                           value={editedRates?.additional_animal_rate?.toString() || '0'}
                           onChangeText={updateAdditionalAnimalRate}
                         />
-                        <Text style={styles.inputLabel}> / pet / {occurrence.unit_of_time || 'visit'}</Text>
+                        <Text style={styles.inputLabel}> / pet / {(occurrence.unit_of_time) || 
+                                                                (occurrence.rates && occurrence.rates.unit_of_time) || 
+                                                                'Per Visit'}</Text>
                       </View>
                     ) : null}
                   </View>
                   {!isEditMode && (
                     <Text style={styles.breakdownCalculation}>
-                      ${occurrence.rates?.additional_animal_rate || 0} / pet / {occurrence.unit_of_time || 'visit'}
+                      ${occurrence.rates?.additional_animal_rate || 0} / pet / {(occurrence.unit_of_time) || 
+                                                                              (occurrence.rates && occurrence.rates.unit_of_time) || 
+                                                                              'Per Visit'}
                     </Text>
                   )}
                 </View>

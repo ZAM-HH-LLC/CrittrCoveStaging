@@ -1532,14 +1532,24 @@ class CreateFromDraftView(APIView):
                 logger.info(f"MBA66777 Created occurrence {occurrence.occurrence_id} for booking {booking.booking_id}")
                 
                 # Get or create booking details
-                unit_of_time = occurrence_data.get('unit_of_time', 'Per Visit')
-                logger.info(f"MBA66777 Unit of time: {unit_of_time}")
-                multiple = occurrence_data.get('multiple', 1)
-                logger.info(f"MBA66777 Multiple: {multiple}")
-                rates = occurrence_data.get('rates', {})
-                logger.info(f"MBA66777 Rates: {rates}")
+                # Try to get unit_of_time from either occurrence_data directly or from occurrence_data.rates
+                unit_of_time = occurrence_data.get('unit_of_time')
+                if not unit_of_time and 'rates' in occurrence_data:
+                    unit_of_time = occurrence_data['rates'].get('unit_of_time')
+                if not unit_of_time:
+                    unit_of_time = 'Per Visit'  # Default if not found in either place
                 
-                # BookingDetails is created by signal, so let's update it
+                logger.info(f"MBAio3htg5uohg: Unit of time: {unit_of_time}")
+                
+                multiple = occurrence_data.get('multiple', 1)
+                # Ensure multiple is a string to preserve precision (e.g., 0.33 vs 0.3)
+                if not isinstance(multiple, str):
+                    multiple = str(multiple)
+                logger.info(f"MBAio3htg5uohg: Multiple from draft: {multiple}")
+                
+                rates = occurrence_data.get('rates', {})
+                logger.info(f"MBAio3htg5uohg: Rates: {rates}")
+                
                 booking_details = BookingDetails.objects.filter(booking_occurrence=occurrence).first()
                 if booking_details:
                     booking_details.num_pets = pet_count
@@ -1548,18 +1558,19 @@ class CreateFromDraftView(APIView):
                     booking_details.applies_after = int(rates.get('applies_after', 1))
                     booking_details.holiday_rate = Decimal(str(rates.get('holiday_rate', 0)))
                     booking_details.unit_of_time = unit_of_time
-                    booking_details.multiple = Decimal(str(multiple))
+                    # Store the exact multiple value from the draft without rounding
+                    booking_details.multiple = Decimal(multiple)
                     booking_details.nights = int(draft_data.get('nights', 0))
                     booking_details.save()
                     
                     # Force update the calculated rate based on the supplied multiple
                     base_rate = booking_details.base_rate
-                    calculated_rate = base_rate * Decimal(str(multiple))
+                    calculated_rate = base_rate * Decimal(multiple)
                     
                     # Add additional pet costs if applicable
                     if booking_details.additional_pet_rate and pet_count > booking_details.applies_after:
                         additional_pets = pet_count - booking_details.applies_after
-                        additional_pet_cost = booking_details.additional_pet_rate * additional_pets * Decimal(str(multiple))
+                        additional_pet_cost = booking_details.additional_pet_rate * additional_pets * Decimal(multiple)
                         calculated_rate += additional_pet_cost
                         logger.info(f"MBA66777 Added {additional_pets} additional pets cost: ${additional_pet_cost}")
                     
@@ -1567,7 +1578,7 @@ class CreateFromDraftView(APIView):
                     booking_details.calculated_rate = calculated_rate.quantize(Decimal('0.01'))
                     booking_details.save(update_fields=['calculated_rate'])
                     
-                    logger.info(f"MBA66777 Updated booking details for occurrence {occurrence.occurrence_id}")
+                    logger.info(f"MBAio3htg5uohg: Updated booking details with multiple={multiple} for occurrence {occurrence.occurrence_id}")
                     logger.info(f"MBA66777 Forced calculated_rate to: ${booking_details.calculated_rate}")
                 
                 # Create additional rates if any
@@ -1928,15 +1939,21 @@ class BookingDetailView(APIView):
                     'calculated_cost': str(occurrence.calculated_cost),
                     'unit_of_time': booking_details.unit_of_time if booking_details else 'Per Visit',
                     'base_total': str(base_total),
-                    'multiple': Decimal(str(multiple)).quantize(Decimal('0.01')),
+                    'multiple': str(multiple),  # Don't quantize the multiple - return the exact value
                     'rates': {
                         'base_rate': str(booking_details.base_rate) if booking_details else '0.00',
                         'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0.00',
                         'applies_after': booking_details.applies_after if booking_details else 1,
                         'holiday_rate': str(booking_details.holiday_rate) if booking_details else '0.00',
-                        'additional_rates': additional_rates
+                        'holiday_days': 0,  # Add holiday_days field with default
+                        'additional_rates': additional_rates,
+                        'unit_of_time': booking_details.unit_of_time if booking_details else 'Per Visit', # Also include unit_of_time in rates
                     }
                 }
+                
+                # Log the multiple value and unit_of_time for debugging
+                logger.info(f"MBAio3htg5uohg: Occurrence {occurrence.occurrence_id} multiple: {multiple}, unit_of_time: {booking_details.unit_of_time if booking_details else 'Per Visit'}")
+                
                 occurrences_data.append(occurrence_data)
             
             # Format cost summary - simplified
