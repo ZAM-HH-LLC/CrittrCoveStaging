@@ -152,6 +152,25 @@ const BookingStepModal = ({
   const handleTimeSelect = (timeData) => {
     debugLog('MBA12345 Selected times:', timeData);
     setBookingData(prev => {
+      // Check if we have individual day times
+      if (timeData.hasIndividualTimes) {
+        // Filter out only the date-keyed properties and non-function properties
+        const individualTimes = Object.keys(timeData)
+          .filter(key => key.match(/^\d{4}-\d{2}-\d{2}$/) || 
+                        ['startTime', 'endTime', 'isOvernightForced', 'hasIndividualTimes'].includes(key))
+          .reduce((obj, key) => {
+            obj[key] = timeData[key];
+            return obj;
+          }, {});
+          
+        debugLog('MBA12345 Using individual day times:', individualTimes);
+        
+        return {
+          ...prev,
+          times: individualTimes
+        };
+      }
+      
       // Create a new times object that preserves any existing values
       const updatedTimes = {
         ...prev.times,
@@ -216,58 +235,174 @@ const BookingStepModal = ({
           debugLog('MBA5asdt3f4321 Original booking data:', bookingData);
 
           if (bookingData.dateRangeType === 'date-range') {
-            // Handle date range selection (existing logic)
-            const startDate = formatDateForAPI(bookingData.dateRange.startDate);
-            const endDate = formatDateForAPI(bookingData.dateRange.endDate);
-            const startTime = formatTimeForAPI(bookingData.times.startTime);
-            const endTime = formatTimeForAPI(bookingData.times.endTime);
+            // Check if this is a non-overnight service with date range
+            const isNonOvernightDateRange = 
+              bookingData.dateRangeType === 'date-range' && 
+              !bookingData.service?.is_overnight &&
+              !bookingData.times?.isOvernightForced;
 
-            debugLog('MBA5asdt3f4321 Local dates and times:', {
-              startDate,
-              endDate,
-              startTime,
-              endTime
-            });
-
-            // Convert local times to UTC before sending to backend
-            const { date: utcStartDate, time: utcStartTime } = convertToUTC(
-              startDate,
-              startTime,
-              'US/Mountain'
-            );
-
-            const { date: utcEndDate, time: utcEndTime } = convertToUTC(
-              endDate,
-              endTime,
-              'US/Mountain'
-            );
-
-            debugLog('MBA5asdt3f4321 UTC dates and times:', {
-              utcStartDate,
-              utcStartTime,
-              utcEndDate,
-              utcEndTime
-            });
-
-            // Call the API with UTC times and dates
-            const response = await updateBookingDraftTimeAndDate(
-              bookingId,
-              utcStartDate,
-              utcEndDate,
-              utcStartTime,
-              utcEndTime
-            );
-
-            debugLog('MBA5asdt3f4321 Received response from updateBookingDraftTimeAndDate:', response);
-
-            // Update booking data with the response's draft_data
-            if (response?.draft_data) {
-              setBookingData(prev => ({
-                ...prev,
-                ...response.draft_data
-              }));
+            if (isNonOvernightDateRange) {
+              // For non-overnight date range services, we need to create individual days
+              debugLog('MBA5asdt3f4321 Handling non-overnight date range as individual occurrences');
+              
+              // Create dates array from date range
+              const startDate = new Date(bookingData.dateRange.startDate);
+              const endDate = new Date(bookingData.dateRange.endDate);
+              const dates = [];
+              
+              // Generate all dates in the range
+              const currentDate = new Date(startDate);
+              while (currentDate <= endDate) {
+                dates.push(new Date(currentDate));
+                currentDate.setDate(currentDate.getDate() + 1);
+              }
+              
+              debugLog('MBA5asdt3f4321 Generated dates from range:', dates.map(d => d.toISOString().split('T')[0]));
+              debugLog('MBA5asdt3f4321 Time settings:', bookingData.times);
+              
+              // Format dates and determine times for each day
+              const formattedDates = dates.map(date => {
+                const dateKey = date.toISOString().split('T')[0];
+                debugLog('MBA5asdt3f4321 Processing date:', dateKey);
+                
+                let dayTimes = bookingData.times;
+                
+                // If there are individual time settings for this day, use those
+                if (bookingData.times[dateKey] && bookingData.times.hasIndividualTimes) {
+                  dayTimes = bookingData.times[dateKey];
+                  debugLog('MBA5asdt3f4321 Using individual times for date:', dateKey, dayTimes);
+                } else {
+                  debugLog('MBA5asdt3f4321 Using default times for date:', dateKey, dayTimes);
+                }
+                
+                // Format the start time
+                let startTime;
+                if (typeof dayTimes.startTime === 'string') {
+                  startTime = dayTimes.startTime;
+                } else if (dayTimes.startTime?.hours !== undefined) {
+                  startTime = `${String(dayTimes.startTime.hours).padStart(2, '0')}:${String(dayTimes.startTime.minutes || 0).padStart(2, '0')}`;
+                } else {
+                  // Default time if missing
+                  startTime = '09:00';
+                }
+                
+                // Format the end time
+                let endTime;
+                if (typeof dayTimes.endTime === 'string') {
+                  endTime = dayTimes.endTime;
+                } else if (dayTimes.endTime?.hours !== undefined) {
+                  endTime = `${String(dayTimes.endTime.hours).padStart(2, '0')}:${String(dayTimes.endTime.minutes || 0).padStart(2, '0')}`;
+                } else {
+                  // Default time if missing
+                  endTime = '17:00';
+                }
+                
+                debugLog('MBA5asdt3f4321 Formatted times for date:', dateKey, { startTime, endTime });
+                
+                // Format the date
+                const formattedDate = formatDateForAPI(date);
+                debugLog('MBA5asdt3f4321 Formatted date:', formattedDate);
+                
+                try {
+                  // Convert local times to UTC
+                  const { date: utcDate, time: utcStartTime } = convertToUTC(
+                    formattedDate,
+                    startTime,
+                    'US/Mountain'
+                  );
+                  
+                  const { time: utcEndTime } = convertToUTC(
+                    formattedDate,
+                    endTime,
+                    'US/Mountain'
+                  );
+                  
+                  debugLog('MBA5asdt3f4321 Converted UTC times:', { utcDate, utcStartTime, utcEndTime });
+                  
+                  return {
+                    date: utcDate,
+                    startTime: utcStartTime,
+                    endTime: utcEndTime
+                  };
+                } catch (err) {
+                  debugLog('MBA5asdt3f4321 Error converting time to UTC:', err);
+                  throw err;
+                }
+              });
+              
+              debugLog('MBA5asdt3f4321 Sending non-overnight date range as individual days:', formattedDates);
+              
+              // Call the API for multiple individual days (even though they're from a date range)
+              const response = await updateBookingDraftMultipleDays(
+                bookingId,
+                {
+                  dates: formattedDates,
+                  times: {} // Empty times object since times are already included in each date
+                }
+              );
+              
+              debugLog('MBA5asdt3f4321 Received response from updateBookingDraftMultipleDays:', response);
+              
+              if (response?.draft_data) {
+                setBookingData(prev => ({
+                  ...prev,
+                  ...response.draft_data
+                }));
+              }
             } else {
-              debugLog('MBA5asdt3f4321 No draft_data in response:', response);
+              // Handle date range selection for overnight services (existing logic)
+              const startDate = formatDateForAPI(bookingData.dateRange.startDate);
+              const endDate = formatDateForAPI(bookingData.dateRange.endDate);
+              const startTime = formatTimeForAPI(bookingData.times.startTime);
+              const endTime = formatTimeForAPI(bookingData.times.endTime);
+
+              debugLog('MBA5asdt3f4321 Local dates and times:', {
+                startDate,
+                endDate,
+                startTime,
+                endTime
+              });
+
+              // Convert local times to UTC before sending to backend
+              const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+                startDate,
+                startTime,
+                'US/Mountain'
+              );
+
+              const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+                endDate,
+                endTime,
+                'US/Mountain'
+              );
+
+              debugLog('MBA5asdt3f4321 UTC dates and times:', {
+                utcStartDate,
+                utcStartTime,
+                utcEndDate,
+                utcEndTime
+              });
+
+              // Call the API with UTC times and dates
+              const response = await updateBookingDraftTimeAndDate(
+                bookingId,
+                utcStartDate,
+                utcEndDate,
+                utcStartTime,
+                utcEndTime
+              );
+
+              debugLog('MBA5asdt3f4321 Received response from updateBookingDraftTimeAndDate:', response);
+
+              // Update booking data with the response's draft_data
+              if (response?.draft_data) {
+                setBookingData(prev => ({
+                  ...prev,
+                  ...response.draft_data
+                }));
+              } else {
+                debugLog('MBA5asdt3f4321 No draft_data in response:', response);
+              }
             }
           } else if (bookingData.dateRangeType === 'multiple-days') {
             // Handle multiple individual days

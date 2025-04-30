@@ -2102,8 +2102,8 @@ class UpdateBookingDraftMultipleDaysView(APIView):
     renderer_classes = [JSONRenderer]
 
     def post(self, request, draft_id):
-        logger.info("MBA5asdt3f4321 - Starting UpdateBookingDraftMultipleDaysView.post")
-        logger.info(f"MBA5asdt3f4321 - Request data: {request.data}")
+        logger.info("MBA5321 - Starting UpdateBookingDraftMultipleDaysView.post")
+        logger.info(f"MBA5321 - Request data: {request.data}")
         
         try:
             # Get the draft and verify professional access
@@ -2111,7 +2111,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
             professional = get_object_or_404(Professional, user=request.user)
             
             if draft.booking and draft.booking.professional != professional:
-                logger.error(f"MBA5asdt3f4321 - Unauthorized access attempt by {request.user.email} for draft {draft_id}")
+                logger.error(f"MBA5321 - Unauthorized access attempt by {request.user.email} for draft {draft_id}")
                 return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
             # Initialize draft_data if it doesn't exist
@@ -2179,6 +2179,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                         raise Exception(f"Failed to calculate rates for date {date_obj}")
 
                     # Convert string values to Decimal for rounding
+                    # Safely convert to Decimal, even if the values are already numbers
                     calculated_cost = Decimal(str(rate_data['calculated_cost']))
                     base_total = Decimal(str(rate_data['base_total']))
 
@@ -2198,7 +2199,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     processed_occurrences.append(occurrence)
 
                 except Exception as e:
-                    logger.error(f"MBA5asdt3f4321 - Error processing date: {str(e)}")
+                    logger.error(f"MBA5321 - Error processing date: {str(e)}")
                     return Response(
                         {"error": f"Error processing date: {str(e)}"},
                         status=status.HTTP_400_BAD_REQUEST
@@ -2237,12 +2238,30 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                 ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
             ])
 
+            # Preserve existing client data if it exists in draft_data
+            client_name = None
+            client_id = None
+            
+            if draft.draft_data and 'client_name' in draft.draft_data and draft.draft_data['client_name']:
+                client_name = draft.draft_data['client_name']
+                logger.info(f"MBA5321 - Using client_name from draft_data: {client_name}")
+            elif draft.booking and draft.booking.client:
+                client_name = draft.booking.client.user.name
+                logger.info(f"MBA5321 - Using client_name from booking: {client_name}")
+            
+            if draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
+                client_id = draft.draft_data['client_id']
+                logger.info(f"MBA5321 - Using client_id from draft_data: {client_id}")
+            elif draft.booking and draft.booking.client:
+                client_id = draft.booking.client.id
+                logger.info(f"MBA5321 - Using client_id from booking: {client_id}")
+
             # Create draft data structure
             draft_data = OrderedDict([
                 ('booking_id', draft.booking.booking_id if draft.booking else None),
                 ('status', draft.booking.status if draft.booking else 'DRAFT'),
-                ('client_name', draft.booking.client.user.name if draft.booking and draft.booking.client else None),
-                ('client_id', draft.booking.client.id if draft.booking and draft.booking.client else None),
+                ('client_name', client_name),
+                ('client_id', client_id),
                 ('professional_name', professional.user.name),
                 ('professional_id', professional.professional_id),
                 ('pets', draft.draft_data.get('pets', [])),
@@ -2253,7 +2272,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     ('service_type', service.service_name),
                     ('service_id', service.service_id)
                 ])),
-                ('conversation_id', draft.booking.conversation_id if draft.booking else None)
+                ('conversation_id', draft.booking.conversation_id if draft.booking else draft.draft_data.get('conversation_id'))
             ])
 
             # Update draft status if needed
@@ -2264,15 +2283,18 @@ class UpdateBookingDraftMultipleDaysView(APIView):
             draft.draft_data = draft_data
             draft.save()
 
-            logger.info(f"MBA5asdt3f4321 - Successfully updated booking draft {draft_id}")
+            logger.info(f"MBA5321 - Successfully updated booking draft {draft_id}")
+            logger.info(f"MBA5321 - Client ID in response: {draft_data['client_id']}")
+            logger.info(f"MBA5321 - Client Name in response: {draft_data['client_name']}")
+            
             return Response({
                 'status': 'success',
                 'draft_data': draft_data
             })
 
         except Exception as e:
-            logger.error(f"MBA5asdt3f4321 - Error in UpdateBookingDraftMultipleDaysView: {str(e)}")
-            logger.error(f"MBA5asdt3f4321 - Full error traceback: {traceback.format_exc()}")
+            logger.error(f"MBA5321 - Error in UpdateBookingDraftMultipleDaysView: {str(e)}")
+            logger.error(f"MBA5321 - Full error traceback: {traceback.format_exc()}")
             return Response(
                 {"error": f"An error occurred while updating the booking draft: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -2285,18 +2307,18 @@ class UpdateBookingDraftMultipleDaysView(APIView):
         """
         platform_fee = Decimal('0.15')
         if not client_user:
-            logger.warning("MBA5asdt3f4321 - No client user found, using default 15% platform fee")
+            logger.warning("MBA5321 - No client user found, using default 15% platform fee")
             return platform_fee
         client_plan = client_user.subscription_plan
-        logger.info(f"MBA5asdt3f4321 - Client subscription plan: {client_plan}")
+        logger.info(f"MBA5321 - Client subscription plan: {client_plan}")
         if client_plan == 5:
-            logger.info("MBA5asdt3f4321 - Client has Dual subscription, applying 0% platform fee")
+            logger.info("MBA5321 - Client has Dual subscription, applying 0% platform fee")
             return Decimal('0.0')
         if client_plan == 4:
-            logger.info("MBA5asdt3f4321 - Client has Client subscription, applying 0% platform fee")
+            logger.info("MBA5321 - Client has Client subscription, applying 0% platform fee")
             return Decimal('0.0')
         if client_plan == 1:
-            logger.info("MBA5asdt3f4321 - Client has Waitlist tier, applying 0% platform fee")
+            logger.info("MBA5321 - Client has Waitlist tier, applying 0% platform fee")
             return Decimal('0.0')
         if client_plan == 0:
             today = timezone.now().date()
@@ -2305,11 +2327,11 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                 professional__user=client_user,
                 created_at__date__gte=month_start
             ).count()
-            logger.info(f"MBA5asdt3f4321 - Professional bookings this month: {pro_bookings_this_month}")
+            logger.info(f"MBA5321 - Professional bookings this month: {pro_bookings_this_month}")
             if pro_bookings_this_month == 0:
-                logger.info("MBA5asdt3f4321 - First booking this month for professional, applying 0% platform fee")
+                logger.info("MBA5321 - First booking this month for professional, applying 0% platform fee")
                 return Decimal('0.0')
-        logger.info("MBA5asdt3f4321 - Professional pays standard 15% platform fee")
+        logger.info("MBA5321 - Professional pays standard 15% platform fee")
         return platform_fee
 
     def determine_professional_platform_fee(self, professional_user):
@@ -2319,15 +2341,15 @@ class UpdateBookingDraftMultipleDaysView(APIView):
         """
         platform_fee = Decimal('0.15')
         pro_plan = professional_user.subscription_plan
-        logger.info(f"MBA5asdt3f4321 - Professional subscription plan: {pro_plan}")
+        logger.info(f"MBA5321 - Professional subscription plan: {pro_plan}")
         if pro_plan == 5:
-            logger.info("MBA5asdt3f4321 - Professional has Dual subscription, applying 0% platform fee")
+            logger.info("MBA5321 - Professional has Dual subscription, applying 0% platform fee")
             return Decimal('0.0')
         if pro_plan == 3:
-            logger.info("MBA5asdt3f4321 - Professional has Pro subscription, applying 0% platform fee")
+            logger.info("MBA5321 - Professional has Pro subscription, applying 0% platform fee")
             return Decimal('0.0')
         if pro_plan == 1:
-            logger.info("MBA5asdt3f4321 - Professional has Waitlist tier, applying 0% platform fee")
+            logger.info("MBA5321 - Professional has Waitlist tier, applying 0% platform fee")
             return Decimal('0.0')
         if pro_plan == 0:
             today = timezone.now().date()
@@ -2336,11 +2358,11 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                 professional__user=professional_user,
                 created_at__date__gte=month_start
             ).count()
-            logger.info(f"MBA5asdt3f4321 - Professional bookings this month: {pro_bookings_this_month}")
+            logger.info(f"MBA5321 - Professional bookings this month: {pro_bookings_this_month}")
             if pro_bookings_this_month == 0:
-                logger.info("MBA5asdt3f4321 - First booking this month for professional, applying 0% platform fee")
+                logger.info("MBA5321 - First booking this month for professional, applying 0% platform fee")
                 return Decimal('0.0')
-        logger.info("MBA5asdt3f4321 - Professional pays standard 15% platform fee")
+        logger.info("MBA5321 - Professional pays standard 15% platform fee")
         return platform_fee
 
 class UpdateBookingDraftRecurringView(APIView):

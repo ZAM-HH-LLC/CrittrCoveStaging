@@ -267,21 +267,66 @@ export const updateBookingDraftMultipleDays = async (draftId, data) => {
             data
         });
 
-        // Convert each date's times to UTC
-        const utcDates = data.dates.map(date => {
-            // Format the date for API
-            const dateStr = formatDateForAPI(date);
+        // Handle different formats of dates array
+        const utcDates = data.dates.map(dateItem => {
+            // Check what format the date is in
+            let dateStr, startTimeStr, endTimeStr;
             
-            // Format and convert times to UTC
+            // If the dateItem already has date and times (from non-overnight date range)
+            if (dateItem.date && dateItem.startTime && dateItem.endTime) {
+                debugLog('MBA5asdt3f4321 - Using provided date and times', dateItem);
+                return {
+                    date: dateItem.date,  // Already converted to UTC in BookingStepModal
+                    startTime: dateItem.startTime,
+                    endTime: dateItem.endTime
+                };
+            }
+            
+            // For multiple days format from DateSelectionCard
+            if (dateItem instanceof Date) {
+                // Format the date for API
+                dateStr = formatDateForAPI(dateItem);
+                
+                // Determine which time to use - if individual times exist, use those
+                let dayTimes = data.times;
+                const dateKey = dateItem.toISOString().split('T')[0];
+                
+                if (data.times[dateKey] && data.times.hasIndividualTimes) {
+                    dayTimes = data.times[dateKey];
+                }
+                
+                // Get the time strings
+                if (typeof dayTimes.startTime === 'string') {
+                    startTimeStr = dayTimes.startTime;
+                } else if (dayTimes.startTime?.hours !== undefined) {
+                    startTimeStr = `${String(dayTimes.startTime.hours).padStart(2, '0')}:${String(dayTimes.startTime.minutes || 0).padStart(2, '0')}`;
+                } else {
+                    startTimeStr = '09:00'; // Default
+                }
+                
+                if (typeof dayTimes.endTime === 'string') {
+                    endTimeStr = dayTimes.endTime;
+                } else if (dayTimes.endTime?.hours !== undefined) {
+                    endTimeStr = `${String(dayTimes.endTime.hours).padStart(2, '0')}:${String(dayTimes.endTime.minutes || 0).padStart(2, '0')}`;
+                } else {
+                    endTimeStr = '17:00'; // Default
+                }
+            } else {
+                // If the data is in some other format, we need to extract the date and times
+                debugLog('MBA5asdt3f4321 - Unexpected date format', dateItem);
+                throw new Error('Unexpected date format');
+            }
+            
+            // Convert to UTC
             const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                 dateStr,
-                data.times.startTime,
+                startTimeStr,
                 'US/Mountain'
             );
 
             const { date: utcEndDate, time: utcEndTime } = convertToUTC(
                 dateStr,
-                data.times.endTime,
+                endTimeStr,
                 'US/Mountain'
             );
 

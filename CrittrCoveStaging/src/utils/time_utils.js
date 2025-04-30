@@ -385,15 +385,51 @@ export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
 export const formatDateForAPI = (date) => {
   if (!date) return null;
   
-  // If date is a string, convert to Date object
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  debugLog('MBA12345 formatDateForAPI input:', date, typeof date);
   
-  // Format as YYYY-MM-DD
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const day = String(dateObj.getDate()).padStart(2, '0');
+  let dateObj;
   
-  return `${year}-${month}-${day}`;
+  try {
+    // If date is already a string in YYYY-MM-DD format, return as is
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      debugLog('MBA12345 formatDateForAPI: already in YYYY-MM-DD format:', date);
+      return date;
+    }
+    
+    // If date is an object with date, startTime, and endTime properties, it's a date item
+    if (typeof date === 'object' && date.date && date.startTime && date.endTime) {
+      debugLog('MBA12345 formatDateForAPI: extracting date from date item:', date.date);
+      return date.date;
+    }
+    
+    // If date is a Date object
+    if (date instanceof Date) {
+      dateObj = date;
+      debugLog('MBA12345 formatDateForAPI: using Date object');
+    } else {
+      // Otherwise, try to create a Date from whatever was passed in
+      dateObj = new Date(date);
+      debugLog('MBA12345 formatDateForAPI: created Date from input:', dateObj);
+    }
+    
+    // Check if the date is valid
+    if (isNaN(dateObj.getTime())) {
+      debugLog('MBA12345 formatDateForAPI: invalid date:', date);
+      throw new Error('Invalid date format');
+    }
+    
+    // Format as YYYY-MM-DD
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    
+    const formattedDate = `${year}-${month}-${day}`;
+    debugLog('MBA12345 formatDateForAPI result:', formattedDate);
+    return formattedDate;
+  } catch (error) {
+    debugLog('MBA12345 formatDateForAPI error:', error, 'for input:', date);
+    throw error;
+  }
 };
 
 /**

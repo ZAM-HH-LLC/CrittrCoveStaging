@@ -62,6 +62,28 @@ const TimeSelectionCard = ({
       console.log('MBA12345 Updated overnight times:', currentTimes);
     }
     setTimes(currentTimes);
+    
+    // If we're showing individual days, we need to also update individualTimeRanges
+    if (showIndividualDays && dateRange) {
+      // Get all dates in range
+      const { startDate, endDate } = dateRange;
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const newTimeRanges = { ...individualTimeRanges };
+        
+        // Update every date with the new default time
+        const current = new Date(start);
+        while (current <= end) {
+          const dateKey = current.toISOString().split('T')[0];
+          newTimeRanges[dateKey] = { ...currentTimes };
+          current.setDate(current.getDate() + 1);
+        }
+        
+        setIndividualTimeRanges(newTimeRanges);
+      }
+    }
+    
     onTimeSelect(currentTimes);
   };
 
@@ -88,8 +110,16 @@ const TimeSelectionCard = ({
     };
     setIndividualTimeRanges(newTimeRanges);
     
+    // When individual days are selected, we pass the entire object with date keys
+    // to the parent component, so it can use these times when creating occurrences
+    const timesWithIndividualDays = {
+      ...times, // Keep default times
+      ...newTimeRanges, // Add individual day times
+      hasIndividualTimes: true // Flag to indicate we're using individual times
+    };
+    
     // Send all time ranges to parent
-    onTimeSelect(newTimeRanges);
+    onTimeSelect(timesWithIndividualDays);
   };
 
   // Initialize times with proper format
@@ -110,8 +140,25 @@ const TimeSelectionCard = ({
         console.log('MBA12345 Initializing times:', formattedTimes);
       }
       setTimes(formattedTimes);
+      
+      // Initialize individual time ranges if we have a date range
+      if (dateRange && dateRange.startDate && dateRange.endDate) {
+        const startDate = new Date(dateRange.startDate);
+        const endDate = new Date(dateRange.endDate);
+        const newTimeRanges = {};
+        
+        // Set default times for each date in the range
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          const dateKey = current.toISOString().split('T')[0];
+          newTimeRanges[dateKey] = { ...formattedTimes };
+          current.setDate(current.getDate() + 1);
+        }
+        
+        setIndividualTimeRanges(newTimeRanges);
+      }
     }
-  }, [initialTimes]);
+  }, [initialTimes, dateRange]);
 
   const handlePresetSelect = (preset) => {
     let newTimes = {};
@@ -194,6 +241,56 @@ const TimeSelectionCard = ({
     );
   };
 
+  const handleToggleIndividualDays = () => {
+    const newShowIndividualDays = !showIndividualDays;
+    setShowIndividualDays(newShowIndividualDays);
+    
+    if (newShowIndividualDays) {
+      // Switching to individual days - initialize if needed
+      if (Object.keys(individualTimeRanges).length === 0 && dateRange) {
+        const { startDate, endDate } = dateRange;
+        if (startDate && endDate) {
+          const newTimeRanges = {};
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          
+          // Initialize all days with the default time
+          const current = new Date(start);
+          while (current <= end) {
+            const dateKey = current.toISOString().split('T')[0];
+            newTimeRanges[dateKey] = { ...times };
+            current.setDate(current.getDate() + 1);
+          }
+          
+          setIndividualTimeRanges(newTimeRanges);
+          
+          // Notify parent with individual day structure
+          const timesWithIndividualDays = {
+            ...times,
+            ...newTimeRanges,
+            hasIndividualTimes: true
+          };
+          onTimeSelect(timesWithIndividualDays);
+        }
+      } else if (dateRange) {
+        // Already have individual time ranges, just notify parent
+        const timesWithIndividualDays = {
+          ...times,
+          ...individualTimeRanges,
+          hasIndividualTimes: true
+        };
+        onTimeSelect(timesWithIndividualDays);
+      }
+    } else {
+      // Switching back to default time range
+      // Just send the default times without individual days
+      onTimeSelect({
+        ...times,
+        hasIndividualTimes: false
+      });
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -212,7 +309,7 @@ const TimeSelectionCard = ({
           <View style={[styles.customizeButtonContainer, { zIndex: 1 }]}>
             <TouchableOpacity 
               style={styles.customizeButton}
-              onPress={() => setShowIndividualDays(!showIndividualDays)}
+              onPress={handleToggleIndividualDays}
             >
               <MaterialIcons name="schedule" size={20} color={theme.colors.mainColors.main} />
               <Text style={[styles.customizeButtonText]}>
