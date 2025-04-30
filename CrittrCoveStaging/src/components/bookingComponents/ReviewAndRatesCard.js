@@ -23,6 +23,8 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expandedRates, setExpandedRates] = useState(new Set());
+  const [editingOccurrenceId, setEditingOccurrenceId] = useState(null);
+  const [occurrenceEdits, setOccurrenceEdits] = useState({});
 
   useEffect(() => {
     debugLog('MBA54321 ReviewAndRatesCard received bookingData:', bookingData);
@@ -85,33 +87,50 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       debugLog('MBA66777 Saving rate changes:', editedRates);
       debugLog('MBA66777 Using bookingId:', bookingId);
       
-      // Create the occurrence object with updated rates for the API
-      const firstOccurrence = bookingData.occurrences[0];
-      const occurrenceForApi = {
-        occurrence_id: firstOccurrence.occurrence_id,
-        rates: {
-          base_rate: parseFloat(editedRates.base_rate),
-          additional_animal_rate: parseFloat(editedRates.additional_animal_rate || 0),
-          applies_after: parseInt(editedRates.applies_after || 1),
-          holiday_rate: parseFloat(editedRates.holiday_rate || 0)
+      // Create occurrences array for API with all occurrences
+      const occurrencesForApi = bookingData.occurrences.map((occ, index) => {
+        // For the first occurrence (the one being edited in this case), update its rates
+        if (index === 0) {
+          return {
+            occurrence_id: occ.occurrence_id,
+            rates: {
+              base_rate: parseFloat(editedRates.base_rate),
+              additional_animal_rate: parseFloat(editedRates.additional_animal_rate || 0),
+              applies_after: parseInt(editedRates.applies_after || 1),
+              holiday_rate: parseFloat(editedRates.holiday_rate || 0),
+              additional_rates: editedRates.additional_rates && editedRates.additional_rates.length > 0 
+                ? editedRates.additional_rates.map(rate => ({
+                    title: rate.name || rate.title,
+                    amount: parseFloat(rate.amount),
+                    description: rate.description || `Additional rate`
+                  }))
+                : []
+            }
+          };
         }
-      };
+        // For other occurrences, keep them as they are
+        return {
+          occurrence_id: occ.occurrence_id,
+          rates: {
+            base_rate: parseFloat(occ.rates.base_rate),
+            additional_animal_rate: parseFloat(occ.rates.additional_animal_rate || 0),
+            applies_after: parseInt(occ.rates.applies_after || 1),
+            holiday_rate: parseFloat(occ.rates.holiday_rate || 0),
+            additional_rates: (occ.rates.additional_rates || []).map(rate => ({
+              title: rate.name || rate.title,
+              amount: parseFloat(rate.amount),
+              description: rate.description || ''
+            }))
+          }
+        };
+      });
       
-      // Add additional rates if present
-      if (editedRates.additional_rates && editedRates.additional_rates.length > 0) {
-        occurrenceForApi.rates.additional_rates = editedRates.additional_rates.map(rate => ({
-          title: rate.name || rate.title,
-          amount: parseFloat(rate.amount),
-          description: rate.description || `Additional rate`
-        }));
-      } else {
-        occurrenceForApi.rates.additional_rates = [];
-      }
+      debugLog('MBA66777 Sending all occurrences to API:', occurrencesForApi);
       
       // Call the API to update rates using the bookingId prop
       const response = await updateBookingDraftRates(
         bookingId, 
-        [occurrenceForApi]
+        occurrencesForApi
       );
       
       debugLog('MBA66777 Rate update API response:', response);
@@ -160,27 +179,48 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
         description: newRate.description || `Additional rate`
       });
       
-      // Create the occurrence object for the API
-      const firstOccurrence = bookingData.occurrences[0];
-      const occurrenceForApi = {
-        occurrence_id: firstOccurrence.occurrence_id,
-        rates: {
-          base_rate: parseFloat(updatedRates.base_rate),
-          additional_animal_rate: parseFloat(updatedRates.additional_animal_rate || 0),
-          applies_after: parseInt(updatedRates.applies_after || 1),
-          holiday_rate: parseFloat(updatedRates.holiday_rate || 0),
-          additional_rates: updatedRates.additional_rates.map(rate => ({
-            title: rate.name || rate.title,
-            amount: parseFloat(rate.amount),
-            description: rate.description || `Additional rate`
-          }))
+      // Create occurrences array for API with all occurrences
+      const occurrencesForApi = bookingData.occurrences.map((occ, index) => {
+        // For the first occurrence (the one being edited in this case), update its rates with the new rate
+        if (index === 0) {
+          return {
+            occurrence_id: occ.occurrence_id,
+            rates: {
+              base_rate: parseFloat(updatedRates.base_rate),
+              additional_animal_rate: parseFloat(updatedRates.additional_animal_rate || 0),
+              applies_after: parseInt(updatedRates.applies_after || 1),
+              holiday_rate: parseFloat(updatedRates.holiday_rate || 0),
+              additional_rates: updatedRates.additional_rates.map(rate => ({
+                title: rate.name || rate.title,
+                amount: parseFloat(rate.amount),
+                description: rate.description || `Additional rate`
+              }))
+            }
+          };
         }
-      };
+        // For other occurrences, keep them as they are
+        return {
+          occurrence_id: occ.occurrence_id,
+          rates: {
+            base_rate: parseFloat(occ.rates.base_rate),
+            additional_animal_rate: parseFloat(occ.rates.additional_animal_rate || 0),
+            applies_after: parseInt(occ.rates.applies_after || 1),
+            holiday_rate: parseFloat(occ.rates.holiday_rate || 0),
+            additional_rates: (occ.rates.additional_rates || []).map(rate => ({
+              title: rate.name || rate.title,
+              amount: parseFloat(rate.amount),
+              description: rate.description || ''
+            }))
+          }
+        };
+      });
+      
+      debugLog('MBA66777 Sending all occurrences with new rate to API:', occurrencesForApi);
       
       // Call the API to update rates using the bookingId prop
       const response = await updateBookingDraftRates(
         bookingId, 
-        [occurrenceForApi]
+        occurrencesForApi
       );
       
       debugLog('MBA66777 New rate added API response:', response);
@@ -269,27 +309,48 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       updatedAdditionalRates.splice(index, 1);
       updatedRates.additional_rates = updatedAdditionalRates;
       
-      // Create the occurrence object for the API
-      const firstOccurrence = bookingData.occurrences[0];
-      const occurrenceForApi = {
-        occurrence_id: firstOccurrence.occurrence_id,
-        rates: {
-          base_rate: parseFloat(updatedRates.base_rate),
-          additional_animal_rate: parseFloat(updatedRates.additional_animal_rate || 0),
-          applies_after: parseInt(updatedRates.applies_after || 1),
-          holiday_rate: parseFloat(updatedRates.holiday_rate || 0),
-          additional_rates: updatedRates.additional_rates.map(rate => ({
-            title: rate.name || rate.title,
-            amount: parseFloat(rate.amount),
-            description: rate.description || `Additional rate`
-          }))
+      // Create occurrences array for API with all occurrences
+      const occurrencesForApi = bookingData.occurrences.map((occ, occIndex) => {
+        // For the first occurrence (the one being edited in this case), update its rates with the updated rates
+        if (occIndex === 0) {
+          return {
+            occurrence_id: occ.occurrence_id,
+            rates: {
+              base_rate: parseFloat(updatedRates.base_rate),
+              additional_animal_rate: parseFloat(updatedRates.additional_animal_rate || 0),
+              applies_after: parseInt(updatedRates.applies_after || 1),
+              holiday_rate: parseFloat(updatedRates.holiday_rate || 0),
+              additional_rates: updatedRates.additional_rates.map(rate => ({
+                title: rate.name || rate.title,
+                amount: parseFloat(rate.amount),
+                description: rate.description || `Additional rate`
+              }))
+            }
+          };
         }
-      };
+        // For other occurrences, keep them as they are
+        return {
+          occurrence_id: occ.occurrence_id,
+          rates: {
+            base_rate: parseFloat(occ.rates.base_rate),
+            additional_animal_rate: parseFloat(occ.rates.additional_animal_rate || 0),
+            applies_after: parseInt(occ.rates.applies_after || 1),
+            holiday_rate: parseFloat(occ.rates.holiday_rate || 0),
+            additional_rates: (occ.rates.additional_rates || []).map(rate => ({
+              title: rate.name || rate.title,
+              amount: parseFloat(rate.amount),
+              description: rate.description || ''
+            }))
+          }
+        };
+      });
+      
+      debugLog('MBA66777 Sending all occurrences with updated rates to API:', occurrencesForApi);
       
       // Call the API to update rates using the bookingId prop
       const response = await updateBookingDraftRates(
         bookingId, 
-        [occurrenceForApi]
+        occurrencesForApi
       );
       
       debugLog('MBA66777 Rate deleted API response:', response);
@@ -309,6 +370,103 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     } catch (err) {
       debugLog('MBA66777 Error deleting rate:', err);
       setError('Failed to delete rate. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditOccurrence = (occurrence) => {
+    setEditingOccurrenceId(occurrence.occurrence_id);
+    setExpandedRates(new Set([occurrence.occurrence_id]));
+    setOccurrenceEdits({
+      base_rate: occurrence.rates.base_rate,
+      additional_animal_rate: occurrence.rates.additional_animal_rate,
+      applies_after: occurrence.rates.applies_after,
+      holiday_rate: occurrence.rates.holiday_rate,
+      additional_rates: occurrence.rates.additional_rates?.map(r => ({
+        name: r.name || r.title,
+        amount: r.amount,
+        description: r.description || ''
+      })) || []
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingOccurrenceId(null);
+    setOccurrenceEdits({});
+  };
+
+  const handleOccurrenceInputChange = (field, value) => {
+    setOccurrenceEdits(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleAdditionalRateChange = (index, field, value) => {
+    setOccurrenceEdits(prev => {
+      const updated = [...(prev.additional_rates || [])];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, additional_rates: updated };
+    });
+  };
+
+  const handleSaveOccurrenceRates = async (occurrence) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Create a list of occurrences to send to the API
+      const occurrencesForApi = bookingData.occurrences.map(occ => {
+        // For the occurrence being edited, update its rates
+        if (occ.occurrence_id === occurrence.occurrence_id) {
+          return {
+            occurrence_id: occurrence.occurrence_id,
+            rates: {
+              base_rate: parseFloat(occurrenceEdits.base_rate),
+              additional_animal_rate: parseFloat(occurrenceEdits.additional_animal_rate || 0),
+              applies_after: parseInt(occurrenceEdits.applies_after || 1),
+              holiday_rate: parseFloat(occurrenceEdits.holiday_rate || 0),
+              additional_rates: (occurrenceEdits.additional_rates || []).map(rate => ({
+                title: rate.name,
+                amount: parseFloat(rate.amount),
+                description: rate.description || ''
+              }))
+            }
+          };
+        }
+        // For other occurrences, keep them as they are
+        return {
+          occurrence_id: occ.occurrence_id,
+          rates: {
+            base_rate: parseFloat(occ.rates.base_rate),
+            additional_animal_rate: parseFloat(occ.rates.additional_animal_rate || 0),
+            applies_after: parseInt(occ.rates.applies_after || 1),
+            holiday_rate: parseFloat(occ.rates.holiday_rate || 0),
+            additional_rates: (occ.rates.additional_rates || []).map(rate => ({
+              title: rate.name || rate.title,
+              amount: parseFloat(rate.amount),
+              description: rate.description || ''
+            }))
+          }
+        };
+      });
+      
+      debugLog('MBA54321 - Sending all occurrences to API:', occurrencesForApi);
+      
+      const response = await updateBookingDraftRates(
+        bookingId,
+        occurrencesForApi
+      );
+      
+      if (response.draft_data) {
+        if (onRatesUpdate) onRatesUpdate(response.draft_data);
+        setEditingOccurrenceId(null);
+        setOccurrenceEdits({});
+      }
+    } catch (err) {
+      debugLog('MBA54321 - Error saving occurrence rates:', err);
+      setError('Failed to update rates. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -359,17 +517,17 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                   <Text style={styles.occurrenceCost}>
                     {formatCurrency(occurrence.calculated_cost)}
                   </Text>
-                  {showEditControls && (
-                    <TouchableOpacity onPress={() => {
-                      setEditedRates(occurrence.rates);
-                      setIsEditMode(true);
-                    }}>
-                      <MaterialCommunityIcons 
-                        name="pencil" 
-                        size={20} 
-                        color={theme.colors.mainColors.main} 
-                      />
+                  {/* Edit/Cancel Button - moved here, only one icon */}
+                  {editingOccurrenceId === occurrence.occurrence_id ? (
+                    <TouchableOpacity onPress={handleCancelEdit}>
+                      <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
                     </TouchableOpacity>
+                  ) : (
+                    showEditControls && (
+                      <TouchableOpacity onPress={() => handleEditOccurrence(occurrence)}>
+                        <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
+                      </TouchableOpacity>
+                    )
                   )}
                 </View>
 
@@ -400,45 +558,138 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                   <View style={styles.ratesBreakdown}>
                     {/* Base Rate */}
                     <View style={styles.rateItem}>
-                      <View>
-                        <Text style={styles.rateLabel}>Base Rate ({occurrence.rates.unit_of_time})</Text>
-                        <Text style={styles.breakdownCalculation}>
-                          {formatCurrency(occurrence.rates.base_rate)} × {occurrence.multiple} = {formatCurrency(occurrence.base_total)}
-                        </Text>
-                      </View>
-                      <Text style={styles.rateAmount}>{formatCurrency(occurrence.base_total)}</Text>
+                      {editingOccurrenceId === occurrence.occurrence_id ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <Text style={styles.rateLabel}>Base Rate ({occurrence.rates.unit_of_time})</Text>
+                          <TextInput
+                            style={{ 
+                              width: 80, 
+                              borderWidth: 1,
+                              borderColor: theme.colors.border,
+                              borderRadius: 4,
+                              padding: 8
+                            }}
+                            keyboardType="numeric"
+                            value={occurrenceEdits.base_rate?.toString() || ''}
+                            onChangeText={v => handleOccurrenceInputChange('base_rate', v)}
+                          />
+                        </View>
+                      ) : (
+                        <View>
+                          <Text style={styles.rateLabel}>Base Rate ({occurrence.rates.unit_of_time})</Text>
+                          <Text style={styles.breakdownCalculation}>
+                            {formatCurrency(occurrence.rates.base_rate)} × {occurrence.multiple} = {formatCurrency(occurrence.base_total)}
+                          </Text>
+                        </View>
+                      )}
+                      {editingOccurrenceId === occurrence.occurrence_id ? null : (
+                        <Text style={styles.rateAmount}>{formatCurrency(occurrence.base_total)}</Text>
+                      )}
                     </View>
 
                     {/* Additional Animal Rate */}
                     {occurrence.rates?.additional_animal_rate && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) && (
                       <View style={styles.rateItem}>
-                        <Text style={styles.rateLabel}>
-                          Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
-                        </Text>
-                        <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.additional_animal_rate)}</Text>
+                        {editingOccurrenceId === occurrence.occurrence_id ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <Text style={styles.rateLabel}>
+                              Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
+                            </Text>
+                            <TextInput
+                              style={{ 
+                                width: 80, 
+                                borderWidth: 1,
+                                borderColor: theme.colors.border,
+                                borderRadius: 4,
+                                padding: 8
+                              }}
+                              keyboardType="numeric"
+                              value={occurrenceEdits.additional_animal_rate?.toString() || ''}
+                              onChangeText={v => handleOccurrenceInputChange('additional_animal_rate', v)}
+                            />
+                          </View>
+                        ) : (
+                          <Text style={styles.rateLabel}>
+                            Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
+                          </Text>
+                        )}
+                        {editingOccurrenceId === occurrence.occurrence_id ? null : (
+                          <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.additional_animal_rate)}</Text>
+                        )}
                       </View>
                     )}
 
                     {/* Holiday Rate */}
                     {occurrence.rates?.holiday_rate && occurrence.rates?.holiday_days !== 0 && (
                       <View style={styles.rateItem}>
-                        <Text style={styles.rateLabel}>Holiday Rate</Text>
-                        <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.holiday_rate)}</Text>
+                        {editingOccurrenceId === occurrence.occurrence_id ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <Text style={styles.rateLabel}>Holiday Rate</Text>
+                            <TextInput
+                              style={{ 
+                                width: 80, 
+                                borderWidth: 1,
+                                borderColor: theme.colors.border,
+                                borderRadius: 4,
+                                padding: 8
+                              }}
+                              keyboardType="numeric"
+                              value={occurrenceEdits.holiday_rate?.toString() || ''}
+                              onChangeText={v => handleOccurrenceInputChange('holiday_rate', v)}
+                            />
+                          </View>
+                        ) : (
+                          <Text style={styles.rateLabel}>Holiday Rate</Text>
+                        )}
+                        {editingOccurrenceId === occurrence.occurrence_id ? null : (
+                          <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.holiday_rate)}</Text>
+                        )}
                       </View>
                     )}
 
                     {/* Additional Rates */}
                     {occurrence.rates?.additional_rates?.map((rate, rateIndex) => (
                       <View key={rateIndex} style={styles.rateItem}>
-                        <View>
-                          <Text style={styles.rateLabel}>{rate.title}</Text>
-                          {rate.description && (
-                            <Text style={styles.rateDescription}>{rate.description}</Text>
-                          )}
-                        </View>
-                        <Text style={styles.rateAmount}>{formatCurrency(rate.amount)}</Text>
+                        {editingOccurrenceId === occurrence.occurrence_id ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <Text style={styles.rateLabel}>{rate.title}</Text>
+                            <TextInput
+                              style={{ 
+                                width: 80, 
+                                borderWidth: 1,
+                                borderColor: theme.colors.border,
+                                borderRadius: 4,
+                                padding: 8
+                              }}
+                              keyboardType="numeric"
+                              value={occurrenceEdits.additional_rates?.[rateIndex]?.amount?.toString() || ''}
+                              onChangeText={v => handleAdditionalRateChange(rateIndex, 'amount', v)}
+                            />
+                          </View>
+                        ) : (
+                          <View>
+                            <Text style={styles.rateLabel}>{rate.title}</Text>
+                            {rate.description && (
+                              <Text style={styles.rateDescription}>{rate.description}</Text>
+                            )}
+                          </View>
+                        )}
+                        {editingOccurrenceId === occurrence.occurrence_id ? null : (
+                          <Text style={styles.rateAmount}>{formatCurrency(rate.amount)}</Text>
+                        )}
                       </View>
                     ))}
+
+                    {/* Save button for edit mode */}
+                    {editingOccurrenceId === occurrence.occurrence_id && (
+                      <TouchableOpacity 
+                        style={[styles.saveButton, {alignSelf: 'flex-end', marginTop: 16, marginBottom: 8}]} 
+                        onPress={() => handleSaveOccurrenceRates(occurrence)}
+                        disabled={isLoading}
+                      >
+                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
 
@@ -503,16 +754,32 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
           <View style={styles.breakdownSection}>
             <View style={styles.dateHeader}>
               <View style={styles.dateTextContainer}>
-                <Text style={styles.dateText}>{formattedDateRange}</Text>
+                <Text style={styles.dateText}>
+                  {formatDateTimeRangeFromUTC({
+                    startDate: occurrence.start_date,
+                    startTime: occurrence.start_time,
+                    endDate: occurrence.end_date,
+                    endTime: occurrence.end_time,
+                    userTimezone: userTimezone,
+                    includeTimes: true,
+                    includeTimezone: true
+                  })}
+                </Text>
               </View>
-              {showEditControls && (
-                <TouchableOpacity onPress={toggleEditMode}>
-                  <MaterialCommunityIcons 
-                    name={isEditMode ? "content-save" : "pencil"} 
-                    size={20} 
-                    color={theme.colors.mainColors.main} 
-                  />
+              <Text style={styles.occurrenceCost}>
+                {formatCurrency(occurrence.calculated_cost)}
+              </Text>
+              {/* Edit/Cancel Button - moved here, only one icon */}
+              {editingOccurrenceId === occurrence.occurrence_id ? (
+                <TouchableOpacity onPress={handleCancelEdit}>
+                  <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
                 </TouchableOpacity>
+              ) : (
+                showEditControls && (
+                  <TouchableOpacity onPress={() => handleEditOccurrence(occurrence)}>
+                    <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.mainColors.main} />
+                  </TouchableOpacity>
+                )
               )}
             </View>
             
