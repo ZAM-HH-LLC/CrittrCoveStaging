@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import TimeRangeSelector from './TimeRangeSelector';
 import { AuthContext } from '../../context/AuthContext';
+import { debugLog } from '../../context/AuthContext';
 
 const TimeSelectionCard = ({ 
   onTimeSelect,
@@ -12,9 +13,39 @@ const TimeSelectionCard = ({
   selectedService = null,
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
+  
+  // Log initial input values
+  useEffect(() => {
+    debugLog('MBA2803: TimeSelectionCard initialized with:', {
+      initialTimes,
+      dateRange,
+      selectedService
+    });
+  }, []);
+  
   const [showIndividualDays, setShowIndividualDays] = useState(false);
   const [individualTimeRanges, setIndividualTimeRanges] = useState({});
-  const [times, setTimes] = useState(initialTimes);
+  const [times, setTimes] = useState(() => {
+    // Safely initialize with default values if initialTimes is not properly formatted
+    try {
+      if (!initialTimes || typeof initialTimes !== 'object') {
+        debugLog('MBA2803: Invalid initialTimes, using defaults:', initialTimes);
+        return {
+          startTime: { hours: 9, minutes: 0 },
+          endTime: { hours: 17, minutes: 0 },
+          isOvernightForced: false
+        };
+      }
+      return initialTimes;
+    } catch (error) {
+      debugLog('MBA2803: Error initializing times:', error);
+      return {
+        startTime: { hours: 9, minutes: 0 },
+        endTime: { hours: 17, minutes: 0 },
+        isOvernightForced: false
+      };
+    }
+  });
 
   const handleOvernightTimeSelect = (type, value) => {
     if (is_DEBUG) {
@@ -127,12 +158,20 @@ const TimeSelectionCard = ({
     if (initialTimes) {
       const formattedTimes = {
         startTime: {
-          hours: initialTimes.startTime ? parseInt(initialTimes.startTime.split(':')[0]) : 9,
-          minutes: initialTimes.startTime ? parseInt(initialTimes.startTime.split(':')[1]) : 0
+          hours: typeof initialTimes.startTime === 'string' 
+            ? parseInt(initialTimes.startTime.split(':')[0]) 
+            : initialTimes.startTime?.hours || 9,
+          minutes: typeof initialTimes.startTime === 'string'
+            ? parseInt(initialTimes.startTime.split(':')[1])
+            : initialTimes.startTime?.minutes || 0
         },
         endTime: {
-          hours: initialTimes.endTime ? parseInt(initialTimes.endTime.split(':')[0]) : 17,
-          minutes: initialTimes.endTime ? parseInt(initialTimes.endTime.split(':')[1]) : 0
+          hours: typeof initialTimes.endTime === 'string'
+            ? parseInt(initialTimes.endTime.split(':')[0])
+            : initialTimes.endTime?.hours || 17,
+          minutes: typeof initialTimes.endTime === 'string'
+            ? parseInt(initialTimes.endTime.split(':')[1])
+            : initialTimes.endTime?.minutes || 0
         },
         isOvernightForced: initialTimes.isOvernightForced || false
       };
@@ -243,6 +282,13 @@ const TimeSelectionCard = ({
 
   const handleToggleIndividualDays = () => {
     const newShowIndividualDays = !showIndividualDays;
+    debugLog('MBA2803: Toggling individual days:', {
+      currentShowIndividualDays: showIndividualDays,
+      newShowIndividualDays,
+      currentTimes: times,
+      existingIndividualTimeRanges: individualTimeRanges
+    });
+    
     setShowIndividualDays(newShowIndividualDays);
     
     if (newShowIndividualDays) {
@@ -254,14 +300,38 @@ const TimeSelectionCard = ({
           const start = new Date(startDate);
           const end = new Date(endDate);
           
+          // Ensure we have properly formatted time objects 
+          const formattedTimes = {
+            startTime: {
+              hours: typeof times.startTime === 'string' 
+                ? parseInt(times.startTime.split(':')[0]) 
+                : times.startTime?.hours || 9,
+              minutes: typeof times.startTime === 'string'
+                ? parseInt(times.startTime.split(':')[1])
+                : times.startTime?.minutes || 0
+            },
+            endTime: {
+              hours: typeof times.endTime === 'string'
+                ? parseInt(times.endTime.split(':')[0])
+                : times.endTime?.hours || 17,
+              minutes: typeof times.endTime === 'string'
+                ? parseInt(times.endTime.split(':')[1])
+                : times.endTime?.minutes || 0
+            },
+            isOvernightForced: times.isOvernightForced || false
+          };
+          
+          debugLog('MBA2803: Created formatted times:', formattedTimes);
+          
           // Initialize all days with the default time
           const current = new Date(start);
           while (current <= end) {
             const dateKey = current.toISOString().split('T')[0];
-            newTimeRanges[dateKey] = { ...times };
+            newTimeRanges[dateKey] = { ...formattedTimes };
             current.setDate(current.getDate() + 1);
           }
           
+          debugLog('MBA2803: Created individual time ranges:', newTimeRanges);
           setIndividualTimeRanges(newTimeRanges);
           
           // Notify parent with individual day structure
@@ -270,6 +340,7 @@ const TimeSelectionCard = ({
             ...newTimeRanges,
             hasIndividualTimes: true
           };
+          debugLog('MBA2803: Sending time data to parent:', timesWithIndividualDays);
           onTimeSelect(timesWithIndividualDays);
         }
       } else if (dateRange) {
@@ -279,15 +350,18 @@ const TimeSelectionCard = ({
           ...individualTimeRanges,
           hasIndividualTimes: true
         };
+        debugLog('MBA2803: Sending existing individual time ranges to parent:', timesWithIndividualDays);
         onTimeSelect(timesWithIndividualDays);
       }
     } else {
       // Switching back to default time range
       // Just send the default times without individual days
-      onTimeSelect({
+      const defaultTimes = {
         ...times,
         hasIndividualTimes: false
-      });
+      };
+      debugLog('MBA2803: Switching back to default times:', defaultTimes);
+      onTimeSelect(defaultTimes);
     }
   };
 
