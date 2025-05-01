@@ -34,7 +34,9 @@ def get_conversations(request):
             other_user = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
             
             # Determine if current user is the professional
-            is_professional = conversation.role_map.get(str(current_user.user_id)) == 'professional'
+            # Check both user ID formats (prefixed and numeric) in the role map
+            is_professional = (conversation.role_map.get(str(current_user.user_id)) == 'professional' or 
+                             conversation.role_map.get(str(current_user.id)) == 'professional')
 
             # Check if the other participant is online using cache
             other_participant_online = cache.get(f"user_{other_user.id}_online", False)
