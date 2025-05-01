@@ -124,6 +124,7 @@ INSTALLED_APPS = [
     'interaction_logs',
     'error_logs',
     'engagement_logs',
+    'locations',  # New app for managing city-by-city rollout
 ]
 
 MIDDLEWARE = [

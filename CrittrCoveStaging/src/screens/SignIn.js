@@ -11,6 +11,7 @@ import { validateEmail, validatePassword } from '../validation/validation';
 import { debugLog } from '../context/AuthContext';
 import { updateTimeSettings } from '../api/API';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -21,6 +22,8 @@ export default function SignIn() {
   const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const navigation = useNavigation();
   const { signIn, is_prototype, is_DEBUG } = useContext(AuthContext);
 
@@ -170,109 +173,228 @@ export default function SignIn() {
     }
   }, []);
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Sign In</Text>
-      {is_prototype && (
-        <Text style={styles.prototypeWarning}>
-          Prototype Mode: You can sign in with anything for email and password
-        </Text>
-      )}
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={[styles.input, emailError ? styles.errorInput : null]}
-          placeholder="Email"
-          value={email}
-          onChangeText={(text) => {
-            setEmail(text);
-            setEmailError('');
-          }}
-          autoCapitalize="none"
-          onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
-        />
-        {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+      <View style={styles.card}>
+        <Text style={styles.title}>Log in</Text>
+        
+        {is_prototype && (
+          <Text style={styles.prototypeWarning}>
+            Prototype Mode: You can sign in with anything for email and password
+          </Text>
+        )}
+        
+        <View style={styles.createAccountContainer}>
+          <Text style={styles.createAccountText}>Need a CrittrCove account?</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+            <Text style={styles.createAccountLink}>Create an account</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.inputLabelContainer}>
+          <Text style={styles.inputLabel}>Username or Email</Text>
+          <TextInput
+            style={[styles.input, emailError ? styles.errorInput : null]}
+            value={email}
+            onChangeText={(text) => {
+              setEmail(text);
+              setEmailError('');
+            }}
+            autoCapitalize="none"
+            onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
+          />
+          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+        </View>
+        
+        <View style={styles.inputLabelContainer}>
+          <View style={styles.passwordLabelContainer}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <TouchableOpacity onPress={togglePasswordVisibility}>
+              <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={[styles.input, passwordError ? styles.errorInput : null]}
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              setPasswordError('');
+            }}
+            onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
+          />
+          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+        </View>
+        
+        <View style={styles.rememberMeContainer}>
+          <TouchableOpacity 
+            style={styles.checkbox} 
+            onPress={() => setRememberMe(!rememberMe)}
+          >
+            {rememberMe && (
+              <View style={styles.checkboxInner}>
+                <MaterialCommunityIcons name="check" size={14} color={theme.colors.whiteText} />
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.rememberMeText}>Keep me logged in</Text>
+        </View>
+        
+        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+          <Text style={styles.loginButtonText}>Log in</Text>
+        </TouchableOpacity>
+        
+        {loading && <ActivityIndicator size="large" color={theme.colors.primary} />}
+        {successMessage ? <Text style={styles.message}>{successMessage}</Text> : null}
+        
+        <TouchableOpacity onPress={() => navigation.navigate('ResetPassword')} style={styles.forgotPasswordContainer}>
+          <Text style={styles.link}>Forgot Password?</Text>
+        </TouchableOpacity>
       </View>
-      
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={[styles.input, passwordError ? styles.errorInput : null]}
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-          onChangeText={(text) => {
-            setPassword(text);
-            setPasswordError('');
-          }}
-          onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
-        />
-        {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-      </View>
-      
-      <CustomButton title="Login" onPress={handleLogin} />
-      {loading && <ActivityIndicator size="large" color={theme.colors.primary} />}
-      {successMessage ? <Text style={styles.message}>{successMessage}</Text> : null}
-      <TouchableOpacity onPress={() => navigation.navigate('ResetPassword')}>
-        <Text style={styles.link}>Forgot Password?</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-        <Text style={styles.link}>Sign Up</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: theme.spacing.medium,
-    backgroundColor: theme.colors.background,
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center', // Center the content horizontally
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    padding: theme.spacing.medium,
+  },
+  card: {
+    backgroundColor: theme.colors.surfaceContrast,
+    borderRadius: 8,
+    padding: theme.spacing.large * 1.5,
+    width: '100%',
+    maxWidth: 480,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   title: {
-    fontSize: theme.fontSizes.large,
+    fontSize: theme.fontSizes.extraLarge * 1.4,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: theme.spacing.medium,
+    textAlign: 'left',
+  },
+  createAccountContainer: {
+    flexDirection: 'row',
+    marginBottom: theme.spacing.large,
+  },
+  createAccountText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    marginRight: 5,
+  },
+  createAccountLink: {
+    fontSize: theme.fontSizes.medium,
     color: theme.colors.primary,
+    textDecorationLine: 'underline',
+  },
+  inputLabelContainer: {
     marginBottom: theme.spacing.medium,
   },
-  inputContainer: {
-    width: screenWidth > 600 ? 600 : '100%',
-    maxWidth: 600,
+  inputLabel: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.small,
+    fontWeight: '500',
+  },
+  passwordLabelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: theme.spacing.small,
   },
+  showHideText: {
+    color: theme.colors.primary,
+    fontSize: theme.fontSizes.smallMedium,
+  },
   input: {
-    width: '100%',
-    height: 40,
-    borderColor: 'gray',
+    height: 48,
     borderWidth: 1,
-    paddingHorizontal: theme.spacing.small,
+    borderColor: theme.colors.border,
     borderRadius: 4,
+    paddingHorizontal: theme.spacing.small * 1.5,
+    fontSize: theme.fontSizes.medium,
+    backgroundColor: theme.colors.surfaceContrast,
   },
   errorInput: {
-    borderColor: 'red',
+    borderColor: theme.colors.error,
   },
   errorText: {
-    color: 'red',
-    fontSize: 12,
+    color: theme.colors.error,
+    fontSize: theme.fontSizes.smallMedium,
     marginTop: 4,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.large,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 2,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxInner: {
+    width: 20,
+    height: 20,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rememberMeText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+  },
+  loginButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.small * 1.75,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginBottom: theme.spacing.medium,
+  },
+  loginButtonText: {
+    color: theme.colors.whiteText,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '500',
+  },
+  forgotPasswordContainer: {
+    alignItems: 'center',
+    marginTop: theme.spacing.small,
   },
   link: {
     color: theme.colors.primary,
-    marginTop: theme.spacing.small,
-    textAlign: 'center',
+    fontSize: theme.fontSizes.smallMedium,
   },
   message: {
     marginTop: theme.spacing.small,
-    color: theme.colors.primary,
-    fontSize: theme.fontSizes.medium,
+    color: theme.colors.error,
+    fontSize: theme.fontSizes.smallMedium,
+    textAlign: 'center',
   },
   prototypeWarning: {
     backgroundColor: '#FFF3CD',
     color: '#856404',
-    padding: theme.spacing.small,
+    padding: theme.spacing.small * 1.5,
     marginBottom: theme.spacing.medium,
     borderRadius: 4,
     textAlign: 'center',
-    width: screenWidth > 600 ? 600 : '100%',
-    maxWidth: 600,
   },
 });

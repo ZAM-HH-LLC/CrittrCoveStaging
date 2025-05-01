@@ -37,6 +37,9 @@ urlpatterns = [
         path('professionals/', include('professionals.urls')),
         path('professional-facilities/', include('professional_facilities.urls')),
         
+        # Location Management
+        path('locations/', include('locations.urls')),
+        
         # Pet Management
         path('pets/', include('pets.urls')),
         

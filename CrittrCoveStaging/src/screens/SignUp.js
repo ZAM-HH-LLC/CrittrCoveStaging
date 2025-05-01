@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, TextInput, Text, StyleSheet, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, TextInput, Text, StyleSheet, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import axios from 'axios';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { theme } from '../styles/theme';
@@ -8,6 +8,7 @@ import { API_BASE_URL } from '../config/config';
 import { AuthContext, debugLog } from '../context/AuthContext'; // Import AuthContext
 import { validateEmail, validateName, validatePassword, validatePasswordMatch } from '../validation/validation';
 import { verifyInvitation } from '../api/API';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -27,6 +28,20 @@ export default function SignUp() {
   const [inviteToken, setInviteToken] = useState(null);
   const [inviteVerified, setInviteVerified] = useState(false);
   const [verifyingInvite, setVerifyingInvite] = useState(false);
+  
+  // Location state
+  const [location, setLocation] = useState('');
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [locations, setLocations] = useState([]);
+  const [loadingLocations, setLoadingLocations] = useState(true);
+  
+  // Fallback locations in case API fails
+  const fallbackLocations = [
+    { name: 'Colorado Springs', supported: true },
+    { name: 'Denver', supported: false },
+    { name: 'Other', supported: false }
+  ];
   
   // Validation states
   const [firstNameError, setFirstNameError] = useState('');
@@ -127,8 +142,42 @@ export default function SignUp() {
     checkInvitation();
   }, [route.params, route.name]);
 
+  // Fetch supported locations from backend
+  useEffect(() => {
+    const fetchLocations = async () => {
+      setLoadingLocations(true);
+      try {
+        // Fetch locations from backend
+        const response = await axios.get(`${API_BASE_URL}/api/locations/v1/supported/`);
+        debugLog('MBA6789: Locations fetched from backend', response.data);
+        
+        if (response.data && Array.isArray(response.data.locations)) {
+          setLocations(response.data.locations);
+        } else {
+          // Fallback to hardcoded locations if response format is unexpected
+          debugLog('MBA6789: Using fallback locations due to unexpected response format', response.data);
+          setLocations(fallbackLocations);
+        }
+      } catch (error) {
+        debugLog('MBA6789: Error fetching locations', error);
+        // Use fallback locations if API call fails
+        setLocations(fallbackLocations);
+      } finally {
+        setLoadingLocations(false);
+      }
+    };
+    
+    fetchLocations();
+  }, []);
+
   const validateForm = () => {
     let isValid = true;
+    
+    // Validate location only if not invited
+    if (!inviteVerified && !location) {
+      setLocationError('Please select your location');
+      isValid = false;
+    }
     
     // Validate first name
     const firstNameValidation = validateName(firstName);
@@ -268,6 +317,25 @@ export default function SignUp() {
     }
   };
 
+  // Navigate to the sign in page
+  const navigateToSignIn = () => {
+    navigation.navigate('SignIn');
+  };
+
+  // Navigate to the waitlist page
+  const navigateToWaitlist = () => {
+    navigation.navigate('Waitlist');
+  };
+
+  // Handle location selection 
+  const selectLocation = (selectedLocation) => {
+    console.log("Location selected:", selectedLocation);
+    debugLog('MBA6789: Location selected', selectedLocation);
+    setLocation(selectedLocation);
+    setShowLocationDropdown(false);
+    setLocationError('');
+  };
+
   // Updated data structure to match new backend expectations
   const userData = {
     name: `${firstName.trim().charAt(0).toUpperCase() + firstName.trim().slice(1).toLowerCase()} ${lastName.trim().charAt(0).toUpperCase() + lastName.trim().slice(1).toLowerCase()}`, // Combine first and last name with first letter capitalized and all other letters lowercase
@@ -275,6 +343,7 @@ export default function SignUp() {
     password: password,
     password2: confirmPassword, // Add confirmation password
     phone_number: '', // Add empty phone number for now
+    location: inviteVerified ? 'Colorado Springs' : location, // Use default location for invited users
   };
 
   return (
@@ -284,96 +353,178 @@ export default function SignUp() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.title}>Sign Up</Text>
-        
-        {verifyingInvite && (
-          <View style={styles.inviteContainer}>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-            <Text style={styles.inviteText}>Verifying invitation...</Text>
-          </View>
-        )}
-        
-        {inviteVerified && (
-          <View style={styles.inviteContainer}>
-            <Text style={styles.inviteText}>
-              You've been invited by {inviterName}!
-            </Text>
-          </View>
-        )}
-        
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={[styles.input, firstNameError ? styles.errorInput : null]}
-            placeholder="First Name"
-            value={firstName}
-            onChangeText={(text) => {
-              setFirstName(text);
-              setFirstNameError('');
-            }}
-          />
-          {firstNameError ? <Text style={styles.errorText}>{firstNameError}</Text> : null}
+        <View style={styles.formContainer}>
+          <Text style={styles.title}>Sign Up</Text>
+          <Text style={styles.subtitle}>Sign up to continue</Text>
+          
+          {verifyingInvite && (
+            <View style={styles.inviteContainer}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={styles.inviteText}>Verifying invitation...</Text>
+            </View>
+          )}
+          
+          {inviteVerified && (
+            <View style={styles.inviteContainer}>
+              <Text style={styles.inviteText}>
+                You've been invited by {inviterName}!
+              </Text>
+            </View>
+          )}
+          
+          {/* Location Dropdown - Only show if not invited */}
+          {!inviteVerified && (
+            <View style={styles.locationContainer}>
+              <Text style={styles.label}>Where are you located?</Text>
+              {loadingLocations ? (
+                <View style={[styles.input, styles.dropdown, styles.loadingContainer]}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={styles.placeholderText}>Loading locations...</Text>
+                </View>
+              ) : (
+                <View style={styles.dropdownWrapper}>
+                  <TouchableOpacity
+                    style={[
+                      styles.input,
+                      styles.dropdown,
+                      locationError ? styles.errorInput : null
+                    ]}
+                    onPress={() => setShowLocationDropdown(!showLocationDropdown)}
+                  >
+                    <Text style={location ? styles.inputText : styles.placeholderText}>
+                      {location || 'Select your location'}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name={showLocationDropdown ? "chevron-up" : "chevron-down"}
+                      size={24}
+                      color={theme.colors.text}
+                    />
+                  </TouchableOpacity>
+                  
+                  {showLocationDropdown && (
+                    <View style={styles.dropdownMenu}>
+                      {locations.map((loc) => (
+                        <TouchableOpacity
+                          key={loc.name}
+                          style={styles.dropdownItem}
+                          onPress={() => selectLocation(loc.name)}
+                        >
+                          <Text style={styles.dropdownItemText}>
+                            {loc.name} {!loc.supported && "(Coming Soon)"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+              {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
+            </View>
+          )}
+          
+          {/* Regular form fields */}
+          {(inviteVerified || !location || locations.find(loc => loc.name === location && loc.supported)) ? (
+            <>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, firstNameError ? styles.errorInput : null]}
+                  placeholder="First Name"
+                  value={firstName}
+                  onChangeText={(text) => {
+                    setFirstName(text);
+                    setFirstNameError('');
+                  }}
+                />
+                {firstNameError ? <Text style={styles.errorText}>{firstNameError}</Text> : null}
+              </View>
+              
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, lastNameError ? styles.errorInput : null]}
+                  placeholder="Last Name"
+                  value={lastName}
+                  onChangeText={(text) => {
+                    setLastName(text);
+                    setLastNameError('');
+                  }}
+                />
+                {lastNameError ? <Text style={styles.errorText}>{lastNameError}</Text> : null}
+              </View>
+              
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, emailError ? styles.errorInput : null]}
+                  placeholder="Email"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setEmailError('');
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  editable={true}
+                />
+                {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+              </View>
+              
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, passwordError ? styles.errorInput : null]}
+                  placeholder="Password"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setPasswordError('');
+                  }}
+                  secureTextEntry
+                />
+                {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+              </View>
+              
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, confirmPasswordError ? styles.errorInput : null]}
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    setConfirmPasswordError('');
+                  }}
+                  secureTextEntry
+                />
+                {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
+              </View>
+              
+              <CustomButton title="Sign Up" onPress={handleSignUp} style={styles.signupButton} />
+            </>
+          ) : (
+            /* Show waitlist button if unsupported location is selected */
+            <View style={styles.waitlistContainer}>
+              <Text style={styles.waitlistMessage}>
+                CrittrCove isn't available in {location} yet, but we're expanding soon!
+              </Text>
+              <Text style={styles.waitlistSubMessage}>
+                Join our waitlist to be notified when we launch in your area.
+              </Text>
+              <CustomButton
+                title="Join Waitlist"
+                onPress={navigateToWaitlist}
+                style={styles.waitlistButton}
+              />
+            </View>
+          )}
+          
+          {loading && <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />}
+          {successMessage ? <Text style={styles.message}>{successMessage}</Text> : null}
         </View>
         
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={[styles.input, lastNameError ? styles.errorInput : null]}
-            placeholder="Last Name"
-            value={lastName}
-            onChangeText={(text) => {
-              setLastName(text);
-              setLastNameError('');
-            }}
-          />
-          {lastNameError ? <Text style={styles.errorText}>{lastNameError}</Text> : null}
+        {/* Sign In Link */}
+        <View style={styles.signInContainer}>
+          <Text style={styles.signInText}>Already have an account? </Text>
+          <TouchableOpacity onPress={navigateToSignIn}>
+            <Text style={styles.signInLink}>Sign in</Text>
+          </TouchableOpacity>
         </View>
-        
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={[styles.input, emailError ? styles.errorInput : null]}
-            placeholder="Email"
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setEmailError('');
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={true}
-          />
-          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
-        </View>
-        
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={[styles.input, passwordError ? styles.errorInput : null]}
-            placeholder="Password"
-            value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              setPasswordError('');
-            }}
-            secureTextEntry
-          />
-          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-        </View>
-        
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={[styles.input, confirmPasswordError ? styles.errorInput : null]}
-            placeholder="Confirm Password"
-            value={confirmPassword}
-            onChangeText={(text) => {
-              setConfirmPassword(text);
-              setConfirmPasswordError('');
-            }}
-            secureTextEntry
-          />
-          {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
-        </View>
-        
-        <CustomButton title="Sign Up" onPress={handleSignUp} />
-        {loading && <ActivityIndicator size="large" color={theme.colors.primary} />}
-        {successMessage ? <Text style={styles.message}>{successMessage}</Text> : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -387,19 +538,40 @@ const styles = StyleSheet.create({
   scrollContainer: {
     padding: 20,
     alignItems: 'center',
-    maxWidth: 500,
+    justifyContent: 'center',
+    minHeight: '100%',
+  },
+  formContainer: {
+    backgroundColor: theme.colors.surfaceContrast,
+    padding: 30,
+    borderRadius: 10,
     width: '100%',
-    alignSelf: 'center',
+    maxWidth: 500,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   title: {
-    fontSize: 24,
+    fontSize: 32,
     color: theme.colors.text,
-    marginBottom: 20,
+    marginBottom: 8,
     fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  subtitle: {
+    color: theme.colors.text,
+    fontSize: 16,
+    marginBottom: 24,
+    textAlign: 'center',
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 15,
+    marginBottom: 16,
   },
   input: {
     width: '100%',
@@ -409,6 +581,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     paddingHorizontal: 10,
     backgroundColor: theme.colors.surface,
+    fontSize: 16,
   },
   errorInput: {
     borderColor: theme.colors.error,
@@ -442,5 +615,124 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  signupButton: {
+    marginTop: 24,
+    width: '100%',
+  },
+  loader: {
+    marginTop: 20,
+  },
+  signInContainer: {
+    flexDirection: 'row',
+    marginTop: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signInText: {
+    color: theme.colors.text,
+    fontSize: 16,
+  },
+  signInLink: {
+    color: theme.colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dropdown: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: 50,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    backgroundColor: theme.colors.surface,
+  },
+  placeholderText: {
+    color: theme.colors.placeHolderText,
+    fontSize: 16,
+  },
+  inputText: {
+    color: theme.colors.text,
+    fontSize: 16,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 1002,
+    marginTop: 4,
+    maxHeight: 200,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  dropdownItemText: {
+    color: theme.colors.text,
+    fontSize: 16,
+  },
+  label: {
+    color: theme.colors.text,
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  locationContainer: {
+    width: '100%',
+    marginBottom: 16,
+    position: 'relative',
+    zIndex: 1000,
+  },
+  dropdownWrapper: {
+    position: 'relative',
+    zIndex: 1001,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+  },
+  waitlistContainer: {
+    marginTop: 20,
+    padding: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    width: '100%',
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#e0e7ff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  waitlistMessage: {
+    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  waitlistSubMessage: {
+    color: theme.colors.text,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  waitlistButton: {
+    marginTop: 24,
+    width: '100%',
+    backgroundColor: '#6B7280',
   },
 });
