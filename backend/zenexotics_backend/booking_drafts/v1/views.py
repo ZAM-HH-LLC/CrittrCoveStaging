@@ -37,6 +37,7 @@ from core.booking_operations import (
 import pytz
 from django.utils import timezone
 from booking_drafts.serializers import OvernightBookingCalculationSerializer, UpdateRatesSerializer
+from core.tax_utils import get_state_from_address, calculate_booking_taxes
 
 logger = logging.getLogger(__name__)
 
@@ -1483,101 +1484,9 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 address_type=AddressType.SERVICE
             ).first()
             
-            # Default tax rate if no address found
-            tax_rate = Decimal('0.00')
-            state = 'CO'  # Default state
+            # Get state from address or use default
+            state = get_state_from_address(address, default_state='CO')
             
-            if address:
-                state = address.state
-                state_tax_info = STATE_TAX_RATES.get(state, {"taxable": False, "state_rate": Decimal('0.00')})
-                
-                # Check if the service is taxable in this state
-                if state_tax_info["taxable"] is True:
-                    tax_rate = Decimal(str(state_tax_info["state_rate"]))
-                elif state_tax_info["taxable"] == "service_fee_only":
-                    # Get client from the booking
-                    client = None
-                    if draft.booking:
-                        client = draft.booking.client
-                    
-                    # Determine platform fees separately for professional and client
-                    client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
-                    pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
-                    
-                    # Calculate fees
-                    client_platform_fee = (total_cost * client_platform_fee_percentage).quantize(Decimal('0.01'))
-                    pro_platform_fee = (total_cost * pro_platform_fee_percentage).quantize(Decimal('0.01'))
-                    total_platform_fee = client_platform_fee + pro_platform_fee
-                    
-                    # For DC, only the platform fee is taxed
-                    taxes = (total_platform_fee * Decimal(str(state_tax_info["state_rate"]))).quantize(Decimal('0.01'))
-                    total_client_cost = total_cost + total_platform_fee + taxes
-                    total_sitter_payout = (total_cost * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
-                    
-                    logger.info(f"MBA1234 - Using service_fee_only tax calculation for {state}. Tax rate: {state_tax_info['state_rate']}")
-                    logger.info(f"MBA1234 - Client platform fee percentage: {client_platform_fee_percentage}")
-                    logger.info(f"MBA1234 - Pro platform fee percentage: {pro_platform_fee_percentage}")
-                    logger.info(f"MBA1234 - Client platform fee: {client_platform_fee}")
-                    logger.info(f"MBA1234 - Pro platform fee: {pro_platform_fee}")
-                    logger.info(f"MBA1234 - Total platform fee: {total_platform_fee}")
-                    logger.info(f"MBA1234 - Taxes (on platform fee only): {taxes}")
-                    
-                    cost_summary = OrderedDict([
-                        ('subtotal', float(total_cost)),
-                        ('client_platform_fee', float(client_platform_fee)),
-                        ('pro_platform_fee', float(pro_platform_fee)),
-                        ('total_platform_fee', float(total_platform_fee)),
-                        ('taxes', float(taxes)),
-                        ('total_client_cost', float(total_client_cost)),
-                        ('total_sitter_payout', float(total_sitter_payout)),
-                        ('is_prorated', True),
-                        ('tax_state', state),
-                        ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
-                        ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
-                    ])
-                    
-                    # Update draft data
-                    if not draft.draft_data:
-                        draft.draft_data = {}
-
-                    draft.draft_data.update({
-                        'occurrences': [occurrence],
-                        'cost_summary': cost_summary,
-                        'nights': nights
-                    })
-
-                    # Update draft status if needed
-                    if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
-                        draft.draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
-
-                    # Save the draft
-                    draft.save()
-
-                    # Log the interaction
-                    InteractionLog.objects.create(
-                        user=request.user,
-                        action='BOOKING_DRAFT_UPDATED',
-                        target_type='BOOKING_DRAFT',
-                        target_id=str(draft_id),
-                        metadata={
-                            'draft_id': draft_id,
-                            'draft_data': draft.draft_data
-                        }
-                    )
-
-                    logger.info(f"MBA1234 - Successfully updated booking draft {draft_id}")
-                    return Response({
-                        'status': 'success',
-                        'draft_data': draft.draft_data
-                    })
-                else:
-                    # Not taxable in this state
-                    tax_rate = Decimal('0.00')
-                
-                logger.info(f"MBA1234 - Using tax rate {tax_rate} for state {state}")
-            else:
-                logger.warning(f"MBA1234 - No service address found for professional {professional.user.email}. Using default tax rate {tax_rate}")
-
             # Get client from the booking
             client = None
             if draft.booking:
@@ -1586,23 +1495,23 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             # Determine platform fees separately for professional and client
             client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
             pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
-            pro_subscription_plan = professional.user.subscription_plan
             
-            # Calculate cost summary with appropriate tax rate
+            # Calculate platform fees
             client_platform_fee = (total_cost * client_platform_fee_percentage).quantize(Decimal('0.01'))
             pro_platform_fee = (total_cost * pro_platform_fee_percentage).quantize(Decimal('0.01'))
             total_platform_fee = client_platform_fee + pro_platform_fee
             
-            taxes = ((total_cost + total_platform_fee) * tax_rate).quantize(Decimal('0.01'))
-            total_client_cost = total_cost + total_platform_fee + taxes
+            # Calculate taxes using the utility function
+            taxes = calculate_booking_taxes(state, total_cost, client_platform_fee, pro_platform_fee)
+            
+            # Calculate totals
+            total_client_cost = total_cost + client_platform_fee + taxes
             total_sitter_payout = (total_cost * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
-
-            logger.info(f"MBA1234 - Client platform fee percentage: {client_platform_fee_percentage}")
-            logger.info(f"MBA1234 - Pro platform fee percentage: {pro_platform_fee_percentage}")
-            logger.info(f"MBA1234 - Client platform fee: {client_platform_fee}")
-            logger.info(f"MBA1234 - Pro platform fee: {pro_platform_fee}")
-            logger.info(f"MBA1234 - Total platform fee: {total_platform_fee}")
-
+            
+            # Get pro subscription plan
+            pro_subscription_plan = professional.user.subscription_plan
+            
+            # Create cost summary
             cost_summary = OrderedDict([
                 ('subtotal', float(total_cost)),
                 ('client_platform_fee', float(client_platform_fee)),
@@ -1905,12 +1814,8 @@ class UpdateBookingRatesView(APIView):
                 address_type=AddressType.SERVICE
             ).first()
             
-            # Default tax rate if no address found
-            tax_rate = Decimal('0.00')
-            state = 'CO'  # Default state
-            
-            if address:
-                state = address.state
+            # Get state from address or use default
+            state = get_state_from_address(address, default_state='CO')
             
             # Get client from the booking
             client = None
@@ -1931,20 +1836,8 @@ class UpdateBookingRatesView(APIView):
             pro_platform_fee = (subtotal * pro_platform_fee_percentage).quantize(Decimal('0.01'))
             total_platform_fee = client_platform_fee + pro_platform_fee
             
-            # Calculate taxes based on state tax info
-            state_tax_info = STATE_TAX_RATES.get(state, {"taxable": False, "state_rate": Decimal('0.00')})
-            
-            if state_tax_info["taxable"] is True:
-                # Regular tax calculation (tax on everything)
-                tax_rate = Decimal(str(state_tax_info["state_rate"]))
-                taxes = (subtotal * tax_rate).quantize(Decimal('0.01'))
-            elif state_tax_info["taxable"] == "service_fee_only":
-                # For DC, only the platform fee is taxed
-                tax_rate = Decimal(str(state_tax_info["state_rate"]))
-                taxes = (total_platform_fee * tax_rate).quantize(Decimal('0.01'))
-            else:
-                # No taxes
-                taxes = Decimal('0.00')
+            # Calculate taxes using tax_utils
+            taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
             
             # Calculate totals
             total_client_cost = subtotal + client_platform_fee + taxes
@@ -1998,7 +1891,7 @@ class UpdateBookingRatesView(APIView):
                     'updated_occurrences': len(updated_occurrences),
                     'subtotal': float(subtotal),
                     'tax_state': state,
-                    'tax_rate': float(tax_rate),
+                    'taxes': float(taxes),
                     'draft_data': draft.draft_data
                 }
             )
@@ -2214,16 +2107,27 @@ class UpdateBookingDraftMultipleDaysView(APIView):
             
             subtotal = round(subtotal, 2)
 
+            # Get professional's service address for tax calculation
+            address = Address.objects.filter(
+                user=professional.user,
+                address_type=AddressType.SERVICE
+            ).first()
+            
+            # Get state from address or use default
+            state = get_state_from_address(address, default_state='CO')
+
             # Calculate platform fees using helper methods
             client = draft.booking.client if draft.booking else None
-            client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
+            client_platform_fee_percentage = 0 # TODO: fix client platform fee returning 15% when no client is found. old code: self.determine_client_platform_fee(client.user if client else None)
             pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
 
             client_platform_fee = (subtotal * client_platform_fee_percentage).quantize(Decimal('0.01'))
             pro_platform_fee = (subtotal * pro_platform_fee_percentage).quantize(Decimal('0.01'))
             total_platform_fee = client_platform_fee + pro_platform_fee
 
-            taxes = ((subtotal + total_platform_fee) * Decimal('0.08')).quantize(Decimal('0.01'))  # 8% tax
+            # Use tax_utils to calculate taxes
+            taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
+            
             total_client_cost = (subtotal + total_platform_fee + taxes).quantize(Decimal('0.01'))
             total_sitter_payout = (subtotal * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
 
@@ -2236,6 +2140,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                 ('total_client_cost', float(total_client_cost)),
                 ('total_sitter_payout', float(total_sitter_payout)),
                 ('is_prorated', True),
+                ('tax_state', state),
                 ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
                 ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
             ])

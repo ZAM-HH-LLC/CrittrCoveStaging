@@ -227,15 +227,7 @@ const SettingsPaymentsTab = ({
         description: 'No commissions, no subscriptions, no fees',
         features: ['Early signup discounts', 'Waitlist for early access', 'Unlimited connections', 'Priority support',],
         isPopular: false,
-      },
-      {
-        id: 'commission',
-        title: 'Commission Based',
-        price: '15% per booking',
-        description: 'Pay as you go',
-        features: ['Unlimited connections', 'Standard support', 'Pay only when you book'],
-        isPopular: false,
-      },
+      }
     ];
 
     if (userRole === 'professional') {
