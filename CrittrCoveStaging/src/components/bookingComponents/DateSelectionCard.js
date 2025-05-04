@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,12 @@ import {
   ScrollView,
   Dimensions,
   Modal,
+  Platform,
+  Image,
+  Animated,
 } from 'react-native';
 import { theme } from '../../styles/theme';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext, debugLog } from '../../context/AuthContext';
 
 const DateSelectionCard = ({ 
   selectedDates = [], 
@@ -47,13 +50,64 @@ const DateSelectionCard = ({
   useEffect(() => {
     if (is_DEBUG) {
       console.log('MBA54321 DateSelectionCard initialized with dates:', selectedDates);
-      console.log('MBA54321 Current booking type:', selectedBookingType);
-      console.log('MBA54321 Current date range type:', selectedDateRangeType);
-      console.log('MBA54321 Is overnight forced:', isOvernightForced);
+      console.log('MBA54321 Current booking type:', bookingType);
+      console.log('MBA54321 Current date range type:', dateRangeType);
+      console.log('MBA54321 Initial date range:', initialDateRange);
+    }
+    
+    // Set the booking type and date range type from props
+    setSelectedBookingType(isOvernightForced ? 'one-time' : bookingType);
+    setSelectedDateRangeType(dateRangeType);
+    
+    // Handle dates from draft that might be in a different format
+    if (selectedDates && selectedDates.length > 0) {
+      // Check if the dates are already Date objects or if they're objects with a date property
+      const datesArray = selectedDates.map(dateItem => {
+        if (dateItem instanceof Date) {
+          return dateItem; // Already a Date object
+        } else if (typeof dateItem === 'object' && dateItem.date) {
+          // It's a date object with a date property (from draft data)
+          // Format is typically { date: '2023-05-01', startTime: '09:00', endTime: '17:00' }
+          return new Date(dateItem.date);
+        } else {
+          // Unknown format, try to parse as date
+          return new Date(dateItem);
+        }
+      });
+      
+      setSelectedDatesList(datesArray);
+      
+      // If in date-range mode, set the range start and end dates
+      if (dateRangeType === 'date-range' && datesArray.length > 0) {
+        // Sort dates to get min and max
+        const sortedDates = [...datesArray].sort((a, b) => a - b);
+        setRangeStartDate(sortedDates[0]);
+        setDateRangeEnd(sortedDates[sortedDates.length - 1]);
+        setDatesFromRange(true);
+      }
+      
+      // Notify parent component that we have valid dates
+      if (onDateSelect) {
+        const dateData = {
+          type: bookingType,
+          dates: datesArray,
+          rangeType: dateRangeType,
+          isValid: true
+        };
+        
+        // Add range data if in date-range mode
+        if (dateRangeType === 'date-range' && datesArray.length > 0) {
+          const sortedDates = [...datesArray].sort((a, b) => a - b);
+          dateData.startDate = sortedDates[0];
+          dateData.endDate = sortedDates[sortedDates.length - 1];
+        }
+        
+        onDateSelect(dateData);
+      }
     }
   }, []);
 
-  // Initialize date range if provided
+  // Initialize date range if provided separately via initialDateRange
   useEffect(() => {
     if (initialDateRange && initialDateRange.startDate && initialDateRange.endDate && !datesFromRange) {
       const dateRange = [];
@@ -66,17 +120,17 @@ const DateSelectionCard = ({
       }
       
       setSelectedDatesList(dateRange);
-      setRangeStartDate(initialDateRange.startDate);
-      setDateRangeEnd(initialDateRange.endDate);
+      setRangeStartDate(new Date(initialDateRange.startDate));
+      setDateRangeEnd(new Date(initialDateRange.endDate));
       setDatesFromRange(true);
 
       if (onDateSelect) {
         onDateSelect({
-          type: 'one-time',
+          type: bookingType,
           dates: dateRange,
           rangeType: 'date-range',
-          startDate: initialDateRange.startDate,
-          endDate: initialDateRange.endDate,
+          startDate: new Date(initialDateRange.startDate),
+          endDate: new Date(initialDateRange.endDate),
           isValid: true
         });
       }
@@ -182,11 +236,25 @@ const DateSelectionCard = ({
   };
 
   const isDateSelected = (date) => {
-    return selectedDatesList.some(selectedDate => 
-      selectedDate.getDate() === date.getDate() && 
-      selectedDate.getMonth() === date.getMonth() && 
-      selectedDate.getFullYear() === date.getFullYear()
-    );
+    return selectedDatesList.some(selectedDate => {
+      // Ensure selectedDate is a proper Date object
+      if (!(selectedDate instanceof Date)) {
+        // Try to convert selectedDate to a Date if it's not already one
+        if (typeof selectedDate === 'string') {
+          selectedDate = new Date(selectedDate);
+        } else if (selectedDate && typeof selectedDate.date === 'string') {
+          selectedDate = new Date(selectedDate.date);
+        } else {
+          // Return false if we can't convert to a Date
+          return false;
+        }
+      }
+      
+      // Now safe to call Date methods
+      return selectedDate.getDate() === date.getDate() && 
+             selectedDate.getMonth() === date.getMonth() && 
+             selectedDate.getFullYear() === date.getFullYear();
+    });
   };
 
   const isDateInRange = (date) => {
@@ -300,11 +368,24 @@ const DateSelectionCard = ({
     let newSelectedDates;
     
     if (isAlreadySelected) {
-      newSelectedDates = selectedDatesList.filter(selectedDate => 
-        !(selectedDate.getDate() === date.getDate() && 
-          selectedDate.getMonth() === date.getMonth() && 
-          selectedDate.getFullYear() === date.getFullYear())
-      );
+      newSelectedDates = selectedDatesList.filter(selectedDate => {
+        // Ensure selectedDate is a proper Date object
+        if (!(selectedDate instanceof Date)) {
+          // Try to convert to date if needed
+          if (typeof selectedDate === 'string') {
+            selectedDate = new Date(selectedDate);
+          } else if (selectedDate && typeof selectedDate.date === 'string') {
+            selectedDate = new Date(selectedDate.date);
+          } else {
+            // Can't compare, so keep this entry
+            return true;
+          }
+        }
+        
+        return !(selectedDate.getDate() === date.getDate() && 
+                 selectedDate.getMonth() === date.getMonth() && 
+                 selectedDate.getFullYear() === date.getFullYear());
+      });
     } else {
       newSelectedDates = [...selectedDatesList, date].sort((a, b) => a - b);
     }
@@ -949,6 +1030,7 @@ const DateSelectionCard = ({
 
   return (
     <ScrollView style={styles.container}>
+      {/* TODO: Add back once recurring is implemented
       {!isOvernightForced && (
         <View style={styles.bookingTypeContainer}>
           <TouchableOpacity
@@ -976,7 +1058,7 @@ const DateSelectionCard = ({
             ]}>Recurring</Text>
           </TouchableOpacity>
         </View>
-      )}
+      )} */}
 
       {isOvernightForced ? (
         <>

@@ -1,5 +1,6 @@
 from django.shortcuts import render
 import logging
+import traceback
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -14,6 +15,8 @@ from clients.models import Client
 from bookings.constants import BookingStates
 from services.models import Service
 from booking_occurrences.models import BookingOccurrence
+from booking_summary.models import BookingSummary
+from booking_occurrence_rates.models import BookingOccurrenceRate
 from decimal import Decimal
 from collections import OrderedDict
 import json
@@ -31,7 +34,6 @@ from core.booking_operations import (
     create_occurrence_data, 
     calculate_cost_summary
 )
-import traceback
 import pytz
 from django.utils import timezone
 from booking_drafts.serializers import OvernightBookingCalculationSerializer, UpdateRatesSerializer
@@ -2550,6 +2552,178 @@ class UpdateBookingDraftRecurringView(APIView):
             logger.error(f"MBA5asdt3f4321 - Full error traceback: {traceback.format_exc()}")
             return Response(
                 {"error": f"An error occurred while updating the booking draft: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class GetBookingDraftDatesAndTimesView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+    
+    def get(self, request, draft_id):
+        logger.info(f"MBA-DEBUG: GetBookingDraftDatesAndTimesView.get called with draft_id={draft_id}")
+        logger.info(f"MBA-DEBUG: Request path: {request.path}")
+        logger.info(f"MBA-DEBUG: Request method: {request.method}")
+        logger.info(f"MBA-DEBUG: Request user: {request.user.id if request.user else 'None'}")
+        
+        try:
+            # First get the booking draft
+            logger.info(f"MBA-DEBUG: Attempting to get BookingDraft with id={draft_id}")
+            # Try multiple ways to find the draft
+            draft = None
+            
+            # Log the available field names for debugging
+            logger.info(f"MBA-DEBUG: Available fields on BookingDraft: {[f.name for f in BookingDraft._meta.get_fields()]}")
+            
+            # Try using draft_id first
+            draft = BookingDraft.objects.filter(draft_id=draft_id).first()
+            if not draft:
+                # If that fails, try using booking_id
+                logger.info(f"MBA-DEBUG: No draft found with draft_id={draft_id}, trying with booking_id")
+                draft = BookingDraft.objects.filter(booking_id=draft_id).first()
+            
+            if not draft:
+                logger.error(f"MBA-DEBUG: No BookingDraft found with id={draft_id}")
+                return Response(
+                    {"error": "Booking draft not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+                
+            logger.info(f"MBA-DEBUG: Successfully found draft with draft_id={draft.draft_id}")
+            logger.info(f"MBA-DEBUG: Draft data: {draft.draft_data}")
+            
+            # Extract data directly from the draft_data JSON field
+            draft_data = draft.draft_data
+            
+            # Initialize response data with default values
+            response_data = {
+                "dates": [],
+                "times": {},
+                "date_range_type": "multiple-days",  # Default
+                "booking_type": "one-time",          # Default
+                "date_range": None,
+            }
+            
+            # Check if we have occurrences in the draft data
+            if "occurrences" in draft_data and draft_data["occurrences"]:
+                logger.info(f"MBA-DEBUG: Found {len(draft_data['occurrences'])} occurrences in draft data")
+                
+                occurrences = draft_data["occurrences"]
+                dates = []
+                times = {}
+                
+                # Extract service type to determine if it's an overnight service
+                is_overnight = False
+                if "service_details" in draft_data:
+                    service_data = draft_data["service_details"]
+                    service_type = service_data.get("service_type", "")
+                    
+                    # Check if it's an overnight service
+                    is_overnight = any(keyword in service_type.lower() for keyword in ["overnight", "boarding", "house sit"])
+                    logger.info(f"MBA-DEBUG: Service type is '{service_type}', is_overnight: {is_overnight}")
+                
+                # Process occurrences into dates and times
+                for occurrence in occurrences:
+                    start_date = occurrence["start_date"]
+                    end_date = occurrence["end_date"]
+                    start_time = occurrence["start_time"]
+                    end_time = occurrence["end_time"]
+                    
+                    logger.info(f"MBA-DEBUG: Processing occurrence: {start_date} - {end_date}, {start_time} - {end_time}")
+                    
+                    # Add to dates array
+                    dates.append({
+                        "date": start_date,
+                        "startTime": start_time,
+                        "endTime": end_time
+                    })
+                    
+                    # Store time info
+                    times[start_date] = {
+                        "startTime": start_time,
+                        "endTime": end_time
+                    }
+                
+                # Determine if all dates are consecutive
+                if len(dates) > 1:
+                    # Sort dates by start_date
+                    sorted_dates = sorted(dates, key=lambda x: x["date"])
+                    
+                    # Check if dates are consecutive
+                    all_consecutive = True
+                    for i in range(1, len(sorted_dates)):
+                        prev_date = datetime.strptime(sorted_dates[i-1]["date"], "%Y-%m-%d").date()
+                        curr_date = datetime.strptime(sorted_dates[i]["date"], "%Y-%m-%d").date()
+                        
+                        if (curr_date - prev_date).days != 1:
+                            all_consecutive = False
+                            break
+                    
+                    logger.info(f"MBA-DEBUG: All dates consecutive: {all_consecutive}")
+                    
+                    # Set date_range_type based on whether dates are consecutive
+                    if all_consecutive:
+                        response_data["date_range_type"] = "date-range"
+                        
+                        # Create date range
+                        if len(sorted_dates) > 0:
+                            response_data["date_range"] = {
+                                "startDate": sorted_dates[0]["date"],
+                                "endDate": sorted_dates[-1]["date"]
+                            }
+                    else:
+                        response_data["date_range_type"] = "multiple-days"
+                
+                # For overnight services with a date range, set the hasIndividualTimes flag based on service type
+                if is_overnight and response_data["date_range_type"] == "date-range":
+                    times["hasIndividualTimes"] = False
+                elif response_data["date_range_type"] == "multiple-days" or not is_overnight:
+                    times["hasIndividualTimes"] = True
+                
+                # Set the response data
+                response_data["dates"] = dates
+                response_data["times"] = times
+                
+                # Add occurrence data
+                response_data["occurrences"] = occurrences
+                
+                # Add cost summary if available
+                if "cost_summary" in draft_data:
+                    response_data["cost_summary"] = draft_data["cost_summary"]
+                
+                # If we have service details with is_overnight, use that
+                if "service_details" in draft_data:
+                    service_data = draft_data["service_details"]
+                    service_type = service_data.get("service_type", "")
+                    
+                    # Add isOvernightForced to times
+                    if not times.get("hasIndividualTimes", False):
+                        times["isOvernightForced"] = is_overnight
+                    
+                    # Add service info to response
+                    response_data["service"] = {
+                        "service_id": service_data.get("service_id"),
+                        "service_name": service_type,
+                        "is_overnight": is_overnight
+                    }
+                
+                logger.info(f"MBA-DEBUG: Final response data: {response_data}")
+            else:
+                logger.info(f"MBA-DEBUG: No occurrences found in draft data, returning empty data")
+            
+            logger.info(f"MBA-DEBUG: Returning successful response with status 200")
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Booking.DoesNotExist:
+            logger.error(f"MBA-DEBUG: Booking associated with draft {draft_id} not found")
+            return Response(
+                {"error": "Booking associated with this draft not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"MBA-DEBUG: Unhandled error in GetBookingDraftDatesAndTimesView: {e}")
+            logger.error(f"MBA-DEBUG: Traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

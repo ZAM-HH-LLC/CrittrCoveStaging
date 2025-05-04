@@ -618,4 +618,206 @@ export const formatDateTimeRangeFromUTC = ({
     console.error('MBA134njo0vh02c23 Error in formatDateTimeRangeFromUTC:', error);
     return '';
   }
+};
+
+/**
+ * Converts a time string from UTC to local timezone, handling date boundary changes
+ * @param {string} dateStr - Date in "YYYY-MM-DD" format 
+ * @param {string} timeStr - Time in "HH:MM" format (24-hour)
+ * @param {string} timezone - User's timezone
+ * @returns {Object} Object with time (hours/minutes) and adjusted date if it changed
+ */
+function convertTimeFromUTC(dateStr, timeStr, timezone = 'US/Mountain') {
+  try {
+    // Create a full UTC datetime string
+    const utcDate = `${dateStr}T${timeStr}:00Z`;
+    
+    // Convert to local timezone using moment-timezone
+    const utcMoment = moment.utc(utcDate);
+    const localMoment = utcMoment.tz(timezone);
+    
+    // Extract hours and minutes
+    const hours = localMoment.hours();
+    const minutes = localMoment.minutes();
+    
+    // Check if the date changed during conversion
+    const localDateStr = localMoment.format('YYYY-MM-DD');
+    const dateChanged = localDateStr !== dateStr;
+    
+    debugLog('MBA2j3kbr9hve4: Time conversion details:', {
+      utc: {
+        date: dateStr,
+        time: timeStr,
+        fullDateTime: utcDate
+      },
+      local: {
+        date: localDateStr,
+        time: `${hours}:${minutes}`,
+        fullDateTime: localMoment.format(),
+        dateChanged
+      }
+    });
+    
+    return {
+      hours,
+      minutes,
+      adjustedDate: dateChanged ? localDateStr : null
+    };
+  } catch (error) {
+    debugLog('MBA2j3kbr9hve4: Error converting time from UTC:', error);
+    
+    // Return the UTC time parsed directly as fallback
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return {
+      hours: hours || 0,
+      minutes: minutes || 0,
+      adjustedDate: null
+    };
+  }
+}
+
+/**
+ * Parses occurrences from the backend API into the format expected by DateSelectionCard and TimeSelectionCard
+ * @param {Array} occurrences - Array of occurrence objects from the API
+ * @returns {Object} Object containing formatted dates and times
+ */
+export const parseOccurrencesForBookingSteps = (occurrences) => {
+  debugLog('MBA2j3kbr9hve4: Parsing occurrences for booking steps:', occurrences);
+  
+  if (!occurrences || !Array.isArray(occurrences) || occurrences.length === 0) {
+    debugLog('MBA2j3kbr9hve4: No occurrences to parse');
+    return {
+      dates: [],
+      dateRange: null,
+      individualTimes: {},
+      defaultTimes: { startTime: { hours: 9, minutes: 0 }, endTime: { hours: 17, minutes: 0 } }
+    };
+  }
+  
+  // 1. Extract all unique dates and create Date objects
+  const uniqueDates = new Set();
+  const individualTimes = {};
+  
+  // Sort occurrences by date to ensure we get the correct start/end for date range
+  const sortedOccurrences = [...occurrences].sort((a, b) => {
+    return new Date(a.start_date) - new Date(b.start_date);
+  });
+  
+  debugLog('MBA2j3kbr9hve4: Sorted occurrences:', sortedOccurrences);
+  
+  // User's timezone - use Mountain Time as default
+  const userTimezone = 'US/Mountain';
+  
+  // Process each occurrence
+  sortedOccurrences.forEach(occurrence => {
+    const { start_date, end_date, start_time, end_time } = occurrence;
+    
+    if (!start_date || !start_time || !end_time) {
+      debugLog('MBA2j3kbr9hve4: Invalid occurrence data, missing required fields:', occurrence);
+      return;
+    }
+    
+    // Convert UTC times to local timezone, accounting for date boundary changes
+    const localStartTime = convertTimeFromUTC(start_date, start_time, userTimezone);
+    const localEndTime = convertTimeFromUTC(end_date || start_date, end_time, userTimezone);
+    
+    // Determine the actual local date to use, accounting for timezone adjustments
+    const actualStartDate = localStartTime.adjustedDate || start_date;
+    const actualEndDate = localEndTime.adjustedDate || (end_date || start_date);
+    
+    debugLog('MBA2j3kbr9hve4: Converted times with date adjustments:', {
+      utc: { 
+        startDate: start_date, 
+        startTime: start_time,
+        endDate: end_date || start_date,
+        endTime: end_time
+      },
+      local: { 
+        startDate: actualStartDate,
+        startTime: localStartTime,
+        endDate: actualEndDate,
+        endTime: localEndTime
+      }
+    });
+    
+    // Add the adjusted dates to uniqueDates set
+    uniqueDates.add(actualStartDate);
+    
+    // If end date is different and not the same as start date, add it too
+    if (actualEndDate !== actualStartDate) {
+      uniqueDates.add(actualEndDate);
+    }
+    
+    // Create time objects for the TimeSelectionCard using the actual local date as key
+    individualTimes[actualStartDate] = {
+      startTime: {
+        hours: localStartTime.hours,
+        minutes: localStartTime.minutes
+      },
+      endTime: {
+        hours: localEndTime.hours,
+        minutes: localEndTime.minutes
+      },
+      isOvernightForced: actualStartDate !== actualEndDate
+    };
+  });
+  
+  // 2. Create the dates array from the set of unique dates
+  const dates = Array.from(uniqueDates).map(dateStr => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  });
+  
+  // Log the parsed dates to ensure they're correct
+  debugLog('MBA2j3kbr9hve4: Parsed dates after timezone adjustment:', dates.map(d => d.toISOString().split('T')[0]));
+  
+  // 3. Create the date range
+  let dateRange = null;
+  if (dates.length > 0) {
+    // Sort dates to ensure correct order
+    const sortedDates = [...dates].sort((a, b) => a - b);
+    
+    // Create a proper date range with JavaScript Date objects
+    dateRange = {
+      startDate: sortedDates[0],
+      endDate: sortedDates[sortedDates.length - 1]
+    };
+    
+    debugLog('MBA2j3kbr9hve4: Created date range after timezone adjustment:', {
+      startDate: dateRange.startDate.toISOString().split('T')[0],
+      endDate: dateRange.endDate.toISOString().split('T')[0]
+    });
+  }
+  
+  // 4. Get default times from the first occurrence if available
+  let defaultTimes = {
+    startTime: { hours: 9, minutes: 0 }, // Default fallback
+    endTime: { hours: 17, minutes: 0 }    // Default fallback
+  };
+  
+  if (Object.keys(individualTimes).length > 0) {
+    // Use the first converted time as the default
+    const firstDateKey = Object.keys(individualTimes)[0];
+    defaultTimes = {
+      startTime: individualTimes[firstDateKey].startTime,
+      endTime: individualTimes[firstDateKey].endTime
+    };
+  }
+  
+  const result = {
+    dates,
+    dateRange,
+    individualTimes,
+    defaultTimes,
+    allTimesAreTheSame: Object.keys(individualTimes).length <= 1 || 
+      Object.values(individualTimes).every(timeObj => 
+        timeObj.startTime.hours === defaultTimes.startTime.hours &&
+        timeObj.startTime.minutes === defaultTimes.startTime.minutes &&
+        timeObj.endTime.hours === defaultTimes.endTime.hours &&
+        timeObj.endTime.minutes === defaultTimes.endTime.minutes
+      )
+  };
+  
+  debugLog('MBA2j3kbr9hve4: Parsed result with timezone adjustments:', result);
+  return result;
 }; 

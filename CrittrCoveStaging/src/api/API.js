@@ -1167,3 +1167,35 @@ export const getUnreadMessageCount = async () => {
     return { unread_count: 0, unread_conversations: 0 };
   }
 };
+
+/**
+ * Gets the dates and times for a booking draft
+ * @param {string} draftId - The ID of the draft
+ * @returns {Promise<Object>} - Draft dates and times data
+ */
+export const getBookingDraftDatesAndTimes = async (draftId) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    debugLog('MBA9876: Fetching booking draft dates and times:', draftId);
+    
+    const response = await axios.get(
+      `${API_BASE_URL}/api/booking_drafts/v1/${draftId}/dates_and_times/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA9876: Draft dates and times fetched successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA9876: Error fetching booking draft dates and times:', error);
+    throw error;
+  }
+};
