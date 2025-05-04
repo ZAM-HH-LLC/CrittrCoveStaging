@@ -1,93 +1,21 @@
 
 RUNNING TESTS
 
-Test #1:
-API Response from /api/professionals/v1/dashboard/:
--------------
-{
-    "upcoming_bookings": [
-        {
-            "booking_id": 441,
-            "client_name": "matt aertker",
-            "start_date": "2025-03-04",
-            "start_time": "09:00:00",
-            "service_type": "Ferrier",
-            "pets": [
-                {
-                    "pet_id": 227,
-                    "name": "Opal",
-                    "species": "DOG",
-                    "breed": "Golden"
-                }
-            ]
-        },
-        {
-            "booking_id": 440,
-            "client_name": "matt aertker",
-            "start_date": "2025-02-01",
-            "start_time": "15:06:17",
-            "service_type": "Ferrier",
-            "pets": [
-                {
-                    "pet_id": 227,
-                    "name": "Opal",
-                    "species": "DOG",
-                    "breed": "Golden"
-                }
-            ]
-        }
-    ]
-}
-
 Test Results For Get Pro Dashboard:
 -------------
 
 ----------------------------------------------------------------------
-Ran 6 tests in 0.457s - OK (PASS)
+Ran 9 tests in 0.008s - OK (PASS)
 
 
 
 RUNNING TESTS
 
-Test #2:
-API Response from /api/bookings/v1/:
--------------
-{
-    "bookings": {
-        "professional_bookings": [
-            {
-                "booking_id": 449,
-                "client_name": "matt aertker",
-                "professional_name": "Test Pro",
-                "service_name": "Ferrier",
-                "start_date": "2025-03-04",
-                "start_time": "09:00:00",
-                "total_client_cost": 0.0,
-                "total_sitter_payout": 0.0,
-                "status": "Confirmed"
-            },
-            {
-                "booking_id": 448,
-                "client_name": "matt aertker",
-                "professional_name": "Test Pro",
-                "service_name": "Ferrier",
-                "start_date": "2025-02-01",
-                "start_time": "15:06:17",
-                "total_client_cost": 0.0,
-                "total_sitter_payout": 0.0,
-                "status": "Confirmed"
-            }
-        ],
-        "client_bookings": []
-    },
-    "next_page": null
-}
-
 Test Results For Get All Bookings For user:
 -------------
 
 ----------------------------------------------------------------------
-Ran 6 tests in 0.457s - OK (PASS)
+Ran 9 tests in 0.008s - OK (PASS)
 
 
 
@@ -97,6 +25,6 @@ Test Results For Get Professional Services:
 -------------
 
 ----------------------------------------------------------------------
-Ran 6 tests in 0.457s - OK (PASS)
+Ran 9 tests in 0.008s - OK (PASS)
 
 

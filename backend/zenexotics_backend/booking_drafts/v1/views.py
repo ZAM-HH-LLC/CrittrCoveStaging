@@ -38,6 +38,7 @@ import pytz
 from django.utils import timezone
 from booking_drafts.serializers import OvernightBookingCalculationSerializer, UpdateRatesSerializer
 from core.tax_utils import get_state_from_address, calculate_booking_taxes
+from core.platform_fee_utils import calculate_platform_fees
 
 logger = logging.getLogger(__name__)
 
@@ -1487,19 +1488,36 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             # Get state from address or use default
             state = get_state_from_address(address, default_state='CO')
             
-            # Get client from the booking
+            # Get client from the booking or draft data
             client = None
-            if draft.booking:
+            client_user = None
+            
+            # First try to get client from booking
+            if draft.booking and draft.booking.client:
                 client = draft.booking.client
+                client_user = client.user if client else None
+                logger.info(f"MBA1234 - Found client from booking: {client.id if client else 'None'}")
+            # If not in booking, try to get from draft data
+            elif draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
+                try:
+                    client_id = draft.draft_data['client_id']
+                    client = Client.objects.get(id=client_id)
+                    client_user = client.user if client else None
+                    logger.info(f"MBA1234 - Found client from draft data: {client.id if client else 'None'}")
+                except (Client.DoesNotExist, Exception) as e:
+                    logger.error(f"MBA1234 - Error retrieving client from draft data: {str(e)}")
             
-            # Determine platform fees separately for professional and client
-            client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
-            pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
+            # Add debug log to see what client user we're passing
+            logger.info(f"MBA1234 - Client user being passed to platform_fees: {client_user.id if client_user else 'None'}")
             
-            # Calculate platform fees
-            client_platform_fee = (total_cost * client_platform_fee_percentage).quantize(Decimal('0.01'))
-            pro_platform_fee = (total_cost * pro_platform_fee_percentage).quantize(Decimal('0.01'))
-            total_platform_fee = client_platform_fee + pro_platform_fee
+            # Use the new platform fee utility to calculate fees
+            platform_fees = calculate_platform_fees(total_cost, client_user, professional.user)
+            
+            client_platform_fee = platform_fees['client_platform_fee']
+            pro_platform_fee = platform_fees['pro_platform_fee']
+            total_platform_fee = platform_fees['total_platform_fee']
+            client_platform_fee_percentage = platform_fees['client_platform_fee_percentage']
+            pro_platform_fee_percentage = platform_fees['pro_platform_fee_percentage']
             
             # Calculate taxes using the utility function
             taxes = calculate_booking_taxes(state, total_cost, client_platform_fee, pro_platform_fee)
@@ -1569,125 +1587,6 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 {"error": f"An error occurred while updating the booking draft: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-    def determine_client_platform_fee(self, client_user):
-        """
-        Determine the platform fee percentage for the client based on their subscription plan.
-        
-        Client platform fee rules by subscription plan:
-        - Plan 0 (Free tier): Fee = 0% if first booking this month, else 15%
-        - Plan 1 (Waitlist tier): Fee = 0% (unlimited free bookings)
-        - Plan 2 (Commission tier): Fee = 15%
-        - Plan 3 (Pro subscription): Fee = 15% (follows commission tier rule)
-        - Plan 4 (Client subscription): Fee = 0%
-        - Plan 5 (Dual subscription): Fee = 0% (no platform fees ever)
-        
-        Returns:
-        - Decimal value of platform fee percentage (0.15 or 0.0)
-        """
-        # Default platform fee percentage
-        platform_fee = Decimal('0.15')  # 15%
-        
-        # If we're missing a client user, default to the standard fee
-        if not client_user:
-            logger.warning("MBA1234 - No client user found, using default 15% platform fee")
-            return platform_fee
-        
-        # Get subscription plan
-        client_plan = client_user.subscription_plan
-        logger.info(f"MBA1234 - Client subscription plan: {client_plan}")
-        
-        # Check subscription plan for client
-        if client_plan == 5:  # Dual subscription - no platform fees ever
-            logger.info("MBA1234 - Client has Dual subscription, applying 0% platform fee")
-            return Decimal('0.0')
-            
-        if client_plan == 4:  # Client subscription - no platform fees
-            logger.info("MBA1234 - Client has Client subscription, applying 0% platform fee")
-            return Decimal('0.0')
-            
-        if client_plan == 1:  # Waitlist tier - unlimited free bookings
-            logger.info("MBA1234 - Client has Waitlist tier, applying 0% platform fee")
-            return Decimal('0.0')
-            
-        if client_plan == 0:  # Free tier - check if first booking this month
-            # Get current month start
-            today = timezone.now().date()
-            month_start = today.replace(day=1)
-            
-            # Count client's bookings this month
-            client_bookings_this_month = Booking.objects.filter(
-                client__user=client_user,
-                created_at__date__gte=month_start
-            ).count()
-            
-            logger.info(f"MBA1234 - Client bookings this month: {client_bookings_this_month}")
-            
-            # If first booking this month, no platform fee
-            if client_bookings_this_month == 0:
-                logger.info("MBA1234 - First booking this month for client, applying 0% platform fee")
-                return Decimal('0.0')
-                
-        # All other cases (plan 2, 3, or non-first booking for plan 0) - 15% platform fee
-        logger.info("MBA1234 - Client pays standard 15% platform fee")
-        return platform_fee
-        
-    def determine_professional_platform_fee(self, professional_user):
-        """
-        Determine the platform fee percentage for the professional based on their subscription plan.
-        
-        Professional platform fee rules by subscription plan:
-        - Plan 0 (Free tier): Fee = 0% if first booking this month, else 15%
-        - Plan 1 (Waitlist tier): Fee = 0% (unlimited free bookings)
-        - Plan 2 (Commission tier): Fee = 15%
-        - Plan 3 (Pro subscription): Fee = 0%
-        - Plan 4 (Client subscription): Fee = 15% (follows commission tier rule)
-        - Plan 5 (Dual subscription): Fee = 0% (no platform fees ever)
-        
-        Returns:
-        - Decimal value of platform fee percentage (0.15 or 0.0)
-        """
-        # Default platform fee percentage
-        platform_fee = Decimal('0.15')  # 15%
-        
-        # Get subscription plan
-        pro_plan = professional_user.subscription_plan
-        logger.info(f"MBA1234 - Professional subscription plan: {pro_plan}")
-        
-        # Check subscription plan for professional
-        if pro_plan == 5:  # Dual subscription - no platform fees ever
-            logger.info("MBA1234 - Professional has Dual subscription, applying 0% platform fee")
-            return Decimal('0.0')
-            
-        if pro_plan == 3:  # Pro subscription - no platform fees
-            logger.info("MBA1234 - Professional has Pro subscription, applying 0% platform fee")
-            return Decimal('0.0')
-            
-        if pro_plan == 1:  # Waitlist tier - unlimited free bookings
-            logger.info("MBA1234 - Professional has Waitlist tier, applying 0% platform fee")
-            return Decimal('0.0')
-            
-        if pro_plan == 0:  # Free tier - check if first booking this month
-            # Get current month start
-            today = timezone.now().date()
-            month_start = today.replace(day=1)
-            
-            # Count professional's bookings this month
-            pro_bookings_this_month = Booking.objects.filter(
-                professional__user=professional_user,
-                created_at__date__gte=month_start
-            ).count()
-            
-            logger.info(f"MBA1234 - Professional bookings this month: {pro_bookings_this_month}")
-            
-            # If first booking this month, no platform fee
-            if pro_bookings_this_month == 0:
-                logger.info("MBA1234 - First booking this month for professional, applying 0% platform fee")
-                return Decimal('0.0')
-                
-        # All other cases (plan 2, 4, or non-first booking for plan 0) - 15% platform fee
-        logger.info("MBA1234 - Professional pays standard 15% platform fee")
-        return platform_fee
 
 class UpdateBookingRatesView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1817,24 +1716,41 @@ class UpdateBookingRatesView(APIView):
             # Get state from address or use default
             state = get_state_from_address(address, default_state='CO')
             
-            # Get client from the booking
-            client = None
-            if draft.booking:
-                client = draft.booking.client
-            
             # Calculate cost summary based on updated occurrences
             subtotal = Decimal('0')
             for occ in updated_occurrences:
                 subtotal += Decimal(str(occ['calculated_cost']))
             
-            # Determine platform fees separately for professional and client
-            client_platform_fee_percentage = self.determine_client_platform_fee(client.user if client else None)
-            pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
+            # Get client from the booking or draft data
+            client = None
+            client_user = None
             
-            # Calculate fees
-            client_platform_fee = (subtotal * client_platform_fee_percentage).quantize(Decimal('0.01'))
-            pro_platform_fee = (subtotal * pro_platform_fee_percentage).quantize(Decimal('0.01'))
-            total_platform_fee = client_platform_fee + pro_platform_fee
+            # First try to get client from booking
+            if draft.booking and draft.booking.client:
+                client = draft.booking.client
+                client_user = client.user if client else None
+                logger.info(f"MBA98765 - Found client from booking: {client.id if client else 'None'}")
+            # If not in booking, try to get from draft data
+            elif draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
+                try:
+                    client_id = draft.draft_data['client_id']
+                    client = Client.objects.get(id=client_id)
+                    client_user = client.user if client else None
+                    logger.info(f"MBA98765 - Found client from draft data: {client.id if client else 'None'}")
+                except (Client.DoesNotExist, Exception) as e:
+                    logger.error(f"MBA98765 - Error retrieving client from draft data: {str(e)}")
+            
+            # Add debug log to see what client user we're passing
+            logger.info(f"MBA98765 - Client user being passed to platform_fees: {client_user.id if client_user else 'None'}")
+            
+            # Use the new platform fee utility to calculate platform fees
+            platform_fees = calculate_platform_fees(subtotal, client_user, professional.user)
+            
+            client_platform_fee = platform_fees['client_platform_fee']
+            pro_platform_fee = platform_fees['pro_platform_fee']
+            total_platform_fee = platform_fees['total_platform_fee']
+            client_platform_fee_percentage = platform_fees['client_platform_fee_percentage']
+            pro_platform_fee_percentage = platform_fees['pro_platform_fee_percentage']
             
             # Calculate taxes using tax_utils
             taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
@@ -1909,88 +1825,6 @@ class UpdateBookingRatesView(APIView):
                 {"error": f"An error occurred while updating booking rates: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            
-    def determine_client_platform_fee(self, client_user):
-        """Determine the platform fee percentage for a client"""
-        # Default to 15% if no client user
-        if not client_user:
-            logger.info("MBA98765 - No client user found, using default 15% platform fee")
-            return Decimal('0.15')
-        
-        # Check if the client has a subscription
-        try:
-            # Access the subscription_plan attribute directly from user model
-            subscription_plan = client_user.subscription_plan
-            logger.info(f"MBA98765 - Client subscription plan: {subscription_plan}")
-            
-            # Check subscription plan for client
-            if subscription_plan == 5:  # Dual subscription - no platform fees
-                logger.info("MBA98765 - Client has Dual subscription, applying 0% platform fee")
-                return Decimal('0.0')
-                
-            if subscription_plan == 4:  # Client subscription - reduced platform fees
-                logger.info("MBA98765 - Client has Client subscription, applying 5% platform fee")
-                return Decimal('0.05')
-                
-            if subscription_plan == 1:  # Waitlist tier - unlimited free bookings
-                logger.info("MBA98765 - Client has Waitlist tier, applying 0% platform fee")
-                return Decimal('0.0')
-                
-            if subscription_plan == 0:  # Free tier - check if first booking this month
-                # Get current month start
-                today = timezone.now().date()
-                month_start = today.replace(day=1)
-                
-                # Count client's bookings this month
-                client_bookings_this_month = Booking.objects.filter(
-                    client__user=client_user,
-                    created_at__date__gte=month_start
-                ).count()
-                
-                logger.info(f"MBA98765 - Client bookings this month: {client_bookings_this_month}")
-                
-                # If first booking this month, no platform fee
-                if client_bookings_this_month == 0:
-                    logger.info("MBA98765 - First booking this month for client, applying 0% platform fee")
-                    return Decimal('0.0')
-        except Exception as e:
-            # Log the error
-            logger.error(f"MBA98765 - Error getting client subscription plan: {str(e)}")
-        
-        # All other cases - standard 15% platform fee
-        logger.info("MBA98765 - Client pays standard 15% platform fee")
-        return Decimal('0.15')
-    
-    def determine_professional_platform_fee(self, professional_user):
-        """Determine the platform fee percentage for a professional"""
-        # Default to 0% pro fee
-        pro_fee = Decimal('0.00')
-        
-        # Check if the professional has an active subscription
-        try:
-            # Access the subscription_plan attribute directly from user model
-            subscription_plan = professional_user.subscription_plan
-            logger.info(f"MBA98765 - Professional subscription plan: {subscription_plan}")
-            
-            # Free tier (plan 0) and waitlist tier (plan 1) have 0% fee
-            if subscription_plan == 0 or subscription_plan == 1:
-                logger.info(f"MBA98765 - Professional has subscription plan {subscription_plan}, applying 0% fee")
-                pro_fee = Decimal('0.00')
-            # Commission tier (plan 2) has 15% fee
-            elif subscription_plan == 2:
-                logger.info(f"MBA98765 - Professional has subscription plan {subscription_plan}, applying 15% fee")
-                pro_fee = Decimal('0.15')
-            # Pro tiers (plans 3, 4, ...) have 0% fee
-            else:
-                logger.info(f"MBA98765 - Professional has subscription plan {subscription_plan}, applying 0% fee")
-                pro_fee = Decimal('0.00')
-        except Exception as e:
-            # Log the error
-            logger.error(f"MBA98765 - Error getting subscription plan: {str(e)}")
-            # Default to 15% if there's an error accessing subscription
-            pro_fee = Decimal('0.15')
-        
-        return pro_fee
 
 class UpdateBookingDraftMultipleDaysView(APIView):
     permission_classes = [IsAuthenticated]
@@ -2116,14 +1950,36 @@ class UpdateBookingDraftMultipleDaysView(APIView):
             # Get state from address or use default
             state = get_state_from_address(address, default_state='CO')
 
-            # Calculate platform fees using helper methods
-            client = draft.booking.client if draft.booking else None
-            client_platform_fee_percentage = 0 # TODO: fix client platform fee returning 15% when no client is found. old code: self.determine_client_platform_fee(client.user if client else None)
-            pro_platform_fee_percentage = self.determine_professional_platform_fee(professional.user)
-
-            client_platform_fee = (subtotal * client_platform_fee_percentage).quantize(Decimal('0.01'))
-            pro_platform_fee = (subtotal * pro_platform_fee_percentage).quantize(Decimal('0.01'))
-            total_platform_fee = client_platform_fee + pro_platform_fee
+            # Get client from the booking or draft data
+            client = None
+            client_user = None
+            
+            # First try to get client from booking
+            if draft.booking and draft.booking.client:
+                client = draft.booking.client
+                client_user = client.user if client else None
+                logger.info(f"MBA5321 - Found client from booking: {client.id if client else 'None'}")
+            # If not in booking, try to get from draft data
+            elif draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
+                try:
+                    client_id = draft.draft_data['client_id']
+                    client = Client.objects.get(id=client_id)
+                    client_user = client.user if client else None
+                    logger.info(f"MBA5321 - Found client from draft data: {client.id if client else 'None'}")
+                except (Client.DoesNotExist, Exception) as e:
+                    logger.error(f"MBA5321 - Error retrieving client from draft data: {str(e)}")
+            
+            # Add debug log to see what client user we're passing
+            logger.info(f"MBA5321 - Client user being passed to platform_fees: {client_user.id if client_user else 'None'}")
+            
+            # Use the new platform fee utility to calculate platform fees
+            platform_fees = calculate_platform_fees(subtotal, client_user, professional.user)
+            
+            client_platform_fee = platform_fees['client_platform_fee']
+            pro_platform_fee = platform_fees['pro_platform_fee']
+            total_platform_fee = platform_fees['total_platform_fee']
+            client_platform_fee_percentage = platform_fees['client_platform_fee_percentage']
+            pro_platform_fee_percentage = platform_fees['pro_platform_fee_percentage']
 
             # Use tax_utils to calculate taxes
             taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
@@ -2206,71 +2062,6 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                 {"error": f"An error occurred while updating the booking draft: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-    def determine_client_platform_fee(self, client_user):
-        """
-        Determine the platform fee percentage for the client based on their subscription plan.
-        Returns Decimal value of platform fee percentage (0.15 or 0.0)
-        """
-        platform_fee = Decimal('0.15')
-        if not client_user:
-            logger.warning("MBA5321 - No client user found, using default 15% platform fee")
-            return platform_fee
-        client_plan = client_user.subscription_plan
-        logger.info(f"MBA5321 - Client subscription plan: {client_plan}")
-        if client_plan == 5:
-            logger.info("MBA5321 - Client has Dual subscription, applying 0% platform fee")
-            return Decimal('0.0')
-        if client_plan == 4:
-            logger.info("MBA5321 - Client has Client subscription, applying 0% platform fee")
-            return Decimal('0.0')
-        if client_plan == 1:
-            logger.info("MBA5321 - Client has Waitlist tier, applying 0% platform fee")
-            return Decimal('0.0')
-        if client_plan == 0:
-            today = timezone.now().date()
-            month_start = today.replace(day=1)
-            pro_bookings_this_month = Booking.objects.filter(
-                professional__user=client_user,
-                created_at__date__gte=month_start
-            ).count()
-            logger.info(f"MBA5321 - Professional bookings this month: {pro_bookings_this_month}")
-            if pro_bookings_this_month == 0:
-                logger.info("MBA5321 - First booking this month for professional, applying 0% platform fee")
-                return Decimal('0.0')
-        logger.info("MBA5321 - Professional pays standard 15% platform fee")
-        return platform_fee
-
-    def determine_professional_platform_fee(self, professional_user):
-        """
-        Determine the platform fee percentage for the professional based on their subscription plan.
-        Returns Decimal value of platform fee percentage (0.15 or 0.0)
-        """
-        platform_fee = Decimal('0.15')
-        pro_plan = professional_user.subscription_plan
-        logger.info(f"MBA5321 - Professional subscription plan: {pro_plan}")
-        if pro_plan == 5:
-            logger.info("MBA5321 - Professional has Dual subscription, applying 0% platform fee")
-            return Decimal('0.0')
-        if pro_plan == 3:
-            logger.info("MBA5321 - Professional has Pro subscription, applying 0% platform fee")
-            return Decimal('0.0')
-        if pro_plan == 1:
-            logger.info("MBA5321 - Professional has Waitlist tier, applying 0% platform fee")
-            return Decimal('0.0')
-        if pro_plan == 0:
-            today = timezone.now().date()
-            month_start = today.replace(day=1)
-            pro_bookings_this_month = Booking.objects.filter(
-                professional__user=professional_user,
-                created_at__date__gte=month_start
-            ).count()
-            logger.info(f"MBA5321 - Professional bookings this month: {pro_bookings_this_month}")
-            if pro_bookings_this_month == 0:
-                logger.info("MBA5321 - First booking this month for professional, applying 0% platform fee")
-                return Decimal('0.0')
-        logger.info("MBA5321 - Professional pays standard 15% platform fee")
-        return platform_fee
 
 class UpdateBookingDraftRecurringView(APIView):
     permission_classes = [IsAuthenticated]
@@ -2403,10 +2194,72 @@ class UpdateBookingDraftRecurringView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-            # Calculate cost summary
-            cost_summary = calculate_cost_summary(processed_occurrences)
-            if not cost_summary:
-                raise Exception("Failed to calculate cost summary")
+            # Calculate subtotal from all occurrences
+            subtotal = Decimal('0')
+            for occ in processed_occurrences:
+                subtotal += Decimal(str(occ.get('calculated_cost', '0')))
+            
+            # Get professional's service address for tax calculation
+            address = Address.objects.filter(
+                user=professional.user,
+                address_type=AddressType.SERVICE
+            ).first()
+            
+            # Get state from address or use default
+            state = get_state_from_address(address, default_state='CO')
+            
+            # Get client from the booking or draft data
+            client = None
+            client_user = None
+            
+            # First try to get client from booking
+            if draft.booking and draft.booking.client:
+                client = draft.booking.client
+                client_user = client.user if client else None
+                logger.info(f"MBA5asdt3f4321 - Found client from booking: {client.id if client else 'None'}")
+            # If not in booking, try to get from draft data
+            elif draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
+                try:
+                    client_id = draft.draft_data['client_id']
+                    client = Client.objects.get(id=client_id)
+                    client_user = client.user if client else None
+                    logger.info(f"MBA5asdt3f4321 - Found client from draft data: {client.id if client else 'None'}")
+                except (Client.DoesNotExist, Exception) as e:
+                    logger.error(f"MBA5asdt3f4321 - Error retrieving client from draft data: {str(e)}")
+            
+            # Add debug log to see what client user we're passing
+            logger.info(f"MBA5asdt3f4321 - Client user being passed to platform_fees: {client_user.id if client_user else 'None'}")
+            
+            # Use the new platform fee utility to calculate fees
+            platform_fees = calculate_platform_fees(subtotal, client_user, professional.user)
+            
+            client_platform_fee = platform_fees['client_platform_fee']
+            pro_platform_fee = platform_fees['pro_platform_fee']
+            total_platform_fee = platform_fees['total_platform_fee']
+            client_platform_fee_percentage = platform_fees['client_platform_fee_percentage']
+            pro_platform_fee_percentage = platform_fees['pro_platform_fee_percentage']
+            
+            # Calculate taxes using the utility function
+            taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
+            
+            # Calculate totals
+            total_client_cost = subtotal + client_platform_fee + taxes
+            total_sitter_payout = (subtotal * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
+            
+            # Create cost summary
+            cost_summary = OrderedDict([
+                ('subtotal', float(subtotal)),
+                ('client_platform_fee', float(client_platform_fee)),
+                ('pro_platform_fee', float(pro_platform_fee)),
+                ('total_platform_fee', float(total_platform_fee)),
+                ('taxes', float(taxes)),
+                ('total_client_cost', float(total_client_cost)),
+                ('total_sitter_payout', float(total_sitter_payout)),
+                ('is_prorated', True),
+                ('tax_state', state),
+                ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
+                ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
+            ])
 
             # Get current pets from draft or booking
             pets_data = []
