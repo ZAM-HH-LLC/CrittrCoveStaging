@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { theme } from '../../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -25,6 +26,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const [expandedRates, setExpandedRates] = useState(new Set());
   const [editingOccurrenceId, setEditingOccurrenceId] = useState(null);
   const [occurrenceEdits, setOccurrenceEdits] = useState({});
+  const [isAddingRateForOccurrence, setIsAddingRateForOccurrence] = useState(null);
+  const [newOccurrenceRate, setNewOccurrenceRate] = useState({ name: '', amount: '', description: '' });
+  const { width } = useWindowDimensions();
 
   useEffect(() => {
     debugLog('MBA54321 ReviewAndRatesCard received bookingData:', bookingData);
@@ -52,6 +56,15 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     }
   }, [bookingData, bookingId]);
 
+  // Log whenever either editMode or editingOccurrenceId changes
+  useEffect(() => {
+    debugLog('MBA66777 Edit state changed:', { 
+      isEditMode, 
+      editingOccurrenceId, 
+      occurrencesCount: bookingData?.occurrences?.length || 0
+    });
+  }, [isEditMode, editingOccurrenceId, bookingData?.occurrences?.length]);
+
   const formatCurrency = (amount) => {
     if (!amount) return '$0.00';
     return `$${parseFloat(amount).toFixed(2)}`;
@@ -70,9 +83,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
 
   const toggleAddRate = () => {
     setIsAddingRate(!isAddingRate);
-    if (isEditMode) {
-      setIsEditMode(false);
-    }
+    // Don't exit edit mode when adding a rate for overnight bookings
     setNewRate({ name: '', amount: '', description: '' });
   };
 
@@ -144,6 +155,8 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       }
       
       setIsEditMode(false);
+      // Also reset editingOccurrenceId to null to ensure the X turns back to a pencil
+      setEditingOccurrenceId(null);
     } catch (err) {
       debugLog('MBA66777 Error saving rate changes:', err);
       setError('Failed to update rates. Please try again.');
@@ -376,13 +389,39 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const handleEditOccurrence = (occurrence) => {
+    debugLog('MBA66777 Editing occurrence:', occurrence);
+    
+    // Set the occurrence ID being edited
     setEditingOccurrenceId(occurrence.occurrence_id);
-    setExpandedRates(new Set([occurrence.occurrence_id]));
+    
+    // For single occurrence bookings (typically overnight), also enter edit mode
+    if (bookingData.occurrences.length === 1) {
+      debugLog('MBA66777 Setting isEditMode for single occurrence booking');
+      setIsEditMode(true);
+      
+      // Make sure we have the correct rates in editedRates
+      setEditedRates({
+        base_rate: occurrence.rates.base_rate,
+        additional_animal_rate: occurrence.rates.additional_animal_rate || 0,
+        applies_after: occurrence.rates.applies_after || 1,
+        holiday_rate: occurrence.rates.holiday_rate || 0,
+        additional_rates: occurrence.rates.additional_rates?.map(r => ({
+          name: r.name || r.title,
+          amount: r.amount,
+          description: r.description || ''
+        })) || []
+      });
+    } else {
+      // For multiple occurrences, expand the rates panel
+      setExpandedRates(new Set([occurrence.occurrence_id]));
+    }
+    
+    // Set the occurrence edits for either case
     setOccurrenceEdits({
       base_rate: occurrence.rates.base_rate,
-      additional_animal_rate: occurrence.rates.additional_animal_rate,
-      applies_after: occurrence.rates.applies_after,
-      holiday_rate: occurrence.rates.holiday_rate,
+      additional_animal_rate: occurrence.rates.additional_animal_rate || 0,
+      applies_after: occurrence.rates.applies_after || 1,
+      holiday_rate: occurrence.rates.holiday_rate || 0,
       additional_rates: occurrence.rates.additional_rates?.map(r => ({
         name: r.name || r.title,
         amount: r.amount,
@@ -394,6 +433,15 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const handleCancelEdit = () => {
     setEditingOccurrenceId(null);
     setOccurrenceEdits({});
+    
+    // If we were editing a single occurrence booking, exit edit mode
+    if (bookingData.occurrences.length === 1) {
+      setIsEditMode(false);
+    }
+    
+    // Also cancel adding a rate if that was in progress
+    setIsAddingRate(false);
+    setIsAddingRateForOccurrence(null);
   };
 
   const handleOccurrenceInputChange = (field, value) => {
@@ -472,6 +520,171 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     }
   };
 
+  const toggleAddRateForOccurrence = (occurrenceId) => {
+    if (isAddingRateForOccurrence === occurrenceId) {
+      setIsAddingRateForOccurrence(null);
+    } else {
+      setIsAddingRateForOccurrence(occurrenceId);
+    }
+    setNewOccurrenceRate({ name: '', amount: '', description: '' });
+  };
+
+  const saveNewRateForOccurrence = async (occurrence) => {
+    if (!newOccurrenceRate.name || !newOccurrenceRate.amount) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Create updated occurrence edits with the new rate
+      const updatedOccurrenceEdits = { ...occurrenceEdits };
+      
+      if (!updatedOccurrenceEdits.additional_rates) {
+        updatedOccurrenceEdits.additional_rates = [];
+      }
+      
+      updatedOccurrenceEdits.additional_rates.push({
+        name: newOccurrenceRate.name,
+        amount: parseFloat(newOccurrenceRate.amount.replace(/[^0-9.]/g, '')),
+        description: newOccurrenceRate.description || `Additional rate`
+      });
+      
+      // Update state
+      setOccurrenceEdits(updatedOccurrenceEdits);
+      
+      // Call API to save the new rate
+      const occurrencesForApi = bookingData.occurrences.map(occ => {
+        // For the occurrence being edited, update its rates with the new rate
+        if (occ.occurrence_id === occurrence.occurrence_id) {
+          return {
+            occurrence_id: occurrence.occurrence_id,
+            rates: {
+              base_rate: parseFloat(updatedOccurrenceEdits.base_rate),
+              additional_animal_rate: parseFloat(updatedOccurrenceEdits.additional_animal_rate || 0),
+              applies_after: parseInt(updatedOccurrenceEdits.applies_after || 1),
+              holiday_rate: parseFloat(updatedOccurrenceEdits.holiday_rate || 0),
+              additional_rates: updatedOccurrenceEdits.additional_rates.map(rate => ({
+                title: rate.name,
+                amount: parseFloat(rate.amount),
+                description: rate.description || ''
+              }))
+            }
+          };
+        }
+        // For other occurrences, keep them as they are
+        return {
+          occurrence_id: occ.occurrence_id,
+          rates: {
+            base_rate: parseFloat(occ.rates.base_rate),
+            additional_animal_rate: parseFloat(occ.rates.additional_animal_rate || 0),
+            applies_after: parseInt(occ.rates.applies_after || 1),
+            holiday_rate: parseFloat(occ.rates.holiday_rate || 0),
+            additional_rates: (occ.rates.additional_rates || []).map(rate => ({
+              title: rate.name || rate.title,
+              amount: parseFloat(rate.amount),
+              description: rate.description || ''
+            }))
+          }
+        };
+      });
+      
+      debugLog('MBA54321 - Sending all occurrences with new rate to API:', occurrencesForApi);
+      
+      const response = await updateBookingDraftRates(
+        bookingId,
+        occurrencesForApi
+      );
+      
+      debugLog('MBA54321 - New rate added to occurrence API response:', response);
+      
+      if (response.draft_data) {
+        if (onRatesUpdate) onRatesUpdate(response.draft_data);
+      }
+      
+      // Close add rate form
+      setIsAddingRateForOccurrence(null);
+      setNewOccurrenceRate({ name: '', amount: '', description: '' });
+      
+    } catch (err) {
+      debugLog('MBA66777 Error adding new rate for occurrence:', err);
+      setError('Failed to add new rate. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteRateForOccurrence = async (occurrence, rateIndex) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Create updated occurrence edits with the rate removed
+      const updatedOccurrenceEdits = { ...occurrenceEdits };
+      
+      if (updatedOccurrenceEdits.additional_rates && updatedOccurrenceEdits.additional_rates.length > rateIndex) {
+        // Remove the rate at the specified index
+        updatedOccurrenceEdits.additional_rates.splice(rateIndex, 1);
+        
+        // Update state
+        setOccurrenceEdits(updatedOccurrenceEdits);
+        
+        // Call API to save the updated rates
+        const occurrencesForApi = bookingData.occurrences.map(occ => {
+          // For the occurrence being edited, update its rates with the rate removed
+          if (occ.occurrence_id === occurrence.occurrence_id) {
+            return {
+              occurrence_id: occurrence.occurrence_id,
+              rates: {
+                base_rate: parseFloat(updatedOccurrenceEdits.base_rate),
+                additional_animal_rate: parseFloat(updatedOccurrenceEdits.additional_animal_rate || 0),
+                applies_after: parseInt(updatedOccurrenceEdits.applies_after || 1),
+                holiday_rate: parseFloat(updatedOccurrenceEdits.holiday_rate || 0),
+                additional_rates: updatedOccurrenceEdits.additional_rates.map(rate => ({
+                  title: rate.name,
+                  amount: parseFloat(rate.amount),
+                  description: rate.description || ''
+                }))
+              }
+            };
+          }
+          // For other occurrences, keep them as they are
+          return {
+            occurrence_id: occ.occurrence_id,
+            rates: {
+              base_rate: parseFloat(occ.rates.base_rate),
+              additional_animal_rate: parseFloat(occ.rates.additional_animal_rate || 0),
+              applies_after: parseInt(occ.rates.applies_after || 1),
+              holiday_rate: parseFloat(occ.rates.holiday_rate || 0),
+              additional_rates: (occ.rates.additional_rates || []).map(rate => ({
+                title: rate.name || rate.title,
+                amount: parseFloat(rate.amount),
+                description: rate.description || ''
+              }))
+            }
+          };
+        });
+        
+        debugLog('MBA54321 - Sending all occurrences with rate deleted to API:', occurrencesForApi);
+        
+        const response = await updateBookingDraftRates(
+          bookingId,
+          occurrencesForApi
+        );
+        
+        debugLog('MBA54321 - Rate deleted from occurrence API response:', response);
+        
+        if (response.draft_data) {
+          if (onRatesUpdate) onRatesUpdate(response.draft_data);
+        }
+      }
+    } catch (err) {
+      debugLog('MBA66777 Error deleting rate for occurrence:', err);
+      setError('Failed to delete rate. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const renderBookingBreakdown = () => {
     debugLog('MBAio3htg5uohg: Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
     const occurrences = bookingData?.occurrences;
@@ -491,11 +704,6 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
         <View style={[styles.section, { marginTop: showEditControls ? 24 : 0 }]}>
           <View style={styles.sectionHeaderContainer}>
             <Text style={styles.sectionHeader}>Booking Breakdown</Text>
-            {showEditControls && (
-              <TouchableOpacity onPress={toggleAddRate}>
-                <Text style={styles.addRateText}>+ Add Rate</Text>
-              </TouchableOpacity>
-            )}
           </View>
           <View style={[styles.card, { paddingTop: 16 }]}>
             {occurrences.map((occurrence, index) => {
@@ -667,37 +875,211 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                       )}
 
                       {/* Additional Rates */}
-                      {occurrence.rates?.additional_rates?.map((rate, rateIndex) => (
-                        <View key={rateIndex} style={styles.rateItem}>
-                          {editingOccurrenceId === occurrence.occurrence_id ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                              <Text style={styles.rateLabel}>{rate.title}</Text>
-                              <TextInput
-                                style={{ 
-                                  width: 80, 
-                                  borderWidth: 1,
-                                  borderColor: theme.colors.border,
-                                  borderRadius: 4,
-                                  padding: 8
-                                }}
-                                keyboardType="numeric"
-                                value={occurrenceEdits.additional_rates?.[rateIndex]?.amount?.toString() || ''}
-                                onChangeText={v => handleAdditionalRateChange(rateIndex, 'amount', v)}
-                              />
-                            </View>
-                          ) : (
-                            <View>
-                              <Text style={styles.rateLabel}>{rate.title}</Text>
-                              {rate.description && (
-                                <Text style={styles.rateDescription}>{rate.description}</Text>
+                      {((isEditMode ? editedRates?.additional_rates : occurrence.rates?.additional_rates) || []).length > 0 ? 
+                        ((isEditMode ? editedRates?.additional_rates : occurrence.rates?.additional_rates) || []).map((rate, index) => (
+                          <View key={index} style={styles.breakdownItem}>
+                            <View style={styles.breakdownLabelContainer}>
+                              {isEditMode || editingOccurrenceId === occurrence.occurrence_id ? (
+                                width < 600 ? (
+                                  // Mobile layout - stacked with trash icon on the right
+                                  <View style={{ width: '100%' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      <TextInput
+                                        style={[styles.nameInput, { flex: 1, marginRight: 8 }]}
+                                        value={editingOccurrenceId === occurrence.occurrence_id ? 
+                                          (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
+                                          rate.name || rate.title}
+                                        onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                          handleAdditionalRateChange(index, 'name', value) : 
+                                          updateAdditionalRate(index, 'name', value)}
+                                        placeholder="Rate Name"
+                                      />
+                                      <TouchableOpacity 
+                                        style={styles.deleteButton} 
+                                        onPress={() => editingOccurrenceId === occurrence.occurrence_id ? 
+                                          deleteRateForOccurrence(occurrence, index) : 
+                                          deleteAdditionalRate(index)}
+                                      >
+                                        <MaterialCommunityIcons 
+                                          name="trash-can-outline" 
+                                          size={22} 
+                                          color={theme.colors.error} 
+                                        />
+                                      </TouchableOpacity>
+                                    </View>
+                                    <View style={{ marginTop: 8 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={{ marginRight: 8 }}>Amount: $</Text>
+                                        <TextInput
+                                          style={{ 
+                                            width: 80, 
+                                            borderWidth: 1,
+                                            borderColor: theme.colors.border,
+                                            borderRadius: 4,
+                                            padding: 8
+                                          }}
+                                          keyboardType="numeric"
+                                          value={rate.amount?.toString() || '0'}
+                                          onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                            handleAdditionalRateChange(index, 'amount', value) : 
+                                            updateAdditionalRate(index, 'amount', value)}
+                                        />
+                                      </View>
+                                    </View>
+                                  </View>
+                                ) : (
+                                  // Desktop layout - side by side
+                                  <View style={styles.editableAdditionalRateRow}>
+                                    <View style={styles.rateNameAmountRowWithDelete}>
+                                      <TextInput
+                                        style={styles.nameInput}
+                                        value={editingOccurrenceId === occurrence.occurrence_id ? 
+                                          (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
+                                          rate.name || rate.title}
+                                        onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                          handleAdditionalRateChange(index, 'name', value) : 
+                                          updateAdditionalRate(index, 'name', value)}
+                                        placeholder="Rate Name"
+                                      />
+                                      <View style={styles.amountInputContainer}>
+                                        <Text style={styles.currencySymbol}>$</Text>
+                                        <TextInput
+                                          style={styles.rateInput}
+                                          keyboardType="numeric"
+                                          value={rate.amount?.toString() || '0'}
+                                          onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                            handleAdditionalRateChange(index, 'amount', value) : 
+                                            updateAdditionalRate(index, 'amount', value)}
+                                        />
+                                      </View>
+                                    </View>
+                                    <TouchableOpacity 
+                                      style={styles.deleteButton} 
+                                      onPress={() => editingOccurrenceId === occurrence.occurrence_id ? 
+                                        deleteRateForOccurrence(occurrence, index) : 
+                                        deleteAdditionalRate(index)}
+                                    >
+                                      <MaterialCommunityIcons 
+                                        name="trash-can-outline" 
+                                        size={22} 
+                                        color={theme.colors.error} 
+                                      />
+                                    </TouchableOpacity>
+                                  </View>
+                                )
+                              ) : (
+                                <>
+                                  <Text style={styles.breakdownLabel}>{rate.name || rate.title}</Text>
+                                  <Text style={styles.breakdownCalculation}>{rate.description || "Additional Rate"}</Text>
+                                </>
                               )}
                             </View>
-                          )}
-                          {editingOccurrenceId === occurrence.occurrence_id ? null : (
-                            <Text style={styles.rateAmount}>{formatCurrency(rate.amount)}</Text>
-                          )}
-                        </View>
-                      ))}
+                            {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
+                              <Text style={styles.breakdownAmount}>+{formatCurrency(rate.amount)}</Text>
+                            )}
+                          </View>
+                        ))
+                      : null}
+                    </View>
+                  )}
+
+                  {/* Add New Rate Form for individual occurrence */}
+                  {isAddingRateForOccurrence === occurrence.occurrence_id && (
+                    <View>
+                      <View style={styles.addRateContainer}>
+                        <View style={styles.formDivider} />
+                        
+                        {width < 600 ? (
+                          // Mobile layout - stacked
+                          <View>
+                            <TextInput
+                              style={[styles.nameInput, { marginRight: 0, marginBottom: 12 }]}
+                              value={newOccurrenceRate.name}
+                              onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, name: text }))}
+                              placeholder="Rate Name"
+                              placeholderTextColor={theme.colors.placeHolderText}
+                            />
+                            <View style={[styles.amountInputContainer, { marginBottom: 12 }]}>
+                              <Text style={styles.currencySymbol}>$</Text>
+                              <TextInput
+                                style={styles.rateInput}
+                                keyboardType="numeric"
+                                value={newOccurrenceRate.amount}
+                                onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, amount: text }))}
+                                placeholder="0.00"
+                                placeholderTextColor={theme.colors.placeHolderText}
+                              />
+                            </View>
+                            <TextInput
+                              style={styles.descriptionInput}
+                              value={newOccurrenceRate.description}
+                              onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, description: text }))}
+                              placeholder="Description (optional)"
+                              placeholderTextColor={theme.colors.placeHolderText}
+                            />
+                          </View>
+                        ) : (
+                          // Desktop layout - side by side
+                          <>
+                            <View style={styles.rateNameAmountRow}>
+                              <TextInput
+                                style={styles.nameInput}
+                                value={newOccurrenceRate.name}
+                                onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, name: text }))}
+                                placeholder="Rate Name"
+                                placeholderTextColor={theme.colors.placeHolderText}
+                              />
+                              <View style={styles.amountInputContainer}>
+                                <Text style={styles.currencySymbol}>$</Text>
+                                <TextInput
+                                  style={styles.rateInput}
+                                  keyboardType="numeric"
+                                  value={newOccurrenceRate.amount}
+                                  onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, amount: text }))}
+                                  placeholder="0.00"
+                                  placeholderTextColor={theme.colors.placeHolderText}
+                                />
+                              </View>
+                            </View>
+                            
+                            <TextInput
+                              style={styles.descriptionInput}
+                              value={newOccurrenceRate.description}
+                              onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, description: text }))}
+                              placeholder="Description (optional)"
+                              placeholderTextColor={theme.colors.placeHolderText}
+                            />
+                          </>
+                        )}
+                        
+                        <View style={styles.formDivider} />
+                      </View>
+                      <View style={styles.buttonsContainer}>
+                        <TouchableOpacity style={styles.cancelButton} onPress={() => setIsAddingRateForOccurrence(null)}>
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.saveButton} onPress={() => saveNewRateForOccurrence(occurrence)}>
+                          <Text style={styles.saveButtonText}>Save New Rate</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Add Rate and Save buttons for edit mode for this occurrence */}
+                  {editingOccurrenceId === occurrence.occurrence_id && !isAddingRateForOccurrence && (
+                    <View style={styles.buttonsContainer}>
+                      <TouchableOpacity 
+                        style={styles.cancelButton} 
+                        onPress={() => toggleAddRateForOccurrence(occurrence.occurrence_id)}
+                      >
+                        <Text style={styles.cancelButtonText}>+ Add Rate</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.saveButton} 
+                        onPress={() => handleSaveOccurrenceRates(occurrence)}
+                      >
+                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
@@ -741,11 +1123,6 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       <View style={[styles.section, { marginTop: showEditControls ? 24 : 0 }]}>
         <View style={styles.sectionHeaderContainer}>
           <Text style={styles.sectionHeader}>Booking Breakdown</Text>
-          {showEditControls && (
-            <TouchableOpacity onPress={toggleAddRate}>
-              <Text style={styles.addRateText}>+ Add Rate</Text>
-            </TouchableOpacity>
-          )}
         </View>
         <View style={[styles.card, { paddingTop: 16 }]}>
           <View style={styles.breakdownSection}>
@@ -789,25 +1166,29 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                               (occurrence.rates && occurrence.rates.unit_of_time) || 
                               'Per Visit'})
                   </Text>
-                  {isEditMode ? (
+                  {isEditMode || editingOccurrenceId === occurrence.occurrence_id ? (
                     <View style={styles.amountInputContainer}>
                       <Text style={styles.currencySymbol}>$</Text>
                       <TextInput
                         style={styles.rateInput}
                         keyboardType="numeric"
-                        value={editedRates?.base_rate?.toString() || '0'}
-                        onChangeText={updateBaseRate}
+                        value={editingOccurrenceId === occurrence.occurrence_id ? 
+                          occurrenceEdits.base_rate?.toString() || '0' : 
+                          editedRates?.base_rate?.toString() || '0'}
+                        onChangeText={editingOccurrenceId === occurrence.occurrence_id ? 
+                          v => handleOccurrenceInputChange('base_rate', v) : 
+                          updateBaseRate}
                       />
                     </View>
                   ) : null}
                 </View>
-                {!isEditMode && (
+                {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                   <Text style={styles.breakdownCalculation}>
                     {occurrence.multiple || 1} × {formatCurrency(occurrence.rates?.base_rate || 0)} = {formatCurrency(occurrence.base_total || occurrence.rates?.base_rate || 0)}
                   </Text>
                 )}
               </View>
-              {!isEditMode && (
+              {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                 <Text style={styles.breakdownAmount}>{formatCurrency(occurrence.base_total || occurrence.rates?.base_rate || 0)}</Text>
               )}
             </View>
@@ -820,14 +1201,18 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                     <Text style={styles.breakdownLabel}>
                       Additional Pet Rate (after {occurrence.rates?.applies_after || 1} {occurrence.rates?.applies_after !== 1 ? 'pets' : 'pet'})
                     </Text>
-                    {isEditMode ? (
+                    {isEditMode || editingOccurrenceId === occurrence.occurrence_id ? (
                       <View style={styles.amountInputContainer}>
                         <Text style={styles.currencySymbol}>$</Text>
                         <TextInput
                           style={styles.rateInput}
                           keyboardType="numeric"
-                          value={editedRates?.additional_animal_rate?.toString() || '0'}
-                          onChangeText={updateAdditionalAnimalRate}
+                          value={editingOccurrenceId === occurrence.occurrence_id ? 
+                            occurrenceEdits.additional_animal_rate?.toString() || '0' : 
+                            editedRates?.additional_animal_rate?.toString() || '0'}
+                          onChangeText={editingOccurrenceId === occurrence.occurrence_id ? 
+                            v => handleOccurrenceInputChange('additional_animal_rate', v) : 
+                            updateAdditionalAnimalRate}
                         />
                         <Text style={styles.inputLabel}> / pet / {(occurrence.unit_of_time) || 
                                                                 (occurrence.rates && occurrence.rates.unit_of_time) || 
@@ -835,7 +1220,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                       </View>
                     ) : null}
                   </View>
-                  {!isEditMode && (
+                  {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                     <Text style={styles.breakdownCalculation}>
                       ${occurrence.rates?.additional_animal_rate || 0} / pet / {(occurrence.unit_of_time) || 
                                                                               (occurrence.rates && occurrence.rates.unit_of_time) || 
@@ -843,7 +1228,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                     </Text>
                   )}
                 </View>
-                {!isEditMode && (
+                {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                   <Text style={styles.breakdownAmount}>
                     {(occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0)) ? '+' : ''}
                     {(occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0)) 
@@ -862,26 +1247,30 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                     <Text style={styles.breakdownLabel}>
                       Holiday Rate
                     </Text>
-                    {isEditMode ? (
+                    {isEditMode || editingOccurrenceId === occurrence.occurrence_id ? (
                       <View style={styles.amountInputContainer}>
                         <Text style={styles.currencySymbol}>$</Text>
                         <TextInput
                           style={styles.rateInput}
                           keyboardType="numeric"
-                          value={editedRates?.holiday_rate?.toString() || '0'}
-                          onChangeText={updateHolidayRate}
+                          value={editingOccurrenceId === occurrence.occurrence_id ? 
+                            occurrenceEdits.holiday_rate?.toString() || '0' : 
+                            editedRates?.holiday_rate?.toString() || '0'}
+                          onChangeText={editingOccurrenceId === occurrence.occurrence_id ? 
+                            v => handleOccurrenceInputChange('holiday_rate', v) : 
+                            updateHolidayRate}
                         />
                         <Text style={styles.inputLabel}> × {occurrence.rates?.holiday_days || 0} {occurrence.rates?.holiday_days !== 1 ? 'holidays' : 'holiday'}</Text>
                       </View>
                     ) : null}
                   </View>
-                  {!isEditMode && (
+                  {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                     <Text style={styles.breakdownCalculation}>
                       {formatCurrency(occurrence.rates?.holiday_rate || 0)} × {occurrence.rates?.holiday_days || 0} {occurrence.rates?.holiday_days !== 1 ? 'holidays' : 'holiday'}
                     </Text>
                   )}
                 </View>
-                {!isEditMode && (
+                {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                   <Text style={styles.breakdownAmount}>
                     {occurrence.rates?.holiday_days ? '+' : ''}
                     {occurrence.rates?.holiday_days ? formatCurrency(occurrence.rates?.holiday_rate_total || occurrence.rates?.holiday_rate || 0) : 'NA'}
@@ -895,36 +1284,94 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
               ((isEditMode ? editedRates?.additional_rates : occurrence.rates?.additional_rates) || []).map((rate, index) => (
                 <View key={index} style={styles.breakdownItem}>
                   <View style={styles.breakdownLabelContainer}>
-                    {isEditMode ? (
-                      <View style={styles.editableAdditionalRateRow}>
-                        <View style={styles.rateNameAmountRowWithDelete}>
-                          <TextInput
-                            style={styles.nameInput}
-                            value={rate.name}
-                            onChangeText={(value) => updateAdditionalRate(index, 'name', value)}
-                            placeholder="Rate Name"
-                          />
-                          <View style={styles.amountInputContainer}>
-                            <Text style={styles.currencySymbol}>$</Text>
+                    {isEditMode || editingOccurrenceId === occurrence.occurrence_id ? (
+                      width < 600 ? (
+                        // Mobile layout - stacked with trash icon on the right
+                        <View style={{ width: '100%' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                             <TextInput
-                              style={styles.rateInput}
-                              keyboardType="numeric"
-                              value={rate.amount?.toString() || '0'}
-                              onChangeText={(value) => updateAdditionalRate(index, 'amount', value)}
+                              style={[styles.nameInput, { flex: 1, marginRight: 8 }]}
+                              value={editingOccurrenceId === occurrence.occurrence_id ? 
+                                (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
+                                rate.name || rate.title}
+                              onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                handleAdditionalRateChange(index, 'name', value) : 
+                                updateAdditionalRate(index, 'name', value)}
+                              placeholder="Rate Name"
                             />
+                            <TouchableOpacity 
+                              style={styles.deleteButton} 
+                              onPress={() => editingOccurrenceId === occurrence.occurrence_id ? 
+                                deleteRateForOccurrence(occurrence, index) : 
+                                deleteAdditionalRate(index)}
+                            >
+                              <MaterialCommunityIcons 
+                                name="trash-can-outline" 
+                                size={22} 
+                                color={theme.colors.error} 
+                              />
+                            </TouchableOpacity>
+                          </View>
+                          <View style={{ marginTop: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Text style={{ marginRight: 8 }}>Amount: $</Text>
+                              <TextInput
+                                style={{ 
+                                  width: 80, 
+                                  borderWidth: 1,
+                                  borderColor: theme.colors.border,
+                                  borderRadius: 4,
+                                  padding: 8
+                                }}
+                                keyboardType="numeric"
+                                value={rate.amount?.toString() || '0'}
+                                onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                  handleAdditionalRateChange(index, 'amount', value) : 
+                                  updateAdditionalRate(index, 'amount', value)}
+                              />
+                            </View>
                           </View>
                         </View>
-                        <TouchableOpacity 
-                          style={styles.deleteButton} 
-                          onPress={() => deleteAdditionalRate(index)}
-                        >
-                          <MaterialCommunityIcons 
-                            name="trash-can-outline" 
-                            size={22} 
-                            color={theme.colors.error} 
-                          />
-                        </TouchableOpacity>
-                      </View>
+                      ) : (
+                        // Desktop layout - side by side
+                        <View style={styles.editableAdditionalRateRow}>
+                          <View style={styles.rateNameAmountRowWithDelete}>
+                            <TextInput
+                              style={styles.nameInput}
+                              value={editingOccurrenceId === occurrence.occurrence_id ? 
+                                (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
+                                rate.name || rate.title}
+                              onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                handleAdditionalRateChange(index, 'name', value) : 
+                                updateAdditionalRate(index, 'name', value)}
+                              placeholder="Rate Name"
+                            />
+                            <View style={styles.amountInputContainer}>
+                              <Text style={styles.currencySymbol}>$</Text>
+                              <TextInput
+                                style={styles.rateInput}
+                                keyboardType="numeric"
+                                value={rate.amount?.toString() || '0'}
+                                onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
+                                  handleAdditionalRateChange(index, 'amount', value) : 
+                                  updateAdditionalRate(index, 'amount', value)}
+                              />
+                            </View>
+                          </View>
+                          <TouchableOpacity 
+                            style={styles.deleteButton} 
+                            onPress={() => editingOccurrenceId === occurrence.occurrence_id ? 
+                              deleteRateForOccurrence(occurrence, index) : 
+                              deleteAdditionalRate(index)}
+                          >
+                            <MaterialCommunityIcons 
+                              name="trash-can-outline" 
+                              size={22} 
+                              color={theme.colors.error} 
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )
                     ) : (
                       <>
                         <Text style={styles.breakdownLabel}>{rate.name || rate.title}</Text>
@@ -932,7 +1379,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                       </>
                     )}
                   </View>
-                  {!isEditMode && (
+                  {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                     <Text style={styles.breakdownAmount}>+{formatCurrency(rate.amount)}</Text>
                   )}
                 </View>
@@ -945,34 +1392,68 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                 <View style={styles.addRateContainer}>
                   <View style={styles.formDivider} />
                   
-                  <View style={styles.rateNameAmountRow}>
-                    <TextInput
-                      style={styles.nameInput}
-                      value={newRate.name}
-                      onChangeText={(text) => setNewRate(prev => ({ ...prev, name: text }))}
-                      placeholder="Rate Name"
-                      placeholderTextColor={theme.colors.placeHolderText}
-                    />
-                    <View style={styles.amountInputContainer}>
-                      <Text style={styles.currencySymbol}>$</Text>
+                  {width < 600 ? (
+                    // Mobile layout - stacked
+                    <View>
                       <TextInput
-                        style={styles.rateInput}
-                        keyboardType="numeric"
-                        value={newRate.amount}
-                        onChangeText={(text) => setNewRate(prev => ({ ...prev, amount: text }))}
-                        placeholder="0.00"
+                        style={[styles.nameInput, { marginRight: 0, marginBottom: 12 }]}
+                        value={newRate.name}
+                        onChangeText={(text) => setNewRate(prev => ({ ...prev, name: text }))}
+                        placeholder="Rate Name"
+                        placeholderTextColor={theme.colors.placeHolderText}
+                      />
+                      <View style={[styles.amountInputContainer, { marginBottom: 12 }]}>
+                        <Text style={styles.currencySymbol}>$</Text>
+                        <TextInput
+                          style={styles.rateInput}
+                          keyboardType="numeric"
+                          value={newRate.amount}
+                          onChangeText={(text) => setNewRate(prev => ({ ...prev, amount: text }))}
+                          placeholder="0.00"
+                          placeholderTextColor={theme.colors.placeHolderText}
+                        />
+                      </View>
+                      <TextInput
+                        style={styles.descriptionInput}
+                        value={newRate.description}
+                        onChangeText={(text) => setNewRate(prev => ({ ...prev, description: text }))}
+                        placeholder="Description (optional)"
                         placeholderTextColor={theme.colors.placeHolderText}
                       />
                     </View>
-                  </View>
-                  
-                  <TextInput
-                    style={styles.descriptionInput}
-                    value={newRate.description}
-                    onChangeText={(text) => setNewRate(prev => ({ ...prev, description: text }))}
-                    placeholder="Description (optional)"
-                    placeholderTextColor={theme.colors.placeHolderText}
-                  />
+                  ) : (
+                    // Desktop layout - side by side
+                    <>
+                      <View style={styles.rateNameAmountRow}>
+                        <TextInput
+                          style={styles.nameInput}
+                          value={newRate.name}
+                          onChangeText={(text) => setNewRate(prev => ({ ...prev, name: text }))}
+                          placeholder="Rate Name"
+                          placeholderTextColor={theme.colors.placeHolderText}
+                        />
+                        <View style={styles.amountInputContainer}>
+                          <Text style={styles.currencySymbol}>$</Text>
+                          <TextInput
+                            style={styles.rateInput}
+                            keyboardType="numeric"
+                            value={newRate.amount}
+                            onChangeText={(text) => setNewRate(prev => ({ ...prev, amount: text }))}
+                            placeholder="0.00"
+                            placeholderTextColor={theme.colors.placeHolderText}
+                          />
+                        </View>
+                      </View>
+                      
+                      <TextInput
+                        style={styles.descriptionInput}
+                        value={newRate.description}
+                        onChangeText={(text) => setNewRate(prev => ({ ...prev, description: text }))}
+                        placeholder="Description (optional)"
+                        placeholderTextColor={theme.colors.placeHolderText}
+                      />
+                    </>
+                  )}
                   
                   <View style={styles.formDivider} />
                 </View>
@@ -987,12 +1468,17 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
               </View>
             ) : null}
             
-            {/* Save button for edit mode */}
-            {isEditMode ? (
-              <TouchableOpacity style={[styles.saveButton, {alignSelf: 'flex-end', marginRight: 16, marginTop: 16, marginBottom: 8}]} onPress={saveRateChanges}>
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
-            ) : null}
+            {/* Add buttons for edit mode on single occurrence bookings */}
+            {isEditMode && !isAddingRate && (
+              <View style={styles.buttonsContainer}>
+                <TouchableOpacity style={styles.cancelButton} onPress={toggleAddRate}>
+                  <Text style={styles.cancelButtonText}>+ Add Rate</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveButton} onPress={saveRateChanges}>
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </View>
