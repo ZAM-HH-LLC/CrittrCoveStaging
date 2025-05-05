@@ -12,6 +12,7 @@ from clients.models import Client
 from django.core.cache import cache
 import logging
 from datetime import datetime
+from user_messages.models import UserMessage
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def get_conversations(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-def find_or_create_conversation(current_user, other_user, current_user_role):
+def find_or_create_conversation(current_user, other_user, current_user_role, only_find_with_role=False):
     """
     Helper function to find or create a conversation between two users.
     
@@ -72,50 +73,107 @@ def find_or_create_conversation(current_user, other_user, current_user_role):
         current_user: The user making the request
         other_user: The other participant in the conversation
         current_user_role: Role of the current user ('professional' or 'client')
+        only_find_with_role: If True, only find conversations where current_user has current_user_role,
+                           and return None if none found instead of creating a new one
     
     Returns:
-        tuple: (conversation object, boolean indicating if user is professional)
+        tuple: (conversation object or None if only_find_with_role is True and no match, 
+               boolean indicating if user is professional)
     """
+    logger = logging.getLogger(__name__)
+    logger.info(f"MBA2314: Finding conversation for users {current_user.id} and {other_user.id}, where current user is a {current_user_role}")
+    logger.info(f"MBA2314: only_find_with_role={only_find_with_role}")
+    
     # Determine other user's role
     other_user_role = 'client' if current_user_role == 'professional' else 'professional'
     
     # Check if a conversation already exists between these users
-    existing_conversation = Conversation.objects.filter(
+    existing_conversations = Conversation.objects.filter(
         models.Q(participant1=current_user, participant2=other_user) |
         models.Q(participant1=other_user, participant2=current_user)
-    ).first()
+    ).order_by('-last_message_time')
+    
+    logger.info(f"MBA2314: Found {existing_conversations.count()} existing conversations between users")
     
     # Determine if the current user is the professional
     is_professional = current_user_role == 'professional'
     
-    if existing_conversation:
-        # Check if the role mapping matches the requested role
-        existing_role = existing_conversation.role_map.get(str(current_user.user_id))
-        
-        if existing_role == current_user_role:
-            # Role already matches, return existing conversation
-            return existing_conversation, is_professional
-        else:
-            # Roles don't match - create a new conversation with correct roles
-            # This handles the case where a user wants to interact in a different role
-            role_map = {
-                str(current_user.user_id): current_user_role,
-                str(other_user.user_id): other_user_role
-            }
+    if existing_conversations.exists():
+        # Look through all conversations for one with matching roles
+        for conversation in existing_conversations:
+            role_map = conversation.role_map or {}
+            current_user_id_str = str(current_user.id)
             
-            conversation = Conversation.objects.create(
-                participant1=current_user,
-                participant2=other_user,
-                role_map=role_map
-            )
-            return conversation, is_professional
+            logger.info(f"MBA2314: Checking conversation {conversation.conversation_id} with role_map: {role_map}")
+            
+            # Check all possible formats of user ID in role map
+            # Format 1: Direct ID match ("1": "client")
+            # Format 2: Prefixed ID ("user_1": "client")
+            # Format 3: UUID format ("user_h8Udar0SJ": "client")
+            user_has_role = False
+            
+            # Check for direct ID match
+            if current_user_id_str in role_map and role_map[current_user_id_str] == current_user_role:
+                user_has_role = True
+                logger.info(f"MBA2314: Found direct ID match for user {current_user_id_str} with role {current_user_role}")
+            
+            # Check for prefixed ID matches
+            for key, role in role_map.items():
+                logger.info(f"MBA2314: Checking key={key}, role={role}")
+                # Check if key starts with "user_" and ends with the user ID
+                if (key.startswith('user_') and key.endswith(current_user_id_str)) or key == current_user_id_str:
+                    if role == current_user_role:
+                        user_has_role = True
+                        logger.info(f"MBA2314: Found match for key={key}, role={role}")
+                        break
+                # Also check for any key containing the user ID (general case for uuid formats)
+                elif key.startswith('user_') and role == current_user_role:
+                    user_has_role = True
+                    logger.info(f"MBA2314: Found UUID format match for key={key}, role={role}")
+                    break
+            
+            if user_has_role:
+                # Found a conversation where current user has the specified role
+                logger.info(f"MBA2314: Returning existing conversation {conversation.conversation_id} where user has role {current_user_role}")
+                return conversation, is_professional
+        
+        # No conversation found with matching roles
+        logger.info(f"MBA2314: No conversation found with user {current_user.id} having role {current_user_role}")
+        
+        if only_find_with_role:
+            # If only finding (not creating), return None
+            logger.info(f"MBA2314: only_find_with_role is True, returning None")
+            return None, is_professional
+        
+        # Otherwise create a new conversation with correct roles
+        role_map = {
+            str(current_user.id): current_user_role,
+            str(other_user.id): other_user_role
+        }
+        
+        logger.info(f"MBA2314: Creating new conversation with role_map: {role_map}")
+        conversation = Conversation.objects.create(
+            participant1=current_user,
+            participant2=other_user,
+            role_map=role_map
+        )
+        return conversation, is_professional
     
-    # No existing conversation, create a new one
+    # No existing conversation
+    logger.info(f"MBA2314: No existing conversations found between users")
+    
+    if only_find_with_role:
+        # If only finding (not creating), return None
+        logger.info(f"MBA2314: only_find_with_role is True, returning None")
+        return None, is_professional
+    
+    # Create a new conversation
     role_map = {
-        str(current_user.user_id): current_user_role,
-        str(other_user.user_id): other_user_role
+        str(current_user.id): current_user_role,
+        str(other_user.id): other_user_role
     }
     
+    logger.info(f"MBA2314: Creating new conversation with role_map: {role_map}")
     conversation = Conversation.objects.create(
         participant1=current_user,
         participant2=other_user,

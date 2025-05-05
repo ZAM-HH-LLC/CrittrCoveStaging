@@ -1308,14 +1308,28 @@ class RequestBookingChangesView(APIView):
             is_client = request.user == booking.client.user
             user_role = 'client' if is_client else 'professional'
             other_user = booking.professional.user if is_client else booking.client.user
+
+            logger.info(f"MBA88899 Other user: {other_user}")
+            logger.info(f"MBA88899 User role: {user_role}")
+            logger.info(f"MBA88899 Request user: {request.user}")
+            logger.info(f"MBA88899 is_client: {is_client}")
             
             # Find or create a conversation between these users
             conversation, is_professional = find_or_create_conversation(
                 request.user, 
                 other_user, 
-                user_role
+                user_role,
+                only_find_with_role=True  # Only find, don't create new conversations
             )
             
+            # If no conversation found with the right roles, return an error
+            if not conversation:
+                logger.error(f"MBA88899 No conversation found where user {request.user.id} is a {user_role}")
+                return Response(
+                    {"error": "No existing conversation found between these users with the correct roles"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+                
             logger.info(f"MBA88899 Using conversation {conversation.conversation_id}")
             
             # Create a message with change request type
