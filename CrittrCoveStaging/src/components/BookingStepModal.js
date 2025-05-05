@@ -716,7 +716,8 @@ const BookingStepModal = ({
           times: bookingData.times,
           dateRange: bookingData.dateRange,
           dates: bookingData.dates,
-          dateRangeType: bookingData.dateRangeType
+          dateRangeType: bookingData.dateRangeType,
+          isOvernightService: bookingData.service?.is_overnight
         });
         
         // Prepare initialTimes object with all necessary data
@@ -730,9 +731,15 @@ const BookingStepModal = ({
           hasIndividualTimes: bookingData.times?.hasIndividualTimes || false
         };
         
+        // If it's an overnight service, make sure hasIndividualTimes is false
+        if (bookingData.service?.is_overnight) {
+          initialTimes.hasIndividualTimes = false;
+        }
+        
         debugLog('MBA66777: Passing initialTimes to TimeSelectionCard:', {
           hasIndividualTimes: initialTimes.hasIndividualTimes,
-          dateCount: initialTimes.dates?.length || 0
+          dateCount: initialTimes.dates?.length || 0,
+          isOvernightService: bookingData.service?.is_overnight
         });
         
         return (
@@ -740,7 +747,11 @@ const BookingStepModal = ({
             onTimeSelect={handleTimeSelect}
             initialTimes={initialTimes}
             dateRange={bookingData.dateRange}
-            selectedService={bookingData.service}
+            selectedService={{
+              ...bookingData.service,
+              is_overnight: bookingData.service?.is_overnight
+            }}
+            isOvernightForced={bookingData.service?.is_overnight || false}
           />
         );
       case STEPS.REVIEW_AND_RATES.id:

@@ -48,16 +48,21 @@ const DateSelectionCard = ({
   const [lastRangeSelection, setLastRangeSelection] = useState(null);
 
   useEffect(() => {
-    if (is_DEBUG) {
-      console.log('MBA54321 DateSelectionCard initialized with dates:', selectedDates);
-      console.log('MBA54321 Current booking type:', bookingType);
-      console.log('MBA54321 Current date range type:', dateRangeType);
-      console.log('MBA54321 Initial date range:', initialDateRange);
-    }
+    debugLog('MBA54321 DateSelectionCard initialized with dates:', selectedDates);
+    debugLog('MBA54321 Current booking type:', bookingType);
+    debugLog('MBA54321 Current date range type:', dateRangeType);
+    debugLog('MBA54321 Initial date range:', initialDateRange);
+    debugLog('MBA54321 isOvernightForced:', isOvernightForced);
     
     // Set the booking type and date range type from props
     setSelectedBookingType(isOvernightForced ? 'one-time' : bookingType);
-    setSelectedDateRangeType(dateRangeType);
+    
+    // For overnight services, ALWAYS force date-range selection type regardless of what was passed
+    if (isOvernightForced) {
+      setSelectedDateRangeType('date-range');
+    } else {
+      setSelectedDateRangeType(dateRangeType);
+    }
     
     // Handle dates from draft that might be in a different format
     if (selectedDates && selectedDates.length > 0) {
@@ -78,7 +83,7 @@ const DateSelectionCard = ({
       setSelectedDatesList(datesArray);
       
       // If in date-range mode, set the range start and end dates
-      if (dateRangeType === 'date-range' && datesArray.length > 0) {
+      if ((dateRangeType === 'date-range' || isOvernightForced) && datesArray.length > 0) {
         // Sort dates to get min and max
         const sortedDates = [...datesArray].sort((a, b) => a - b);
         setRangeStartDate(sortedDates[0]);
@@ -91,12 +96,12 @@ const DateSelectionCard = ({
         const dateData = {
           type: bookingType,
           dates: datesArray,
-          rangeType: dateRangeType,
+          rangeType: isOvernightForced ? 'date-range' : dateRangeType,
           isValid: true
         };
         
         // Add range data if in date-range mode
-        if (dateRangeType === 'date-range' && datesArray.length > 0) {
+        if ((dateRangeType === 'date-range' || isOvernightForced) && datesArray.length > 0) {
           const sortedDates = [...datesArray].sort((a, b) => a - b);
           dateData.startDate = sortedDates[0];
           dateData.endDate = sortedDates[sortedDates.length - 1];
@@ -832,24 +837,26 @@ const DateSelectionCard = ({
   };
 
   const renderOneTimeOptions = () => {
-    if (selectedBookingType !== 'one-time') return null;
-
     return (
-      <>
-        {!isOvernightForced && (
-          <View style={styles.dateRangeTypeContainer}>
-            <TouchableOpacity
-              style={[
-                styles.dateRangeTypeButton,
-                selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButton
-              ]}
-              onPress={() => handleDateRangeTypeSelect('date-range')}
-            >
-              <Text style={[
-                styles.dateRangeTypeText,
-                selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeText
-              ]}>Date Range</Text>
-            </TouchableOpacity>
+      <View style={styles.oneTimeOptionsContainer}>
+        <View style={styles.dateRangeTypeContainer}>
+          <TouchableOpacity
+            style={[
+              styles.dateRangeTypeButton,
+              selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButton
+            ]}
+            onPress={() => handleDateRangeTypeSelect('date-range')}
+          >
+            <Text style={[
+              styles.dateRangeTypeButtonText,
+              selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButtonText
+            ]}>
+              Date Range
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Only show the multiple days option if NOT an overnight service */}
+          {!isOvernightForced && (
             <TouchableOpacity
               style={[
                 styles.dateRangeTypeButton,
@@ -858,18 +865,25 @@ const DateSelectionCard = ({
               onPress={() => handleDateRangeTypeSelect('multiple-days')}
             >
               <Text style={[
-                styles.dateRangeTypeText,
-                selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeText
-              ]}>Multiple Days</Text>
+                styles.dateRangeTypeButtonText,
+                selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeButtonText
+              ]}>
+                Multiple Days
+              </Text>
             </TouchableOpacity>
-          </View>
+          )}
+        </View>
+        
+        {/* Calendar section based on selected date range type */}
+        {selectedDateRangeType === 'date-range' || isOvernightForced ? (
+          renderDateRangeSection()
+        ) : (
+          <>
+            {renderCalendar()}
+            {renderSelectedDates()}
+          </>
         )}
-        {isOvernightForced && (
-          <Text style={[styles.sectionTitle, { fontSize: screenWidth > 768 ? 26 : 16 }]}>Select Date Range</Text>
-        )}
-
-        {renderCalendar()}
-      </>
+      </View>
     );
   };
 
@@ -1064,6 +1078,7 @@ const DateSelectionCard = ({
         <>
           <Text style={[styles.sectionTitle, { fontSize: screenWidth > 768 ? 26 : 16 }]}>Select Date Range</Text>
           {renderCalendar()}
+          {renderSelectedDates()}
         </>
       ) : (
         <>
@@ -1072,7 +1087,6 @@ const DateSelectionCard = ({
         </>
       )}
       
-      {selectedBookingType === 'one-time' && renderSelectedDates()}
       <RecurringCalendarPreview />
     </ScrollView>
   );
@@ -1484,6 +1498,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.mainColors.main,
     fontWeight: 'bold',
+  },
+  oneTimeOptionsContainer: {
+    marginTop: 8,
+  },
+  dateRangeTypeContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  dateRangeTypeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e8e8e8', // Light gray for inactive buttons
+  },
+  dateRangeTypeButtonText: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+  },
+  selectedDateRangeTypeButton: {
+    backgroundColor: theme.colors.mainColors.main,
+  },
+  selectedDateRangeTypeButtonText: {
+    color: theme.colors.surface,
+    fontWeight: '600',
   },
 });
 

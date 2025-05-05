@@ -9,12 +9,18 @@ const TimeSelectionCard = ({
   onTimeSelect,
   initialTimes = {},
   dateRange = null,
-  selectedService = null
+  selectedService = null,
+  isOvernightForced = false
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
   
   // Initialize showIndividualDays based on initialTimes.hasIndividualTimes
   const [showIndividualDays, setShowIndividualDays] = useState(() => {
+    // For overnight services, never show individual days
+    if (selectedService?.is_overnight || isOvernightForced) {
+      return false;
+    }
+    
     const shouldShowIndividual = initialTimes && initialTimes.hasIndividualTimes === true;
     debugLog('MBA66777: Initial showIndividualDays value:', shouldShowIndividual);
     return shouldShowIndividual;
@@ -533,18 +539,18 @@ const TimeSelectionCard = ({
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        {!showIndividualDays && (
-          <TimeRangeSelector
-            title={`Default Time Range`}
-            onTimeSelect={handleTimeRangeSelectorUpdate}
-            initialTimes={times}
-            showOvernightToggle={!selectedService?.is_overnight}
-            dateRange={dateRange}
-            is_overnight={selectedService?.is_overnight || times.isOvernightForced || false}
-          />
-        )}
+        {/* Always show default time range selector */}
+        <TimeRangeSelector
+          title={selectedService?.is_overnight || isOvernightForced ? `Time Range` : `Default Time Range`}
+          onTimeSelect={handleTimeRangeSelectorUpdate}
+          initialTimes={times}
+          showOvernightToggle={!selectedService?.is_overnight && !isOvernightForced}
+          dateRange={dateRange}
+          is_overnight={selectedService?.is_overnight || times.isOvernightForced || isOvernightForced || false}
+        />
 
-        {!selectedService?.is_overnight && (
+        {/* Only show customize button if not an overnight service */}
+        {!selectedService?.is_overnight && !isOvernightForced && (
           <View style={[styles.customizeButtonContainer, { zIndex: 1 }]}>
             <TouchableOpacity 
               style={styles.customizeButton}
@@ -559,9 +565,11 @@ const TimeSelectionCard = ({
           </View>
         )}
 
-        {showIndividualDays && renderIndividualTimeRanges()}
+        {/* Only show individual day schedules if not an overnight service and the toggle is on */}
+        {showIndividualDays && !selectedService?.is_overnight && !isOvernightForced && renderIndividualTimeRanges()}
 
-        {!showIndividualDays && !selectedService?.is_overnight && (
+        {/* Only show presets for non-overnight services when not in individual days mode */}
+        {!showIndividualDays && !selectedService?.is_overnight && !isOvernightForced && (
           <View style={[styles.presetsContainer, { zIndex: 1 }]}>
             <Text style={[styles.presetsTitle]}>Quick Presets</Text>
             <View style={styles.presetButtons}>
