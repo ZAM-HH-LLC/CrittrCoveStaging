@@ -55,6 +55,7 @@ const BookingStepModal = ({
   navigation
 }) => {
   const { is_DEBUG, screenWidth } = useContext(AuthContext);
+  const isSmallScreen = screenWidth < 600;
   const isDesktop = screenWidth > 768;
   const [currentStep, setCurrentStep] = useState(STEPS.SERVICES_AND_PETS.id);
   const [bookingData, setBookingData] = useState({
@@ -826,29 +827,74 @@ const BookingStepModal = ({
             )}
           </ScrollView>
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleBack}
-            >
-              <Text style={styles.cancelButtonText}>
-                {currentStep > STEPS.SERVICES_AND_PETS.id ? 'Back' : 'Cancel'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.nextButton,
-                (!canProceedToNextStep() || isLoading) && styles.disabledButton
-              ]}
-              onPress={handleNext}
-              disabled={!canProceedToNextStep() || isLoading}
-            >
-              <Text style={[
-                styles.nextButtonText,
-                (!canProceedToNextStep() || isLoading) && styles.disabledButtonText
-              ]}>
-                {currentStep === STEPS.REVIEW_AND_RATES.id ? 'Confirm Booking' : 'Next'}
-              </Text>
-            </TouchableOpacity>
+            {currentStep === STEPS.SERVICES_AND_PETS.id ? (
+              // Step 1: [Cancel] [Next]
+              <>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={handleClose}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.nextButton,
+                    (!canProceedToNextStep() || isLoading) && styles.disabledButton
+                  ]}
+                  onPress={handleNext}
+                  disabled={!canProceedToNextStep() || isLoading}
+                >
+                  <Text style={[
+                    styles.nextButtonText,
+                    (!canProceedToNextStep() || isLoading) && styles.disabledButtonText
+                  ]}>
+                    Next
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              // Steps 2-4: [Back] [Cancel][Next/Confirm]
+              <>
+                <TouchableOpacity
+                  style={[styles.backButton, isSmallScreen && styles.smallScreenButton]}
+                  onPress={handleBack}
+                >
+                  <Text style={styles.backButtonText}>Back</Text>
+                </TouchableOpacity>
+                <View style={styles.spacer} />
+                <TouchableOpacity
+                  style={[styles.cancelButtonSmall, isSmallScreen && styles.smallScreenButton]}
+                  onPress={handleClose}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <View style={isSmallScreen ? styles.smallMargin : null} />
+                <TouchableOpacity
+                  style={[
+                    styles.nextButtonSmall, 
+                    isSmallScreen && styles.smallScreenButton,
+                    (!canProceedToNextStep() || isLoading) && styles.disabledButton
+                  ]}
+                  onPress={handleNext}
+                  disabled={!canProceedToNextStep() || isLoading}
+                >
+                  {currentStep === STEPS.REVIEW_AND_RATES.id && isSmallScreen ? (
+                    <View style={styles.confirmButtonColumn}>
+                      <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
+                        Request
+                      </Text>
+                      <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
+                        Booking
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
+                      {currentStep === STEPS.REVIEW_AND_RATES.id ? 'Request Booking' : 'Next'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </SafeAreaView>
       </View>
@@ -895,15 +941,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
     backgroundColor: theme.colors.background,
     borderTopWidth: 1,
     borderTopColor: theme.colors.modernBorder,
   },
+  spacer: {
+    width: 16,
+    flexGrow: 1,
+  },
+  smallMargin: {
+    width: 8,
+  },
+  backButton: {
+    minWidth: 100,
+    backgroundColor: theme.colors.surface,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  smallScreenButton: {
+    minWidth: 80,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  backButtonText: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
   cancelButton: {
     flex: 1,
     backgroundColor: theme.colors.surface,
-    paddingVertical: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  cancelButtonSmall: {
+    minWidth: 100,
+    backgroundColor: theme.colors.surface,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
@@ -917,7 +1000,15 @@ const styles = StyleSheet.create({
   nextButton: {
     flex: 1,
     backgroundColor: theme.colors.mainColors.main,
-    paddingVertical: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  nextButtonSmall: {
+    minWidth: 100,
+    backgroundColor: theme.colors.mainColors.main,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -964,6 +1055,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+  },
+  confirmButtonColumn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
