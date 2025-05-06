@@ -109,6 +109,107 @@ const BookingStepModal = ({
           
           debugLog('MBA2j3kbr9hve4: Parsed draft dates and times:', parsedData);
           
+          // Check if this is an overnight service
+          // First check the service from the response 
+          const serviceName = (response.service_details?.service_type || '').toLowerCase();
+          const knownOvernightTerms = ['overnight', 'boarding', 'house sitting', 'pet sitting'];
+          const isOvernightService = response.service_details?.is_overnight === true || 
+                                   knownOvernightTerms.some(term => serviceName.includes(term));
+          
+          debugLog('MBA2j3kbr9hve4: Is overnight service from response:', isOvernightService);
+          debugLog('MBA2j3kbr9hve4: Service name:', serviceName);
+          debugLog('MBA2j3kbr9hve4: Known overnight terms match:', knownOvernightTerms.some(term => serviceName.includes(term)));
+          debugLog('MBA2j3kbr9hve4: Full service details from response:', response.service_details);
+
+          // Update bookingData with the service information to ensure we have the overnight status
+          let serviceData = null;
+          if (response.service_details) {
+            serviceData = {
+              ...response.service_details,
+              service_id: response.service_details.service_id,
+              service_name: response.service_details.service_type,
+              is_overnight: isOvernightService, // Using our improved overnight detection
+            };
+            debugLog('MBA2j3kbr9hve4: Setting service data with overnight status:', serviceData);
+          }
+          
+          // Check for occurrences to determine if this is an overnight booking
+          if (response.occurrences && response.occurrences.length > 0) {
+            // Check if we can determine if this is an overnight booking from the dates
+            const firstOcc = response.occurrences[0];
+            const lastOcc = response.occurrences[response.occurrences.length - 1];
+            
+            // If first and last occurrence have different dates, this might be an overnight range
+            if (firstOcc.start_date !== lastOcc.end_date) {
+              const startDate = new Date(firstOcc.start_date);
+              const endDate = new Date(lastOcc.end_date);
+              const daysDifference = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+              
+              // If the difference is 1+ days, it's likely an overnight booking
+              if (daysDifference >= 1) {
+                debugLog('MBA2j3kbr9hve4: DETECTED OVERNIGHT from date range:', {
+                  startDate: firstOcc.start_date,
+                  endDate: lastOcc.end_date,
+                  daysDifference
+                });
+                
+                // Force overnight mode
+                if (serviceData) {
+                  serviceData.is_overnight = true;
+                }
+              }
+            }
+          }
+            
+          // Special check to handle a possible case where we have a multi-day date range
+          // with only start and end dates in individual occurrences (instead of all dates)
+          if (response.occurrences?.length === 2) {
+            try {
+              const occ1Date = new Date(response.occurrences[0].start_date);
+              const occ2Date = new Date(response.occurrences[1].start_date);
+              
+              // Check if they are more than 1 day apart
+              const daysBetween = Math.abs(Math.round((occ2Date - occ1Date) / (1000 * 60 * 60 * 24)));
+              
+              if (daysBetween > 1) {
+                debugLog('MBA2j3kbr9hve4: DETECTED POTENTIAL OVERNIGHT from date distance:', {
+                  date1: response.occurrences[0].start_date,
+                  date2: response.occurrences[1].start_date,
+                  daysBetween
+                });
+                
+                // Force overnight mode if we have more than 1 day between occurrences
+                if (serviceData) {
+                  serviceData.is_overnight = true;
+                }
+              }
+            } catch (err) {
+              debugLog('MBA2j3kbr9hve4: Error checking occ dates:', err);
+            }
+          }
+            
+          // Ensure we set a correct dateRangeType
+          // If we have detected an overnight service, force 'date-range' mode
+          let dateRangeType = response.date_range_type || 'date-range';
+          if (isOvernightService || (serviceData && serviceData.is_overnight)) {
+            dateRangeType = 'date-range';
+            debugLog('MBA2j3kbr9hve4: Forcing date-range type for overnight service');
+          } 
+          // Otherwise, if we have non-consecutive dates, force multiple-days mode
+          else if (parsedData.dates && parsedData.dates.length > 1 && !parsedData.dateRange) {
+            dateRangeType = 'multiple-days';
+            debugLog('MBA2j3kbr9hve4: Non-consecutive dates detected, forcing multiple-days mode');
+          }
+            
+          // Determine final overnight status
+          const isOvernightForced = isOvernightService || (serviceData && serviceData.is_overnight);
+          
+          debugLog('MBA2j3kbr9hve4: Final overnight determination:', {
+            initialCheck: isOvernightService,
+            afterOccurrenceChecks: serviceData?.is_overnight,
+            finalIsOvernightForced: isOvernightForced
+          });
+          
           setBookingData(prev => ({
             ...prev,
             dates: parsedData.dates || [],
@@ -117,11 +218,15 @@ const BookingStepModal = ({
               ...(parsedData.defaultTimes || {}),
               individualTimeRanges: parsedData.individualTimes || {},
               allTimesAreTheSame: parsedData.allTimesAreTheSame,
-              hasIndividualTimes: !parsedData.allTimesAreTheSame
+              hasIndividualTimes: !parsedData.allTimesAreTheSame,
+              // Ensure we preserve the isOvernightForced flag based on the service type
+              isOvernightForced: isOvernightForced
             },
-            dateRangeType: response.date_range_type || prev.dateRangeType || 'date-range',
+            dateRangeType: dateRangeType,
             bookingType: response.booking_type || prev.bookingType || 'one-time',
-            hasFetchedDates: true // Flag to prevent refetching
+            hasFetchedDates: true, // Flag to prevent refetching
+            // Update service information with overnight status
+            service: serviceData || prev.service
           }));
         }
       } catch (error) {
@@ -143,12 +248,66 @@ const BookingStepModal = ({
     fetchDraftDatesAndTimes();
   }, [bookingId, visible, currentStep, bookingData.hasFetchedDates]);
 
+  // Effect to ensure dateRangeType is always 'date-range' for overnight services
+  useEffect(() => {
+    if (bookingData.service?.is_overnight || bookingData.times?.isOvernightForced) {
+      debugLog('MBA2j3kbr9hve4: Detected overnight service, ensuring dateRangeType is date-range');
+      
+      // If we have an overnight service but dateRangeType is not date-range, update it
+      if (bookingData.dateRangeType !== 'date-range') {
+        debugLog('MBA2j3kbr9hve4: Updating dateRangeType from', bookingData.dateRangeType, 'to date-range');
+        
+        setBookingData(prev => ({
+          ...prev,
+          dateRangeType: 'date-range'
+        }));
+      }
+    }
+  }, [bookingData.service, bookingData.times?.isOvernightForced]);
+
   const handleServiceSelect = (service) => {
     debugLog('MBA12345 Selected service:', service);
-    setBookingData(prev => ({
-      ...prev,
-      service
-    }));
+    
+    // Check if the service has an overnight property or name contains overnight-related terms
+    const serviceName = (service?.service_name || '').toLowerCase();
+    const knownOvernightTerms = ['overnight', 'boarding', 'house sitting', 'pet sitting'];
+    
+    // Determine if this is an overnight service from the is_overnight flag or name
+    const isOvernight = service?.is_overnight === true || 
+                        knownOvernightTerms.some(term => serviceName.includes(term));
+    
+    debugLog('MBA2j3kbr9hve4: Service overnight status:', {
+      isOvernight,
+      serviceData: service,
+      serviceName,
+      matchesOvernightTerms: knownOvernightTerms.some(term => serviceName.includes(term))
+    });
+    
+    setBookingData(prev => {
+      // Update times object to include isOvernightForced based on service
+      const updatedTimes = {
+        ...(prev.times || {}),
+        // Explicitly set isOvernightForced based on service type
+        isOvernightForced: isOvernight
+      };
+      
+      debugLog('MBA2j3kbr9hve4: Updated times with overnight status:', updatedTimes);
+      
+      // Also update the service object to ensure is_overnight is set correctly
+      const updatedService = {
+        ...service,
+        is_overnight: isOvernight
+      };
+      
+      return {
+        ...prev,
+        service: updatedService,
+        // Also update the times object to ensure isOvernightForced is set correctly
+        times: updatedTimes,
+        // Force date-range selection mode for overnight services
+        dateRangeType: isOvernight ? 'date-range' : prev.dateRangeType
+      };
+    });
   };
 
   const handlePetSelect = (pet) => {
@@ -166,6 +325,13 @@ const BookingStepModal = ({
 
   const handleDateSelect = (dateData) => {
     debugLog('MBA12345 Selected dates:', dateData);
+    debugLog('MBA2j3kbr9hve4: CRITICAL handleDateSelect rangeType:', {
+      rangeType: dateData.rangeType,
+      currentDateRangeType: bookingData.dateRangeType,
+      isServiceOvernight: bookingData.service?.is_overnight,
+      isTimesOvernightForced: bookingData.times?.isOvernightForced
+    });
+    
     setBookingData(prev => {
       // Preserve date range when switching to multiple-days
       let newDateRange = prev.dateRange;
@@ -345,12 +511,212 @@ const BookingStepModal = ({
         try {
           debugLog('MBA5asdt3f4321 Original booking data:', bookingData);
 
+          // Direct fix - if the service is overnight, always use the updateBookingDraftTimeAndDate endpoint
+          // regardless of the dateRangeType that might have been previously set
+          const isServiceOvernightFlag = bookingData.service?.is_overnight === true;
+          const isTimeOvernightFlag = bookingData.times?.isOvernightForced === true;
+          const isAnyOvernightFlag = isServiceOvernightFlag || isTimeOvernightFlag;
+          
+          debugLog('MBA5asdt3f4321 DIRECT OVERNIGHT CHECK AT START:', {
+            isServiceOvernightFlag,
+            isTimeOvernightFlag,
+            isAnyOvernightFlag,
+            dateRangeType: bookingData.dateRangeType
+          });
+          
+          // If any overnight flag is set, we'll bypass all the other checks and directly use the overnight endpoint
+          if (isAnyOvernightFlag && bookingData.dateRange) {
+            // Force overnight mode
+            debugLog('MBA5asdt3f4321 DIRECT OVERRIDE: Forcing overnight mode for any overnight service');
+            
+            const startDate = formatDateForAPI(bookingData.dateRange.startDate);
+            const endDate = formatDateForAPI(bookingData.dateRange.endDate);
+            const startTime = formatTimeForAPI(bookingData.times.startTime);
+            const endTime = formatTimeForAPI(bookingData.times.endTime);
+            
+            debugLog('MBA5asdt3f4321 DIRECT OVERRIDE: Using time-and-date endpoint with dates:', {
+              startDate,
+              endDate,
+              startTime,
+              endTime
+            });
+            
+            // Convert local times to UTC before sending to backend
+            const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+              startDate,
+              startTime,
+              'US/Mountain'
+            );
+
+            const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+              endDate,
+              endTime,
+              'US/Mountain'
+            );
+
+            // Call the API with UTC times and dates
+            const response = await updateBookingDraftTimeAndDate(
+              bookingId,
+              utcStartDate,
+              utcEndDate,
+              utcStartTime,
+              utcEndTime
+            );
+            
+            debugLog('MBA5asdt3f4321 DIRECT OVERRIDE: Response from updateBookingDraftTimeAndDate:', response);
+            
+            // Update booking data with the response's draft_data
+            if (response?.draft_data) {
+              setBookingData(prev => ({
+                ...prev,
+                ...response.draft_data,
+                // Ensure we maintain overnight settings
+                times: {
+                  ...(response.draft_data.times || prev.times),
+                  isOvernightForced: true
+                },
+                service: {
+                  ...(response.draft_data.service || prev.service),
+                  is_overnight: true
+                },
+                // Force dateRangeType to date-range for overnight services
+                dateRangeType: 'date-range'
+              }));
+            }
+            
+            // Skip the rest of the checks - we've already made the API call
+            setCurrentStep(prev => prev + 1);
+            return;
+          }
+          
           if (bookingData.dateRangeType === 'date-range') {
             // Check if this is a non-overnight service with date range
+            const isServiceOvernight = bookingData.service?.is_overnight === true;
+            const isTimeOvernight = bookingData.times?.isOvernightForced === true;
+            
+            // Check if the date range spans multiple days - if it does, treat it as overnight
+            let isMultiDayRange = false;
+            if (bookingData.dateRange && bookingData.dateRange.startDate && bookingData.dateRange.endDate) {
+              try {
+                const startDate = new Date(bookingData.dateRange.startDate);
+                const endDate = new Date(bookingData.dateRange.endDate);
+                const daysDifference = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                
+                // If more than 1 day difference, consider it multi-day
+                if (daysDifference > 1) {
+                  isMultiDayRange = true;
+                  debugLog('MBA5asdt3f4321 DETECTED multi-day date range:', {
+                    startDate: bookingData.dateRange.startDate,
+                    endDate: bookingData.dateRange.endDate,
+                    daysDifference
+                  });
+                }
+              } catch (err) {
+                debugLog('MBA5asdt3f4321 Error checking date range:', err);
+              }
+            }
+            
+            debugLog('MBA5asdt3f4321 CRITICAL Checking overnight status:', {
+              dateRangeType: bookingData.dateRangeType,
+              serviceIsOvernight: isServiceOvernight,
+              timesIsOvernightForced: isTimeOvernight,
+              isMultiDayRange: isMultiDayRange,
+              service: bookingData.service,
+              times: bookingData.times
+            });
+            
+            // DIRECT FIX: If either the service or times indicate this is an overnight service,
+            // or if we have a multi-day date range, we need to use the updateBookingDraftTimeAndDate endpoint
+            if (isServiceOvernight || isTimeOvernight || isMultiDayRange) {
+              // Force the overnight flag to ensure we get the right API call in future steps
+              const updatedBookingData = {
+                ...bookingData,
+                service: {
+                  ...bookingData.service,
+                  is_overnight: true
+                },
+                times: {
+                  ...bookingData.times,
+                  isOvernightForced: true
+                }
+              };
+              
+              // Update state with the forced overnight mode
+              setBookingData(updatedBookingData);
+              
+              // This is an overnight service with a date range, so we should call updateBookingDraftTimeAndDate
+              debugLog('MBA5asdt3f4321 OVERRIDE: Forcing overnight mode for date range due to overnight service or flag');
+              
+              const startDate = formatDateForAPI(bookingData.dateRange.startDate);
+              const endDate = formatDateForAPI(bookingData.dateRange.endDate);
+              const startTime = formatTimeForAPI(bookingData.times.startTime);
+              const endTime = formatTimeForAPI(bookingData.times.endTime);
+              
+              debugLog('MBA5asdt3f4321 Using update-time-and-date endpoint for OVERNIGHT service with dates:', {
+                startDate,
+                endDate,
+                startTime,
+                endTime,
+                service: updatedBookingData.service,
+                times: updatedBookingData.times
+              });
+              
+              // Convert local times to UTC before sending to backend
+              const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+                startDate,
+                startTime,
+                'US/Mountain'
+              );
+
+              const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+                endDate,
+                endTime,
+                'US/Mountain'
+              );
+
+              // Call the API with UTC times and dates
+              const response = await updateBookingDraftTimeAndDate(
+                bookingId,
+                utcStartDate,
+                utcEndDate,
+                utcStartTime,
+                utcEndTime
+              );
+              
+              debugLog('MBA5asdt3f4321 Received response from updateBookingDraftTimeAndDate (overnight override):', response);
+              
+              // Update booking data with the response's draft_data
+              if (response?.draft_data) {
+                setBookingData(prev => ({
+                  ...prev,
+                  ...response.draft_data,
+                  // Ensure we maintain overnight settings
+                  times: {
+                    ...(response.draft_data.times || prev.times),
+                    isOvernightForced: true
+                  },
+                  service: {
+                    ...(response.draft_data.service || prev.service),
+                    is_overnight: true
+                  }
+                }));
+              }
+              
+              // Skip the rest of the checks since we've already made the API call
+              setCurrentStep(prev => prev + 1);
+              return;
+            }
+            
             const isNonOvernightDateRange = 
               bookingData.dateRangeType === 'date-range' && 
-              !bookingData.service?.is_overnight &&
-              !bookingData.times?.isOvernightForced;
+              !isServiceOvernight &&
+              !isTimeOvernight &&
+              !isMultiDayRange;
+
+            debugLog('MBA5asdt3f4321 Decision:', {
+              isNonOvernightDateRange: isNonOvernightDateRange,
+              willUseEndpoint: isNonOvernightDateRange ? 'updateBookingDraftMultipleDays' : 'updateBookingDraftTimeAndDate'
+            });
 
             if (isNonOvernightDateRange) {
               // For non-overnight date range services, we need to create individual days
@@ -467,11 +833,19 @@ const BookingStepModal = ({
               const startTime = formatTimeForAPI(bookingData.times.startTime);
               const endTime = formatTimeForAPI(bookingData.times.endTime);
 
-              debugLog('MBA5asdt3f4321 Local dates and times:', {
+              debugLog('MBA5asdt3f4321 Using update-time-and-date endpoint for OVERNIGHT service with dates:', {
                 startDate,
                 endDate,
                 startTime,
-                endTime
+                endTime,
+                service: {
+                  id: bookingData.service?.service_id,
+                  name: bookingData.service?.service_name,
+                  is_overnight: bookingData.service?.is_overnight
+                },
+                times: {
+                  isOvernightForced: bookingData.times?.isOvernightForced
+                }
               });
 
               // Convert local times to UTC before sending to backend
@@ -571,7 +945,6 @@ const BookingStepModal = ({
               }));
             }
           }
-
         } catch (error) {
           debugLog('MBA5asdt3f4321 Error calculating booking totals:', error);
           debugLog('MBA5asdt3f4321 Error stack:', error.stack);
@@ -688,6 +1061,14 @@ const BookingStepModal = ({
           hasFetchedDates: bookingData.hasFetchedDates
         });
         
+        const dateSelectionIsOvernightMode = bookingData.service?.is_overnight || bookingData.times?.isOvernightForced || false;
+        
+        debugLog('MBA2j3kbr9hve4: Date selection overnight status:', {
+          serviceIsOvernight: bookingData.service?.is_overnight,
+          timesIsOvernightForced: bookingData.times?.isOvernightForced,
+          combinedMode: dateSelectionIsOvernightMode
+        });
+        
         return (
           <DateSelectionCard
             selectedDates={bookingData.dates || []}
@@ -695,11 +1076,7 @@ const BookingStepModal = ({
             bookingType={bookingData.bookingType || 'one-time'}
             dateRangeType={bookingData.dateRangeType || 'date-range'}
             initialDateRange={bookingData.dateRange || null}
-            isOvernightForced={
-              bookingData.service?.is_overnight || 
-              bookingData.times?.isOvernightForced || 
-              false
-            }
+            isOvernightForced={dateSelectionIsOvernightMode}
           />
         );
       case STEPS.TIME_SELECTION.id:
@@ -712,12 +1089,19 @@ const BookingStepModal = ({
           );
         }
         
-        debugLog('MBA66777: Rendering time selection with:', { 
-          times: bookingData.times,
+        // Log current service and times state BEFORE preparing initialTimes 
+        debugLog('MBA66777: CURRENT STATE Before rendering time selection:', { 
+          service: {
+            id: bookingData.service?.service_id,
+            name: bookingData.service?.service_name,
+            is_overnight: bookingData.service?.is_overnight
+          },
+          times: {
+            isOvernightForced: bookingData.times?.isOvernightForced,
+            hasIndividualTimes: bookingData.times?.hasIndividualTimes
+          },
           dateRange: bookingData.dateRange,
-          dates: bookingData.dates,
-          dateRangeType: bookingData.dateRangeType,
-          isOvernightService: bookingData.service?.is_overnight
+          dateRangeType: bookingData.dateRangeType
         });
         
         // Prepare initialTimes object with all necessary data
@@ -728,18 +1112,25 @@ const BookingStepModal = ({
           // Include occurrences if available
           occurrences: bookingData.occurrences || [],
           // Ensure hasIndividualTimes is preserved from bookingData.times
-          hasIndividualTimes: bookingData.times?.hasIndividualTimes || false
+          hasIndividualTimes: bookingData.times?.hasIndividualTimes || false,
+          // Make sure isOvernightForced is included in initialTimes
+          isOvernightForced: bookingData.service?.is_overnight || bookingData.times?.isOvernightForced || false
         };
         
         // If it's an overnight service, make sure hasIndividualTimes is false
-        if (bookingData.service?.is_overnight) {
+        if (bookingData.service?.is_overnight || bookingData.times?.isOvernightForced) {
           initialTimes.hasIndividualTimes = false;
+          initialTimes.isOvernightForced = true;
         }
+        
+        const isOvernightMode = bookingData.service?.is_overnight || bookingData.times?.isOvernightForced || false;
         
         debugLog('MBA66777: Passing initialTimes to TimeSelectionCard:', {
           hasIndividualTimes: initialTimes.hasIndividualTimes,
           dateCount: initialTimes.dates?.length || 0,
-          isOvernightService: bookingData.service?.is_overnight
+          isOvernightService: bookingData.service?.is_overnight,
+          isOvernightForced: bookingData.times?.isOvernightForced,
+          combinedOvernight: isOvernightMode
         });
         
         return (
@@ -749,9 +1140,9 @@ const BookingStepModal = ({
             dateRange={bookingData.dateRange}
             selectedService={{
               ...bookingData.service,
-              is_overnight: bookingData.service?.is_overnight
+              is_overnight: isOvernightMode
             }}
-            isOvernightForced={bookingData.service?.is_overnight || false}
+            isOvernightForced={isOvernightMode}
           />
         );
       case STEPS.REVIEW_AND_RATES.id:
@@ -807,6 +1198,15 @@ const BookingStepModal = ({
     // Call the onClose function passed as a prop
     onClose();
   };
+
+  // Add cleanup effect to ensure clean state when unmounting
+  useEffect(() => {
+    return () => {
+      debugLog('MBA2j3kbr9hve4: BookingStepModal unmounting, cleaning up state');
+      // This is a cleanup function that will run when the component unmounts
+      // We don't need to do anything here, just logging for debugging
+    };
+  }, []);
 
   return (
     <Modal

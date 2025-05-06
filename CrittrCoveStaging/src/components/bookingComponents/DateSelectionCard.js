@@ -61,7 +61,41 @@ const DateSelectionCard = ({
     if (isOvernightForced) {
       setSelectedDateRangeType('date-range');
     } else {
-      setSelectedDateRangeType(dateRangeType);
+      // Check if the dates are non-consecutive to enforce multiple-days mode
+      if (selectedDates && selectedDates.length > 1) {
+        const datesArray = selectedDates.map(dateItem => {
+          if (dateItem instanceof Date) {
+            return dateItem;
+          } else if (typeof dateItem === 'object' && dateItem.date) {
+            return new Date(dateItem.date);
+          } else {
+            return new Date(dateItem);
+          }
+        }).sort((a, b) => a - b);
+        
+        // Check if dates are consecutive
+        let areConsecutive = true;
+        for (let i = 1; i < datesArray.length; i++) {
+          const prevDate = new Date(datesArray[i-1]);
+          const currDate = new Date(datesArray[i]);
+          prevDate.setDate(prevDate.getDate() + 1);
+          
+          if (prevDate.getTime() !== currDate.getTime()) {
+            areConsecutive = false;
+            break;
+          }
+        }
+        
+        // Set appropriate date range type
+        if (!areConsecutive) {
+          setSelectedDateRangeType('multiple-days');
+          debugLog('MBA54321 Non-consecutive dates detected, enforcing multiple-days mode');
+        } else {
+          setSelectedDateRangeType(dateRangeType);
+        }
+      } else {
+        setSelectedDateRangeType(dateRangeType);
+      }
     }
     
     // Handle dates from draft that might be in a different format
@@ -82,13 +116,18 @@ const DateSelectionCard = ({
       
       setSelectedDatesList(datesArray);
       
-      // If in date-range mode, set the range start and end dates
-      if ((dateRangeType === 'date-range' || isOvernightForced) && datesArray.length > 0) {
+      // If in date-range mode and dates are consecutive, set the range start and end dates
+      const areConsecutiveDates = checkIfConsecutiveDates(datesArray);
+      
+      if ((dateRangeType === 'date-range' || isOvernightForced) && datesArray.length > 0 && areConsecutiveDates) {
         // Sort dates to get min and max
         const sortedDates = [...datesArray].sort((a, b) => a - b);
         setRangeStartDate(sortedDates[0]);
         setDateRangeEnd(sortedDates[sortedDates.length - 1]);
         setDatesFromRange(true);
+      } else if (datesArray.length > 0) {
+        // For non-consecutive dates, we'll stay in multiple-days mode
+        setDatesFromRange(false);
       }
       
       // Notify parent component that we have valid dates
@@ -96,12 +135,15 @@ const DateSelectionCard = ({
         const dateData = {
           type: bookingType,
           dates: datesArray,
-          rangeType: isOvernightForced ? 'date-range' : dateRangeType,
+          rangeType: isOvernightForced ? 'date-range' : 
+                    (!areConsecutiveDates ? 'multiple-days' : dateRangeType),
           isValid: true
         };
         
-        // Add range data if in date-range mode
-        if ((dateRangeType === 'date-range' || isOvernightForced) && datesArray.length > 0) {
+        // Add range data if in date-range mode and dates are consecutive
+        if ((dateRangeType === 'date-range' || isOvernightForced) && 
+            datesArray.length > 0 && 
+            areConsecutiveDates) {
           const sortedDates = [...datesArray].sort((a, b) => a - b);
           dateData.startDate = sortedDates[0];
           dateData.endDate = sortedDates[sortedDates.length - 1];
@@ -112,9 +154,51 @@ const DateSelectionCard = ({
     }
   }, []);
 
+  // Helper function to check if an array of dates contains only consecutive dates
+  const checkIfConsecutiveDates = (datesArray) => {
+    if (!datesArray || datesArray.length <= 1) return true;
+    
+    // Sort the dates
+    const sortedDates = [...datesArray].sort((a, b) => a - b);
+    
+    // Check if each date is exactly one day after the previous
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prevDate = new Date(sortedDates[i-1]);
+      const currDate = new Date(sortedDates[i]);
+      prevDate.setDate(prevDate.getDate() + 1);
+      
+      if (prevDate.getTime() !== currDate.getTime()) {
+        debugLog('MBA54321 Non-consecutive dates found:', {
+          prev: sortedDates[i-1].toISOString().split('T')[0],
+          current: sortedDates[i].toISOString().split('T')[0]
+        });
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
   // Initialize date range if provided separately via initialDateRange
   useEffect(() => {
     if (initialDateRange && initialDateRange.startDate && initialDateRange.endDate && !datesFromRange) {
+      // Check if we already have selectedDatesList populated
+      // If so, we need to determine if these are non-consecutive dates
+      if (selectedDatesList.length > 0 && !checkIfConsecutiveDates(selectedDatesList)) {
+        debugLog('MBA54321 Non-consecutive dates already loaded, not converting to range');
+        
+        // We already have non-consecutive dates, don't override with a range
+        if (onDateSelect) {
+          onDateSelect({
+            type: bookingType,
+            dates: selectedDatesList,
+            rangeType: 'multiple-days',
+            isValid: selectedDatesList.length > 0
+          });
+        }
+        return;
+      }
+      
       const dateRange = [];
       const currentDate = new Date(initialDateRange.startDate);
       const endDate = new Date(initialDateRange.endDate);
@@ -166,24 +250,52 @@ const DateSelectionCard = ({
       });
     }
     
+    // Check if we're switching to date-range with non-consecutive dates
+    if (type === 'date-range' && selectedDatesList.length > 1 && !checkIfConsecutiveDates(selectedDatesList)) {
+      debugLog('MBA54321 Cannot switch to date-range with existing non-consecutive dates');
+      // The UI will handle this by clearing dates first, so we don't need additional handling here
+      return;
+    }
+    
     setSelectedDateRangeType(type);
     
     if (type === 'date-range' && lastRangeSelection) {
-      // Restore the last range selection when switching back to date-range
-      setRangeStartDate(lastRangeSelection.startDate);
-      setDateRangeEnd(lastRangeSelection.endDate);
-      setSelectedDatesList(lastRangeSelection.dates);
-      setDatesFromRange(true);
-      
-      if (onDateSelect) {
-        onDateSelect({
-          type: 'one-time',
-          dates: lastRangeSelection.dates,
-          rangeType: 'date-range',
-          startDate: lastRangeSelection.startDate,
-          endDate: lastRangeSelection.endDate,
-          isValid: true
-        });
+      // Only restore the last range selection when switching to date-range
+      // if those dates were actually consecutive
+      if (checkIfConsecutiveDates(lastRangeSelection.dates)) {
+        setRangeStartDate(lastRangeSelection.startDate);
+        setDateRangeEnd(lastRangeSelection.endDate);
+        setSelectedDatesList(lastRangeSelection.dates);
+        setDatesFromRange(true);
+        
+        if (onDateSelect) {
+          onDateSelect({
+            type: 'one-time',
+            dates: lastRangeSelection.dates,
+            rangeType: 'date-range',
+            startDate: lastRangeSelection.startDate,
+            endDate: lastRangeSelection.endDate,
+            isValid: true
+          });
+        }
+      } else {
+        // Current dates are not consecutive - keep in multiple-days mode and show warning
+        debugLog('MBA54321 Cannot switch to date-range with non-consecutive dates');
+        
+        // Revert the UI selection
+        setTimeout(() => {
+          setSelectedDateRangeType('multiple-days');
+        }, 100);
+        
+        // Keep the existing dates in multiple-days mode
+        if (onDateSelect) {
+          onDateSelect({
+            type: 'one-time',
+            dates: selectedDatesList,
+            rangeType: 'multiple-days',
+            isValid: selectedDatesList.length > 0
+          });
+        }
       }
     } else if (type === 'multiple-days') {
       // Store the current range selection before switching to multiple-days
@@ -289,6 +401,40 @@ const DateSelectionCard = ({
         dateRangeEnd,
         selectedDatesList: selectedDatesList.length
       });
+    }
+
+    // If we have non-consecutive dates but we're in date-range mode,
+    // we should clear them first
+    if (selectedDatesList.length > 1 && !checkIfConsecutiveDates(selectedDatesList)) {
+      debugLog('MBA19ynkiy34b handleDateRangeSelection - clearing non-consecutive dates for date range');
+      setSelectedDatesList([date]);
+      setRangeStartDate(date);
+      setDateRangeEnd(null);
+      setDatesFromRange(false);
+      
+      if (onDateSelect) {
+        onDateSelect({
+          type: 'one-time',
+          dates: [date],
+          rangeType: 'date-range',
+          startDate: date,
+          isValid: false
+        });
+      }
+      return;
+    }
+
+    // First check if we already have non-consecutive dates selected
+    if (selectedDatesList.length > 1 && !checkIfConsecutiveDates(selectedDatesList)) {
+      // We have non-consecutive dates, so we should be in multiple-days mode
+      if (selectedDateRangeType !== 'multiple-days') {
+        debugLog('MBA19ynkiy34b Non-consecutive dates exist, forcing multiple-days mode');
+        setSelectedDateRangeType('multiple-days');
+      }
+      
+      // Handle the date click as a toggle in multiple-days mode
+      toggleDateSelection(date);
+      return;
     }
 
     if (!rangeStartDate) {
@@ -837,6 +983,11 @@ const DateSelectionCard = ({
   };
 
   const renderOneTimeOptions = () => {
+    // Check if we have non-consecutive dates that need to force multiple-days mode
+    const hasNonConsecutiveDates = selectedDatesList.length > 1 && !checkIfConsecutiveDates(selectedDatesList);
+    
+    // Don't force multiple-days mode automatically - let user choose and then clear dates if needed
+    
     return (
       <View style={styles.oneTimeOptionsContainer}>
         <View style={styles.dateRangeTypeContainer}>
@@ -845,7 +996,32 @@ const DateSelectionCard = ({
               styles.dateRangeTypeButton,
               selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButton
             ]}
-            onPress={() => handleDateRangeTypeSelect('date-range')}
+            onPress={() => {
+              // If we have non-consecutive dates and switching to date-range, 
+              // clear the selected dates first to allow a clean range selection
+              if (hasNonConsecutiveDates && selectedDateRangeType !== 'date-range') {
+                debugLog('MBA54321 Clearing non-consecutive dates when switching to date-range mode');
+                setSelectedDatesList([]);
+                setRangeStartDate(null);
+                setDateRangeEnd(null);
+                setDatesFromRange(false);
+                
+                // Now switch to date-range mode with cleared dates
+                setSelectedDateRangeType('date-range');
+                
+                if (onDateSelect) {
+                  onDateSelect({
+                    type: 'one-time',
+                    dates: [],
+                    rangeType: 'date-range',
+                    isValid: false
+                  });
+                }
+              } else {
+                // Normal switching behavior
+                handleDateRangeTypeSelect('date-range');
+              }
+            }}
           >
             <Text style={[
               styles.dateRangeTypeButtonText,

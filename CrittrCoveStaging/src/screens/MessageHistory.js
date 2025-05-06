@@ -18,6 +18,14 @@ import { formatOccurrenceFromUTC } from '../utils/time_utils';
 import DraftConfirmationModal from '../components/DraftConfirmationModal';
 import useWebSocket from '../hooks/useWebSocket';
 import MessageNotificationContext from '../context/MessageNotificationContext';
+import {
+  getConnectionProfile,
+  getUserConnections,
+  approveBooking,
+  requestBookingChanges,
+  createDraftFromBooking,
+  // ... other imports from API.js
+} from '../api/API';
 
 // First, create a function to generate dynamic styles
 const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
@@ -698,6 +706,7 @@ const MessageHistory = ({ navigation, route }) => {
   // Add loading states
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Add isLoading state for edit draft
   
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [selectedConversationData, setSelectedConversationData] = useState(null);
@@ -738,6 +747,34 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add a ref to track the last viewed conversation to avoid redundant API calls
   const lastViewedConversationRef = useRef(null);
+
+  // Outside the renderMessage callback, add a function to group messages by booking ID
+  const groupMessagesByBookingId = (messages) => {
+    const bookingMessages = {};
+    
+    // First pass: collect messages by booking ID
+    messages.forEach(message => {
+      if (message.metadata && message.metadata.booking_id) {
+        const bookingId = message.metadata.booking_id;
+        if (!bookingMessages[bookingId]) {
+          bookingMessages[bookingId] = [];
+        }
+        bookingMessages[bookingId].push({
+          messageId: message.message_id,
+          type: message.type_of_message,
+          timestamp: new Date(message.created_at || message.timestamp),
+          message: message
+        });
+      }
+    });
+    
+    // Second pass: sort messages by timestamp (newest first)
+    Object.keys(bookingMessages).forEach(bookingId => {
+      bookingMessages[bookingId].sort((a, b) => b.timestamp - a.timestamp);
+    });
+    
+    return bookingMessages;
+  };
 
   // WebSocket message handler defined as a memoized callback
   const handleWebSocketMessage = useCallback((data) => {
@@ -1619,57 +1656,67 @@ const MessageHistory = ({ navigation, route }) => {
   };
 
   const renderMessage = useCallback(({ item }) => {
-    // Create a map to keep track of which bookings have change requests
-    // This is defined outside the component to persist between renders
-    if (!renderMessage.changeRequestMap) {
-      renderMessage.changeRequestMap = new Map();
-
-      // Initialize the map with booking IDs that have change requests
-      messages.forEach(msg => {
-        if (msg.type_of_message === 'request_changes' && msg.metadata?.booking_id) {
-          renderMessage.changeRequestMap.set(msg.metadata.booking_id, true);
-        }
-      });
+    // Create a map to keep track of which bookings have change requests and latest message timestamps
+    const bookingMessages = groupMessagesByBookingId(messages);
+    const hasChangeRequest = item.metadata?.booking_id && 
+      messages.some(m => 
+        m.type_of_message === 'request_changes' && 
+        m.metadata?.booking_id === item.metadata.booking_id
+      );
+    
+    // Determine if this is the newest message for this booking
+    let isNewestMessage = false;
+    let messageCreatedAt = new Date(item.created_at || item.timestamp);
+    
+    if (item.metadata?.booking_id && bookingMessages[item.metadata.booking_id]) {
+      const bookingMessagesList = bookingMessages[item.metadata.booking_id];
+      
+      // Check if this is the newest message for this booking
+      isNewestMessage = bookingMessagesList.length > 0 && 
+        bookingMessagesList[0].messageId === item.message_id;
+      
+      debugLog(`MBA7321: Message ${item.message_id} for booking ${item.metadata.booking_id} isNewestMessage: ${isNewestMessage}`);
     }
 
-    // Update the map when we encounter a change request
-    if (item.type_of_message === 'request_changes' && item.metadata?.booking_id) {
-      renderMessage.changeRequestMap.set(item.metadata.booking_id, true);
-    }
-
-    // Handle booking messages (both requests and approvals)
-    if (item.type_of_message === 'initial_booking_request' || 
-        item.type_of_message === 'send_approved_message') {
+    if (item.type_of_message === 'initial_booking_request' || item.type_of_message === 'send_approved_message') {
       const isFromMe = !item.sent_by_other_user;
 
-      // Check if this booking has a change request
+      // Determine if this booking has an associated change request
       const bookingId = item.metadata?.booking_id;
-      const hasChangeRequest = bookingId ? renderMessage.changeRequestMap.has(bookingId) : false;
+      const hasAssociatedChangeRequest = bookingId && messages.some(m => 
+        m.type_of_message === 'request_changes' && 
+        m.metadata?.booking_id === bookingId
+      );
 
-      // Safely get total owner cost
-      const totalOwnerCost = item.metadata?.cost_summary?.total_owner_cost || 
-                            item.metadata?.total_owner_cost || 
-                            0;
+      // Check if this is an approval request message
+      const isApprovalMessage = item.type_of_message === 'send_approved_message';
+      
+      // Get booking status from metadata
+      const bookingStatus = item.metadata?.booking_status;
+      
+      // Check if the pro should be able to edit the draft
+      const showEditDraft = selectedConversationData?.is_professional && 
+        (item.type_of_message === 'initial_booking_request' || 
+         (item.type_of_message === 'send_approved_message' && hasAssociatedChangeRequest));
 
-      if (is_DEBUG) {
-        console.log('MBA9876i2ghv93 Message data:', {
-          type: item.type_of_message,
-          metadata: item.metadata,
-          booking_id: item.metadata?.booking_id,
-          service_type: item.metadata?.service_type,
-          totalOwnerCost,
-          userTimezone: timeSettings.timezone,
-          occurrences: item.metadata.occurrences,
-          hasChangeRequest
+      // This is for logging purposes
+      if (showEditDraft) {
+        debugLog('MBA6428: Showing edit draft button for message:', {
+          messageId: item.message_id,
+          bookingId: bookingId,
+          type: item.type_of_message
         });
       }
 
-      // Determine if we should show edit draft button
-      // Only show for initial_booking_request when we have a draft and user is professional
-      const showEditDraft = item.type_of_message === 'initial_booking_request' && 
-                           hasDraft && 
-                           draftData && 
-                           selectedConversationData?.is_professional;
+      // Get total owner cost
+      let totalOwnerCost = '0.00';
+      try {
+        if (item.metadata.cost_summary && item.metadata.cost_summary.total_client_cost) {
+          totalOwnerCost = item.metadata.cost_summary.total_client_cost;
+        }
+      } catch (error) {
+        console.error('Error parsing total cost:', error);
+      }
 
       return (
         <BookingMessageCard
@@ -1704,9 +1751,14 @@ const MessageHistory = ({ navigation, route }) => {
           onApproveError={(error) => {
             Alert.alert('Error', error || 'Failed to approve booking');
           }}
-          onEditDraft={showEditDraft ? () => handleEditDraft(item.metadata.draft_id) : undefined}
+          onEditDraft={showEditDraft ? () => {
+            debugLog('MBA6428: Edit Draft button clicked, calling handleEditDraft with bookingId:', bookingId);
+            handleEditDraft(bookingId);
+          } : undefined}
           bookingStatus={item.metadata?.booking_status}
-          hasChangeRequest={hasChangeRequest}
+          hasChangeRequest={hasAssociatedChangeRequest}
+          isNewestMessage={isNewestMessage}
+          messageCreatedAt={messageCreatedAt}
         />
       );
     }
@@ -1720,11 +1772,12 @@ const MessageHistory = ({ navigation, route }) => {
       const bookingStatus = item.metadata?.booking_status;
       
       // Log for debugging
-      debugLog('MBA88899 Rendering change request message:', {
+      debugLog('MBA6428: Rendering change request message:', {
         bookingId,
         isFromMe,
         content: item.content,
-        metadata: item.metadata
+        metadata: item.metadata,
+        isNewestMessage
       });
       
       return (
@@ -1758,17 +1811,13 @@ const MessageHistory = ({ navigation, route }) => {
           onApproveError={(error) => {
             Alert.alert('Error', error || 'Failed to process changes');
           }}
-          onEditDraft={() => {
-            // Navigate to edit booking if professional
-            if (selectedConversationData?.is_professional && bookingId) {
-              navigation.navigate('EditBooking', { 
-                bookingId: bookingId,
-                from: 'MessageHistory'
-              });
-            }
-          }}
+          onEditDraft={selectedConversationData?.is_professional ? () => {
+            handleEditDraft(bookingId);
+          } : undefined}
           bookingStatus={bookingStatus}
-          hasChangeRequest={false} // Change request message itself doesn't need an overlay
+          hasChangeRequest={false} // Change requests don't have change requests themselves
+          isNewestMessage={isNewestMessage}
+          messageCreatedAt={messageCreatedAt}
         />
       );
     }
@@ -2293,7 +2342,7 @@ const MessageHistory = ({ navigation, route }) => {
             style={styles.editDraftButton}
             onPress={() => {
               if (draftData?.draft_id) {
-                handleEditDraft(draftData.draft_id);
+                handleOpenExistingDraft(draftData.draft_id);
               }
             }}
           >
@@ -2505,24 +2554,74 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  const handleEditDraft = (draft_id) => {
-    if (is_DEBUG) {
-      console.log('MBA98765 handleEditDraft:', {
-        draft_id,
-        showBookingStepModal
-      });
+  const handleEditDraft = async (bookingId) => {
+    debugLog('MBA6428: handleEditDraft called with booking ID:', bookingId);
+    
+    if (!bookingId) {
+      debugLog('MBA6428: Error - No booking ID provided');
+      Alert.alert('Error', 'Missing booking information. Please try again.');
+      return;
     }
     
-    // Use the provided draft_id
-    setCurrentBookingId(draft_id);
-    setShowDraftConfirmModal(false); // Ensure draft confirm modal is closed
-    // Add a small delay to ensure modal state is updated
-    setTimeout(() => {
-      if (is_DEBUG) {
-        console.log('MBA98765 Opening BookingStepModal with draft:', draft_id);
+    try {
+      setIsLoading(true);
+      debugLog('MBA6428: Calling createDraftFromBooking API with booking ID:', bookingId);
+      
+      // Call our new API function to create a draft from the booking
+      const response = await createDraftFromBooking(bookingId);
+      
+      if (response && response.draft_id) {
+        debugLog('MBA6428: Draft created successfully:', response);
+        
+        // Use the returned draft_id for opening the booking step modal
+        setCurrentBookingId(response.draft_id);
+        
+        // Close any open modal and open the booking step modal
+        setShowDraftConfirmModal(false);
+        
+        // Add a small delay to ensure modal state is updated
+        setTimeout(() => {
+          debugLog('MBA6428: Opening BookingStepModal with draft:', response.draft_id);
+          setShowBookingStepModal(true);
+        }, 100);
+      } else {
+        debugLog('MBA6428: Error - Invalid response from createDraftFromBooking:', response);
+        Alert.alert('Error', 'Failed to create draft from booking. Please try again.');
       }
-      setShowBookingStepModal(true);
-    }, 100);
+    } catch (error) {
+      debugLog('MBA6428: Error creating draft from booking:', error);
+      Alert.alert('Error', 'Failed to create draft from booking. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // New function for opening an existing draft directly
+  const handleOpenExistingDraft = (draftId) => {
+    debugLog('MBA6428: handleOpenExistingDraft called with draft ID:', draftId);
+    
+    if (!draftId) {
+      debugLog('MBA6428: Error - No draft ID provided');
+      Alert.alert('Error', 'Missing draft information. Please try again.');
+      return;
+    }
+    
+    try {
+      // Set the current booking ID to the provided draft ID
+      setCurrentBookingId(draftId);
+      
+      // Close any open modal and open the booking step modal
+      setShowDraftConfirmModal(false);
+      
+      // Add a small delay to ensure modal state is updated
+      setTimeout(() => {
+        debugLog('MBA6428: Opening BookingStepModal with existing draft:', draftId);
+        setShowBookingStepModal(true);
+      }, 100);
+    } catch (error) {
+      debugLog('MBA6428: Error opening booking modal with draft:', error);
+      Alert.alert('Error', 'Failed to open booking draft. Please try again.');
+    }
   };
 
   // Add polling for online status of the other participant
@@ -2706,6 +2805,7 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, []);
 
+  // Add a loading overlay component at the bottom of the return statement, before any modals
   return (
     <SafeAreaView style={[
       styles.container,
@@ -2741,6 +2841,38 @@ const MessageHistory = ({ navigation, route }) => {
         renderEmptyState()
       )}
       
+      {/* Loading overlay for draft creation */}
+      {isLoading && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <View style={{
+            backgroundColor: theme.colors.surface,
+            borderRadius: 12,
+            padding: 24,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+            elevation: 5,
+          }}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={{ marginTop: 16, color: theme.colors.text, fontFamily: theme.fonts.regular.fontFamily }}>
+              Creating draft from booking...
+            </Text>
+          </View>
+        </View>
+      )}
+      
       <RequestBookingModal
         visible={showRequestModal}
         onClose={() => setShowRequestModal(false)}
@@ -2757,17 +2889,16 @@ const MessageHistory = ({ navigation, route }) => {
         navigation={navigation}
         bookingId={currentBookingId}
         onComplete={(bookingData) => {
-          if (is_DEBUG) {
-            console.log('MBA98765 Booking completed:', bookingData);
-            console.log('MBA98765 New booking message:', bookingData.message);
-            console.log('MBA98765 Message metadata:', bookingData.message?.metadata);
-          }
+          debugLog('MBA6428: Booking completed:', bookingData);
+          debugLog('MBA6428: New booking message:', bookingData.message);
+          debugLog('MBA6428: Message metadata:', bookingData.message?.metadata);
+          debugLog('MBA6428: Is this an update?', bookingData.isUpdate);
           
           // Handle error case
           if (bookingData.error) {
             Alert.alert(
               'Error',
-              bookingData.errorMessage || 'Failed to create booking. Please try again.'
+              bookingData.errorMessage || 'Failed to process booking. Please try again.'
             );
             
             // Close the modal and clean up
@@ -2776,16 +2907,20 @@ const MessageHistory = ({ navigation, route }) => {
             return;
           }
           
-          // Add the newly created booking message to the messages list
+          // Add the new booking message to the messages list
           if (bookingData.message) {
             setMessages(prevMessages => [bookingData.message, ...prevMessages]);
             
-            // Update conversation's last message
+            // Update conversation's last message with appropriate text
+            const lastMessageText = bookingData.isUpdate 
+              ? "Updated Booking Request" 
+              : "Approval Request";
+              
             setConversations(prev => prev.map(conv => 
               conv.conversation_id === selectedConversation 
                 ? {
                     ...conv,
-                    last_message: "Approval Request",
+                    last_message: lastMessageText,
                     last_message_time: bookingData.message.timestamp
                   }
                 : conv
@@ -2799,6 +2934,13 @@ const MessageHistory = ({ navigation, route }) => {
           // Close the modal and clean up
           setShowBookingStepModal(false);
           setCurrentBookingId(null);
+
+          // Show success message to the user
+          const successMessage = bookingData.isUpdate
+            ? "Booking update request sent successfully!"
+            : "Booking request sent successfully!";
+          
+          Alert.alert("Success", successMessage);
         }}
       />
 

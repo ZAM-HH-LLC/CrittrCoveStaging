@@ -33,7 +33,9 @@ const BookingMessageCard = ({
   onApproveError,
   onEditDraft,
   bookingStatus, // Added to know if booking is confirmed
-  hasChangeRequest // Boolean to indicate if this approval has a pending change request
+  hasChangeRequest, // Boolean to indicate if this approval has a pending change request
+  isNewestMessage = false, // Flag to indicate if this is the newest message for this booking
+  messageCreatedAt // Timestamp of when the message was created
 }) => {
   const { timeSettings } = useContext(AuthContext);
   const userTimezone = timeSettings?.timezone || 'US/Mountain';
@@ -64,11 +66,30 @@ const BookingMessageCard = ({
   const isChangeRequest = type === 'request_changes';
   const shouldShowAsApproval = type === 'approval' || isChangeRequest;
   
-  // Determine if we should show the overlay - only on approval messages, either when confirmed or has change request
-  const shouldShowOverlay = isConfirmed || (type === 'approval' && hasChangeRequest);
+  // Determine if we should show the overlay based on message type and recency
+  // - Show "Booking Confirmed" on all messages if the booking is confirmed
+  // - Show "Changes Requested" on approval messages if there's a change request AND this isn't the newest message
+  // - Show "Booking Updated" on change request messages if they're not the newest message and there's a newer approval
+  const shouldShowOverlay = isConfirmed || 
+    (type === 'approval' && hasChangeRequest && !isNewestMessage) ||
+    (isChangeRequest && !isNewestMessage);
   
   // What overlay text to show
-  const overlayText = isConfirmed ? 'Booking Confirmed' : 'Changes Requested';
+  const getOverlayText = () => {
+    if (isConfirmed) return 'Booking Confirmed';
+    
+    if (type === 'approval' && hasChangeRequest && !isNewestMessage) {
+      return 'Changes Requested';
+    }
+    
+    if (isChangeRequest && !isNewestMessage) {
+      return 'Booking Updated';
+    }
+    
+    return '';
+  };
+  
+  const overlayText = getOverlayText();
 
   const getIcon = () => {
     switch (type) {

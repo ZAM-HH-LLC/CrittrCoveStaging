@@ -8,6 +8,7 @@ from .views import (
     UpdateBookingDraftMultipleDaysView,
     UpdateBookingDraftRecurringView,
     GetBookingDraftDatesAndTimesView,
+    CreateDraftFromBookingView,
 )
 from booking_drafts.v1.views import UpdateBookingDraftTimeAndDateView
 
@@ -20,4 +21,5 @@ urlpatterns = [
     path('update-multiple-days/<str:draft_id>/', UpdateBookingDraftMultipleDaysView.as_view(), name='update-multiple-days'),
     path('update-recurring/<str:draft_id>/', UpdateBookingDraftRecurringView.as_view(), name='update-recurring'),
     path('<int:draft_id>/dates_and_times/', GetBookingDraftDatesAndTimesView.as_view(), name='get_booking_draft_dates_and_times'),
+    path('create-from-booking/<int:booking_id>/', CreateDraftFromBookingView.as_view(), name='create-draft-from-booking'),
 ]

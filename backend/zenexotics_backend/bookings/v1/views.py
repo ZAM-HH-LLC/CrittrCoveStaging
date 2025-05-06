@@ -1422,14 +1422,14 @@ class CreateFromDraftView(APIView):
     @transaction.atomic
     def post(self, request):
         """
-        Create a booking from a draft.
+        Create or update a booking from a draft.
         
         This endpoint:
         1. Validates the professional is the one in the conversation
-        2. Creates a new booking with data from the draft
-        3. Creates booking occurrences, details, and rates
-        4. Creates booking pets entries
-        5. Creates a booking summary
+        2. If draft has an existing booking, updates it. Otherwise, creates a new booking 
+        3. Creates/updates booking occurrences, details, and rates
+        4. Creates/updates booking pets entries
+        5. Creates/updates a booking summary
         6. Logs the interaction
         7. Creates a message for the client
         8. Deletes the draft
@@ -1499,16 +1499,36 @@ class CreateFromDraftView(APIView):
             
             service = get_object_or_404(Service, service_id=service_id)
             
-            # Create booking with status "Pending Client Approval"
-            booking = Booking.objects.create(
-                client=client,
-                professional=professional,
-                service_id=service,
-                status=BookingStates.PENDING_CLIENT_APPROVAL,
-                initiated_by=professional.user,
-                last_modified_by=professional.user
-            )
-            logger.info(f"MBA66777 Created booking {booking.booking_id}")
+            # Check if we have an existing booking to update or need to create a new one
+            is_new_booking = False
+            if draft.booking:
+                # Update existing booking
+                booking = draft.booking
+                booking.status = BookingStates.PENDING_CLIENT_APPROVAL
+                booking.service_id = service
+                booking.last_modified_by = professional.user
+                booking.save()
+                logger.info(f"MBA66777 Updated existing booking {booking.booking_id}")
+                
+                # Delete existing booking pets and occurrences to rebuild them
+                BookingPets.objects.filter(booking=booking).delete()
+                
+                # Store existing occurrences to delete after creating new ones
+                # This prevents foreign key constraint issues when deleting occurrences
+                existing_occurrences = list(BookingOccurrence.objects.filter(booking=booking))
+            else:
+                # Create new booking with status "Pending Client Approval"
+                booking = Booking.objects.create(
+                    client=client,
+                    professional=professional,
+                    service_id=service,
+                    status=BookingStates.PENDING_CLIENT_APPROVAL,
+                    initiated_by=professional.user,
+                    last_modified_by=professional.user
+                )
+                is_new_booking = True
+                logger.info(f"MBA66777 Created new booking {booking.booking_id}")
+                existing_occurrences = []
             
             # Add pets to booking
             pet_count = 0
@@ -1523,6 +1543,8 @@ class CreateFromDraftView(APIView):
             
             # Process occurrences
             occurrences = []
+            new_booking_occurrences = []
+            
             for occurrence_data in draft_data.get('occurrences', []):
                 # Parse dates and times
                 start_date = datetime.strptime(occurrence_data['start_date'], '%Y-%m-%d').date()
@@ -1543,6 +1565,7 @@ class CreateFromDraftView(APIView):
                     calculated_cost=Decimal(str(occurrence_data.get('calculated_cost', 0)))
                 )
                 
+                new_booking_occurrences.append(occurrence)
                 logger.info(f"MBA66777 Created occurrence {occurrence.occurrence_id} for booking {booking.booking_id}")
                 
                 # Get or create booking details
@@ -1662,6 +1685,11 @@ class CreateFromDraftView(APIView):
                     'start_time': start_time.strftime('%H:%M'),
                     'end_time': end_time.strftime('%H:%M')
                 })
+            
+            # Now it's safe to delete old occurrences since new ones are created
+            for old_occurrence in existing_occurrences:
+                old_occurrence.delete()
+                logger.info(f"MBA66777 Deleted old occurrence {old_occurrence.occurrence_id}")
 
             # Get cost summary from draft data
             cost_summary = draft_data.get('cost_summary', {})
@@ -1676,14 +1704,16 @@ class CreateFromDraftView(APIView):
             logger.info(f"MBA66777 Created/updated booking summary for booking {booking.booking_id}")
             
             # Log the interaction with metadata
+            action = 'BOOKING_CREATED_FROM_DRAFT' if is_new_booking else 'BOOKING_UPDATED_FROM_DRAFT'
             InteractionLog.objects.create(
                 user=request.user,
-                action='BOOKING_CREATED_FROM_DRAFT',
+                action=action,
                 target_type='BOOKING',
                 target_id=str(booking.booking_id),
                 metadata={
                     'booking_id': booking.booking_id,
                     'draft_id': draft.draft_id,
+                    'is_new_booking': is_new_booking,
                     'draft_data': draft_data,
                     'cost_summary': cost_summary
                 }
@@ -1725,17 +1755,17 @@ class CreateFromDraftView(APIView):
             
             return Response({
                 'status': 'success',
-                'message': 'Booking created successfully',
+                'message': 'Booking created successfully' if is_new_booking else 'Booking updated successfully',
                 'booking_id': booking.booking_id,
                 'message': message.metadata
             })
             
         except Exception as e:
             transaction.savepoint_rollback(sid)
-            logger.error(f"MBA66777 Error creating booking from draft: {str(e)}")
+            logger.error(f"MBA66777 Error creating/updating booking from draft: {str(e)}")
             logger.error(f"MBA66777 Full traceback: {traceback.format_exc()}")
             return Response(
-                {"error": "An error occurred while creating the booking"},
+                {"error": "An error occurred while processing the booking"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

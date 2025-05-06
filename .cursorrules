@@ -56,7 +56,7 @@ CURSOR PROJECT GUIDELINES
 3. **No `alert()`**—use toasts like `ProfilInfoTab.js` does.  
 4. Error/success responses → show modal + toast.  
 5. Reduce needless round‑trips (e.g., only save pets/services if modified).
-6. DO NOT EVER create new components in the ui or edit the styling of the ui unless explicitly told to do so.
+6. NEVER create new components in the ui or edit the styling of the ui unless explicitly told to do so.
 7. NEVER try to run the frontend server yourself in your responses to me.
 
 ---

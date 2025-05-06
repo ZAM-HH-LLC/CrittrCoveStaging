@@ -6,13 +6,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
-from bookings.models import Booking
+from bookings.models import Booking, BookingStates
 from booking_pets.models import BookingPets
 from booking_drafts.models import BookingDraft
 from pets.models import Pet
 from professionals.models import Professional
 from clients.models import Client
-from bookings.constants import BookingStates
 from services.models import Service
 from booking_occurrences.models import BookingOccurrence
 from booking_summary.models import BookingSummary
@@ -2035,8 +2034,53 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     ('service_type', service.service_name),
                     ('service_id', service.service_id)
                 ])),
-                ('conversation_id', draft.booking.conversation_id if draft.booking else draft.draft_data.get('conversation_id'))
+                ('conversation_id', None)  # Initialize with None, will be updated below
             ])
+
+            # Get conversation_id - try multiple sources
+            conversation_id = None
+            
+            # 1. Try to get from draft_data
+            if draft.draft_data and 'conversation_id' in draft.draft_data:
+                conversation_id = draft.draft_data.get('conversation_id')
+                logger.info(f"MBA5321 - Found conversation_id from draft_data: {conversation_id}")
+                
+            # 2. If booking exists, try to get from related message
+            if not conversation_id and draft.booking:
+                try:
+                    from user_messages.models import UserMessage
+                    message = UserMessage.objects.filter(booking=draft.booking).first()
+                    if message and message.conversation:
+                        conversation_id = message.conversation.conversation_id
+                        logger.info(f"MBA5321 - Found conversation_id from booking message: {conversation_id}")
+                except Exception as e:
+                    logger.error(f"MBA5321 - Error getting conversation_id from message: {str(e)}")
+            
+            # 3. If client and professional exist, try to find conversation between them
+            if not conversation_id and client_id and professional:
+                try:
+                    from conversations.models import Conversation
+                    from django.db.models import Q
+                    
+                    # Get client user
+                    client = Client.objects.filter(id=client_id).first()
+                    
+                    if client and client.user:
+                        # Find conversation between professional and client
+                        conversation = Conversation.objects.filter(
+                            Q(participant1=professional.user, participant2=client.user) |
+                            Q(participant1=client.user, participant2=professional.user)
+                        ).first()
+                        
+                        if conversation:
+                            conversation_id = conversation.conversation_id
+                            logger.info(f"MBA5321 - Found conversation_id by looking up participants: {conversation_id}")
+                except Exception as e:
+                    logger.error(f"MBA5321 - Error finding conversation between users: {str(e)}")
+            
+            # Update the draft data with the conversation_id
+            draft_data['conversation_id'] = conversation_id
+            logger.info(f"MBA5321 - Final conversation_id in draft_data: {conversation_id}")
 
             # Update draft status if needed
             if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
@@ -2482,6 +2526,274 @@ class GetBookingDraftDatesAndTimesView(APIView):
             logger.error(f"MBA-DEBUG: Traceback: {traceback.format_exc()}")
             return Response(
                 {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class CreateDraftFromBookingView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+    
+    def post(self, request, booking_id):
+        logger.info(f"MBA6428: CreateDraftFromBookingView.post called with booking_id={booking_id}")
+        
+        try:
+            # Get the booking
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            
+            # Verify authorization - only professionals can create drafts from bookings
+            professional = get_object_or_404(Professional, user=request.user)
+            if booking.professional != professional:
+                logger.error(f"MBA6428: Unauthorized access attempt by {request.user.email} for booking {booking_id}")
+                return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Delete any existing drafts for this booking
+            existing_drafts = BookingDraft.objects.filter(booking=booking)
+            if existing_drafts.exists():
+                logger.info(f"MBA6428: Deleting {existing_drafts.count()} existing drafts for booking {booking_id}")
+                existing_drafts.delete()
+            
+            # Create a new draft
+            draft = BookingDraft(
+                booking=booking,
+                draft_data={},
+                last_modified_by='PROFESSIONAL',
+                status='IN_PROGRESS',
+                original_status=booking.status
+            )
+            
+            # Get the pets associated with this booking
+            pets_data = []
+            for bp in booking.booking_pets.select_related('pet').all():
+                pets_data.append(OrderedDict([
+                    ('name', bp.pet.name),
+                    ('breed', bp.pet.breed),
+                    ('pet_id', bp.pet.pet_id),
+                    ('species', bp.pet.species)
+                ]))
+            
+            # Get the service
+            service = booking.service_id
+            
+            # Process occurrences
+            processed_occurrences = []
+            num_pets = len(pets_data)
+            
+            # Get booking occurrences
+            occurrences = BookingOccurrence.objects.filter(booking=booking)
+            
+            for occurrence in occurrences:
+                # Get occurrence details
+                booking_details = occurrence.booking_details.first()
+                
+                # Get occurrence rates
+                occurrence_rates = None
+                try:
+                    occurrence_rates = occurrence.rates
+                except:
+                    pass
+                
+                # Create a temporary service object to ensure we capture the correct unit_of_time
+                temp_service = Service(
+                    service_id=service.service_id,
+                    service_name=service.service_name,
+                    professional=service.professional,
+                    base_rate=booking_details.base_rate if booking_details else service.base_rate,
+                    additional_animal_rate=booking_details.additional_pet_rate if booking_details else service.additional_animal_rate,
+                    applies_after=booking_details.applies_after if booking_details else service.applies_after,
+                    holiday_rate=booking_details.holiday_rate if booking_details else service.holiday_rate,
+                    unit_of_time=booking_details.unit_of_time if booking_details else service.unit_of_time
+                )
+                
+                # Extract data directly from the occurrence model in 24-hour UTC format
+                # instead of relying on create_occurrence_data which may convert to user timezone
+                occurrence_data = OrderedDict([
+                    ('occurrence_id', occurrence.occurrence_id),
+                    ('start_date', occurrence.start_date.strftime('%Y-%m-%d')),
+                    ('end_date', occurrence.end_date.strftime('%Y-%m-%d')),
+                    ('start_time', occurrence.start_time.strftime('%H:%M')),
+                    ('end_time', occurrence.end_time.strftime('%H:%M')),
+                    ('timezone', 'UTC')
+                ])
+                
+                logger.info(f"MBA23oh9uvrnu32: Created occurrence with UTC times: {occurrence_data['start_time']}-{occurrence_data['end_time']}")
+                
+                # Directly calculate necessary rate data if temp_service available
+                # This ensures we have calculated_cost even if create_occurrence_data fails
+                try:
+                    # Start with default base rate from service
+                    base_rate = temp_service.base_rate
+                    # Calculate duration in hours
+                    hour_diff = (occurrence.end_time.hour - occurrence.start_time.hour)
+                    minute_diff = (occurrence.end_time.minute - occurrence.start_time.minute) / 60
+                    duration_hours = hour_diff + minute_diff
+                    
+                    # Calculate multiple based on unit_of_time
+                    multiple = 0.33333  # Default for per day (8 hours)
+                    if temp_service.unit_of_time == 'Per Hour':
+                        multiple = duration_hours
+                    elif temp_service.unit_of_time == 'Per Visit':
+                        multiple = 1
+                    
+                    # Calculate basic costs
+                    base_total = Decimal(str(base_rate)) * Decimal(str(multiple))
+                    calculated_cost = base_total
+                    
+                    # Add default calculated values
+                    occurrence_data['multiple'] = float(multiple)
+                    occurrence_data['base_total'] = str(base_total)
+                    occurrence_data['calculated_cost'] = str(calculated_cost)
+                    occurrence_data['duration'] = f"{int(duration_hours)} hours"
+                    
+                    # Add basic rates information
+                    occurrence_data['rates'] = OrderedDict([
+                        ('base_rate', str(temp_service.base_rate)),
+                        ('holiday_rate', str(temp_service.holiday_rate)),
+                        ('additional_animal_rate', str(temp_service.additional_animal_rate)),
+                        ('applies_after', temp_service.applies_after),
+                        ('holiday_days', 0),
+                        ('unit_of_time', temp_service.unit_of_time),
+                        ('additional_rates', [])
+                    ])
+                    
+                    logger.info(f"MBA23oh9uvrnu32: Directly calculated cost: {calculated_cost} with multiple: {multiple}")
+                except Exception as e:
+                    logger.error(f"MBA23oh9uvrnu32: Error calculating rates directly: {str(e)}")
+                
+                # Try to use create_occurrence_data for calculating rates, but preserve our time formats
+                temp_data = create_occurrence_data(
+                    occurrence=occurrence,
+                    service=temp_service,
+                    num_pets=num_pets,
+                    user_timezone=None  # Setting to None prevents timezone conversion
+                )
+                
+                # Copy only the necessary fields from temp_data, preserving our time formats
+                if temp_data:
+                    for key, value in temp_data.items():
+                        # Skip time and date fields that we've already set
+                        if key not in ['start_date', 'end_date', 'start_time', 'end_time', 'formatted_start', 'formatted_end']:
+                            occurrence_data[key] = value
+                
+                # If occurrence_rates exists, add any additional rates
+                if occurrence_rates and hasattr(occurrence_rates, 'rates'):
+                    additional_rates = []
+                    for rate in occurrence_rates.rates:
+                        if rate.get('title') != 'Base Rate' and rate.get('title') != 'Additional Animal Rate' and rate.get('title') != 'Holiday Rate':
+                            additional_rates.append(OrderedDict([
+                                ('title', rate.get('title', '')),
+                                ('description', rate.get('description', '')),
+                                ('amount', rate.get('amount', '0.00'))
+                            ]))
+                    
+                    # Update the occurrence data with these additional rates
+                    if occurrence_data and 'rates' in occurrence_data:
+                        occurrence_data['rates']['additional_rates'] = additional_rates
+                
+                if occurrence_data:
+                    processed_occurrences.append(occurrence_data)
+            
+            # Calculate subtotal from all occurrences
+            subtotal = Decimal('0.00')
+            for occ in processed_occurrences:
+                calculated_cost = Decimal(str(occ['calculated_cost']))
+                subtotal += calculated_cost
+            
+            # Get professional's service address for tax calculation
+            address = Address.objects.filter(
+                user=professional.user, 
+                address_type=AddressType.SERVICE
+            ).first()
+            
+            # Get state for tax calculation
+            state = get_state_from_address(address, default_state='CO')
+            
+            # Get client for platform fee calculation
+            client = booking.client
+            client_user = client.user if client else None
+            
+            # Calculate platform fees using the utility function
+            platform_fees = calculate_platform_fees(subtotal, client_user, professional.user)
+            
+            client_platform_fee = platform_fees['client_platform_fee']
+            pro_platform_fee = platform_fees['pro_platform_fee']
+            total_platform_fee = platform_fees['total_platform_fee']
+            client_platform_fee_percentage = platform_fees['client_platform_fee_percentage']
+            pro_platform_fee_percentage = platform_fees['pro_platform_fee_percentage']
+            
+            # Calculate taxes using the tax utility function
+            taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
+            
+            # Calculate totals
+            total_client_cost = subtotal + client_platform_fee + taxes
+            total_sitter_payout = (subtotal * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
+            
+            # Get conversation ID from booking metadata or messages
+            conversation_id = None
+            try:
+                # Try to get conversation from booking message
+                from user_messages.models import UserMessage
+                message = UserMessage.objects.filter(booking=booking).first()
+                if message:
+                    conversation_id = message.conversation.conversation_id
+            except Exception as e:
+                logger.error(f"MBA6428: Error getting conversation_id: {str(e)}")
+            
+            # Create cost summary
+            cost_summary = OrderedDict([
+                ('subtotal', float(subtotal)),
+                ('client_platform_fee', float(client_platform_fee)),
+                ('pro_platform_fee', float(pro_platform_fee)),
+                ('total_platform_fee', float(total_platform_fee)),
+                ('taxes', float(taxes)),
+                ('total_client_cost', float(total_client_cost)),
+                ('total_sitter_payout', float(total_sitter_payout)),
+                ('is_prorated', True),
+                ('tax_state', state),
+                ('pro_subscription_plan', professional.user.subscription_plan),
+                ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
+                ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
+            ])
+            
+            # Create draft data
+            draft_data = OrderedDict([
+                ('booking_id', booking.booking_id),
+                ('status', booking.status),
+                ('client_name', booking.client.user.name),
+                ('client_id', booking.client.id),
+                ('professional_name', booking.professional.user.name),
+                ('professional_id', booking.professional.professional_id),
+                ('pets', pets_data),
+                ('can_edit', True),
+                ('occurrences', processed_occurrences),
+                ('service_details', OrderedDict([
+                    ('service_type', service.service_name),
+                    ('service_id', service.service_id)
+                ])),
+                ('cost_summary', cost_summary),
+                ('conversation_id', conversation_id)
+            ])
+            
+            # Save the draft
+            draft.draft_data = draft_data
+            draft.save()
+            
+            logger.info(f"MBA6428: Successfully created draft from booking {booking_id}")
+            logger.info(f"MBA6428: Draft ID: {draft.draft_id}")
+            
+            # Create response data
+            response_data = {
+                'status': 'success',
+                'draft_id': draft.draft_id,
+                'draft_data': draft_data
+            }
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"MBA6428: Error creating draft from booking: {str(e)}")
+            logger.error(f"MBA6428: Traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": f"An error occurred while creating the draft: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

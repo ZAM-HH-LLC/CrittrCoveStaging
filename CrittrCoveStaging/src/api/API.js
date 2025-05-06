@@ -1199,3 +1199,39 @@ export const getBookingDraftDatesAndTimes = async (draftId) => {
     throw error;
   }
 };
+
+/**
+ * Creates a draft from an existing booking for editing purposes
+ * @param {number} bookingId - The ID of the booking to create a draft from
+ * @returns {Promise<Object>} Response containing the draft ID and draft data
+ */
+export const createDraftFromBooking = async (bookingId) => {
+  try {
+    debugLog('MBA6428: Creating draft from booking:', { bookingId });
+    
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/api/booking_drafts/v1/create-from-booking/${bookingId}/`,
+      {},  // No body needed for this request
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA6428: Draft created successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA6428: Error creating draft from booking:', error);
+    throw error;
+  }
+};
+
+// implement new api call herre
+
