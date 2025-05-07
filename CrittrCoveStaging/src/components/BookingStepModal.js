@@ -54,7 +54,7 @@ const BookingStepModal = ({
   initialData = {},
   navigation
 }) => {
-  const { is_DEBUG, screenWidth } = useContext(AuthContext);
+  const { is_DEBUG, screenWidth, timeSettings } = useContext(AuthContext);
   const isSmallScreen = screenWidth < 600;
   const isDesktop = screenWidth > 768;
   const [currentStep, setCurrentStep] = useState(STEPS.SERVICES_AND_PETS.id);
@@ -380,6 +380,10 @@ const BookingStepModal = ({
 
   const handleTimeSelect = (timeData) => {
     debugLog('MBA12345 Selected times:', timeData);
+
+    // Just for logging
+    const hasServiceOvernight = bookingData.service?.is_overnight === true;
+    
     setBookingData(prev => {
       // Check if we have individual day times
       if (timeData.hasIndividualTimes) {
@@ -398,6 +402,8 @@ const BookingStepModal = ({
           ...prev,
           times: {
             ...individualTimes,
+            // Use isOvernightForced exactly as it was passed in timeData
+            isOvernightForced: timeData.isOvernightForced,
             hasIndividualTimes: true
           }
         };
@@ -410,6 +416,7 @@ const BookingStepModal = ({
           ...prev.times,
           startTime: timeData.startTime ? `${String(timeData.startTime.hours).padStart(2, '0')}:${String(timeData.startTime.minutes || 0).padStart(2, '0')}` : prev.times.startTime,
           endTime: timeData.endTime ? `${String(timeData.endTime.hours).padStart(2, '0')}:${String(timeData.endTime.minutes || 0).padStart(2, '0')}` : prev.times.endTime,
+          // Use isOvernightForced exactly as it was passed in timeData
           isOvernightForced: timeData.isOvernightForced,
           // Explicitly set hasIndividualTimes to false
           hasIndividualTimes: false
@@ -417,6 +424,11 @@ const BookingStepModal = ({
 
         debugLog('MBA12345 Previous times:', prev.times);
         debugLog('MBA12345 Updated times:', updatedTimes);
+        debugLog('MBA12345 Checking for service overnight:', { 
+          hasServiceOvernight, 
+          timeDataIsOvernight: timeData.isOvernightForced,
+          finalIsOvernightForced: updatedTimes.isOvernightForced
+        });
 
         return {
           ...prev,
@@ -527,31 +539,35 @@ const BookingStepModal = ({
           // If any overnight flag is set, we'll bypass all the other checks and directly use the overnight endpoint
           if (isAnyOvernightFlag && bookingData.dateRange) {
             // Force overnight mode
-            debugLog('MBA5asdt3f4321 DIRECT OVERRIDE: Forcing overnight mode for any overnight service');
+            debugLog('MBA53212co2v3nvoub5 DIRECT OVERRIDE: Forcing overnight mode for any overnight service');
             
             const startDate = formatDateForAPI(bookingData.dateRange.startDate);
             const endDate = formatDateForAPI(bookingData.dateRange.endDate);
             const startTime = formatTimeForAPI(bookingData.times.startTime);
             const endTime = formatTimeForAPI(bookingData.times.endTime);
             
-            debugLog('MBA5asdt3f4321 DIRECT OVERRIDE: Using time-and-date endpoint with dates:', {
+            debugLog('MBA53212co2v3nvoub5 DIRECT OVERRIDE: Using time-and-date endpoint with dates:', {
               startDate,
               endDate,
               startTime,
               endTime
             });
             
+            // Get user's timezone from context
+            const userTimezone = timeSettings?.timezone || 'US/Mountain';
+            debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion:', userTimezone);
+            
             // Convert local times to UTC before sending to backend
             const { date: utcStartDate, time: utcStartTime } = convertToUTC(
               startDate,
               startTime,
-              'US/Mountain'
+              userTimezone
             );
 
             const { date: utcEndDate, time: utcEndTime } = convertToUTC(
               endDate,
               endTime,
-              'US/Mountain'
+              userTimezone
             );
 
             // Call the API with UTC times and dates
@@ -563,7 +579,7 @@ const BookingStepModal = ({
               utcEndTime
             );
             
-            debugLog('MBA5asdt3f4321 DIRECT OVERRIDE: Response from updateBookingDraftTimeAndDate:', response);
+            debugLog('MBA53212co2v3nvoub5 DIRECT OVERRIDE: Response from updateBookingDraftTimeAndDate:', response);
             
             // Update booking data with the response's draft_data
             if (response?.draft_data) {
@@ -592,7 +608,9 @@ const BookingStepModal = ({
           if (bookingData.dateRangeType === 'date-range') {
             // Check if this is a non-overnight service with date range
             const isServiceOvernight = bookingData.service?.is_overnight === true;
-            const isTimeOvernight = bookingData.times?.isOvernightForced === true;
+            // Check time overnight status - but don't count 00:00 end time as overnight by itself
+            const isTimeOvernight = bookingData.times?.isOvernightForced === true && 
+                                   !(bookingData.times.endTime === '00:00' && !isServiceOvernight);
             
             // Check if the date range spans multiple days - if it does, treat it as overnight
             let isMultiDayRange = false;
@@ -605,21 +623,26 @@ const BookingStepModal = ({
                 // If more than 1 day difference, consider it multi-day
                 if (daysDifference > 1) {
                   isMultiDayRange = true;
-                  debugLog('MBA5asdt3f4321 DETECTED multi-day date range:', {
+                  debugLog('MBA53212co2v3nvoub5 DETECTED multi-day date range:', {
                     startDate: bookingData.dateRange.startDate,
                     endDate: bookingData.dateRange.endDate,
                     daysDifference
                   });
                 }
               } catch (err) {
-                debugLog('MBA5asdt3f4321 Error checking date range:', err);
+                debugLog('MBA53212co2v3nvoub5 Error checking date range:', err);
               }
             }
             
-            debugLog('MBA5asdt3f4321 CRITICAL Checking overnight status:', {
+            debugLog('MBA53212co2v3nvoub5 CRITICAL Checking overnight status:', {
               dateRangeType: bookingData.dateRangeType,
               serviceIsOvernight: isServiceOvernight,
-              timesIsOvernightForced: isTimeOvernight,
+              timesIsOvernightForced: bookingData.times?.isOvernightForced,
+              endTime: bookingData.times?.endTime,
+              endTimeIsMidnight: bookingData.times?.endTime === '00:00',
+              // Special check for midnight end time
+              isMidnightEndTimeButNotForced: bookingData.times?.endTime === '00:00' && !isServiceOvernight,
+              isTimeOvernight: isTimeOvernight,
               isMultiDayRange: isMultiDayRange,
               service: bookingData.service,
               times: bookingData.times
@@ -645,33 +668,28 @@ const BookingStepModal = ({
               setBookingData(updatedBookingData);
               
               // This is an overnight service with a date range, so we should call updateBookingDraftTimeAndDate
-              debugLog('MBA5asdt3f4321 OVERRIDE: Forcing overnight mode for date range due to overnight service or flag');
+              debugLog('MBA53212co2v3nvoub5 OVERRIDE: Forcing overnight mode for date range due to overnight service or flag');
               
               const startDate = formatDateForAPI(bookingData.dateRange.startDate);
               const endDate = formatDateForAPI(bookingData.dateRange.endDate);
               const startTime = formatTimeForAPI(bookingData.times.startTime);
               const endTime = formatTimeForAPI(bookingData.times.endTime);
               
-              debugLog('MBA5asdt3f4321 Using update-time-and-date endpoint for OVERNIGHT service with dates:', {
-                startDate,
-                endDate,
-                startTime,
-                endTime,
-                service: updatedBookingData.service,
-                times: updatedBookingData.times
-              });
+              // Get user's timezone from context
+              const userTimezone = timeSettings?.timezone || 'US/Mountain';
+              debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion:', userTimezone);
               
               // Convert local times to UTC before sending to backend
               const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                 startDate,
                 startTime,
-                'US/Mountain'
+                userTimezone
               );
 
               const { date: utcEndDate, time: utcEndTime } = convertToUTC(
                 endDate,
                 endTime,
-                'US/Mountain'
+                userTimezone
               );
 
               // Call the API with UTC times and dates
@@ -683,7 +701,7 @@ const BookingStepModal = ({
                 utcEndTime
               );
               
-              debugLog('MBA5asdt3f4321 Received response from updateBookingDraftTimeAndDate (overnight override):', response);
+              debugLog('MBA53212co2v3nvoub5 Received response from updateBookingDraftTimeAndDate (overnight override):', response);
               
               // Update booking data with the response's draft_data
               if (response?.draft_data) {
@@ -713,14 +731,14 @@ const BookingStepModal = ({
               !isTimeOvernight &&
               !isMultiDayRange;
 
-            debugLog('MBA5asdt3f4321 Decision:', {
+            debugLog('MBA53212co2v3nvoub5 Decision:', {
               isNonOvernightDateRange: isNonOvernightDateRange,
               willUseEndpoint: isNonOvernightDateRange ? 'updateBookingDraftMultipleDays' : 'updateBookingDraftTimeAndDate'
             });
 
             if (isNonOvernightDateRange) {
               // For non-overnight date range services, we need to create individual days
-              debugLog('MBA5asdt3f4321 Handling non-overnight date range as individual occurrences');
+              debugLog('MBA53212co2v3nvoub5 Handling non-overnight date range as individual occurrences');
               
               // Create dates array from date range
               const startDate = new Date(bookingData.dateRange.startDate);
@@ -734,22 +752,22 @@ const BookingStepModal = ({
                 currentDate.setDate(currentDate.getDate() + 1);
               }
               
-              debugLog('MBA5asdt3f4321 Generated dates from range:', dates.map(d => d.toISOString().split('T')[0]));
-              debugLog('MBA5asdt3f4321 Time settings:', bookingData.times);
+              debugLog('MBA53212co2v3nvoub5 Generated dates from range:', dates.map(d => d.toISOString().split('T')[0]));
+              debugLog('MBA53212co2v3nvoub5 Time settings:', bookingData.times);
               
               // Format dates and determine times for each day
               const formattedDates = dates.map(date => {
                 const dateKey = date.toISOString().split('T')[0];
-                debugLog('MBA5asdt3f4321 Processing date:', dateKey);
+                debugLog('MBA53212co2v3nvoub5 Processing date:', dateKey);
                 
                 let dayTimes = bookingData.times;
                 
                 // If there are individual time settings for this day, use those
                 if (bookingData.times[dateKey] && bookingData.times.hasIndividualTimes) {
                   dayTimes = bookingData.times[dateKey];
-                  debugLog('MBA5asdt3f4321 Using individual times for date:', dateKey, dayTimes);
+                  debugLog('MBA53212co2v3nvoub5 Using individual times for date:', dateKey, dayTimes);
                 } else {
-                  debugLog('MBA5asdt3f4321 Using default times for date:', dateKey, dayTimes);
+                  debugLog('MBA53212co2v3nvoub5 Using default times for date:', dateKey, dayTimes);
                 }
                 
                 // Format the start time
@@ -774,40 +792,70 @@ const BookingStepModal = ({
                   endTime = '17:00';
                 }
                 
-                debugLog('MBA5asdt3f4321 Formatted times for date:', dateKey, { startTime, endTime });
+                debugLog('MBA53212co2v3nvoub5 Formatted times for date:', dateKey, { startTime, endTime });
                 
                 // Format the date
                 const formattedDate = formatDateForAPI(date);
-                debugLog('MBA5asdt3f4321 Formatted date:', formattedDate);
+                debugLog('MBA53212co2v3nvoub5 Formatted date:', formattedDate);
                 
-                try {
-                  // Convert local times to UTC
-                  const { date: utcDate, time: utcStartTime } = convertToUTC(
-                    formattedDate,
-                    startTime,
-                    'US/Mountain'
-                  );
+                // Determine if the end time might cross to the next day
+                // Check if end time is midnight or earlier than start time, indicating day boundary crossing
+                const needsNextDayDate = endTime === '00:00' || 
+                                        (parseInt(endTime.split(':')[0], 10) < parseInt(startTime.split(':')[0], 10)) ||
+                                        (parseInt(endTime.split(':')[0], 10) === parseInt(startTime.split(':')[0], 10) && 
+                                         parseInt(endTime.split(':')[1], 10) < parseInt(startTime.split(':')[1], 10));
+                
+                // Calculate end date - either same day or next day
+                const endDateObj = needsNextDayDate 
+                  ? new Date(date.getTime() + 24*60*60*1000) // Next day if crossing midnight
+                  : new Date(date);
                   
-                  const { time: utcEndTime } = convertToUTC(
-                    formattedDate,
-                    endTime,
-                    'US/Mountain'
-                  );
-                  
-                  debugLog('MBA5asdt3f4321 Converted UTC times:', { utcDate, utcStartTime, utcEndTime });
-                  
-                  return {
-                    date: utcDate,
-                    startTime: utcStartTime,
-                    endTime: utcEndTime
-                  };
-                } catch (err) {
-                  debugLog('MBA5asdt3f4321 Error converting time to UTC:', err);
-                  throw err;
-                }
+                const formattedEndDate = formatDateForAPI(endDateObj);
+                
+                debugLog('MBA53212co2v3nvoub5 End date calculation:', {
+                  needsNextDayDate,
+                  startTime,
+                  endTime,
+                  originalDate: formattedDate,
+                  calculatedEndDate: formattedEndDate
+                });
+                
+                // IMPORTANT: Crossing midnight or having a different end date due to 00:00 end time
+                // should NOT force overnight mode - that should only be based on the service type
+                // We're just calculating the correct end date for API payload
+                
+                // Convert local times to UTC for start time and date
+                const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+                  formattedDate,
+                  startTime,
+                  userTimezone
+                );
+                
+                // Convert end time to UTC with potentially different end date
+                const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+                  formattedEndDate,
+                  endTime,
+                  userTimezone
+                );
+                
+                debugLog('MBA53212co2v3nvoub5 Converted UTC times:', { 
+                  utcStartDate, 
+                  utcStartTime, 
+                  utcEndDate, 
+                  utcEndTime,
+                  isDifferentDates: utcStartDate !== utcEndDate
+                });
+                
+                // Return structured data with separate start and end dates
+                return {
+                  date: utcStartDate,
+                  startTime: utcStartTime,
+                  endDate: utcEndDate,  // Always include endDate
+                  endTime: utcEndTime
+                };
               });
               
-              debugLog('MBA5asdt3f4321 Sending non-overnight date range as individual days:', formattedDates);
+              debugLog('MBA53212co2v3nvoub5 - Converted UTC dates:', formattedDates);
               
               // Call the API for multiple individual days (even though they're from a date range)
               const response = await updateBookingDraftMultipleDays(
@@ -815,10 +863,11 @@ const BookingStepModal = ({
                 {
                   dates: formattedDates,
                   times: {} // Empty times object since times are already included in each date
-                }
+                },
+                timeSettings
               );
               
-              debugLog('MBA5asdt3f4321 Received response from updateBookingDraftMultipleDays:', response);
+              debugLog('MBA53212co2v3nvoub5 Received response from updateBookingDraftMultipleDays:', response);
               
               if (response?.draft_data) {
                 setBookingData(prev => ({
@@ -833,7 +882,7 @@ const BookingStepModal = ({
               const startTime = formatTimeForAPI(bookingData.times.startTime);
               const endTime = formatTimeForAPI(bookingData.times.endTime);
 
-              debugLog('MBA5asdt3f4321 Using update-time-and-date endpoint for OVERNIGHT service with dates:', {
+              debugLog('MBA53212co2v3nvoub5 Using update-time-and-date endpoint for OVERNIGHT service with dates:', {
                 startDate,
                 endDate,
                 startTime,
@@ -852,16 +901,16 @@ const BookingStepModal = ({
               const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                 startDate,
                 startTime,
-                'US/Mountain'
+                userTimezone
               );
 
               const { date: utcEndDate, time: utcEndTime } = convertToUTC(
                 endDate,
                 endTime,
-                'US/Mountain'
+                userTimezone
               );
 
-              debugLog('MBA5asdt3f4321 UTC dates and times:', {
+              debugLog('MBA53212co2v3nvoub5 UTC dates and times:', {
                 utcStartDate,
                 utcStartTime,
                 utcEndDate,
@@ -877,7 +926,7 @@ const BookingStepModal = ({
                 utcEndTime
               );
 
-              debugLog('MBA5asdt3f4321 Received response from updateBookingDraftTimeAndDate:', response);
+              debugLog('MBA53212co2v3nvoub5 Received response from updateBookingDraftTimeAndDate:', response);
 
               // Update booking data with the response's draft_data
               if (response?.draft_data) {
@@ -886,12 +935,12 @@ const BookingStepModal = ({
                   ...response.draft_data
                 }));
               } else {
-                debugLog('MBA5asdt3f4321 No draft_data in response:', response);
+                debugLog('MBA53212co2v3nvoub5 No draft_data in response:', response);
               }
             }
           } else if (bookingData.dateRangeType === 'multiple-days') {
             // Handle multiple individual days
-            debugLog('MBA5asdt3f4321 Multiple days selection:', {
+            debugLog('MBA53212co2v3nvoub5 Multiple days selection:', {
               dates: bookingData.dates,
               times: bookingData.times
             });
@@ -902,10 +951,11 @@ const BookingStepModal = ({
               {
                 dates: bookingData.dates,
                 times: bookingData.times
-              }
+              },
+              timeSettings
             );
 
-            debugLog('MBA5asdt3f4321 Received response from updateBookingDraftMultipleDays:', response);
+            debugLog('MBA53212co2v3nvoub5 Received response from updateBookingDraftMultipleDays:', response);
 
             if (response?.draft_data) {
               setBookingData(prev => ({
@@ -915,7 +965,7 @@ const BookingStepModal = ({
             }
           } else if (bookingData.bookingType === 'recurring') {
             // Handle recurring dates
-            debugLog('MBA5asdt3f4321 Recurring dates selection:', {
+            debugLog('MBA53212co2v3nvoub5 Recurring dates selection:', {
               startDate: bookingData.recurringStartDate,
               endDate: bookingData.recurringEndDate,
               daysOfWeek: bookingData.selectedDaysOfWeek,
@@ -936,7 +986,7 @@ const BookingStepModal = ({
               }
             );
 
-            debugLog('MBA5asdt3f4321 Received response from updateBookingDraftRecurring:', response);
+            debugLog('MBA53212co2v3nvoub5 Received response from updateBookingDraftRecurring:', response);
 
             if (response?.draft_data) {
               setBookingData(prev => ({
@@ -946,9 +996,9 @@ const BookingStepModal = ({
             }
           }
         } catch (error) {
-          debugLog('MBA5asdt3f4321 Error calculating booking totals:', error);
-          debugLog('MBA5asdt3f4321 Error stack:', error.stack);
-          debugLog('MBA5asdt3f4321 Error details:', {
+          debugLog('MBA53212co2v3nvoub5 Error calculating booking totals:', error);
+          debugLog('MBA53212co2v3nvoub5 Error stack:', error.stack);
+          debugLog('MBA53212co2v3nvoub5 Error details:', {
             message: error.message,
             name: error.name,
             response: error.response?.data
@@ -1207,6 +1257,75 @@ const BookingStepModal = ({
       // We don't need to do anything here, just logging for debugging
     };
   }, []);
+
+  const formatDatesForAPI = (dateState) => {
+    if (!dateState || !dateState.dates || dateState.dates.length === 0) {
+      return { dates: [] };
+    }
+
+    // Format the dates for the API using the proper UTC conversion
+    const formattedDates = dateState.dates.map(date => {
+      const dateString = date.toISOString().split('T')[0];
+      
+      // Get time data for this specific date or fall back to default
+      let timeData = dateState.times;
+      
+      // Check if we have individual day schedules
+      if (dateState.times.hasIndividualTimes && dateState.times[dateString]) {
+        timeData = dateState.times[dateString];
+      }
+      
+      // Format start and end times
+      const formattedStartTime = formatTimeObj(timeData.startTime);
+      const formattedEndTime = formatTimeObj(timeData.endTime);
+      
+      // Handle midnight (00:00) as end of current day, not start of next day
+      // This ensures proper duration calculation and prevents negative durations
+      let endDate = dateString;
+      const isMidnightEnd = formattedEndTime === "00:00";
+      const isTimeBeforeStart = compareTimesAsMinutes(timeData.endTime, timeData.startTime) < 0;
+      
+      // If end time is midnight (00:00) or earlier than start time, use the next day as the end date
+      if (isMidnightEnd || isTimeBeforeStart) {
+        // Calculate the next day
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        endDate = nextDay.toISOString().split('T')[0];
+        
+        debugLog("MBA8810: Using next day for end date due to midnight/early morning end time:", {
+          date: dateString,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime,
+          endDate: endDate,
+          isMidnightEnd,
+          isTimeBeforeStart
+        });
+      }
+      
+      return {
+        date: dateString,
+        start_time: formattedStartTime,
+        end_time: formattedEndTime,
+        end_date: endDate, // Always include end_date for proper backend processing
+        is_overnight: timeData.isOvernightForced || dateState.service?.is_overnight || false
+      };
+    });
+
+    return { dates: formattedDates };
+  };
+
+  const formatTimeObj = (timeObj) => {
+    const hours = timeObj.hours.toString().padStart(2, '0');
+    const minutes = timeObj.minutes.toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+  
+  // Helper to compare two time objects by converting to minutes
+  const compareTimesAsMinutes = (time1, time2) => {
+    const time1Minutes = (time1.hours * 60) + time1.minutes;
+    const time2Minutes = (time2.hours * 60) + time2.minutes;
+    return time1Minutes - time2Minutes;
+  };
 
   return (
     <Modal

@@ -260,25 +260,44 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
     }
 };
 
-export const updateBookingDraftMultipleDays = async (draftId, data) => {
+export const updateBookingDraftMultipleDays = async (draftId, data, timeSettings) => {
     try {
-        debugLog('MBA5asdt3f4321 - Updating booking draft multiple days:', {
+        // Get the user's timezone from timeSettings, with fallback to US/Mountain
+        const userTimezone = timeSettings?.timezone || 'US/Mountain';
+        
+        debugLog('MBA8800: Updating booking draft multiple days:', {
             draftId,
-            data
+            data,
+            userTimezone
         });
 
         // Handle different formats of dates array
         const utcDates = data.dates.map(dateItem => {
             // Check what format the date is in
-            let dateStr, startTimeStr, endTimeStr;
+            let dateStr, startTimeStr, endTimeStr, endDateStr;
+            let isServiceOvernight = false;
             
             // If the dateItem already has date and times (from non-overnight date range)
-            if (dateItem.date && dateItem.startTime && dateItem.endTime) {
-                debugLog('MBA5asdt3f4321 - Using provided date and times', dateItem);
+            if (dateItem.date && dateItem.start_time && dateItem.end_time) {
+                debugLog('MBA8800: Using provided occurrence data format', dateItem);
                 return {
-                    date: dateItem.date,  // Already converted to UTC in BookingStepModal
+                    date: dateItem.date,
+                    startTime: dateItem.start_time,
+                    endDate: dateItem.end_date || dateItem.date, // Always include endDate
+                    endTime: dateItem.end_time,
+                    is_overnight: dateItem.is_overnight || false
+                };
+            }
+            
+            // If the dateItem already has date and times (formatted in BookingStepModal)
+            if (dateItem.date && dateItem.startTime && dateItem.endTime) {
+                debugLog('MBA8800: Using provided date and times', dateItem);
+                return {
+                    date: dateItem.date,
                     startTime: dateItem.startTime,
-                    endTime: dateItem.endTime
+                    endDate: dateItem.endDate || dateItem.date, // Always include endDate
+                    endTime: dateItem.endTime,
+                    is_overnight: dateItem.is_overnight || false
                 };
             }
             
@@ -301,7 +320,8 @@ export const updateBookingDraftMultipleDays = async (draftId, data) => {
                 } else if (dayTimes.startTime?.hours !== undefined) {
                     startTimeStr = `${String(dayTimes.startTime.hours).padStart(2, '0')}:${String(dayTimes.startTime.minutes || 0).padStart(2, '0')}`;
                 } else {
-                    startTimeStr = '09:00'; // Default
+                    // Default time if missing
+                    startTimeStr = '09:00';
                 }
                 
                 if (typeof dayTimes.endTime === 'string') {
@@ -309,35 +329,70 @@ export const updateBookingDraftMultipleDays = async (draftId, data) => {
                 } else if (dayTimes.endTime?.hours !== undefined) {
                     endTimeStr = `${String(dayTimes.endTime.hours).padStart(2, '0')}:${String(dayTimes.endTime.minutes || 0).padStart(2, '0')}`;
                 } else {
-                    endTimeStr = '17:00'; // Default
+                    // Default time if missing
+                    endTimeStr = '17:00';
                 }
+                
+                debugLog('MBA8800: Formatted times for date:', dateKey, { startTimeStr, endTimeStr });
+                
+                // Determine if the end time might cross to the next day
+                // Check if end time is midnight or earlier than start time, indicating day boundary crossing
+                const isMidnightEnd = endTimeStr === '00:00';
+                const isTimeBeforeStart = 
+                    (parseInt(endTimeStr.split(':')[0], 10) < parseInt(startTimeStr.split(':')[0], 10)) ||
+                    (parseInt(endTimeStr.split(':')[0], 10) === parseInt(startTimeStr.split(':')[0], 10) && 
+                     parseInt(endTimeStr.split(':')[1], 10) < parseInt(startTimeStr.split(':')[1], 10));
+                
+                const needsNextDayDate = isMidnightEnd || isTimeBeforeStart;
+                
+                // Calculate end date - either same day or next day
+                const endDateObj = needsNextDayDate 
+                  ? new Date(dateItem.getTime() + 24*60*60*1000) // Next day if crossing midnight
+                  : new Date(dateItem);
+                
+                endDateStr = formatDateForAPI(endDateObj);
+                
+                debugLog('MBA8800: End date calculation in API.js:', {
+                  needsNextDayDate,
+                  isMidnightEnd,
+                  isTimeBeforeStart,
+                  startTimeStr,
+                  endTimeStr,
+                  originalDate: dateStr,
+                  calculatedEndDate: endDateStr
+                });
+                
+                // Set overnight based on service, not just time
+                isServiceOvernight = dayTimes.isOvernightForced || false;
             } else {
                 // If the data is in some other format, we need to extract the date and times
-                debugLog('MBA5asdt3f4321 - Unexpected date format', dateItem);
+                debugLog('MBA8800: Unexpected date format', dateItem);
                 throw new Error('Unexpected date format');
             }
             
-            // Convert to UTC
+            // Convert to UTC using user's timezone
             const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                 dateStr,
                 startTimeStr,
-                'US/Mountain'
+                userTimezone
             );
 
             const { date: utcEndDate, time: utcEndTime } = convertToUTC(
-                dateStr,
+                endDateStr || dateStr, // Use endDateStr if available, otherwise use dateStr
                 endTimeStr,
-                'US/Mountain'
+                userTimezone
             );
 
             return {
                 date: utcStartDate,
                 startTime: utcStartTime,
-                endTime: utcEndTime
+                endDate: utcEndDate, // Always include endDate
+                endTime: utcEndTime,
+                is_overnight: isServiceOvernight
             };
         });
 
-        debugLog('MBA5asdt3f4321 - Converted UTC dates:', utcDates);
+        debugLog('MBA8800: Converted UTC dates:', utcDates);
 
         const response = await axios.post(
             `${API_BASE_URL}/api/booking_drafts/v1/update-multiple-days/${draftId}/`,
@@ -350,10 +405,10 @@ export const updateBookingDraftMultipleDays = async (draftId, data) => {
             }
         );
 
-        debugLog('MBA5asdt3f4321 - Booking draft multiple days update response:', response.data);
+        debugLog('MBA8800: Booking draft multiple days update response:', response.data);
         return response.data;
     } catch (error) {
-        debugLog('MBA5asdt3f4321 Error updating booking draft multiple days:', error);
+        debugLog('MBA8800: Error updating booking draft multiple days:', error);
         throw error;
     }
 };

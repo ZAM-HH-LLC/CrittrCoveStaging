@@ -696,8 +696,23 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     debugLog('MBAio3htg5uohg: userTimezone: ', userTimezone);
 
     // Check if we're dealing with multiple individual dates
-    const isMultipleDates = occurrences.length > 1 && 
-      occurrences.every(occ => occ.start_date === occ.end_date);
+    // Updated logic to properly handle midnight end times
+    const isMultipleDates = occurrences.length > 1 || 
+      // Consider a booking with 00:00 end time as a multiple date booking even if
+      // there's only one occurrence and end_date is different from start_date
+      (occurrences.length === 1 && 
+       ((occurrences[0].end_date !== occurrences[0].start_date && occurrences[0].end_time === "00:00") ||
+        occurrences[0].start_date === occurrences[0].end_date));
+    
+    debugLog('MBAio3htg5uohg: isMultipleDates detection:', { 
+      isMultipleDates, 
+      count: occurrences.length,
+      firstOccurrence: occurrences[0] ? {
+        start_date: occurrences[0].start_date,
+        end_date: occurrences[0].end_date,
+        end_time: occurrences[0].end_time
+      } : null
+    });
 
     if (isMultipleDates) {
       return (

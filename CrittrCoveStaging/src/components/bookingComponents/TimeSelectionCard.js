@@ -500,13 +500,28 @@ const TimeSelectionCard = ({
   };
 
   const handleTimeRangeSelectorUpdate = (timesData) => {
-    debugLog('MBA2j3kbr9hve4: TimeRangeSelector update:', timesData);
+    debugLog('MBA7799: TimeRangeSelector update:', timesData);
     
-    // Convert from TimeRangeSelector format to our expected params
+    // Don't automatically treat midnight end time as overnight
+    const isServiceOvernight = selectedService?.is_overnight === true;
+    const hasExplicitOvernightFlag = timesData.isOvernightForced === true;
+    const isMidnightEndTime = timesData.endTime && timesData.endTime.hours === 0 && timesData.endTime.minutes === 0;
+    
+    // Only set isOvernightForced if service is overnight or explicitly set
+    // Don't set it just because end time is 00:00
+    const effectiveOvernightFlag = isServiceOvernight || (hasExplicitOvernightFlag && !isMidnightEndTime);
+    
+    debugLog('MBA7799: Determining overnight status:', {
+      isServiceOvernight,
+      hasExplicitOvernightFlag,
+      isMidnightEndTime,
+      effectiveOvernightFlag
+    });
+    
     handleOvernightTimeSelect(
-      timesData.startTime,
-      timesData.endTime,
-      timesData.isOvernightForced
+      timesData.startTime, 
+      timesData.endTime, 
+      effectiveOvernightFlag
     );
   };
 

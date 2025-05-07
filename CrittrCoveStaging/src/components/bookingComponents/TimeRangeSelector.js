@@ -222,15 +222,25 @@ const TimeRangeSelector = ({
     // For day services, calculate hours and minutes
     const { startTime, endTime } = times;
     const startMinutes = startTime.hours * 60 + startTime.minutes;
-    const endMinutes = endTime.hours * 60 + endTime.minutes;
-    let duration = endMinutes - startMinutes;
+    let endMinutes = endTime.hours * 60 + endTime.minutes;
     
-    if (duration < 0) {
-      duration += 24 * 60; // Add 24 hours if end time is on next day
+    // Handle the case where end time is midnight or earlier than start time
+    // Treat midnight as the end of the current day, not the beginning of next day
+    if (endTime.hours === 0 && endTime.minutes === 0) {
+      // 00:00 is actually 24:00 (end of day)
+      endMinutes = 24 * 60; 
+    } else if (endMinutes < startMinutes) {
+      // If end time is earlier than start time (e.g., 2am), add 24 hours
+      endMinutes += 24 * 60;
     }
     
+    const duration = endMinutes - startMinutes;
     const hours = Math.floor(duration / 60);
-    return `${hours} hour${hours > 1 ? 's' : ''}`;
+    const minutes = duration % 60;
+    
+    return hours > 0 
+      ? `${hours} hour${hours > 1 ? 's' : ''}${minutes > 0 ? ` ${minutes} min` : ''}`
+      : `${minutes} minutes`;
   };
 
   const generateHourOptions = () => {

@@ -1885,6 +1885,18 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     date_obj = datetime.strptime(date_data['date'], '%Y-%m-%d').date()
                     start_time = datetime.strptime(date_data['startTime'], '%H:%M').time()
                     end_time = datetime.strptime(date_data['endTime'], '%H:%M').time()
+                    
+                    # Check if we have an end date in the request (for handling day boundaries)
+                    end_date_obj = None
+                    if 'endDate' in date_data and date_data['endDate']:
+                        try:
+                            end_date_obj = datetime.strptime(date_data['endDate'], '%Y-%m-%d').date()
+                            logger.info(f"MBA5321 - Using separate end date: {end_date_obj} for start date: {date_obj}")
+                        except Exception as e:
+                            logger.error(f"MBA5321 - Error parsing endDate: {e}")
+                    
+                    # Use the provided end date or fall back to the start date
+                    end_date_obj = end_date_obj or date_obj
 
                     # Create temporary occurrence for rate calculation
                     class TempOccurrence:
@@ -1896,7 +1908,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
 
                     temp_occurrence = TempOccurrence(
                         start_date=date_obj,
-                        end_date=date_obj,
+                        end_date=end_date_obj,
                         start_time=start_time,
                         end_time=end_time
                     )
@@ -1915,7 +1927,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     occurrence = OrderedDict([
                         ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"),
                         ('start_date', date_obj.isoformat()),
-                        ('end_date', date_obj.isoformat()),
+                        ('end_date', end_date_obj.isoformat()),
                         ('start_time', start_time.strftime('%H:%M')),
                         ('end_time', end_time.strftime('%H:%M')),
                         ('calculated_cost', float(round(calculated_cost, 2))),
