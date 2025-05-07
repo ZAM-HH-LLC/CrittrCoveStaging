@@ -554,15 +554,17 @@ const TimeSelectionCard = ({
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        {/* Always show default time range selector */}
-        <TimeRangeSelector
-          title={selectedService?.is_overnight || isOvernightForced ? `Time Range` : `Default Time Range`}
-          onTimeSelect={handleTimeRangeSelectorUpdate}
-          initialTimes={times}
-          showOvernightToggle={!selectedService?.is_overnight && !isOvernightForced}
-          dateRange={dateRange}
-          is_overnight={selectedService?.is_overnight || times.isOvernightForced || isOvernightForced || false}
-        />
+        {/* Only show default time range selector when not showing individual days */}
+        {!showIndividualDays && (
+          <TimeRangeSelector
+            title={selectedService?.is_overnight || isOvernightForced ? `Time Range` : `Default Time Range`}
+            onTimeSelect={handleTimeRangeSelectorUpdate}
+            initialTimes={times}
+            showOvernightToggle={!selectedService?.is_overnight && !isOvernightForced}
+            dateRange={dateRange}
+            is_overnight={selectedService?.is_overnight || times.isOvernightForced || isOvernightForced || false}
+          />
+        )}
 
         {/* Only show customize button if not an overnight service */}
         {!selectedService?.is_overnight && !isOvernightForced && (
