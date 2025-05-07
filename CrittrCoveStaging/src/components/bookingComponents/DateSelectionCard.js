@@ -57,45 +57,48 @@ const DateSelectionCard = ({
     // Set the booking type and date range type from props
     setSelectedBookingType(isOvernightForced ? 'one-time' : bookingType);
     
-    // For overnight services, ALWAYS force date-range selection type regardless of what was passed
+    // For overnight services, ALWAYS force date-range selection type
+    // For non-overnight services, ALWAYS force multiple-days selection type
     if (isOvernightForced) {
       setSelectedDateRangeType('date-range');
     } else {
-      // Check if the dates are non-consecutive to enforce multiple-days mode
-      if (selectedDates && selectedDates.length > 1) {
-        const datesArray = selectedDates.map(dateItem => {
-          if (dateItem instanceof Date) {
-            return dateItem;
-          } else if (typeof dateItem === 'object' && dateItem.date) {
-            return new Date(dateItem.date);
-          } else {
-            return new Date(dateItem);
-          }
-        }).sort((a, b) => a - b);
+      // TODO: [NON-OVERNIGHT Date Range Feature] This is for date ranges for non-overnight services, uncomment after MVP launch
+      // // Check if the dates are non-consecutive to enforce multiple-days mode
+      // if (selectedDates && selectedDates.length > 1) {
+      //   const datesArray = selectedDates.map(dateItem => {
+      //     if (dateItem instanceof Date) {
+      //       return dateItem;
+      //     } else if (typeof dateItem === 'object' && dateItem.date) {
+      //       return new Date(dateItem.date);
+      //     } else {
+      //       return new Date(dateItem);
+      //     }
+      //   }).sort((a, b) => a - b);
         
-        // Check if dates are consecutive
-        let areConsecutive = true;
-        for (let i = 1; i < datesArray.length; i++) {
-          const prevDate = new Date(datesArray[i-1]);
-          const currDate = new Date(datesArray[i]);
-          prevDate.setDate(prevDate.getDate() + 1);
+      //   // Check if dates are consecutive
+      //   let areConsecutive = true;
+      //   for (let i = 1; i < datesArray.length; i++) {
+      //     const prevDate = new Date(datesArray[i-1]);
+      //     const currDate = new Date(datesArray[i]);
+      //     prevDate.setDate(prevDate.getDate() + 1);
           
-          if (prevDate.getTime() !== currDate.getTime()) {
-            areConsecutive = false;
-            break;
-          }
-        }
+      //     if (prevDate.getTime() !== currDate.getTime()) {
+      //       areConsecutive = false;
+      //       break;
+      //     }
+      //   }
         
-        // Set appropriate date range type
-        if (!areConsecutive) {
-          setSelectedDateRangeType('multiple-days');
-          debugLog('MBA54321 Non-consecutive dates detected, enforcing multiple-days mode');
-        } else {
-          setSelectedDateRangeType(dateRangeType);
-        }
-      } else {
-        setSelectedDateRangeType(dateRangeType);
-      }
+      //   // Set appropriate date range type
+      //   if (!areConsecutive) {
+      setSelectedDateRangeType('multiple-days');
+      // TODO: [NON-OVERNIGHT Date Range Feature] This is for date ranges for non-overnight services, uncomment after MVP launch
+      //     debugLog('MBA54321 Non-consecutive dates detected, enforcing multiple-days mode');
+      //   } else {
+      //     setSelectedDateRangeType(dateRangeType);
+      //   }
+      // } else {
+      //   setSelectedDateRangeType(dateRangeType);
+      // }
     }
     
     // Handle dates from draft that might be in a different format
@@ -132,11 +135,12 @@ const DateSelectionCard = ({
       
       // Notify parent component that we have valid dates
       if (onDateSelect) {
+        // TODO: [NON-OVERNIGHT Date Range Feature] Add this back to the conditional below instead of just multiple days
+        // (!areConsecutiveDates ? 'multiple-days' : dateRangeType),
         const dateData = {
           type: bookingType,
           dates: datesArray,
-          rangeType: isOvernightForced ? 'date-range' : 
-                    (!areConsecutiveDates ? 'multiple-days' : dateRangeType),
+          rangeType: isOvernightForced ? 'date-range' : 'multiple-days',
           isValid: true
         };
         
@@ -385,7 +389,7 @@ const DateSelectionCard = ({
       console.log('MBA54321 Date selected:', date);
     }
 
-    if (selectedDateRangeType === 'date-range') {
+    if (isOvernightForced || selectedDateRangeType === 'date-range') {
       handleDateRangeSelection(date);
     } else {
       // Multiple days selection
@@ -982,87 +986,6 @@ const DateSelectionCard = ({
     );
   };
 
-  const renderOneTimeOptions = () => {
-    // Check if we have non-consecutive dates that need to force multiple-days mode
-    const hasNonConsecutiveDates = selectedDatesList.length > 1 && !checkIfConsecutiveDates(selectedDatesList);
-    
-    // Don't force multiple-days mode automatically - let user choose and then clear dates if needed
-    
-    return (
-      <View style={styles.oneTimeOptionsContainer}>
-        <View style={styles.dateRangeTypeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.dateRangeTypeButton,
-              selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButton
-            ]}
-            onPress={() => {
-              // If we have non-consecutive dates and switching to date-range, 
-              // clear the selected dates first to allow a clean range selection
-              if (hasNonConsecutiveDates && selectedDateRangeType !== 'date-range') {
-                debugLog('MBA54321 Clearing non-consecutive dates when switching to date-range mode');
-                setSelectedDatesList([]);
-                setRangeStartDate(null);
-                setDateRangeEnd(null);
-                setDatesFromRange(false);
-                
-                // Now switch to date-range mode with cleared dates
-                setSelectedDateRangeType('date-range');
-                
-                if (onDateSelect) {
-                  onDateSelect({
-                    type: 'one-time',
-                    dates: [],
-                    rangeType: 'date-range',
-                    isValid: false
-                  });
-                }
-              } else {
-                // Normal switching behavior
-                handleDateRangeTypeSelect('date-range');
-              }
-            }}
-          >
-            <Text style={[
-              styles.dateRangeTypeButtonText,
-              selectedDateRangeType === 'date-range' && styles.selectedDateRangeTypeButtonText
-            ]}>
-              Date Range
-            </Text>
-          </TouchableOpacity>
-          
-          {/* Only show the multiple days option if NOT an overnight service */}
-          {!isOvernightForced && (
-            <TouchableOpacity
-              style={[
-                styles.dateRangeTypeButton,
-                selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeButton
-              ]}
-              onPress={() => handleDateRangeTypeSelect('multiple-days')}
-            >
-              <Text style={[
-                styles.dateRangeTypeButtonText,
-                selectedDateRangeType === 'multiple-days' && styles.selectedDateRangeTypeButtonText
-              ]}>
-                Multiple Days
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        {/* Calendar section based on selected date range type */}
-        {selectedDateRangeType === 'date-range' || isOvernightForced ? (
-          renderDateRangeSection()
-        ) : (
-          <>
-            {renderCalendar()}
-            {renderSelectedDates()}
-          </>
-        )}
-      </View>
-    );
-  };
-
   const RecurringCalendarPreview = () => {
     const [previewMonth, setPreviewMonth] = useState(new Date(recurringStartDate));
     
@@ -1220,48 +1143,19 @@ const DateSelectionCard = ({
 
   return (
     <ScrollView style={styles.container}>
-      {/* TODO: Add back once recurring is implemented
-      {!isOvernightForced && (
-        <View style={styles.bookingTypeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.bookingTypeButton,
-              selectedBookingType === 'one-time' && styles.selectedBookingTypeButton
-            ]}
-            onPress={() => handleBookingTypeSelect('one-time')}
-          >
-            <Text style={[
-              styles.bookingTypeText,
-              selectedBookingType === 'one-time' && styles.selectedBookingTypeText
-            ]}>One-time</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.bookingTypeButton,
-              selectedBookingType === 'recurring' && styles.selectedBookingTypeButton
-            ]}
-            onPress={() => handleBookingTypeSelect('recurring')}
-          >
-            <Text style={[
-              styles.bookingTypeText,
-              selectedBookingType === 'recurring' && styles.selectedBookingTypeText
-            ]}>Recurring</Text>
-          </TouchableOpacity>
-        </View>
-      )} */}
-
-      {isOvernightForced ? (
-        <>
-          <Text style={[styles.sectionTitle, { fontSize: screenWidth > 768 ? 26 : 16 }]}>Select Date Range</Text>
+      {/* TODO: Add back recurring options once implemented after MVP */}
+      {isOvernightForced || selectedBookingType === 'one-time' ? (
+        <View style={styles.oneTimeOptionsContainer}>
+          <Text style={[styles.dateSelectionTitle, { fontSize: screenWidth > 768 ? 24 : 18 }]}>
+            {isOvernightForced 
+              ? "Select a date range" 
+              : "Select one or more dates"}
+          </Text>
+          
           {renderCalendar()}
           {renderSelectedDates()}
-        </>
-      ) : (
-        <>
-          {renderOneTimeOptions()}
-          {renderRecurringOptions()}
-        </>
-      )}
+        </View>
+      ) : renderRecurringOptions()}
       
       <RecurringCalendarPreview />
     </ScrollView>
@@ -1678,30 +1572,12 @@ const styles = StyleSheet.create({
   oneTimeOptionsContainer: {
     marginTop: 8,
   },
-  dateRangeTypeContainer: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  dateRangeTypeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e8e8e8', // Light gray for inactive buttons
-  },
-  dateRangeTypeButtonText: {
-    fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
+  dateSelectionTitle: {
     color: theme.colors.text,
-  },
-  selectedDateRangeTypeButton: {
-    backgroundColor: theme.colors.mainColors.main,
-  },
-  selectedDateRangeTypeButtonText: {
-    color: theme.colors.surface,
+    fontFamily: theme.fonts.regular.fontFamily,
     fontWeight: '600',
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
 });
 
