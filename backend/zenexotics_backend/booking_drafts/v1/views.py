@@ -1365,6 +1365,34 @@ class UpdateBookingDraftTimeAndDateView(APIView):
             end_time = serializer.validated_data['end_time']
             user_timezone = serializer.validated_data.get('user_timezone', 'US/Mountain')
 
+            # Get the requesting user's (professional) timezone from UserSettings
+            try:
+                # First check if user_timezone is provided in the request data (timeSettings)
+                if 'timeSettings' in request.data and 'timezone' in request.data['timeSettings']:
+                    user_timezone = request.data['timeSettings']['timezone']
+                    logger.info(f"MBAoi1h34ghnvo: Using timezone from request timeSettings: {user_timezone}")
+                else:
+                    # Get the requesting user's timezone (professional)
+                    from users.models import UserSettings
+                    user_settings = UserSettings.objects.filter(user=request.user).first()
+                    if user_settings and user_settings.timezone:
+                        user_timezone = user_settings.timezone
+                        logger.info(f"MBAoi1h34ghnvo: Retrieved requesting user's timezone from database: {user_timezone}")
+                    else:
+                        logger.warning(f"MBAoi1h34ghnvo: Could not find timezone in user settings, using default: {user_timezone}")
+            except Exception as e:
+                logger.error(f"MBAoi1h34ghnvo: Error retrieving user's timezone: {str(e)}")
+                logger.error(f"MBAoi1h34ghnvo: Fallback to default timezone: {user_timezone}")
+            
+            # Validate that timezone is valid
+            try:
+                import pytz
+                pytz.timezone(user_timezone)
+                logger.info(f"MBAoi1h34ghnvo: Validated timezone: {user_timezone}")
+            except Exception as e:
+                logger.error(f"MBAoi1h34ghnvo: Invalid timezone: {user_timezone}, falling back to US/Mountain")
+                user_timezone = 'US/Mountain'
+
             # Get service from draft data
             service = None
             if draft.draft_data and 'service_details' in draft.draft_data:
@@ -1401,21 +1429,73 @@ class UpdateBookingDraftTimeAndDateView(APIView):
 
             logger.info(f"MBA1234 - Using rates: base_rate={base_rate}, additional_animal_rate={additional_animal_rate}, holiday_rate={holiday_rate}")
 
-            # Calculate number of nights based on local times
-            # Create datetime objects in the user's timezone
-            start_dt = datetime.combine(start_date, start_time)
-            end_dt = datetime.combine(end_date, end_time)
-
-            # Calculate the difference in days
-            nights = (end_dt - start_dt).days
-
-            # If the end time is earlier than the start time on the same day,
-            # or if the end time is on the next day but earlier than the start time,
-            # we need to adjust the night count
-            if end_time < start_time:
-                nights += 1
-
-            logger.info(f"MBA1234 - Calculated nights: {nights}")
+            # Calculate number of nights based on local times in the user's timezone
+            try:
+                import pytz
+                from datetime import datetime, timedelta
+                
+                # Get user timezone - use the provided user_timezone or fall back to default
+                user_tz = pytz.timezone(user_timezone)
+                logger.info(f"MBAoi1h34ghnvo: Using timezone: {user_timezone}")
+                
+                # Create datetime objects with timezone information
+                # Note: start_date, end_date are dates; start_time, end_time are times
+                # We need to combine them and attach timezone info
+                
+                # First create naive datetime objects by combining date and time
+                naive_start_dt = datetime.combine(start_date, start_time)
+                naive_end_dt = datetime.combine(end_date, end_time)
+                
+                # Since all times in our system are stored in UTC, mark these as UTC
+                utc_start_dt = pytz.UTC.localize(naive_start_dt)
+                utc_end_dt = pytz.UTC.localize(naive_end_dt)
+                
+                # Convert to user's local timezone
+                local_start_dt = utc_start_dt.astimezone(user_tz)
+                local_end_dt = utc_end_dt.astimezone(user_tz)
+                
+                logger.info(f"MBAoi1h34ghnvo: UTC Start: {utc_start_dt}, UTC End: {utc_end_dt}")
+                logger.info(f"MBAoi1h34ghnvo: Local Start: {local_start_dt}, Local End: {local_end_dt}")
+                
+                # Calculate nights by comparing dates in local timezone
+                # For overnight booking, count how many days are covered
+                start_date_local = local_start_dt.date()
+                end_date_local = local_end_dt.date()
+                
+                # Calculate nights as the difference between dates
+                # For overnight bookings, this is the number of days between dates
+                nights = (end_date_local - start_date_local).days
+                
+                # The above calculation might undercount if booking spans until next day
+                # Example: Start May 6th, End May 8th should be 2 nights (6th and 7th)
+                if nights == 0 and end_date_local == start_date_local:
+                    # Special handling for same-day case
+                    logger.info(f"MBAoi1h34ghnvo: Same day booking, 0 nights")
+                    nights = 0
+                else:
+                    logger.info(f"MBAoi1h34ghnvo: Multi-day booking spanning {nights} nights")
+                    
+                logger.info(f"MBAoi1h34ghnvo: Calculated nights in {user_timezone}: {nights}")
+                
+            except Exception as e:
+                # Fallback to simple calculation if timezone conversion fails
+                logger.error(f"MBAoi1h34ghnvo: Error calculating nights with timezone: {str(e)}")
+                logger.error(f"MBAoi1h34ghnvo: Traceback: {traceback.format_exc()}")
+                
+                # Create naive datetime objects
+                start_dt = datetime.combine(start_date, start_time)
+                end_dt = datetime.combine(end_date, end_time)
+                
+                # Calculate days difference
+                nights = (end_dt - start_dt).days
+                
+                # Adjust if end time is earlier than start time
+                if end_time < start_time:
+                    nights += 1
+                    
+                logger.info(f"MBAoi1h34ghnvo: Fallback night calculation: {nights}")
+            
+            logger.info(f"MBA1234 - Final calculated nights: {nights}")
             logger.info(f"MBA1234 - Start: {start_date} {start_time}, End: {end_date} {end_time}")
 
             # Calculate additional pet charges

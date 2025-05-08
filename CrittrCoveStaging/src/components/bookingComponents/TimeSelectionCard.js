@@ -257,28 +257,54 @@ const TimeSelectionCard = ({
   };
 
   const handleIndividualDayTimeSelect = (timesData, dateKey) => {
-    debugLog('MBA2j3kbr9hve4: Individual day time selection:', { timesData, dateKey });
+    debugLog('MBAoi1h34ghnvo: Individual day time selection:', { timesData, dateKey });
     
-    if (!dateKey) return;
+    if (!dateKey) {
+      debugLog('MBAoi1h34ghnvo: No dateKey provided, returning');
+      return;
+    }
+
+    // Create a new object with only the selected dates
+    const updatedRanges = {};
     
-    // Update individual time ranges with the new data for this date
-    const updatedRanges = {
-      ...individualTimeRanges,
-      [dateKey]: {
-        startTime: timesData.startTime,
-        endTime: timesData.endTime,
-        isOvernightForced: timesData.isOvernightForced
-      }
+    // Only process the specific date that was selected
+    updatedRanges[dateKey] = {
+      startTime: timesData.startTime,
+      endTime: timesData.endTime,
+      isOvernightForced: timesData.isOvernightForced
     };
     
+    debugLog('MBAoi1h34ghnvo: Current ranges after update:', updatedRanges);
+    
+    // Update state with only the selected date
     setIndividualTimeRanges(updatedRanges);
     
-    // Send all time data to parent
-    onTimeSelect({
+    // Format only the selected date's time range for the backend
+    const formattedRanges = {};
+    formattedRanges[dateKey] = {
+      startTime: typeof timesData.startTime === 'string' ? timesData.startTime : `${String(timesData.startTime.hours).padStart(2, '0')}:${String(timesData.startTime.minutes).padStart(2, '0')}`,
+      endTime: typeof timesData.endTime === 'string' ? timesData.endTime : `${String(timesData.endTime.hours).padStart(2, '0')}:${String(timesData.endTime.minutes).padStart(2, '0')}`,
+      isOvernightForced: timesData.isOvernightForced
+    };
+    
+    debugLog('MBAoi1h34ghnvo: Formatted ranges:', formattedRanges);
+    
+    // Create the final data object with only the selected date's time change
+    const finalData = {
       ...times,
-      ...updatedRanges,
-      hasIndividualTimes: true
-    });
+      hasIndividualTimes: true,
+      isOvernightForced: timesData.isOvernightForced,
+      dates: initialTimes.dates || [],
+      // Include only the formatted range for the selected date
+      ...formattedRanges,
+      // Include the raw individualTimeRanges for state preservation
+      individualTimeRanges: updatedRanges,
+      // Ensure we preserve all time changes
+      allTimesAreTheSame: false
+    };
+    
+    debugLog('MBAoi1h34ghnvo: Sending final data to parent:', finalData);
+    onTimeSelect(finalData);
   };
 
   const handlePresetSelect = (preset) => {

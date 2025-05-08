@@ -216,10 +216,10 @@ const BookingStepModal = ({
             dateRange: parsedData.dateRange,
             times: {
               ...(parsedData.defaultTimes || {}),
+              ...parsedData.individualTimes,
               individualTimeRanges: parsedData.individualTimes || {},
               allTimesAreTheSame: parsedData.allTimesAreTheSame,
               hasIndividualTimes: !parsedData.allTimesAreTheSame,
-              // Ensure we preserve the isOvernightForced flag based on the service type
               isOvernightForced: isOvernightForced
             },
             dateRangeType: dateRangeType,
@@ -379,7 +379,7 @@ const BookingStepModal = ({
   };
 
   const handleTimeSelect = (timeData) => {
-    debugLog('MBA12345 Selected times:', timeData);
+    debugLog('MBAoi1h34ghnvo: TimeSelectionCard sent time data:', timeData);
 
     // Just for logging
     const hasServiceOvernight = bookingData.service?.is_overnight === true;
@@ -387,48 +387,51 @@ const BookingStepModal = ({
     setBookingData(prev => {
       // Check if we have individual day times
       if (timeData.hasIndividualTimes) {
-        // Filter out only the date-keyed properties and non-function properties
-        const individualTimes = Object.keys(timeData)
-          .filter(key => key.match(/^\d{4}-\d{2}-\d{2}$/) || 
-                        ['startTime', 'endTime', 'isOvernightForced', 'hasIndividualTimes', 'dates'].includes(key))
-          .reduce((obj, key) => {
-            obj[key] = timeData[key];
-            return obj;
-          }, {});
+        debugLog('MBAoi1h34ghnvo: Processing individual times');
+        
+        // Create a new times object that preserves all individual time changes
+        const individualTimes = {
+          ...prev.times,
+          hasIndividualTimes: true,
+          isOvernightForced: timeData.isOvernightForced,
+          dates: timeData.dates || prev.times.dates || [],
+          // Preserve the raw individualTimeRanges
+          individualTimeRanges: timeData.individualTimeRanges || {}
+        };
+
+        // Add all date-specific time changes
+        Object.keys(timeData).forEach(key => {
+          if (key.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            debugLog('MBAoi1h34ghnvo: Processing date key:', key, timeData[key]);
+            // Ensure we preserve the exact time data for each date
+            individualTimes[key] = {
+              startTime: timeData[key].startTime,
+              endTime: timeData[key].endTime,
+              isOvernightForced: timeData[key].isOvernightForced
+            };
+          }
+        });
           
-        debugLog('MBA12345 Using individual day times:', individualTimes);
+        debugLog('MBAoi1h34ghnvo: Final individual times object:', individualTimes);
         
         return {
           ...prev,
-          times: {
-            ...individualTimes,
-            // Use isOvernightForced exactly as it was passed in timeData
-            isOvernightForced: timeData.isOvernightForced,
-            hasIndividualTimes: true
-          }
+          times: individualTimes
         };
       } else {
-        // Using default time range mode
-        debugLog('MBA12345 Using default time range mode');
+        debugLog('MBAoi1h34ghnvo: Using default time range mode');
         
         // Create a new times object that preserves any existing values
         const updatedTimes = {
           ...prev.times,
           startTime: timeData.startTime ? `${String(timeData.startTime.hours).padStart(2, '0')}:${String(timeData.startTime.minutes || 0).padStart(2, '0')}` : prev.times.startTime,
           endTime: timeData.endTime ? `${String(timeData.endTime.hours).padStart(2, '0')}:${String(timeData.endTime.minutes || 0).padStart(2, '0')}` : prev.times.endTime,
-          // Use isOvernightForced exactly as it was passed in timeData
           isOvernightForced: timeData.isOvernightForced,
-          // Explicitly set hasIndividualTimes to false
-          hasIndividualTimes: false
+          hasIndividualTimes: false,
+          dates: timeData.dates || prev.times.dates || []
         };
 
-        debugLog('MBA12345 Previous times:', prev.times);
-        debugLog('MBA12345 Updated times:', updatedTimes);
-        debugLog('MBA12345 Checking for service overnight:', { 
-          hasServiceOvernight, 
-          timeDataIsOvernight: timeData.isOvernightForced,
-          finalIsOvernightForced: updatedTimes.isOvernightForced
-        });
+        debugLog('MBAoi1h34ghnvo: Updated default times:', updatedTimes);
 
         return {
           ...prev,
@@ -554,20 +557,20 @@ const BookingStepModal = ({
             });
             
             // Get user's timezone from context
-            const userTimezone = timeSettings?.timezone || 'US/Mountain';
-            debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion:', userTimezone);
+            const userTz = timeSettings?.timezone || 'US/Mountain';
+            debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion:', userTz);
             
             // Convert local times to UTC before sending to backend
             const { date: utcStartDate, time: utcStartTime } = convertToUTC(
               startDate,
               startTime,
-              userTimezone
+              userTz
             );
 
             const { date: utcEndDate, time: utcEndTime } = convertToUTC(
               endDate,
               endTime,
-              userTimezone
+              userTz
             );
 
             // Call the API with UTC times and dates
@@ -676,20 +679,20 @@ const BookingStepModal = ({
               const endTime = formatTimeForAPI(bookingData.times.endTime);
               
               // Get user's timezone from context
-              const userTimezone = timeSettings?.timezone || 'US/Mountain';
-              debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion:', userTimezone);
+              const userTz = timeSettings?.timezone || 'US/Mountain';
+              debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion:', userTz);
               
               // Convert local times to UTC before sending to backend
               const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                 startDate,
                 startTime,
-                userTimezone
+                userTz
               );
 
               const { date: utcEndDate, time: utcEndTime } = convertToUTC(
                 endDate,
                 endTime,
-                userTimezone
+                userTz
               );
 
               // Call the API with UTC times and dates
@@ -824,18 +827,22 @@ const BookingStepModal = ({
                 // should NOT force overnight mode - that should only be based on the service type
                 // We're just calculating the correct end date for API payload
                 
+                // Get user's timezone from context
+                const userTz = timeSettings?.timezone || 'US/Mountain';
+                debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion in map function:', userTz);
+                
                 // Convert local times to UTC for start time and date
                 const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                   formattedDate,
                   startTime,
-                  userTimezone
+                  userTz
                 );
                 
                 // Convert end time to UTC with potentially different end date
                 const { date: utcEndDate, time: utcEndTime } = convertToUTC(
                   formattedEndDate,
                   endTime,
-                  userTimezone
+                  userTz
                 );
                 
                 debugLog('MBA53212co2v3nvoub5 Converted UTC times:', { 
@@ -901,13 +908,13 @@ const BookingStepModal = ({
               const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                 startDate,
                 startTime,
-                userTimezone
+                userTz
               );
 
               const { date: utcEndDate, time: utcEndTime } = convertToUTC(
                 endDate,
                 endTime,
-                userTimezone
+                userTz
               );
 
               debugLog('MBA53212co2v3nvoub5 UTC dates and times:', {

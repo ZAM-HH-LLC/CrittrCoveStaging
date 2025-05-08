@@ -87,6 +87,38 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     setNewRate({ name: '', amount: '', description: '' });
   };
 
+  // Helper function to sanitize amount input for consistent handling
+  const sanitizeAmountInput = (value) => {
+    // Remove non-numeric characters except decimal point
+    let sanitized = value
+      .replace(/[^\d.]/g, '') // Remove anything that's not a digit or decimal point
+      .replace(/(\..*)\./g, '$1'); // Remove multiple decimal points, keep only the first one
+    
+    // Limit to 2 decimal places
+    const parts = sanitized.split('.');
+    if (parts.length > 1 && parts[1].length > 2) {
+      sanitized = `${parts[0]}.${parts[1].substring(0, 2)}`;
+    }
+    
+    return sanitized;
+  };
+  
+  // Update the setNewRate for amount field to apply consistent validation
+  const handleNewRateAmountChange = (text) => {
+    setNewRate(prev => ({
+      ...prev,
+      amount: sanitizeAmountInput(text)
+    }));
+  };
+  
+  // Update the setNewOccurrenceRate for amount field to apply consistent validation
+  const handleNewOccurrenceRateAmountChange = (text) => {
+    setNewOccurrenceRate(prev => ({
+      ...prev,
+      amount: sanitizeAmountInput(text)
+    }));
+  };
+
   const saveRateChanges = async () => {
     // Create a copy of bookingData with updated rates
     if (!editedRates) return;
@@ -98,6 +130,19 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       debugLog('MBA66777 Saving rate changes:', editedRates);
       debugLog('MBA66777 Using bookingId:', bookingId);
       
+      // Create a clean version of editedRates to send to API
+      const cleanEditedRates = {
+        ...editedRates,
+        additional_rates: editedRates.additional_rates && editedRates.additional_rates.length > 0 
+          ? editedRates.additional_rates.map(rate => ({
+              title: rate.name || rate.title, // Always use 'title' for backend
+              // Convert empty or string amount values to number
+              amount: rate.amount === '' ? 0 : typeof rate.amount === 'string' ? parseFloat(rate.amount) : rate.amount,
+              description: rate.description || `Additional rate`
+            }))
+          : []
+      };
+      
       // Create occurrences array for API with all occurrences
       const occurrencesForApi = bookingData.occurrences.map((occ, index) => {
         // For the first occurrence (the one being edited in this case), update its rates
@@ -105,17 +150,11 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
           return {
             occurrence_id: occ.occurrence_id,
             rates: {
-              base_rate: parseFloat(editedRates.base_rate),
-              additional_animal_rate: parseFloat(editedRates.additional_animal_rate || 0),
+              base_rate: editedRates.base_rate === '' ? 0 : typeof editedRates.base_rate === 'string' ? parseFloat(editedRates.base_rate) : editedRates.base_rate,
+              additional_animal_rate: editedRates.additional_animal_rate === '' ? 0 : typeof editedRates.additional_animal_rate === 'string' ? parseFloat(editedRates.additional_animal_rate) : editedRates.additional_animal_rate || 0,
               applies_after: parseInt(editedRates.applies_after || 1),
-              holiday_rate: parseFloat(editedRates.holiday_rate || 0),
-              additional_rates: editedRates.additional_rates && editedRates.additional_rates.length > 0 
-                ? editedRates.additional_rates.map(rate => ({
-                    title: rate.name || rate.title,
-                    amount: parseFloat(rate.amount),
-                    description: rate.description || `Additional rate`
-                  }))
-                : []
+              holiday_rate: editedRates.holiday_rate === '' ? 0 : typeof editedRates.holiday_rate === 'string' ? parseFloat(editedRates.holiday_rate) : editedRates.holiday_rate || 0,
+              additional_rates: cleanEditedRates.additional_rates
             }
           };
         }
@@ -154,9 +193,13 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
         }
       }
       
+      // Reset all edit state
       setIsEditMode(false);
-      // Also reset editingOccurrenceId to null to ensure the X turns back to a pencil
       setEditingOccurrenceId(null);
+      setOccurrenceEdits({});
+      setExpandedRates(new Set());
+      setIsAddingRate(false);
+      setIsAddingRateForOccurrence(null);
     } catch (err) {
       debugLog('MBA66777 Error saving rate changes:', err);
       setError('Failed to update rates. Please try again.');
@@ -166,7 +209,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const saveNewRate = async () => {
-    if (!newRate.name || !newRate.amount) return;
+    if (!newRate.name || (!newRate.amount && newRate.amount !== '')) return;
     
     try {
       setIsLoading(true);
@@ -175,7 +218,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       // Create the new rate object
       const newAdditionalRate = {
         title: newRate.name,
-        amount: parseFloat(newRate.amount.replace(/[^0-9.]/g, '')),
+        amount: newRate.amount === '' ? 0 : typeof newRate.amount === 'string' ? parseFloat(newRate.amount) : newRate.amount,
         description: newRate.description || `Additional rate`
       };
       
@@ -188,7 +231,8 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       
       updatedRates.additional_rates.push({
         name: newRate.name,
-        amount: parseFloat(newRate.amount.replace(/[^0-9.]/g, '')),
+        title: newRate.name, // Add title for consistency
+        amount: newRate.amount === '' ? 0 : typeof newRate.amount === 'string' ? parseFloat(newRate.amount) : newRate.amount,
         description: newRate.description || `Additional rate`
       });
       
@@ -262,26 +306,32 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const updateBaseRate = (value) => {
-    const numericValue = value.replace(/[^0-9.]/g, '');
+    // Apply consistent amount sanitization
+    const sanitizedValue = sanitizeAmountInput(value);
+    
     setEditedRates(prev => ({
       ...prev,
-      base_rate: numericValue ? parseFloat(numericValue) : 0
+      base_rate: sanitizedValue
     }));
   };
 
   const updateAdditionalAnimalRate = (value) => {
-    const numericValue = value.replace(/[^0-9.]/g, '');
+    // Apply consistent amount sanitization
+    const sanitizedValue = sanitizeAmountInput(value);
+    
     setEditedRates(prev => ({
       ...prev,
-      additional_animal_rate: numericValue ? parseFloat(numericValue) : 0
+      additional_animal_rate: sanitizedValue
     }));
   };
 
   const updateHolidayRate = (value) => {
-    const numericValue = value.replace(/[^0-9.]/g, '');
+    // Apply consistent amount sanitization
+    const sanitizedValue = sanitizeAmountInput(value);
+    
     setEditedRates(prev => ({
       ...prev,
-      holiday_rate: numericValue ? parseFloat(numericValue) : 0
+      holiday_rate: sanitizedValue
     }));
   };
 
@@ -291,10 +341,12 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     const updatedAdditionalRates = [...editedRates.additional_rates];
     
     if (field === 'amount') {
-      const numericValue = value.replace(/[^0-9.]/g, '');
+      // Apply consistent amount sanitization
+      const sanitizedValue = sanitizeAmountInput(value);
+      
       updatedAdditionalRates[index] = {
         ...updatedAdditionalRates[index],
-        amount: numericValue ? parseFloat(numericValue) : 0
+        amount: sanitizedValue === '' ? '' : sanitizedValue
       };
     } else if (field === 'name') {
       updatedAdditionalRates[index] = {
@@ -445,16 +497,51 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const handleOccurrenceInputChange = (field, value) => {
-    setOccurrenceEdits(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    if (field === 'base_rate' || field === 'additional_animal_rate' || field === 'holiday_rate') {
+      // Apply consistent amount sanitization
+      const sanitizedValue = sanitizeAmountInput(value);
+      
+      setOccurrenceEdits(prev => ({
+        ...prev,
+        [field]: sanitizedValue
+      }));
+    } else {
+      setOccurrenceEdits(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
   };
 
   const handleAdditionalRateChange = (index, field, value) => {
+    debugLog(`MBA66778 Changing additional rate at index ${index}, field ${field} to value: ${value}`, {
+      currentOccurrenceEdits: occurrenceEdits,
+      currentAdditionalRates: occurrenceEdits.additional_rates
+    });
+    
     setOccurrenceEdits(prev => {
       const updated = [...(prev.additional_rates || [])];
-      updated[index] = { ...updated[index], [field]: value };
+      
+      if (field === 'amount') {
+        // Apply consistent amount sanitization
+        const sanitizedValue = sanitizeAmountInput(value);
+        
+        updated[index] = {
+          ...updated[index],
+          amount: sanitizedValue === '' ? '' : sanitizedValue
+        };
+      } else if (field === 'name') {
+        updated[index] = {
+          ...updated[index],
+          name: value
+        };
+      }
+      
+      debugLog(`MBA66778 Updated additional rate:`, {
+        updatedRate: updated[index],
+        allRates: updated
+      });
+      
       return { ...prev, additional_rates: updated };
     });
   };
@@ -464,6 +551,17 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       setIsLoading(true);
       setError(null);
       
+      // Clean up any empty amount values in occurrenceEdits
+      const cleanOccurrenceEdits = {
+        ...occurrenceEdits,
+        additional_rates: (occurrenceEdits.additional_rates || []).map(rate => ({
+          title: rate.name || rate.title, // Always use 'title' for backend
+          // Convert empty or string amount values to number
+          amount: rate.amount === '' ? 0 : typeof rate.amount === 'string' ? parseFloat(rate.amount) : rate.amount,
+          description: rate.description || ''
+        }))
+      };
+      
       // Create a list of occurrences to send to the API
       const occurrencesForApi = bookingData.occurrences.map(occ => {
         // For the occurrence being edited, update its rates
@@ -471,15 +569,11 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
           return {
             occurrence_id: occurrence.occurrence_id,
             rates: {
-              base_rate: parseFloat(occurrenceEdits.base_rate),
-              additional_animal_rate: parseFloat(occurrenceEdits.additional_animal_rate || 0),
+              base_rate: occurrenceEdits.base_rate === '' ? 0 : typeof occurrenceEdits.base_rate === 'string' ? parseFloat(occurrenceEdits.base_rate) : occurrenceEdits.base_rate,
+              additional_animal_rate: occurrenceEdits.additional_animal_rate === '' ? 0 : typeof occurrenceEdits.additional_animal_rate === 'string' ? parseFloat(occurrenceEdits.additional_animal_rate) : occurrenceEdits.additional_animal_rate || 0,
               applies_after: parseInt(occurrenceEdits.applies_after || 1),
-              holiday_rate: parseFloat(occurrenceEdits.holiday_rate || 0),
-              additional_rates: (occurrenceEdits.additional_rates || []).map(rate => ({
-                title: rate.name,
-                amount: parseFloat(rate.amount),
-                description: rate.description || ''
-              }))
+              holiday_rate: occurrenceEdits.holiday_rate === '' ? 0 : typeof occurrenceEdits.holiday_rate === 'string' ? parseFloat(occurrenceEdits.holiday_rate) : occurrenceEdits.holiday_rate || 0,
+              additional_rates: cleanOccurrenceEdits.additional_rates
             }
           };
         }
@@ -509,8 +603,20 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       
       if (response.draft_data) {
         if (onRatesUpdate) onRatesUpdate(response.draft_data);
+        
+        // Reset all edit state
         setEditingOccurrenceId(null);
         setOccurrenceEdits({});
+        
+        // If we're in edit mode for a single occurrence booking, exit that mode too
+        if (bookingData.occurrences.length === 1) {
+          setIsEditMode(false);
+        }
+        
+        // Also remove any expanded rates and cancel any rate addition in progress
+        setExpandedRates(new Set());
+        setIsAddingRate(false);
+        setIsAddingRateForOccurrence(null);
       }
     } catch (err) {
       debugLog('MBA54321 - Error saving occurrence rates:', err);
@@ -530,7 +636,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const saveNewRateForOccurrence = async (occurrence) => {
-    if (!newOccurrenceRate.name || !newOccurrenceRate.amount) return;
+    if (!newOccurrenceRate.name || (!newOccurrenceRate.amount && newOccurrenceRate.amount !== '')) return;
     
     try {
       setIsLoading(true);
@@ -545,7 +651,8 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       
       updatedOccurrenceEdits.additional_rates.push({
         name: newOccurrenceRate.name,
-        amount: parseFloat(newOccurrenceRate.amount.replace(/[^0-9.]/g, '')),
+        title: newOccurrenceRate.name, // Add title for consistency
+        amount: newOccurrenceRate.amount === '' ? 0 : typeof newOccurrenceRate.amount === 'string' ? parseFloat(newOccurrenceRate.amount) : newOccurrenceRate.amount,
         description: newOccurrenceRate.description || `Additional rate`
       });
       
@@ -685,6 +792,34 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     }
   };
 
+  // Helper function to get the correct value for an additional rate field based on edit state
+  const getAdditionalRateValue = (occurrence, index, field) => {
+    // If we're editing this occurrence, get value from occurrenceEdits
+    if (editingOccurrenceId === occurrence.occurrence_id && occurrenceEdits.additional_rates) {
+      const value = occurrenceEdits.additional_rates[index]?.[field];
+      // For numeric fields like 'amount', 0 is a valid value
+      if (field === 'amount' && value === 0) return '';
+      return value || '';
+    }
+    
+    // If we're in edit mode (for single occurrence bookings), get from editedRates
+    if (isEditMode && editedRates?.additional_rates) {
+      const value = editedRates.additional_rates[index]?.[field];
+      // For numeric fields like 'amount', 0 is a valid value
+      if (field === 'amount' && value === 0) return '';
+      return value || '';
+    }
+    
+    // Otherwise get from the rate directly
+    const rates = occurrence.rates?.additional_rates || [];
+    const rate = rates[index] || {};
+    const value = field === 'name' ? (rate.name || rate.title) : rate[field];
+    
+    // For numeric fields like 'amount', 0 is a valid value
+    if (field === 'amount' && value === 0) return '';
+    return value || '';
+  };
+
   const renderBookingBreakdown = () => {
     debugLog('MBAio3htg5uohg: Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
     const occurrences = bookingData?.occurrences;
@@ -810,7 +945,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                 borderRadius: 4,
                                 padding: 8
                               }}
-                              keyboardType="numeric"
+                              keyboardType="decimal-pad"
                               value={occurrenceEdits.base_rate?.toString() || ''}
                               onChangeText={v => handleOccurrenceInputChange('base_rate', v)}
                             />
@@ -844,7 +979,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                   borderRadius: 4,
                                   padding: 8
                                 }}
-                                keyboardType="numeric"
+                                keyboardType="decimal-pad"
                                 value={occurrenceEdits.additional_animal_rate?.toString() || ''}
                                 onChangeText={v => handleOccurrenceInputChange('additional_animal_rate', v)}
                               />
@@ -875,7 +1010,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                   borderRadius: 4,
                                   padding: 8
                                 }}
-                                keyboardType="numeric"
+                                keyboardType="decimal-pad"
                                 value={occurrenceEdits.holiday_rate?.toString() || ''}
                                 onChangeText={v => handleOccurrenceInputChange('holiday_rate', v)}
                               />
@@ -899,11 +1034,21 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                   // Mobile layout - stacked with trash icon on the right
                                   <View style={{ width: '100%' }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      {/* Debug log for rate name */}
+                                      {debugLog(`MBA66778 Rendering rate at index ${index}:`, {
+                                        isEditMode,
+                                        editingOccurrenceId: editingOccurrenceId,
+                                        occurrenceId: occurrence.occurrence_id,
+                                        rateName: rate.name || rate.title,
+                                        rateAmount: rate.amount,
+                                        occurrenceEditsRate: occurrenceEdits.additional_rates?.[index],
+                                        valueToShow: editingOccurrenceId === occurrence.occurrence_id ? 
+                                          (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.amount?.toString()) || '0' : 
+                                          rate.amount?.toString() || '0'
+                                      })}
                                       <TextInput
                                         style={[styles.nameInput, { flex: 1, marginRight: 8 }]}
-                                        value={editingOccurrenceId === occurrence.occurrence_id ? 
-                                          (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
-                                          rate.name || rate.title}
+                                        value={getAdditionalRateValue(occurrence, index, 'name')}
                                         onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                           handleAdditionalRateChange(index, 'name', value) : 
                                           updateAdditionalRate(index, 'name', value)}
@@ -933,8 +1078,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                             borderRadius: 4,
                                             padding: 8
                                           }}
-                                          keyboardType="numeric"
-                                          value={rate.amount?.toString() || '0'}
+                                          keyboardType="decimal-pad"
+                                          value={getAdditionalRateValue(occurrence, index, 'amount') === '' ? '' : 
+                                                getAdditionalRateValue(occurrence, index, 'amount').toString()}
                                           onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                             handleAdditionalRateChange(index, 'amount', value) : 
                                             updateAdditionalRate(index, 'amount', value)}
@@ -948,9 +1094,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                     <View style={styles.rateNameAmountRowWithDelete}>
                                       <TextInput
                                         style={styles.nameInput}
-                                        value={editingOccurrenceId === occurrence.occurrence_id ? 
-                                          (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
-                                          rate.name || rate.title}
+                                        value={getAdditionalRateValue(occurrence, index, 'name')}
                                         onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                           handleAdditionalRateChange(index, 'name', value) : 
                                           updateAdditionalRate(index, 'name', value)}
@@ -960,8 +1104,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                         <Text style={styles.currencySymbol}>$</Text>
                                         <TextInput
                                           style={styles.rateInput}
-                                          keyboardType="numeric"
-                                          value={rate.amount?.toString() || '0'}
+                                          keyboardType="decimal-pad"
+                                          value={getAdditionalRateValue(occurrence, index, 'amount') === '' ? '' : 
+                                                getAdditionalRateValue(occurrence, index, 'amount').toString()}
                                           onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                             handleAdditionalRateChange(index, 'amount', value) : 
                                             updateAdditionalRate(index, 'amount', value)}
@@ -1018,9 +1163,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                               <Text style={styles.currencySymbol}>$</Text>
                               <TextInput
                                 style={styles.rateInput}
-                                keyboardType="numeric"
+                                keyboardType="decimal-pad"
                                 value={newOccurrenceRate.amount}
-                                onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, amount: text }))}
+                                onChangeText={handleNewOccurrenceRateAmountChange}
                                 placeholder="0.00"
                                 placeholderTextColor={theme.colors.placeHolderText}
                               />
@@ -1048,9 +1193,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                 <Text style={styles.currencySymbol}>$</Text>
                                 <TextInput
                                   style={styles.rateInput}
-                                  keyboardType="numeric"
+                                  keyboardType="decimal-pad"
                                   value={newOccurrenceRate.amount}
-                                  onChangeText={(text) => setNewOccurrenceRate(prev => ({ ...prev, amount: text }))}
+                                  onChangeText={handleNewOccurrenceRateAmountChange}
                                   placeholder="0.00"
                                   placeholderTextColor={theme.colors.placeHolderText}
                                 />
@@ -1186,7 +1331,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                       <Text style={styles.currencySymbol}>$</Text>
                       <TextInput
                         style={styles.rateInput}
-                        keyboardType="numeric"
+                        keyboardType="decimal-pad"
                         value={editingOccurrenceId === occurrence.occurrence_id ? 
                           occurrenceEdits.base_rate?.toString() || '0' : 
                           editedRates?.base_rate?.toString() || '0'}
@@ -1221,7 +1366,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                         <Text style={styles.currencySymbol}>$</Text>
                         <TextInput
                           style={styles.rateInput}
-                          keyboardType="numeric"
+                          keyboardType="decimal-pad"
                           value={editingOccurrenceId === occurrence.occurrence_id ? 
                             occurrenceEdits.additional_animal_rate?.toString() || '0' : 
                             editedRates?.additional_animal_rate?.toString() || '0'}
@@ -1267,7 +1412,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                         <Text style={styles.currencySymbol}>$</Text>
                         <TextInput
                           style={styles.rateInput}
-                          keyboardType="numeric"
+                          keyboardType="decimal-pad"
                           value={editingOccurrenceId === occurrence.occurrence_id ? 
                             occurrenceEdits.holiday_rate?.toString() || '0' : 
                             editedRates?.holiday_rate?.toString() || '0'}
@@ -1304,11 +1449,21 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                         // Mobile layout - stacked with trash icon on the right
                         <View style={{ width: '100%' }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            {/* Debug log for rate name */}
+                            {debugLog(`MBA66778 Rendering rate at index ${index}:`, {
+                              isEditMode,
+                              editingOccurrenceId: editingOccurrenceId,
+                              occurrenceId: occurrence.occurrence_id,
+                              rateName: rate.name || rate.title,
+                              rateAmount: rate.amount,
+                              occurrenceEditsRate: occurrenceEdits.additional_rates?.[index],
+                              valueToShow: editingOccurrenceId === occurrence.occurrence_id ? 
+                                (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.amount?.toString()) || '0' : 
+                                rate.amount?.toString() || '0'
+                            })}
                             <TextInput
                               style={[styles.nameInput, { flex: 1, marginRight: 8 }]}
-                              value={editingOccurrenceId === occurrence.occurrence_id ? 
-                                (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
-                                rate.name || rate.title}
+                              value={getAdditionalRateValue(occurrence, index, 'name')}
                               onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                 handleAdditionalRateChange(index, 'name', value) : 
                                 updateAdditionalRate(index, 'name', value)}
@@ -1338,8 +1493,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                                   borderRadius: 4,
                                   padding: 8
                                 }}
-                                keyboardType="numeric"
-                                value={rate.amount?.toString() || '0'}
+                                keyboardType="decimal-pad"
+                                value={getAdditionalRateValue(occurrence, index, 'amount') === '' ? '' : 
+                                      getAdditionalRateValue(occurrence, index, 'amount').toString()}
                                 onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                   handleAdditionalRateChange(index, 'amount', value) : 
                                   updateAdditionalRate(index, 'amount', value)}
@@ -1353,9 +1509,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                           <View style={styles.rateNameAmountRowWithDelete}>
                             <TextInput
                               style={styles.nameInput}
-                              value={editingOccurrenceId === occurrence.occurrence_id ? 
-                                (occurrenceEdits.additional_rates && occurrenceEdits.additional_rates[index]?.name) || rate.name || rate.title : 
-                                rate.name || rate.title}
+                              value={getAdditionalRateValue(occurrence, index, 'name')}
                               onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                 handleAdditionalRateChange(index, 'name', value) : 
                                 updateAdditionalRate(index, 'name', value)}
@@ -1365,8 +1519,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                               <Text style={styles.currencySymbol}>$</Text>
                               <TextInput
                                 style={styles.rateInput}
-                                keyboardType="numeric"
-                                value={rate.amount?.toString() || '0'}
+                                keyboardType="decimal-pad"
+                                value={getAdditionalRateValue(occurrence, index, 'amount') === '' ? '' : 
+                                      getAdditionalRateValue(occurrence, index, 'amount').toString()}
                                 onChangeText={(value) => editingOccurrenceId === occurrence.occurrence_id ? 
                                   handleAdditionalRateChange(index, 'amount', value) : 
                                   updateAdditionalRate(index, 'amount', value)}
@@ -1421,9 +1576,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                         <Text style={styles.currencySymbol}>$</Text>
                         <TextInput
                           style={styles.rateInput}
-                          keyboardType="numeric"
+                          keyboardType="decimal-pad"
                           value={newRate.amount}
-                          onChangeText={(text) => setNewRate(prev => ({ ...prev, amount: text }))}
+                          onChangeText={handleNewRateAmountChange}
                           placeholder="0.00"
                           placeholderTextColor={theme.colors.placeHolderText}
                         />
@@ -1451,9 +1606,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                           <Text style={styles.currencySymbol}>$</Text>
                           <TextInput
                             style={styles.rateInput}
-                            keyboardType="numeric"
+                            keyboardType="decimal-pad"
                             value={newRate.amount}
-                            onChangeText={(text) => setNewRate(prev => ({ ...prev, amount: text }))}
+                            onChangeText={handleNewRateAmountChange}
                             placeholder="0.00"
                             placeholderTextColor={theme.colors.placeHolderText}
                           />

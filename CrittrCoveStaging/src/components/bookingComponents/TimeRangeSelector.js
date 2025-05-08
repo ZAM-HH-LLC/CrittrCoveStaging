@@ -10,8 +10,9 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { theme } from '../../styles/theme';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext, debugLog } from '../../context/AuthContext';
 import TimeSlider from './TimeSlider';
+import moment from 'moment-timezone';
 
 const THUMB_SIZE = 20;
 const TRACK_HEIGHT = 4;
@@ -25,7 +26,7 @@ const TimeRangeSelector = ({
   dateRange = null,
   is_overnight = false,
 }) => {
-  const { is_DEBUG } = useContext(AuthContext);
+  const { is_DEBUG, timeSettings } = useContext(AuthContext);
   const sliderContainerRef = useRef(null);
   const [sliderWidth, setSliderWidth] = useState(0);
   const [times, setTimes] = useState({
@@ -38,11 +39,13 @@ const TimeRangeSelector = ({
   const isDragging = useRef(false);
   const previousTimes = useRef(times);
 
-  // Add ref for click outside detection
-  const timePickerRef = useRef(null);
+  // Refs for dropdown and button elements
+  const timePickerDropdownRef = useRef(null);
+  const startButtonRef = useRef(null);
+  const endButtonRef = useRef(null);
   const timePickerStartRef = useRef(null);
   const timePickerEndRef = useRef(null);
-
+  
   const hourScrollViewRef = useRef(null);
   const minuteScrollViewRef = useRef(null);
 
@@ -70,31 +73,52 @@ const TimeRangeSelector = ({
     }
   }, []);
 
+  // Handle click outside to close the dropdown
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!showTimePicker) return;
-      const target = event.target;
-      const isChildOf = (element, ref) => {
-        if (!ref.current || !element) return false;
-        return ref.current.contains(element);
-      };
-      const isInsideStart = isChildOf(target, timePickerStartRef);
-      const isInsideEnd = isChildOf(target, timePickerEndRef);
+    if (Platform.OS !== 'web' || !showTimePicker) return;
+
+    const handleDocumentClick = (event) => {
+      // Get the active dropdown and button based on the activeTimeType
+      const activeDropdownRef = activeTimeType === 'start' ? timePickerStartRef : timePickerEndRef;
+      const activeButtonRef = activeTimeType === 'start' ? startButtonRef : endButtonRef;
+
+      debugLog('MBAoi1h34ghnvo: Checking click outside', {
+        activeTimeType,
+        showTimePicker,
+        hasDropdownRef: !!activeDropdownRef?.current,
+        hasButtonRef: !!activeButtonRef?.current
+      });
       
-      if (!isInsideStart && !isInsideEnd) {
-        // Immediately close the picker
-        requestAnimationFrame(() => {
-          setShowTimePicker(false);
-          setActiveTimeType(null);
-        });
+      // Only proceed if we have valid refs
+      if (!activeDropdownRef?.current && !activeButtonRef?.current) return;
+      
+      // Check if click is inside either the dropdown or the button that opened it
+      const isInsideDropdown = activeDropdownRef.current?.contains(event.target);
+      const isInsideButton = activeButtonRef.current?.contains(event.target);
+
+      debugLog('MBAoi1h34ghnvo: Click event', {
+        isInsideDropdown,
+        isInsideButton,
+        target: event.target.tagName,
+        activeTimeType
+      });
+      
+      // Close the dropdown if clicked outside both the dropdown and button
+      if (!isInsideDropdown && !isInsideButton) {
+        debugLog('MBAoi1h34ghnvo: Closing dropdown - clicked outside');
+        setShowTimePicker(false);
+        setActiveTimeType(null);
       }
     };
 
-    if (Platform.OS === 'web') {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showTimePicker]);
+    // Add event listener
+    document.addEventListener('mousedown', handleDocumentClick);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+    };
+  }, [showTimePicker, activeTimeType]);
 
   // Handle initialTimes updates
   useEffect(() => {
@@ -184,16 +208,19 @@ const TimeRangeSelector = ({
   };
 
   const handleTimePress = (type) => {
+    debugLog('MBAoi1h34ghnvo: handleTimePress called for', type, 'current state:', {activeTimeType, showTimePicker});
+    
     if (activeTimeType === type && showTimePicker) {
       // If clicking the same time picker that's already open, close it
+      debugLog('MBAoi1h34ghnvo: Closing dropdown');
       setShowTimePicker(false);
       setActiveTimeType(null);
     } else {
       // Open the clicked time picker
+      debugLog('MBAoi1h34ghnvo: Opening dropdown for', type);
       setActiveTimeType(type);
       setShowTimePicker(true);
     }
-    if (is_DEBUG) console.log('MBA123: Toggle time picker for', type);
   };
 
   const formatTime = (hour, minutes = 0) => {
@@ -210,12 +237,14 @@ const TimeRangeSelector = ({
 
   const calculateDuration = () => {
     if (is_overnight) {
-      // For overnight services, calculate number of nights
+      // For overnight services, calculate number of nights using moment-timezone for DST awareness
       if (!dateRange?.startDate || !dateRange?.endDate) return '1 Night';
       
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
-      const nights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+      // Use user's timezone from timeSettings instead of hardcoding
+      const userTimezone = timeSettings?.timezone || 'US/Mountain';
+      const startDate = moment.tz(dateRange.startDate, userTimezone).startOf('day');
+      const endDate = moment.tz(dateRange.endDate, userTimezone).startOf('day');
+      const nights = endDate.diff(startDate, 'days');
       return `${nights} Night${nights > 1 ? 's' : ''}`;
     }
 
@@ -289,21 +318,22 @@ const TimeRangeSelector = ({
       ...times,
       [isStart ? 'startTime' : 'endTime']: newTime
     };
-    
-    if (is_DEBUG) {
-      console.log('MBA12345 Time selection in picker:', {
-        type,
-        value,
-        isStart,
-        currentTime,
-        newTime,
-        newTimes
-      });
-    }
+
+    debugLog('MBAoi1h34ghnvo: Time selection in picker:', {
+      type,
+      value,
+      isStart,
+      currentTime,
+      newTime,
+      newTimes
+    });
 
     setTimes(newTimes);
     previousTimes.current = newTimes;
-    onTimeSelect(isStart ? 'start' : 'end', newTime);
+    onTimeSelect(newTimes);
+    
+    // Do not close the dropdown after selection to allow multiple adjustments
+    // Let the user close it explicitly by clicking outside or the dropdown button
   };
 
   const scrollToSelectedTime = (type) => {
@@ -351,20 +381,70 @@ const TimeRangeSelector = ({
     </View>
   );
 
+  const renderTimeButton = (type) => {
+    const isStart = type === 'start';
+    const containerRef = isStart ? timePickerStartRef : timePickerEndRef;
+    const buttonRef = isStart ? startButtonRef : endButtonRef;
+    
+    return (
+      <View 
+        style={[styles.timeSelectContainer, isStart ? styles.startTimeContainer : styles.endTimeContainer]}
+        ref={containerRef}
+      >
+        <View style={styles.dateTimeWrapper}>
+          <View style={styles.dateHeaderContainer}>
+            <Text style={styles.dateLabel}>
+              {isStart ? 'Start Time:' : 'End Time:'}
+            </Text>
+            <View style={styles.dateContainer}>
+              <MaterialIcons name="calendar-today" size={20} color={theme.colors.mainColors.main} />
+              <Text style={styles.dateText}>
+                {formatDate(isStart ? dateRange?.startDate : dateRange?.endDate)}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.timeSelectButton}
+            onPress={() => handleTimePress(type)}
+            activeOpacity={0.7}
+            ref={buttonRef}
+          >
+            <View style={styles.timeContent}>
+              <View style={styles.timeDisplay}>
+                <MaterialIcons name="access-time" size={20} color={theme.colors.mainColors.main} />
+                <Text style={styles.timeText}>
+                  {formatTime(isStart ? times.startTime.hours : times.endTime.hours, 
+                           isStart ? times.startTime.minutes : times.endTime.minutes)}
+                </Text>
+              </View>
+              <MaterialIcons 
+                name="keyboard-arrow-down" 
+                size={24} 
+                color={theme.colors.text} 
+              />
+            </View>
+          </TouchableOpacity>
+          {showTimePicker && activeTimeType === type && renderTimePickerDropdown(type)}
+        </View>
+      </View>
+    );
+  };
+
   const renderTimePickerDropdown = (type) => {
     const currentTime = type === 'start' ? times.startTime : times.endTime;
     const currentHour = currentTime.hours % 12 || 12;
     const currentMinutes = currentTime.minutes;
     const isPM = currentTime.hours >= 12;
+    const dropdownRef = type === 'start' ? timePickerStartRef : timePickerEndRef;
 
     return (
       <View 
-        ref={type === 'start' ? timePickerStartRef : timePickerEndRef}
         style={[
           styles.timePickerDropdownContainer,
           type === 'start' ? styles.timePickerDropdownStart : styles.timePickerDropdownEnd,
           styles.timePickerAnimation
-        ]} 
+        ]}
+        ref={timePickerDropdownRef}
       >
         <View style={styles.timePickerContent}>
           <ScrollView 
@@ -435,40 +515,6 @@ const TimeRangeSelector = ({
     );
   };
 
-  const renderTimeButton = (type) => (
-    <View style={[styles.timeSelectContainer, type === 'start' ? styles.startTimeContainer : styles.endTimeContainer]}>
-      <View style={styles.dateTimeWrapper}>
-        <View style={styles.dateHeaderContainer}>
-          <Text style={styles.dateLabel}>
-            {type === 'start' ? 'Start Time:' : 'End Time:'}
-          </Text>
-          <View style={styles.dateContainer}>
-            <MaterialIcons name="calendar-today" size={20} color={theme.colors.mainColors.main} />
-            <Text style={styles.dateText}>
-              {formatDate(type === 'start' ? dateRange?.startDate : dateRange?.endDate)}
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity 
-          style={styles.timeSelectButton}
-          onPress={() => handleTimePress(type)}
-        >
-          <View style={styles.timeContent}>
-            <View style={styles.timeDisplay}>
-              <MaterialIcons name="access-time" size={20} color={theme.colors.mainColors.main} />
-              <Text style={styles.timeText}>
-                {formatTime(type === 'start' ? times.startTime.hours : times.endTime.hours, 
-                         type === 'start' ? times.startTime.minutes : times.endTime.minutes)}
-              </Text>
-            </View>
-            <MaterialIcons name="keyboard-arrow-down" size={24} color={theme.colors.text} />
-          </View>
-        </TouchableOpacity>
-        {showTimePicker && activeTimeType === type && renderTimePickerDropdown(type)}
-      </View>
-    </View>
-  );
-
   const renderOvernightUI = () => (
     <View style={styles.overnightContainer}>
       {renderTimeButton('start')}
@@ -485,16 +531,18 @@ const TimeRangeSelector = ({
           <TouchableOpacity 
             style={[styles.timeButton, { marginLeft: 10 }]}
             onPress={() => handleTimePress('start')}
+            ref={startButtonRef}
           >
             <Text style={styles.timeText}>
               {formatTime(times.startTime.hours, times.startTime.minutes)}
-        </Text>
+            </Text>
             {/* <MaterialIcons name="edit" size={20} color={theme.colors.mainColors.main} /> */}
           </TouchableOpacity>
           <Text style={styles.timeSeparator}>-</Text>
           <TouchableOpacity 
             style={styles.timeButton}
             onPress={() => handleTimePress('end')}
+            ref={endButtonRef}
           >
             <Text style={styles.timeText}>
               {formatTime(times.endTime.hours, times.endTime.minutes)}
