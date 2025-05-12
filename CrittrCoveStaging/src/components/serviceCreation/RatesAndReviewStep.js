@@ -8,6 +8,7 @@ import {
   Switch,
   ScrollView,
   TouchableWithoutFeedback,
+  Modal
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
@@ -17,12 +18,13 @@ import { debugLog } from '../../context/AuthContext';
 const TIME_UNITS = Object.keys(TIME_UNIT_MAPPING);
 const ANIMAL_THRESHOLDS = ['1', '2', '3', '4', '5'];
 
-const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
+const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, setIsUpdatingService, onProceedWithUpdate }) => {
   const [showTimeUnitDropdown, setShowTimeUnitDropdown] = useState(false);
   const [showThresholdDropdown, setShowThresholdDropdown] = useState(false);
   const [customChargeVisible, setCustomChargeVisible] = useState(false);
   const [isHolidayRatePercent, setIsHolidayRatePercent] = useState(true);
   const [isEditingExistingRate, setIsEditingExistingRate] = useState(false);
+  const [showUnsavedRateWarning, setShowUnsavedRateWarning] = useState(false);
   const [newCustomRate, setNewCustomRate] = useState({
     title: '',
     rate: '',
@@ -90,6 +92,65 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
       (BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit] || serviceData.rates.base_rate_unit) : 
       TIME_UNITS[0]);
   }, [serviceData.rates?.base_rate_unit]);
+
+  // Helper function to check if there's an unsaved custom rate
+  const hasUnsavedCustomRate = () => {
+    // If the custom rate form is open, we consider it as unsaved
+    // regardless of whether fields have content
+    const result = customChargeVisible;
+    
+    debugLog('MBAno34othg0v', 'hasUnsavedCustomRate check:', { 
+      customChargeVisible, 
+      title: newCustomRate.title,
+      rate: newCustomRate.rate,
+      description: newCustomRate.description,
+      result 
+    });
+    
+    return result;
+  };
+
+  // Add effect to check if trying to update service while custom rate is being added
+  useEffect(() => {
+    debugLog('MBAno34othg0v', 'isUpdatingService changed:', {
+      isUpdatingService,
+      hasUnsaved: hasUnsavedCustomRate()
+    });
+    
+    if (!isUpdatingService) {
+      // Skip processing when isUpdatingService becomes false
+      return;
+    }
+    
+    // Check if there's an unsaved rate
+    const hasUnsaved = hasUnsavedCustomRate();
+    
+    // Only show warning if isUpdatingService becomes true while there's an unsaved rate
+    if (hasUnsaved) {
+      debugLog('MBAno34othg0v', 'Showing unsaved rate warning modal');
+      // Show the modal
+      setShowUnsavedRateWarning(true);
+      // Reset the isUpdatingService flag after showing the modal
+      if (setIsUpdatingService) {
+        debugLog('MBAno34othg0v', 'Setting isUpdatingService to FALSE to prevent API call');
+        setIsUpdatingService(false);
+      }
+    } else {
+      debugLog('MBAno34othg0v', 'No unsaved custom rate, allowing update to proceed');
+      // Here we would directly call the API, but we need to add that functionality to props
+      if (setIsUpdatingService) {
+        // Signal to parent that it's OK to proceed
+        debugLog('MBAno34othg0v', 'Setting isUpdatingService to TRUE to allow parent to call API');
+        setIsUpdatingService(true);
+        
+        // This will trigger the parent component to call its callServiceApi function
+        if (typeof onProceedWithUpdate === 'function') {
+          debugLog('MBAno34othg0v', 'Calling onProceedWithUpdate directly');
+          onProceedWithUpdate();
+        }
+      }
+    }
+  }, [isUpdatingService]);
 
   // Close dropdowns when clicking outside
   const handlePressOutside = () => {
@@ -214,6 +275,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
 
   const handleAddCustomRate = () => {
     if (!customChargeVisible) {
+      debugLog('MBAno34othg0v', 'Opening custom rate form');
       setCustomChargeVisible(true);
       setIsEditingExistingRate(false);
       return;
@@ -221,34 +283,39 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
 
     // Check for title
     if (!newCustomRate.title.trim()) {
-      debugLog('MBA54321', 'Missing custom rate title');
-      // You could set an error state here if you want to show a specific error message
+      debugLog('MBAno34othg0v', 'Missing custom rate title');
       return;
     }
     
     // Check for rate value
     if (!newCustomRate.rate) {
-      debugLog('MBA54321', 'Missing custom rate value');
+      debugLog('MBAno34othg0v', 'Missing custom rate value');
       return;
     }
 
     // Validate rate value
     const rateValue = parseFloat(newCustomRate.rate);
     if (isNaN(rateValue) || rateValue <= 0) {
-      // Show an error or alert that rate must be greater than 0
-      debugLog('MBA54321', 'Invalid rate value:', newCustomRate.rate);
+      debugLog('MBAno34othg0v', 'Invalid rate value:', newCustomRate.rate);
       return;
     }
 
+    debugLog('MBAno34othg0v', 'Saving custom rate successfully:', newCustomRate);
+    
+    // Save the custom rate to the service data
     setServiceData(prev => ({
       ...prev,
       additionalRates: [...(prev.additionalRates || []), newCustomRate]
     }));
+    
+    // Reset the form state
     setNewCustomRate({
       title: '',
       rate: '',
       description: ''
     });
+    
+    // Close the form
     setCustomChargeVisible(false);
     setIsEditingExistingRate(false);
   };
@@ -314,6 +381,39 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
     <TouchableWithoutFeedback onPress={handlePressOutside}>
       <ScrollView style={styles.container}>
         <Text style={styles.title}>Set Your Rates</Text>
+
+        {/* Error Modal */}
+        <Modal
+          visible={showUnsavedRateWarning}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowUnsavedRateWarning(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <MaterialCommunityIcons
+                name="alert-circle"
+                size={48}
+                color={theme.colors.error}
+                style={styles.modalIcon}
+              />
+              <Text style={styles.modalTitle}>Unsaved Custom Rate</Text>
+              <Text style={styles.modalText}>
+                Please save or cancel your custom rate before updating the service.
+              </Text>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => {
+                  debugLog('MBAno34othg0v', 'Modal OK button clicked');
+                  // Just close the modal, keep the form open for editing
+                  setShowUnsavedRateWarning(false);
+                }}
+              >
+                <Text style={styles.modalButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         <View style={[styles.rateContainer, { zIndex: 3 }]}>
           <Text style={styles.label}>Base Rate <Text style={{ color: theme.colors.placeHolderText }}>(Required)</Text></Text>
@@ -552,6 +652,8 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
                 <TouchableOpacity
                   style={styles.cancelRateButton}
                   onPress={() => {
+                    debugLog('MBAno34othg0v', 'Cancel button pressed for custom rate form');
+                    // Reset all form-related state
                     setCustomChargeVisible(false);
                     setNewCustomRate({
                       title: '',
@@ -559,6 +661,8 @@ const RatesAndReviewStep = ({ serviceData, setServiceData }) => {
                       description: ''
                     });
                     setIsEditingExistingRate(false);
+                    // Ensure any warning modal is also closed
+                    setShowUnsavedRateWarning(false);
                   }}
                 >
                   <MaterialCommunityIcons
@@ -932,6 +1036,57 @@ const styles = StyleSheet.create({
   customRateAction: {
     padding: 8,
     borderRadius: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.surface,
+    padding: 24,
+    borderRadius: 12,
+    maxWidth: '85%',
+    minWidth: 280,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalIcon: {
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  modalText: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  modalButton: {
+    backgroundColor: theme.colors.mainColors.main,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  modalButtonText: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
+    textAlign: 'center',
   },
 });
 

@@ -135,6 +135,7 @@ const ServiceCreationModal = ({
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isAddingCustomRate, setIsAddingCustomRate] = useState(false);
   const showToast = useToast();
 
   // Reset state when modal is opened
@@ -285,21 +286,10 @@ const ServiceCreationModal = ({
     }
   };
 
-  const handleNext = () => {
-    if (!canProceedToNextStep()) {
-      setError('Please complete all required fields before proceeding');
-      return;
-    }
-
-    setError(null);
-    if (currentStep < STEPS.RATES_AND_REVIEW.id) {
-      setCurrentStep(prev => prev + 1);
-    } else {
-      handleSaveService();
-    }
-  };
-
-  const handleSaveService = async () => {
+  // Direct API call function that doesn't depend on state
+  const callServiceApi = async () => {
+    debugLog('MBAno34othg0v', 'Directly calling API without state dependencies');
+    
     debugLog('MBA54321', 'Original serviceData:', serviceData);
     setIsSubmitting(true);
     
@@ -336,12 +326,6 @@ const ServiceCreationModal = ({
       const holidayRateString = holidayRateValue && holidayRateValue !== '0' ? 
         (serviceData.rates.isPercent ? `${holidayRateValue}%` : `$${holidayRateValue}`) : 
         '0';
-      
-      // Log the holiday rate values and animal types for debugging
-      debugLog('MBA54321', 'Holiday rate value:', holidayRateValue);
-      debugLog('MBA54321', 'Holiday rate is percent:', serviceData.rates.isPercent);
-      debugLog('MBA54321', 'Formatted holiday rate:', holidayRateString);
-      debugLog('MBA54321', 'Animal types being sent:', animalTypesDict);
       
       // Format the data according to the backend's expected format
       const formattedData = {
@@ -495,6 +479,33 @@ const ServiceCreationModal = ({
     }
   };
 
+  const handleNext = () => {
+    debugLog('MBAno34othg0v', 'handleNext called, currentStep:', currentStep);
+    
+    if (!canProceedToNextStep()) {
+      setError('Please complete all required fields before proceeding');
+      return;
+    }
+
+    setError(null);
+    if (currentStep < STEPS.RATES_AND_REVIEW.id) {
+      setCurrentStep(prev => prev + 1);
+    } else {
+      // We're on the final step (Rates & Review)
+      debugLog('MBAno34othg0v', 'Final step, checking for unsaved custom rates');
+      
+      // Signal to RatesAndReviewStep that we're attempting to update
+      setIsAddingCustomRate(true);
+      
+      // Don't even call handleSaveService
+      // We'll call the API directly from the RatesAndReviewStep when appropriate
+    }
+  };
+
+  const handleSaveService = async () => {
+    debugLog('MBAno34othg0v', 'DEPRECATED: handleSaveService called, this should not happen');
+  };
+
   const handleBack = () => {
     if (currentStep > STEPS.CATEGORY_SELECTION.id) {
       setCurrentStep(prev => prev - 1);
@@ -526,6 +537,9 @@ const ServiceCreationModal = ({
           <RatesAndReviewStep
             serviceData={serviceData}
             setServiceData={setServiceData}
+            isUpdatingService={isAddingCustomRate}
+            setIsUpdatingService={setIsAddingCustomRate}
+            onProceedWithUpdate={callServiceApi}
           />
         );
       default:
