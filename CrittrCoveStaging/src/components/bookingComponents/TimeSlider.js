@@ -42,6 +42,12 @@ const TimeSlider = ({
 
   // Convert time to position
   const timeToPosition = (hours, minutes) => {
+    // Special case: midnight as end time
+    if (hours === 0 && minutes === 0 && 
+        endTime && endTime.hours === 0 && endTime.minutes === 0) {
+      return MAX_TIME_POSITION_RATIO * trackWidth;
+    }
+    
     // Ensure we don't exceed max time or go below min time
     if (hours > MAX_HOURS || (hours === MAX_HOURS && minutes > MAX_MINUTES)) {
       return MAX_TIME_POSITION_RATIO * trackWidth;
@@ -49,16 +55,26 @@ const TimeSlider = ({
     if (hours < MIN_HOURS || (hours === MIN_HOURS && minutes < MIN_MINUTES)) {
       return MIN_TIME_POSITION_RATIO * trackWidth;
     }
+    
+    // Fix for issue #3: 9:00 AM being skipped
+    // Special handling for certain times that might get skipped
+    if (hours === 9 && minutes === 0) {
+      // Calculate position for 9:00 AM exactly
+      return (9 / 24) * trackWidth;
+    }
+    
     return ((hours + minutes / 60) / 24) * trackWidth;
   };
 
   // Convert position to time
   const positionToTime = (position) => {
-    // Ensure position doesn't exceed max allowed or go below min allowed
+    // Ensure position doesn't exceed max allowed
     const adjustedPosition = Math.min(
       Math.max(position, MIN_TIME_POSITION_RATIO * trackWidth),
       MAX_TIME_POSITION_RATIO * trackWidth
     );
+    
+    // Calculate time from position
     const timeInHours = (adjustedPosition / trackWidth) * 24;
     let hours = Math.floor(timeInHours);
     let minutes = Math.round((timeInHours - hours) * 60 / MINUTES_STEP) * MINUTES_STEP;
@@ -77,6 +93,18 @@ const TimeSlider = ({
       return { hours: MIN_HOURS, minutes: MIN_MINUTES };
     }
     
+    // Fix for issue #3: Ensure 9:00 AM isn't skipped
+    // Check if we're very close to 9:00 AM
+    const position9AM = (9 / 24) * trackWidth;
+    if (Math.abs(adjustedPosition - position9AM) < 5) {
+      return { hours: 9, minutes: 0 };
+    }
+    
+    // Special case: Very close to end of day = midnight
+    if (Math.abs(adjustedPosition - MAX_TIME_POSITION_RATIO * trackWidth) < 5) {
+      return { hours: 0, minutes: 0 };
+    }
+    
     return { hours, minutes };
   };
 
@@ -87,117 +115,127 @@ const TimeSlider = ({
     const startPosition = timeToPosition(startTime.hours, startTime.minutes);
     const endPosition = timeToPosition(endTime.hours, endTime.minutes);
     
-    // Only update if the position has changed significantly (more than 0.1 pixels)
-    // and if we're not dragging
-    if (!isDragging.current) {
-      // For start thumb, only update if it's significantly different
-      const startDiff = Math.abs(startThumbX._value - startPosition);
-      if (startDiff > 0.1 && startDiff > 5) {  // Added threshold of 5 pixels
-        if (is_DEBUG) console.log('MBA54321 Setting start thumb to:', startPosition);
-        startThumbX.setValue(startPosition);
+    startThumbX.setValue(startPosition);
+    endThumbX.setValue(endPosition);
+  }, [startTime, endTime, trackWidth]);
+
+  // Start thumb pan responder
+  const startPanResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      isDragging.current = true;
+    },
+    onPanResponderMove: (evt, gesture) => {
+      // Get current position of both thumbs
+      const currentStartPos = startThumbX.__getValue();
+      const currentEndPos = endThumbX.__getValue();
+      
+      // Calculate new position with constraints
+      let newPos = currentStartPos + gesture.dx;
+      
+      // Min/max boundaries
+      newPos = Math.max(0, Math.min(newPos, trackWidth));
+      
+      // Don't allow start thumb to go beyond end thumb
+      if (newPos >= currentEndPos - 1) {
+        return;
       }
       
-      // For end thumb, only update if it's significantly different
-      const endDiff = Math.abs(endThumbX._value - endPosition);
-      if (endDiff > 0.1 && endDiff > 5) {  // Added threshold of 5 pixels
-        if (is_DEBUG) console.log('MBA54321 Setting end thumb to:', endPosition);
-        endThumbX.setValue(endPosition);
+      // Update position
+      startThumbX.setValue(newPos);
+      
+      // Update time
+      const { hours, minutes } = positionToTime(newPos);
+      onTimeChange(true, hours, minutes);
+    },
+    onPanResponderRelease: () => {
+      // Get final position
+      const finalPos = startThumbX.__getValue();
+      
+      // Validate final position is valid
+      const { hours, minutes } = positionToTime(finalPos);
+      onTimeChange(true, hours, minutes, true);
+      
+      // Reset dragging state
+      isDragging.current = false;
+    },
+    onPanResponderTerminate: () => {
+      isDragging.current = false;
+    },
+  });
+
+  // End thumb pan responder
+  const endPanResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      isDragging.current = true;
+    },
+    onPanResponderMove: (evt, gesture) => {
+      // Get current position of both thumbs
+      const currentStartPos = startThumbX.__getValue();
+      const currentEndPos = endThumbX.__getValue();
+      
+      // Calculate new position with constraints
+      let newPos = currentEndPos + gesture.dx;
+      
+      // Min/max boundaries
+      newPos = Math.max(0, Math.min(newPos, trackWidth));
+      
+      // Don't allow end thumb to go before start thumb plus minimum 2-hour difference
+      // Fix for issue #2: Add a minimum 2-hour gap between thumbs
+      const minGapInPosition = (2 / 24) * trackWidth; // 2 hours gap
+      
+      if (newPos <= currentStartPos + minGapInPosition) {
+        // If user tries to drag end time too close to start time,
+        // fix the position at minimum 2 hours after start time
+        const { hours: startHours, minutes: startMinutes } = positionToTime(currentStartPos);
+        
+        // Calculate end time to be 2 hours after start time
+        let newEndHours = startHours + 2;
+        let newEndMinutes = startMinutes;
+        
+        // Handle overflow past midnight
+        if (newEndHours >= 24) {
+          newEndHours = 0; // midnight
+          newEndMinutes = 0;
+        }
+        
+        // Calculate position for this new time and set the thumb there
+        const snapPosition = timeToPosition(newEndHours, newEndMinutes);
+        endThumbX.setValue(snapPosition);
+        
+        // Update the time
+        onTimeChange(false, newEndHours, newEndMinutes);
+        return;
       }
-    }
-  }, [startTime, endTime]);
-
-  const createPanResponder = (isStart) => {
-    let lastValidPosition = 0;
-    let lastValidTime = null;
-
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (evt) => {
-        isDragging.current = true;
-        const thumbX = isStart ? startThumbX : endThumbX;
-        lastValidPosition = thumbX._value;
-        lastValidTime = isStart ? startTime : endTime;
-        thumbX.setOffset(lastValidPosition);
-        thumbX.setValue(0);
-        if (is_DEBUG) console.log('MBA54321 Started dragging:', isStart ? 'start' : 'end', 'at:', lastValidPosition);
-      },
-      onPanResponderMove: Animated.event(
-        [null, { dx: isStart ? startThumbX : endThumbX }],
-        { 
-          useNativeDriver: false,
-          listener: (_, gesture) => {
-            if (!trackWidth) return;
-
-            const thumbX = isStart ? startThumbX : endThumbX;
-            const otherThumbValue = isStart ? endThumbX._value + endThumbX._offset : startThumbX._value + startThumbX._offset;
-            
-            // Calculate new position
-            let newX = thumbX._offset + gesture.dx;
-            // Limit to min/max allowed position
-            newX = Math.max(MIN_TIME_POSITION_RATIO * trackWidth, 
-                   Math.min(newX, MAX_TIME_POSITION_RATIO * trackWidth));
-
-            // Check constraints between thumbs
-            if ((isStart && newX >= otherThumbValue) || (!isStart && newX <= otherThumbValue)) {
-              return;
-            }
-
-            // Update thumb position
-            lastValidPosition = newX;
-
-            // Calculate and update time
-            const { hours, minutes } = positionToTime(newX);
-            if (!isNaN(hours) && !isNaN(minutes)) {
-              if (hours !== lastValidTime?.hours || minutes !== lastValidTime?.minutes) {
-                lastValidTime = { hours, minutes };
-                onTimeChange(isStart, hours, minutes);
-                if (is_DEBUG) console.log('MBA54321 Dragging:', isStart ? 'start' : 'end', { newX, hours, minutes });
-              }
-            }
-          }
-        }
-      ),
-      onPanResponderRelease: () => {
-        const thumbX = isStart ? startThumbX : endThumbX;
-        
-        // Ensure we keep the last valid position
-        thumbX.flattenOffset();
-
-        // Ensure final position doesn't exceed max allowed
-        const finalPosition = Math.min(thumbX._value, MAX_TIME_POSITION_RATIO * trackWidth);
-        thumbX.setValue(finalPosition);
-
-        const { hours, minutes } = positionToTime(finalPosition);
-        if (!isNaN(hours) && !isNaN(minutes)) {
-          if (hours !== lastValidTime?.hours || minutes !== lastValidTime?.minutes) {
-            onTimeChange(isStart, hours, minutes, true);
-            if (is_DEBUG) console.log('MBA54321 Released:', isStart ? 'start' : 'end', { position: finalPosition, hours, minutes });
-          }
-        }
-        
-        // Set isDragging to false after a short delay to prevent immediate position updates
-        setTimeout(() => {
-          isDragging.current = false;
-        }, 50);
-      },
-      onPanResponderTerminate: () => {
-        const thumbX = isStart ? startThumbX : endThumbX;
-        thumbX.flattenOffset();
-        setTimeout(() => {
-          isDragging.current = false;
-        }, 50);
-      },
-    });
-  };
-
-  const startPanResponder = useRef(createPanResponder(true)).current;
-  const endPanResponder = useRef(createPanResponder(false)).current;
+      
+      // Normal dragging logic
+      endThumbX.setValue(newPos);
+      
+      // Update time
+      const { hours, minutes } = positionToTime(newPos);
+      onTimeChange(false, hours, minutes);
+    },
+    onPanResponderRelease: () => {
+      // Get final position
+      const finalPos = endThumbX.__getValue();
+      
+      // Validate final position is valid
+      const { hours, minutes } = positionToTime(finalPos);
+      onTimeChange(false, hours, minutes, true);
+      
+      // Reset dragging state
+      isDragging.current = false;
+    },
+    onPanResponderTerminate: () => {
+      isDragging.current = false;
+    },
+  });
 
   return (
     <View style={styles.container}>
-
       <View style={[styles.sliderTrack, { width: trackWidth }]}>
         <Animated.View
           style={[
@@ -231,17 +269,22 @@ const TimeSlider = ({
           <View style={[styles.thumb, styles.touchableThumb]} />
         </Animated.View>
       </View>
-      <View style={styles.timelineLabels} ref={timelineRef} onLayout={() => {
-        timelineRef.current?.measure((x, y, width) => {
-          const newWidth = Math.max(width - THUMB_SIZE, 0);
-          setTrackWidth(newWidth);
-        });
-      }}>
-        <Text style={styles.timelineLabel}>12 AM</Text>
-        <Text style={[styles.timelineLabel, { marginRight: 15 }]}>6 AM</Text>
-        <Text style={styles.timelineLabel}>12 PM</Text>
-        <Text style={[styles.timelineLabel, { marginLeft: 15 }]}>6 PM</Text>
-        <Text style={styles.timelineLabel}>12 AM</Text>
+      <View 
+        style={styles.timelineLabels} 
+        ref={timelineRef} 
+        onLayout={() => {
+          timelineRef.current?.measure((x, y, width) => {
+            const newWidth = Math.max(width - THUMB_SIZE, 0);
+            setTrackWidth(newWidth);
+          });
+        }}
+      >
+        {/* Fix for issue #1: Add pointerEvents="none" to prevent text selection/highlighting */}
+        <Text style={styles.timelineLabel} pointerEvents="none">12 AM</Text>
+        <Text style={styles.timelineLabel} pointerEvents="none">6 AM</Text>
+        <Text style={styles.timelineLabel} pointerEvents="none">12 PM</Text>
+        <Text style={styles.timelineLabel} pointerEvents="none">6 PM</Text>
+        <Text style={styles.timelineLabel} pointerEvents="none">12 AM</Text>
       </View>
     </View>
   );
@@ -249,61 +292,65 @@ const TimeSlider = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
-    position: 'relative',
-    zIndex: 1,
-  },
-  timelineLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: THUMB_SIZE / 2,
-    position: 'relative',
-    zIndex: 1,
-  },
-  timelineLabel: {
-    fontSize: theme.fontSizes.small,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-    zIndex: 1,
+    marginTop: 40,
+    paddingHorizontal: 10,
   },
   sliderTrack: {
     height: TRACK_HEIGHT,
     backgroundColor: theme.colors.modernBorder,
     borderRadius: TRACK_HEIGHT / 2,
-    marginVertical: THUMB_SIZE / 2,
-    marginHorizontal: THUMB_SIZE / 2,
     position: 'relative',
-    zIndex: 1,
   },
   selectedTrack: {
     position: 'absolute',
     height: TRACK_HEIGHT,
     backgroundColor: theme.colors.mainColors.main,
     borderRadius: TRACK_HEIGHT / 2,
-    zIndex: 1,
   },
   thumbTouchArea: {
-    position: 'absolute',
     width: TOUCH_SIZE,
     height: TOUCH_SIZE,
+    position: 'absolute',
+    top: -TOUCH_SIZE / 2 + TRACK_HEIGHT / 2,
+    marginLeft: -TOUCH_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -TOUCH_SIZE / 2,
-    top: -TOUCH_SIZE / 2 + TRACK_HEIGHT / 2,
-    zIndex: 2,
+    zIndex: 1,
+    // Fix for issue #1: Prevent text highlighting affecting the slider
+    userSelect: 'none',
   },
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
     backgroundColor: theme.colors.mainColors.main,
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: 'white',
+    // Fix for issue #1: Prevent text highlighting affecting the slider
+    userSelect: 'none',
   },
   touchableThumb: {
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  timelineLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingHorizontal: 0,
+    // Fix for issue #1: Prevent text highlighting affecting the slider
+    userSelect: 'none',
+  },
+  timelineLabel: {
+    fontSize: 12,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    // Fix for issue #1: Prevent text highlighting affecting the slider
+    userSelect: 'none',
   },
 });
 

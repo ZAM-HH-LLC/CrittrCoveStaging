@@ -313,7 +313,40 @@ const TimeRangeSelector = ({
         break;
     }
 
+    // Create the proposed new time
     const newTime = { hours: newHours, minutes: newMinutes };
+    
+    // Validate that start time is not after end time, and end time is not before start time
+    if (isStart) {
+      // For start time, ensure it's not after end time
+      const endTimeInMinutes = times.endTime.hours * 60 + times.endTime.minutes;
+      const newStartTimeInMinutes = newHours * 60 + newMinutes;
+      
+      // Don't allow start time to be after or equal to end time
+      // Special case for midnight end time (treated as end of day)
+      const isEndTimeMidnight = times.endTime.hours === 0 && times.endTime.minutes === 0;
+      
+      if (newStartTimeInMinutes >= endTimeInMinutes && !isEndTimeMidnight) {
+        // Invalid: Start time would be after or equal to end time
+        debugLog('MBAoi1h34ghnvo: Prevented invalid time selection - start time cannot be after end time');
+        return;
+      }
+    } else {
+      // For end time, ensure it's not before start time (unless it's midnight)
+      const startTimeInMinutes = times.startTime.hours * 60 + times.startTime.minutes;
+      const newEndTimeInMinutes = newHours * 60 + newMinutes;
+      
+      // Special case: Midnight (00:00) as end time is treated as end of day (24:00)
+      const isMidnightEndTime = newHours === 0 && newMinutes === 0;
+      
+      // Only validate if not setting end time to midnight
+      if (newEndTimeInMinutes <= startTimeInMinutes && !isMidnightEndTime) {
+        // Invalid: End time would be before or equal to start time
+        debugLog('MBAoi1h34ghnvo: Prevented invalid time selection - end time cannot be before start time');
+        return;
+      }
+    }
+
     const newTimes = {
       ...times,
       [isStart ? 'startTime' : 'endTime']: newTime

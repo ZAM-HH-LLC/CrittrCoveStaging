@@ -217,11 +217,32 @@ const TimeSelectionCard = ({
       isOvernightForced 
     });
     
+    // Create proposed new start and end times, using existing values if not provided
+    const newStartTime = startTime || times.startTime;
+    const newEndTime = endTime || times.endTime;
+    
+    // Convert to minutes for easier comparison
+    const startTimeInMinutes = newStartTime.hours * 60 + newStartTime.minutes;
+    const endTimeInMinutes = newEndTime.hours * 60 + newEndTime.minutes;
+    
+    // Special case: Midnight (00:00) as end time is treated as end of day (24:00)
+    const isMidnightEndTime = newEndTime.hours === 0 && newEndTime.minutes === 0;
+    
+    // We only need to validate when end time is NOT midnight
+    if (!isMidnightEndTime && endTimeInMinutes <= startTimeInMinutes) {
+      debugLog('MBA2j3kbr9hve4: Invalid time selection - end time cannot be before start time', {
+        startTime: newStartTime,
+        endTime: newEndTime
+      });
+      // Don't update times if invalid
+      return;
+    }
+    
     // Update our local state
     const updatedTimes = {
       ...times,
-      startTime: startTime || times.startTime,
-      endTime: endTime || times.endTime,
+      startTime: newStartTime,
+      endTime: newEndTime,
       isOvernightForced: isOvernightForced !== undefined ? isOvernightForced : times.isOvernightForced
     };
     
@@ -233,8 +254,8 @@ const TimeSelectionCard = ({
       Object.keys(updatedRanges).forEach(date => {
         updatedRanges[date] = {
           ...updatedRanges[date],
-          startTime: startTime || updatedRanges[date].startTime,
-          endTime: endTime || updatedRanges[date].endTime,
+          startTime: newStartTime,
+          endTime: newEndTime,
           isOvernightForced: isOvernightForced !== undefined ? isOvernightForced : updatedRanges[date].isOvernightForced
         };
       });
@@ -261,6 +282,24 @@ const TimeSelectionCard = ({
     
     if (!dateKey) {
       debugLog('MBAoi1h34ghnvo: No dateKey provided, returning');
+      return;
+    }
+
+    // Convert to minutes for easier comparison
+    const startTimeInMinutes = timesData.startTime.hours * 60 + timesData.startTime.minutes;
+    const endTimeInMinutes = timesData.endTime.hours * 60 + timesData.endTime.minutes;
+    
+    // Special case: Midnight (00:00) as end time is treated as end of day (24:00)
+    const isMidnightEndTime = timesData.endTime.hours === 0 && timesData.endTime.minutes === 0;
+    
+    // We only need to validate when end time is NOT midnight
+    if (!isMidnightEndTime && endTimeInMinutes <= startTimeInMinutes) {
+      debugLog('MBAoi1h34ghnvo: Invalid time selection for individual day - end time cannot be before start time', {
+        dateKey,
+        startTime: timesData.startTime,
+        endTime: timesData.endTime
+      });
+      // Don't update times if invalid
       return;
     }
 
@@ -543,6 +582,23 @@ const TimeSelectionCard = ({
       isMidnightEndTime,
       effectiveOvernightFlag
     });
+    
+    // Check if end time is before start time (except for midnight case)
+    if (timesData.startTime && timesData.endTime) {
+      const startTimeInMinutes = timesData.startTime.hours * 60 + timesData.startTime.minutes;
+      const endTimeInMinutes = timesData.endTime.hours * 60 + timesData.endTime.minutes;
+      
+      // Special case: Midnight (00:00) as end time is treated as end of day (24:00)
+      // So we only need to validate when end time is NOT midnight
+      if (!isMidnightEndTime && endTimeInMinutes <= startTimeInMinutes) {
+        debugLog('MBA7799: Invalid time selection from TimeRangeSelector - end time cannot be before start time', {
+          startTime: timesData.startTime,
+          endTime: timesData.endTime
+        });
+        // Don't update times if invalid
+        return;
+      }
+    }
     
     handleOvernightTimeSelect(
       timesData.startTime, 
