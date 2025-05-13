@@ -7,6 +7,9 @@ import { AuthContext, debugLog } from '../context/AuthContext';
 import { convertDateTimeFromUTC, formatDate } from '../utils/time_utils';
 
 const getStatusInfo = (status) => {
+  // Add debugging for status values
+  debugLog("MBA5677: Processing status", { status });
+  
   switch (status) {
     case 'Pending Initial Professional Changes':
     case 'Pending Professional Changes':
@@ -53,7 +56,7 @@ const getStatusInfo = (status) => {
       };
     default:
       return {
-        text: status,
+        text: status || 'Unknown',
         bgColor: theme.colors.mybookings.main,
         textColor: theme.colors.mybookings.secondary,
         icon: 'clock-outline'
@@ -63,7 +66,17 @@ const getStatusInfo = (status) => {
 
 const BookingCard = ({ booking, type, onViewDetails }) => {
   const { id, status, date, time, serviceName } = booking;
-  const name = type === 'professional' ? booking.client_name : booking.professionalName;
+  
+  // Handle both client_name and professional_name, with fallbacks for backward compatibility
+  let name = '';
+  if (type === 'professional') {
+    name = booking.client_name || booking.ownerName || 'Client';
+    debugLog("MBA5677: Using client name for professional view", { client_name: booking.client_name, ownerName: booking.ownerName });
+  } else {
+    name = booking.professional_name || booking.professionalName || 'Professional';
+    debugLog("MBA5677: Using professional name for client view", { professional_name: booking.professional_name, professionalName: booking.professionalName });
+  }
+  
   const statusInfo = getStatusInfo(status);
   const pets = booking.pets || [];
   const { screenWidth, timeSettings } = useContext(AuthContext);
@@ -153,6 +166,14 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
       </View>
     );
   };
+
+  // Add debugging for complete booking object and type
+  debugLog("MBA5677: Rendering BookingCard", { 
+    booking,
+    type,
+    name,
+    status
+  });
 
   return (
     <TouchableOpacity 

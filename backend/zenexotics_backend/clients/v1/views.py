@@ -89,7 +89,8 @@ def get_client_dashboard(request):
                     'start_date': next_occurrence.start_date,
                     'start_time': next_occurrence.start_time,
                     'service_type': booking.service_id.service_name if booking.service_id else None,
-                    'pets': PetSerializer(Pet.objects.filter(bookingpets__booking=booking), many=True).data
+                    'pets': PetSerializer(Pet.objects.filter(bookingpets__booking=booking), many=True).data,
+                    'status': booking.status  # Add status to the response
                 }
                 serialized_bookings.append(booking_data)
 

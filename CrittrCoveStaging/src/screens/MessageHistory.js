@@ -748,6 +748,11 @@ const MessageHistory = ({ navigation, route }) => {
   // Add a ref to track the last viewed conversation to avoid redundant API calls
   const lastViewedConversationRef = useRef(null);
 
+  // Add these refs at the top level of the component, near other ref declarations
+  const isLoadingMoreRef = useRef(false);
+  const processedPagesRef = useRef(new Set());
+  const messageIdsRef = useRef(new Set());
+
   // Outside the renderMessage callback, add a function to group messages by booking ID
   const groupMessagesByBookingId = (messages) => {
     const bookingMessages = {};
@@ -1424,21 +1429,42 @@ const MessageHistory = ({ navigation, route }) => {
     }
   };
 
-  // Modify fetchMessages to handle pagination better
+  // Modify fetchMessages to handle pagination better and prevent duplicate requests
   const fetchMessages = async (conversationId, page = 1) => {
     try {
+      // Skip if we've already processed this page for the current conversation
+      const pageKey = `${conversationId}-${page}`;
+      if (processedPagesRef.current.has(pageKey) && page > 1) {
+        debugLog(`MBA4321: Skipping duplicate fetch for page ${page} of conversation ${conversationId}`);
+        return;
+      }
       
       if (page === 1) {
         setIsLoadingMessages(true);
         // Reset messages when fetching first page
         setMessages([]);
+        // Clear processed pages and message IDs when starting fresh
+        processedPagesRef.current.clear();
+        messageIdsRef.current.clear();
       } else {
+        // Set the loading ref first to block concurrent requests
+        if (isLoadingMoreRef.current) {
+          debugLog(`MBA4321: Already loading more messages, skipping request for page ${page}`);
+          return;
+        }
+        
+        // Mark that we're loading more
+        isLoadingMoreRef.current = true;
         setIsLoadingMore(true);
       }
+      
+      // Mark this page as being processed
+      processedPagesRef.current.add(pageKey);
       
       const token = await getStorage('userToken');
       
       const url = `${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/?page=${page}`;
+      debugLog(`MBA4321: Fetching messages for conversation ${conversationId}, page ${page}`);
 
       const response = await axios.get(url, {
         headers: { 
@@ -1447,10 +1473,28 @@ const MessageHistory = ({ navigation, route }) => {
         }
       });
       
+      // Process messages to remove duplicates
+      const newMessages = response.data.messages || [];
+      const uniqueMessages = newMessages.filter(msg => {
+        // Skip messages we already have
+        if (msg.message_id && messageIdsRef.current.has(msg.message_id)) {
+          debugLog(`MBA4321: Skipping duplicate message ${msg.message_id}`);
+          return false;
+        }
+        
+        // Add to our set of seen message IDs
+        if (msg.message_id) {
+          messageIdsRef.current.add(msg.message_id);
+        }
+        
+        return true;
+      });
+      
+      debugLog(`MBA4321: Received ${newMessages.length} messages, ${uniqueMessages.length} unique for page ${page}`);
       
       // Update the messages state based on the page
       if (page === 1) {
-        setMessages(response.data.messages || []);
+        setMessages(uniqueMessages);
         // Set draft data only on first page load
         setHasDraft(response.data.has_draft || false);
         setDraftData(response.data.draft_data || null);
@@ -1460,7 +1504,19 @@ const MessageHistory = ({ navigation, route }) => {
           setForceRerender(prev => prev + 1);
         }, 100);
       } else {
-        setMessages(prev => [...prev, ...(response.data.messages || [])]);
+        setMessages(prev => {
+          // Create a set of existing message IDs for quick lookups
+          const existingIds = new Set(prev.map(m => m.message_id).filter(Boolean));
+          
+          // Only add messages we don't already have
+          const messagesToAdd = uniqueMessages.filter(msg => 
+            !msg.message_id || !existingIds.has(msg.message_id)
+          );
+          
+          debugLog(`MBA4321: Adding ${messagesToAdd.length} unique messages to existing ${prev.length} messages`);
+          
+          return [...prev, ...messagesToAdd];
+        });
       }
       
       // Update pagination state
@@ -1478,6 +1534,10 @@ const MessageHistory = ({ navigation, route }) => {
     } finally {
       setIsLoadingMessages(false);
       setIsLoadingMore(false);
+      // Reset the loading ref after a short delay to prevent rapid consecutive calls
+      setTimeout(() => {
+        isLoadingMoreRef.current = false;
+      }, 300);
     }
   };
 
@@ -1640,20 +1700,22 @@ const MessageHistory = ({ navigation, route }) => {
   };
 
   // Update loadMoreMessages to check current state before loading
-  const loadMoreMessages = () => {
+  const loadMoreMessages = useCallback(() => {
     if (is_DEBUG) {
       console.log('MBA98765 loadMoreMessages called:', {
         hasMore,
         isLoadingMore,
+        isLoadingMoreRef: isLoadingMoreRef.current,
         currentPage,
         selectedConversation
       });
     }
     
-    if (hasMore && !isLoadingMore && selectedConversation) {
+    if (hasMore && !isLoadingMoreRef.current && selectedConversation) {
+      debugLog(`MBA4321: Loading more messages for page ${currentPage + 1}`);
       fetchMessages(selectedConversation, currentPage + 1);
     }
-  };
+  }, [hasMore, currentPage, selectedConversation]);
 
   const renderMessage = useCallback(({ item }) => {
     // Create a map to keep track of which bookings have change requests and latest message timestamps
@@ -2358,7 +2420,71 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Update message section to use new header
+  // Extract FlatList into a dedicated component
+  const MessageFlatList = React.memo(({ 
+    messages, 
+    renderMessage, 
+    loadMoreMessages, 
+    isLoadingMore, 
+    hasMore, 
+    forceRerender 
+  }) => {
+    return (
+      <FlatList
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={item => {
+          // Prioritize message_id if available
+          if (item.message_id) {
+            return `message-${item.message_id}`;
+          }
+          
+          // Create a more robust fallback key using multiple properties
+          const timestamp = item.timestamp || item.created_at || Date.now();
+          const senderHash = item.sent_by_other_user ? 'other' : 'self';
+          const contentHash = item.content ? 
+            `${item.content.substring(0, 10)}-${item.content.length}` : 
+            'no-content';
+          const typeHash = item.type_of_message || 'normal';
+          
+          // Combine all these factors for a more unique key
+          return `message-${timestamp}-${senderHash}-${typeHash}-${contentHash}`;
+        }}
+        style={styles.messageList}
+        onEndReached={loadMoreMessages}
+        onEndReachedThreshold={0.3} // Reduced threshold to prevent multiple triggers
+        inverted={true}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'flex-end',
+          paddingTop: 16,
+        }}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10
+        }}
+        ListFooterComponent={isLoadingMore && (
+          <ActivityIndicator 
+            size="small" 
+            color={theme.colors.primary}
+            style={styles.loadingMore}
+          />
+        )}
+        initialNumToRender={20}
+        maxToRenderPerBatch={10} // Lower value to improve rendering performance
+        windowSize={15} // Optimized window size
+        removeClippedSubviews={false}
+        extraData={forceRerender}
+        getItemLayout={(data, index) => ({
+          length: 100, // Estimated item height
+          offset: 100 * index,
+          index,
+        })}
+      />
+    );
+  });
+
+  // Update renderMessageSection to use our new component
   const renderMessageSection = () => {
     if (!selectedConversation) {
       return null;
@@ -2380,39 +2506,13 @@ const MessageHistory = ({ navigation, route }) => {
                 No messages yet, start the conversation!
               </Text>
             ) : (
-              <FlatList
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={item => {
-                  // Use message_id if available, fallback to timestamp + content as unique key
-                  return item.message_id ? 
-                    `message-${item.message_id}` : 
-                    `message-${item.timestamp}-${item.content?.substring(0, 10)}`;
-                }}
-                style={styles.messageList}
-                onEndReached={loadMoreMessages}
-                onEndReachedThreshold={0.5}
-                inverted={true}
-                contentContainerStyle={{
-                  flexGrow: 1,
-                  justifyContent: 'flex-end',
-                  paddingTop: 16, // Add padding to ensure scrolling works properly
-                }}
-                maintainVisibleContentPosition={{
-                  minIndexForVisible: 0,
-                  autoscrollToTopThreshold: 10
-                }}
-                ListFooterComponent={isLoadingMore && (
-                  <ActivityIndicator 
-                    size="small" 
-                    color={theme.colors.primary}
-                    style={styles.loadingMore}
-                  />
-                )}
-                initialNumToRender={20} // Render more items initially
-                windowSize={21} // Increase window size for better performance
-                removeClippedSubviews={false} // Disable clipping for web performance
-                extraData={forceRerender} // Add this to force FlatList to re-render when needed
+              <MessageFlatList
+                messages={messages}
+                renderMessage={renderMessage}
+                loadMoreMessages={loadMoreMessages}
+                isLoadingMore={isLoadingMore}
+                hasMore={hasMore}
+                forceRerender={forceRerender}
               />
             )}
           </View>
@@ -2804,6 +2904,16 @@ const MessageHistory = ({ navigation, route }) => {
       };
     }
   }, []);
+
+  // Clear processed messages cache when switching conversations
+  useEffect(() => {
+    if (selectedConversation) {
+      // Reset our tracking refs when switching conversations
+      processedPagesRef.current.clear();
+      messageIdsRef.current.clear();
+      isLoadingMoreRef.current = false;
+    }
+  }, [selectedConversation]);
 
   // Add a loading overlay component at the bottom of the return statement, before any modals
   return (

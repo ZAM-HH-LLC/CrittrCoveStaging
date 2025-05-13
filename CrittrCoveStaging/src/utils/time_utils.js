@@ -100,7 +100,7 @@ export const convertTo12Hour = (time24h) => {
  */
 export const convertToUTC = (date, time, fromTimezone) => {
   try {
-    console.log('MBA12345 Converting to UTC - Input:', { date, time, fromTimezone });
+    debugLog('MBA12345: Converting to UTC - Input:', { date, time, fromTimezone });
 
     // Create a moment object in the source timezone
     const localMoment = moment.tz(`${date} ${time}`, fromTimezone);
@@ -112,7 +112,7 @@ export const convertToUTC = (date, time, fromTimezone) => {
     const utcDate = utcMoment.format('YYYY-MM-DD');
     const utcTime = utcMoment.format('HH:mm');
 
-    console.log('MBA12345 UTC conversion result:', {
+    debugLog('MBA12345: UTC conversion result:', {
       input: {
         date,
         time,
@@ -131,8 +131,8 @@ export const convertToUTC = (date, time, fromTimezone) => {
       time: utcTime
     };
   } catch (error) {
-    console.error('MBA12345 Error converting to UTC:', error);
-    throw error;
+    debugLog('MBA12345: Error converting to UTC:', error);
+    return { date, time }; // Return original values as fallback
   }
 };
 
@@ -149,25 +149,87 @@ export const convertDateTimeFromUTC = (date, time, timezone, useMilitaryTime = f
             return { date, time };
         }
         
-        // Parse UTC date and time properly
-        let utcDate;
+        // Multiple parsing strategies for more robust date handling
+        let utcDate = null;
         
-        // Handle different time formats
-        let formattedTime = time;
-        if (time.includes('.')) {
-            formattedTime = time.split('.')[0]; // Remove milliseconds if present
+        // Strategy 1: Try standard ISO format parsing
+        try {
+            // Handle different time formats
+            let formattedTime = time;
+            if (time.includes('.')) {
+                formattedTime = time.split('.')[0]; // Remove milliseconds if present
+            }
+            
+            // Create a proper ISO string
+            const isoString = `${date}T${formattedTime}${formattedTime.includes('Z') ? '' : 'Z'}`;
+            debugLog('MBA5677: Trying ISO string format', isoString);
+            
+            // Create Date object
+            utcDate = new Date(isoString);
+            
+            // Check if valid
+            if (isNaN(utcDate.getTime())) {
+                debugLog('MBA5677: ISO format parsing failed');
+                utcDate = null;
+            } else {
+                debugLog('MBA5677: ISO format parsing succeeded');
+            }
+        } catch (parseError) {
+            debugLog('MBA5677: Error in ISO format parsing', parseError);
         }
         
-        // Create a proper ISO string
-        const isoString = `${date}T${formattedTime}${formattedTime.includes('Z') ? '' : 'Z'}`;
-        debugLog('MBA5677: Created ISO string for UTC date', isoString);
+        // Strategy 2: Try direct date-fns parsing
+        if (!utcDate) {
+            try {
+                debugLog('MBA5677: Trying date-fns parsing');
+                const dateStr = `${date} ${time}`;
+                utcDate = moment.utc(dateStr).toDate();
+                
+                // Check if valid
+                if (isNaN(utcDate.getTime())) {
+                    debugLog('MBA5677: date-fns parsing failed');
+                    utcDate = null;
+                } else {
+                    debugLog('MBA5677: date-fns parsing succeeded');
+                }
+            } catch (parseError) {
+                debugLog('MBA5677: Error in date-fns parsing', parseError);
+            }
+        }
         
-        // Create Date object
-        utcDate = new Date(isoString);
+        // Strategy 3: Try manual parsing
+        if (!utcDate) {
+            try {
+                debugLog('MBA5677: Trying manual parsing');
+                // Split the date and time parts
+                const [year, month, day] = date.split('-').map(Number);
+                let hours = 0, minutes = 0;
+                
+                // Parse time
+                if (time.includes(':')) {
+                    const timeParts = time.split(':');
+                    hours = parseInt(timeParts[0], 10);
+                    minutes = parseInt(timeParts[1], 10);
+                }
+                
+                // Create UTC date
+                utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+                
+                // Check if valid
+                if (isNaN(utcDate.getTime())) {
+                    debugLog('MBA5677: Manual parsing failed');
+                    utcDate = null;
+                } else {
+                    debugLog('MBA5677: Manual parsing succeeded');
+                }
+            } catch (parseError) {
+                debugLog('MBA5677: Error in manual parsing', parseError);
+            }
+        }
         
-        // Verify date is valid
-        if (isNaN(utcDate.getTime())) {
-            debugLog('MBA5677: Invalid date created from input', { date, time, utcDate });
+        // If all parsing strategies failed, return original values
+        if (!utcDate) {
+            debugLog('MBA5677: All parsing strategies failed, returning original');
             return { date, time };
         }
         
@@ -585,7 +647,7 @@ export const formatDateTimeRangeFromUTC = ({
   includeTimezone = true
 }) => {
   try {
-    console.log('MBA134njo0vh02c23 formatDateTimeRangeFromUTC input:', {
+    debugLog('MBA134njo: formatDateTimeRangeFromUTC input:', {
       startDate,
       startTime,
       endDate,
@@ -600,7 +662,7 @@ export const formatDateTimeRangeFromUTC = ({
       const startUtcMoment = moment.utc(`${startDate}T${startTime}:00Z`);
       const endUtcMoment = moment.utc(`${endDate}T${endTime}:00Z`);
 
-      console.log('MBA134njo0vh02c23 UTC moments:', {
+      debugLog('MBA134njo: UTC moments:', {
         start: startUtcMoment.format(),
         end: endUtcMoment.format()
       });
@@ -609,14 +671,14 @@ export const formatDateTimeRangeFromUTC = ({
       const startLocalMoment = startUtcMoment.tz(userTimezone);
       const endLocalMoment = endUtcMoment.tz(userTimezone);
 
-      console.log('MBA134njo0vh02c23 Local moments:', {
+      debugLog('MBA134njo: Local moments:', {
         start: startLocalMoment.format(),
         end: endLocalMoment.format()
       });
 
       // Get timezone abbreviation
       const tzAbbrev = startLocalMoment.zoneAbbr();
-      console.log('MBA134njo0vh02c23 Timezone abbreviation:', tzAbbrev);
+      debugLog('MBA134njo: Timezone abbreviation:', tzAbbrev);
 
       // Format the dates without timezone in the format string
       const startFormatted = startLocalMoment.format("MMM D, YYYY h:mm A");
@@ -626,7 +688,7 @@ export const formatDateTimeRangeFromUTC = ({
       const finalStart = includeTimezone ? `${startFormatted} ${tzAbbrev}` : startFormatted;
       const finalEnd = includeTimezone ? `${endFormatted} ${tzAbbrev}` : endFormatted;
 
-      console.log('MBA134njo0vh02c23 Formatted dates:', {
+      debugLog('MBA134njo: Formatted dates:', {
         startFormatted: finalStart,
         endFormatted: finalEnd,
         tzAbbrev
@@ -640,7 +702,7 @@ export const formatDateTimeRangeFromUTC = ({
       return `${startLocalMoment.format('MMM D, YYYY')} - ${endLocalMoment.format('MMM D, YYYY')}`;
     }
   } catch (error) {
-    console.error('MBA134njo0vh02c23 Error in formatDateTimeRangeFromUTC:', error);
+    debugLog('MBA134njo: Error in formatDateTimeRangeFromUTC:', error);
     return '';
   }
 };

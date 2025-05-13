@@ -19,6 +19,9 @@ const TIME_UNITS = Object.keys(TIME_UNIT_MAPPING);
 const ANIMAL_THRESHOLDS = ['1', '2', '3', '4', '5'];
 
 const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, setIsUpdatingService, onProceedWithUpdate }) => {
+  // Debug log for tracking isOvernight status
+  debugLog('MBA5931', 'RatesAndReviewStep render - isOvernight status:', serviceData.isOvernight);
+  
   const [showTimeUnitDropdown, setShowTimeUnitDropdown] = useState(false);
   const [showThresholdDropdown, setShowThresholdDropdown] = useState(false);
   const [customChargeVisible, setCustomChargeVisible] = useState(false);
@@ -31,6 +34,11 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
     description: ''
   });
 
+  // Filter available time units based on isOvernight flag
+  const availableTimeUnits = serviceData.isOvernight ? 
+    ['Per Night'] : 
+    TIME_UNITS;
+
   // Check if we need to convert existing data on component mount
   useEffect(() => {
     // Initialize isPercent property based on the state
@@ -42,8 +50,19 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
       }
     }));
     
+    // If service is overnight, ensure the base_rate_unit is 'Per Night'
+    if (serviceData.isOvernight) {
+      debugLog('MBA5931', 'Service is overnight, setting rate unit to Per Night');
+      setServiceData(prev => ({
+        ...prev,
+        rates: {
+          ...prev.rates,
+          base_rate_unit: 'Per Night'
+        }
+      }));
+    }
     // If we have a base_rate_unit from backend but it's not in our mapping, initialize with default
-    if (serviceData.rates?.base_rate_unit && !BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit]) {
+    else if (serviceData.rates?.base_rate_unit && !BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit]) {
       debugLog('MBA5931', 'Converting initial base_rate_unit to mapped value');
       const frontendKey = Object.keys(TIME_UNIT_MAPPING).find(
         key => TIME_UNIT_MAPPING[key] === serviceData.rates.base_rate_unit
@@ -92,6 +111,20 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
       (BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit] || serviceData.rates.base_rate_unit) : 
       TIME_UNITS[0]);
   }, [serviceData.rates?.base_rate_unit]);
+
+  // Watch for changes to isOvernight and update rate unit accordingly
+  useEffect(() => {
+    if (serviceData.isOvernight) {
+      debugLog('MBA5931', 'Overnight service detected, forcing Per Night rate unit');
+      setServiceData(prev => ({
+        ...prev,
+        rates: {
+          ...prev.rates,
+          base_rate_unit: 'Per Night'
+        }
+      }));
+    }
+  }, [serviceData.isOvernight]);
 
   // Helper function to check if there's an unsaved custom rate
   const hasUnsavedCustomRate = () => {
@@ -188,11 +221,17 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
   };
 
   const handleTimeUnitSelect = (unit) => {
+    // If this is an overnight service, always use 'Per Night'
+    // Otherwise, map the user-friendly display value to the backend value
+    const selectedUnit = serviceData.isOvernight ? 
+      'Per Night' : 
+      TIME_UNIT_MAPPING[unit];
+    
     setServiceData(prev => ({
       ...prev,
       rates: {
         ...prev.rates,
-        base_rate_unit: TIME_UNIT_MAPPING[unit]
+        base_rate_unit: selectedUnit
       }
     }));
     setShowTimeUnitDropdown(false);
@@ -431,28 +470,38 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
             </View>
             <View style={{ flex: 1, zIndex: 1 }}>
               <TouchableOpacity
-                style={styles.unitSelector}
+                style={[
+                  styles.unitSelector,
+                  serviceData.isOvernight && styles.disabledUnitSelector
+                ]}
                 onPress={() => {
-                  setShowThresholdDropdown(false);
-                  setShowTimeUnitDropdown(!showTimeUnitDropdown);
+                  if (!serviceData.isOvernight) {
+                    setShowThresholdDropdown(false);
+                    setShowTimeUnitDropdown(!showTimeUnitDropdown);
+                  }
                 }}
+                disabled={serviceData.isOvernight}
               >
                 <Text style={styles.unitText}>
-                  {serviceData.rates?.base_rate_unit ? 
-                    (BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit] || serviceData.rates.base_rate_unit) : 
-                    TIME_UNITS[0]}
+                  {serviceData.isOvernight ? 
+                    'Per Night' : 
+                    (serviceData.rates?.base_rate_unit ? 
+                      (BACKEND_TO_FRONTEND_TIME_UNIT[serviceData.rates.base_rate_unit] || serviceData.rates.base_rate_unit) : 
+                      TIME_UNITS[0])}
                 </Text>
-                <MaterialCommunityIcons
-                  name={showTimeUnitDropdown ? 'chevron-up' : 'chevron-down'}
-                  size={24}
-                  color={theme.colors.text}
-                />
+                {!serviceData.isOvernight && (
+                  <MaterialCommunityIcons
+                    name={showTimeUnitDropdown ? 'chevron-up' : 'chevron-down'}
+                    size={24}
+                    color={theme.colors.text}
+                  />
+                )}
               </TouchableOpacity>
               {renderDropdown(
-                TIME_UNITS,
+                availableTimeUnits,
                 serviceData.rates?.base_rate_unit,
                 handleTimeUnitSelect,
-                showTimeUnitDropdown,
+                showTimeUnitDropdown && !serviceData.isOvernight,
                 { width: '100%' }
               )}
             </View>
@@ -1087,6 +1136,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: theme.fonts.regular.fontFamily,
     textAlign: 'center',
+  },
+  disabledUnitSelector: {
+    backgroundColor: theme.colors.surface,
+    opacity: 0.8,
+    borderColor: theme.colors.modernBorder,
   },
 });
 

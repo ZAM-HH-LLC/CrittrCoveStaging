@@ -547,13 +547,14 @@ const Dashboard = ({ navigation }) => {
           </TouchableOpacity>
         ))}
       </View>
+      {/* TODO: UNCOMMONT THIS SECTION after mvp launch and implementation of mybookings screen
       <TouchableOpacity
         style={styles.viewAllButton}
         onPress={() => navigateToFrom(navigation, 'MyBookings', 'Dashboard')}
       >
         <Text style={styles.viewAllText}>View All</Text>
         <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.primary} />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </View>
   );
 
@@ -583,28 +584,36 @@ const Dashboard = ({ navigation }) => {
             date: is_prototype ? booking.date : booking.start_date,
             time: is_prototype ? booking.time : booking.start_time,
             client_name: is_prototype ? booking.owner : booking.client_name,
-            owner_name: is_prototype ? booking.owner : booking.owner_name
+            professional_name: is_prototype ? booking.professional : booking.professional_name,
+            status: is_prototype ? booking.status : booking.status
           });
           
           const bookingId = is_prototype ? booking.id : booking.booking_id;
-          const clientName = is_prototype ? booking.owner : (booking.client_name || booking.owner_name);
           
-          debugLog('MBA5677: Using client name', clientName);
+          // Set name based on user role
+          let name;
+          if (isProfessional) {
+            name = is_prototype ? booking.owner : (booking.client_name || booking.owner_name || 'Client');
+            debugLog('MBA5677: Using client name', name);
+          } else {
+            name = is_prototype ? booking.professional : (booking.professional_name || 'Professional');
+            debugLog('MBA5677: Using professional name', name);
+          }
           
           return (
             <BookingCard
               key={bookingId}
               booking={{
                 id: bookingId,
-                client_name: clientName,
-                ownerName: clientName, // Keep for backward compatibility
+                client_name: isProfessional ? name : null,
+                professional_name: !isProfessional ? name : null,
                 serviceName: is_prototype ? booking.service : booking.service_type,
                 date: is_prototype ? booking.date : booking.start_date,
                 time: is_prototype ? booking.time : booking.start_time,
                 status: is_prototype ? booking.status : booking.status,
                 pets: is_prototype ? [{ name: booking.pet }] : booking.pets
               }}
-              type="professional"
+              type={isProfessional ? "professional" : "client"}
               onViewDetails={() => handleViewBookingDetails(bookingId)}
             />
           );
@@ -655,10 +664,11 @@ const Dashboard = ({ navigation }) => {
         <Text style={styles.serviceCategory}>{service.category || 'Exotic'}</Text>
       </View>
       <View style={styles.serviceFooter}>
-        <View style={styles.bookingsCount}>
+        {/* TODO: Implement this section after mvp */}
+        {/* <View style={styles.bookingsCount}>
           <MaterialCommunityIcons name="calendar" size={16} color={theme.colors.textSecondary} />
           <Text style={styles.bookingsText}>{service.booking_count || 8} bookings</Text>
-        </View>
+        </View> */}
         <TouchableOpacity 
           style={styles.viewButton}
           onPress={() => navigateToFrom(navigation, 'ServiceManager', 'Dashboard', { serviceId: service.id })}
