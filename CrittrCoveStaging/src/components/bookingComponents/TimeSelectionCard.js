@@ -1,9 +1,36 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
-import TimeRangeSelector from './TimeRangeSelector';
+import NewTimeRangeSelector from './NewTimeRangeSelector';
 import { AuthContext, debugLog } from '../../context/AuthContext';
+import DayTimeSelector from './DayTimeSelector';
+import { formatDateOnly, getUTCTimeString } from '../../utils/time_utils';
+
+// Helper function to parse time values from various formats
+const parseTimeValue = (timeValue) => {
+  if (!timeValue) return null;
+  
+  // Handle string format 'HH:MM'
+  if (typeof timeValue === 'string' && timeValue.includes(':')) {
+    const [hours, minutes] = timeValue.split(':').map(part => parseInt(part, 10));
+    return { hours, minutes };
+  }
+  
+  // Handle object format directly
+  if (typeof timeValue === 'object' && timeValue !== null) {
+    // If it has hours/minutes properties directly
+    if (timeValue.hours !== undefined || timeValue.minutes !== undefined) {
+      return {
+        hours: timeValue.hours || 0,
+        minutes: timeValue.minutes || 0
+      };
+    }
+  }
+  
+  // Default fallback
+  return null;
+};
 
 const TimeSelectionCard = ({ 
   onTimeSelect,
@@ -22,15 +49,16 @@ const TimeSelectionCard = ({
     }
     
     const shouldShowIndividual = initialTimes && initialTimes.hasIndividualTimes === true;
-    debugLog('MBA66777: Initial showIndividualDays value:', shouldShowIndividual);
+    debugLog('MBAoi9uv43d: Initial showIndividualDays value:', shouldShowIndividual);
     return shouldShowIndividual;
   });
+  
   const [individualTimeRanges, setIndividualTimeRanges] = useState({});
   const [times, setTimes] = useState(() => {
     // Safely initialize with default values if initialTimes is not properly formatted
     try {
       if (!initialTimes || typeof initialTimes !== 'object') {
-        debugLog('MBA2j3kbr9hve4: Invalid initialTimes, using defaults:', initialTimes);
+        debugLog('MBAoi9uv43d: Invalid initialTimes, using defaults:', initialTimes);
         return {
           startTime: { hours: 9, minutes: 0 },
           endTime: { hours: 17, minutes: 0 },
@@ -39,7 +67,7 @@ const TimeSelectionCard = ({
       }
       return initialTimes;
     } catch (error) {
-      debugLog('MBA2j3kbr9hve4: Error initializing times:', error);
+      debugLog('MBAoi9uv43d: Error initializing times:', error);
       return {
         startTime: { hours: 9, minutes: 0 },
         endTime: { hours: 17, minutes: 0 },
@@ -52,7 +80,7 @@ const TimeSelectionCard = ({
   const isInitialRender = useRef(true);
   
   useEffect(() => {
-    debugLog('MBA66777: TimeSelectionCard received initialTimes:', initialTimes);
+    debugLog('MBAoi9uv43d: TimeSelectionCard received initialTimes:', initialTimes);
     
     // Safely initialize with default values if initialTimes is not properly formatted
     try {
@@ -62,7 +90,7 @@ const TimeSelectionCard = ({
           endTime: { hours: 17, minutes: 0 },
           isOvernightForced: selectedService?.is_overnight || false
         };
-        debugLog('MBA66777: Using default times:', defaultTimes);
+        debugLog('MBAoi9uv43d: Using default times:', defaultTimes);
         setTimes(defaultTimes);
         setShowIndividualDays(false);
         return;
@@ -70,42 +98,17 @@ const TimeSelectionCard = ({
       
       // Extract the hasIndividualTimes flag early
       const hasIndividualTimesFlag = initialTimes.hasIndividualTimes === true;
-      debugLog('MBA66777: hasIndividualTimes flag is', hasIndividualTimesFlag);
+      debugLog('MBAoi9uv43d: hasIndividualTimes flag is', hasIndividualTimesFlag);
       
       // Only set the showIndividualDays based on initialTimes on the initial render
       // This prevents it from overriding user's toggle action
       if (isInitialRender.current) {
-        debugLog('MBA66777: Initial render - setting showIndividualDays to', hasIndividualTimesFlag);
+        debugLog('MBAoi9uv43d: Initial render - setting showIndividualDays to', hasIndividualTimesFlag);
         setShowIndividualDays(hasIndividualTimesFlag);
         isInitialRender.current = false;
       } else {
-        debugLog('MBA66777: Not initial render - preserving showIndividualDays state');
+        debugLog('MBAoi9uv43d: Not initial render - preserving showIndividualDays state');
       }
-      
-      // Function to safely parse time string or object
-      const parseTimeValue = (timeValue) => {
-        if (!timeValue) return null;
-        
-        // Handle string format 'HH:MM'
-        if (typeof timeValue === 'string' && timeValue.includes(':')) {
-          const [hours, minutes] = timeValue.split(':').map(part => parseInt(part, 10));
-          return { hours, minutes };
-        }
-        
-        // Handle object format directly
-        if (typeof timeValue === 'object' && timeValue !== null) {
-          // If it has hours/minutes properties directly
-          if (timeValue.hours !== undefined || timeValue.minutes !== undefined) {
-            return {
-              hours: timeValue.hours || 0,
-              minutes: timeValue.minutes || 0
-            };
-          }
-        }
-        
-        // Default fallback
-        return null;
-      };
       
       // Get formatted start time
       const startTimeValue = parseTimeValue(initialTimes.startTime);
@@ -117,13 +120,13 @@ const TimeSelectionCard = ({
         isOvernightForced: initialTimes.isOvernightForced || selectedService?.is_overnight || false
       };
       
-      debugLog('MBA2j3kbr9hve4: Setting formatted times:', formattedTimes);
+      debugLog('MBAoi9uv43d: Setting formatted times:', formattedTimes);
       setTimes(formattedTimes);
       
       // Check if initialTimes already has individual times or if we have dates from draft
       const hasDatesInDraft = initialTimes && Object.keys(initialTimes).some(key => key.match(/^\d{4}-\d{2}-\d{2}$/));
       
-      debugLog('MBA66777: Time selection setup:', { 
+      debugLog('MBAoi9uv43d: Time selection setup:', { 
         hasDatesInDraft,
         hasIndividualTimesFlag,
         hasDateRange: !!(dateRange && dateRange.startDate && dateRange.endDate),
@@ -143,14 +146,14 @@ const TimeSelectionCard = ({
           const current = new Date(startDate);
           while (current <= endDate) {
             const dateKey = current.toISOString().split('T')[0];
-            newTimeRanges[dateKey] = { ...formattedTimes };
+            newTimeRanges[dateKey] = JSON.parse(JSON.stringify(formattedTimes));
             current.setDate(current.getDate() + 1);
           }
         }
         
         // Also populate time ranges from multiple days selection if available
         if (initialTimes.dates && initialTimes.dates.length > 0 && !dateRange) {
-          debugLog('MBA66777: Creating time ranges from multiple days selection');
+          debugLog('MBAoi9uv43d: Creating time ranges from multiple days selection');
           initialTimes.dates.forEach(dateObj => {
             // Handle different date formats
             let date;
@@ -164,7 +167,7 @@ const TimeSelectionCard = ({
             
             const dateKey = date.toISOString().split('T')[0];
             if (!newTimeRanges[dateKey]) {
-              newTimeRanges[dateKey] = { ...formattedTimes };
+              newTimeRanges[dateKey] = JSON.parse(JSON.stringify(formattedTimes));
             }
           });
         }
@@ -189,11 +192,30 @@ const TimeSelectionCard = ({
           });
         }
         
-        debugLog('MBA2j3kbr9hve4: Setting individual time ranges:', newTimeRanges);
+        // Also handle individualTimeRanges format from initialTimes
+        if (initialTimes.individualTimeRanges) {
+          Object.keys(initialTimes.individualTimeRanges).forEach(dateKey => {
+            if (dateKey.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              const dayTime = initialTimes.individualTimeRanges[dateKey];
+              const parsedStartTime = parseTimeValue(dayTime.startTime);
+              const parsedEndTime = parseTimeValue(dayTime.endTime);
+              
+              if (parsedStartTime || parsedEndTime) {
+                newTimeRanges[dateKey] = {
+                  startTime: parsedStartTime || { hours: 9, minutes: 0 },
+                  endTime: parsedEndTime || { hours: 17, minutes: 0 },
+                  isOvernightForced: dayTime.isOvernightForced || false
+                };
+              }
+            }
+          });
+        }
+        
+        debugLog('MBAoi9uv43d: Setting individual time ranges:', newTimeRanges);
         setIndividualTimeRanges(newTimeRanges);
       }
     } catch (error) {
-      debugLog('MBA2j3kbr9hve4: Error processing initialTimes:', error);
+      debugLog('MBAoi9uv43d: Error processing initialTimes:', error);
       // Set default times on error
       setTimes({
         startTime: { hours: 9, minutes: 0 },
@@ -203,60 +225,25 @@ const TimeSelectionCard = ({
     }
   }, [initialTimes, dateRange, selectedService]);
   
-  // Ensure times are properly displayed
-  useEffect(() => {
-    if (!showIndividualDays && individualTimeRanges && Object.keys(individualTimeRanges).length > 0) {
-      debugLog('MBA66777: Individual days view is off but we have individualTimeRanges');
-    }
-  }, [showIndividualDays, individualTimeRanges]);
-  
-  const handleOvernightTimeSelect = (startTime, endTime, isOvernightForced) => {
-    debugLog('MBA2j3kbr9hve4: handleOvernightTimeSelect called with:', { 
-      startTime, 
-      endTime, 
-      isOvernightForced 
-    });
+  const handleDefaultTimeSelect = (newTimes) => {
+    debugLog('MBAoi9uv43d: handleDefaultTimeSelect called with:', newTimes);
     
-    // Create proposed new start and end times, using existing values if not provided
-    const newStartTime = startTime || times.startTime;
-    const newEndTime = endTime || times.endTime;
-    
-    // Convert to minutes for easier comparison
-    const startTimeInMinutes = newStartTime.hours * 60 + newStartTime.minutes;
-    const endTimeInMinutes = newEndTime.hours * 60 + newEndTime.minutes;
-    
-    // Special case: Midnight (00:00) as end time is treated as end of day (24:00)
-    const isMidnightEndTime = newEndTime.hours === 0 && newEndTime.minutes === 0;
-    
-    // We only need to validate when end time is NOT midnight
-    if (!isMidnightEndTime && endTimeInMinutes <= startTimeInMinutes) {
-      debugLog('MBA2j3kbr9hve4: Invalid time selection - end time cannot be before start time', {
-        startTime: newStartTime,
-        endTime: newEndTime
-      });
-      // Don't update times if invalid
-      return;
-    }
+    // Create a new deep copy to avoid reference issues
+    const updatedTimes = JSON.parse(JSON.stringify(newTimes));
     
     // Update our local state
-    const updatedTimes = {
-      ...times,
-      startTime: newStartTime,
-      endTime: newEndTime,
-      isOvernightForced: isOvernightForced !== undefined ? isOvernightForced : times.isOvernightForced
-    };
-    
     setTimes(updatedTimes);
     
     // If showing individual days, update each day's times
     if (showIndividualDays) {
-      const updatedRanges = { ...individualTimeRanges };
-      Object.keys(updatedRanges).forEach(date => {
+      const updatedRanges = {};
+      
+      // Create deep copies for each date
+      Object.keys(individualTimeRanges).forEach(date => {
         updatedRanges[date] = {
-          ...updatedRanges[date],
-          startTime: newStartTime,
-          endTime: newEndTime,
-          isOvernightForced: isOvernightForced !== undefined ? isOvernightForced : updatedRanges[date].isOvernightForced
+          startTime: updatedTimes.startTime,
+          endTime: updatedTimes.endTime,
+          isOvernightForced: updatedTimes.isOvernightForced
         };
       });
       
@@ -278,200 +265,61 @@ const TimeSelectionCard = ({
   };
 
   const handleIndividualDayTimeSelect = (timesData, dateKey) => {
-    debugLog('MBAoi1h34ghnvo: Individual day time selection:', { timesData, dateKey });
+    debugLog('MBAoi9uv43d: Individual day time selection for card:', { dateKey, timesData });
     
     if (!dateKey) {
-      debugLog('MBAoi1h34ghnvo: No dateKey provided, returning');
+      debugLog('MBAoi9uv43d: No dateKey provided, returning');
       return;
     }
 
-    // Convert to minutes for easier comparison
-    const startTimeInMinutes = timesData.startTime.hours * 60 + timesData.startTime.minutes;
-    const endTimeInMinutes = timesData.endTime.hours * 60 + timesData.endTime.minutes;
+    // Create a completely fresh object for the updated ranges with no shared references
+    const updatedRanges = JSON.parse(JSON.stringify(individualTimeRanges));
     
-    // Special case: Midnight (00:00) as end time is treated as end of day (24:00)
-    const isMidnightEndTime = timesData.endTime.hours === 0 && timesData.endTime.minutes === 0;
+    // Now set the new time data for this date key
+    updatedRanges[dateKey] = JSON.parse(JSON.stringify(timesData));
     
-    // We only need to validate when end time is NOT midnight
-    if (!isMidnightEndTime && endTimeInMinutes <= startTimeInMinutes) {
-      debugLog('MBAoi1h34ghnvo: Invalid time selection for individual day - end time cannot be before start time', {
-        dateKey,
-        startTime: timesData.startTime,
-        endTime: timesData.endTime
-      });
-      // Don't update times if invalid
-      return;
-    }
-
-    // Create a new object with only the selected dates
-    const updatedRanges = {};
+    debugLog('MBAoi9uv43d: TimeSelectionCard updating only date:', dateKey);
+    debugLog('MBAoi9uv43d: Current individualTimeRanges keys:', Object.keys(individualTimeRanges));
+    debugLog('MBAoi9uv43d: New updatedRanges keys:', Object.keys(updatedRanges));
     
-    // Only process the specific date that was selected
-    updatedRanges[dateKey] = {
-      startTime: timesData.startTime,
-      endTime: timesData.endTime,
-      isOvernightForced: timesData.isOvernightForced
-    };
-    
-    debugLog('MBAoi1h34ghnvo: Current ranges after update:', updatedRanges);
-    
-    // Update state with only the selected date
+    // Update local state with completely new object to break all references
     setIndividualTimeRanges(updatedRanges);
     
-    // Format only the selected date's time range for the backend
+    // Format time strings for API
     const formattedRanges = {};
-    formattedRanges[dateKey] = {
-      startTime: typeof timesData.startTime === 'string' ? timesData.startTime : `${String(timesData.startTime.hours).padStart(2, '0')}:${String(timesData.startTime.minutes).padStart(2, '0')}`,
-      endTime: typeof timesData.endTime === 'string' ? timesData.endTime : `${String(timesData.endTime.hours).padStart(2, '0')}:${String(timesData.endTime.minutes).padStart(2, '0')}`,
-      isOvernightForced: timesData.isOvernightForced
-    };
+    Object.keys(updatedRanges).forEach(date => {
+      const timeData = updatedRanges[date];
+      formattedRanges[date] = {
+        startTime: `${String(timeData.startTime.hours).padStart(2, '0')}:${String(timeData.startTime.minutes).padStart(2, '0')}`,
+        endTime: `${String(timeData.endTime.hours).padStart(2, '0')}:${String(timeData.endTime.minutes).padStart(2, '0')}`,
+        isOvernightForced: !!timeData.isOvernightForced
+      };
+    });
     
-    debugLog('MBAoi1h34ghnvo: Formatted ranges:', formattedRanges);
-    
-    // Create the final data object with only the selected date's time change
-    const finalData = {
-      ...times,
+    // Create a completely new data object for the parent component
+    const updatedData = {
+      startTime: JSON.parse(JSON.stringify(times.startTime)),
+      endTime: JSON.parse(JSON.stringify(times.endTime)),
+      isOvernightForced: times.isOvernightForced,
       hasIndividualTimes: true,
-      isOvernightForced: timesData.isOvernightForced,
-      dates: initialTimes.dates || [],
-      // Include only the formatted range for the selected date
-      ...formattedRanges,
-      // Include the raw individualTimeRanges for state preservation
-      individualTimeRanges: updatedRanges,
-      // Ensure we preserve all time changes
-      allTimesAreTheSame: false
+      dates: initialTimes.dates ? [...initialTimes.dates] : [],
+      individualTimeRanges: formattedRanges
     };
     
-    debugLog('MBAoi1h34ghnvo: Sending final data to parent:', finalData);
-    onTimeSelect(finalData);
-  };
-
-  const handlePresetSelect = (preset) => {
-    let newTimes = {};
-    switch (preset) {
-      case 'morning':
-        newTimes = {
-          startTime: { hours: 9, minutes: 0 },
-          endTime: { hours: 12, minutes: 0 },
-          isOvernightForced: false
-        };
-        break;
-      case 'afternoon':
-        newTimes = {
-          startTime: { hours: 13, minutes: 0 },
-          endTime: { hours: 17, minutes: 0 },
-          isOvernightForced: false
-        };
-        break;
-      case 'fullDay':
-        newTimes = {
-          startTime: { hours: 9, minutes: 0 },
-          endTime: { hours: 17, minutes: 0 },
-          isOvernightForced: false
-        };
-        break;
-      default:
-        return;
-    }
-    handleOvernightTimeSelect(null, null, newTimes.isOvernightForced);
-  };
-
-  const formatDateRange = (startDate, endDate) => {
-    if (!startDate || !endDate) return '';
-    const options = { month: 'short', day: 'numeric' };
-    const start = new Date(startDate).toLocaleDateString('en-US', options);
-    const end = new Date(endDate).toLocaleDateString('en-US', options);
-    return start === end ? start : `${start} to ${end}`;
-  };
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    const options = { month: 'short', day: 'numeric' };
-    return new Date(date).toLocaleDateString('en-US', options);
-  };
-
-  const renderIndividualTimeRanges = () => {
-    // Get dates either from dateRange or from multiple-days selection
-    let dates = [];
+    // Add the specific date data
+    updatedData[dateKey] = formattedRanges[dateKey];
     
-    // Check if we have multiple individual dates from the booking data
-    const hasMultipleDays = initialTimes && initialTimes.dates && initialTimes.dates.length > 0;
-    
-    if (hasMultipleDays) {
-      // Get dates from the initialTimes.dates for multiple-days selection
-      debugLog('MBA66777: Using multiple individual dates from initialTimes:', initialTimes.dates);
-      dates = initialTimes.dates.map(dateObj => {
-        // Handle different date formats (string or object with date property)
-        if (typeof dateObj === 'string') {
-          return new Date(dateObj);
-        } else if (dateObj && dateObj.date) {
-          return new Date(dateObj.date);
-        } else {
-          return new Date(dateObj);
-        }
-      });
-    } else if (dateRange && dateRange.startDate && dateRange.endDate) {
-      // Generate array of dates between start and end for date range
-      debugLog('MBA66777: Generating dates from dateRange:', dateRange);
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
-      const current = new Date(startDate);
-      
-      while (current <= endDate) {
-        dates.push(new Date(current));
-        current.setDate(current.getDate() + 1);
-      }
-    }
-    
-    // If no dates found, return null
-    if (dates.length === 0) {
-      debugLog('MBA66777: No dates found for individual time ranges');
-      return null;
-    }
-    
-    debugLog('MBA66777: Rendering individual time ranges for dates:', dates);
-    
-    return (
-      <View style={styles.individualDaysContainer}>
-        <Text style={styles.sectionHeader}>Individual Day Schedules</Text>
-        
-        {dates.map((date, index) => {
-          const dateKey = date.toISOString().split('T')[0];
-          const timeData = individualTimeRanges[dateKey] || { 
-            startTime: times.startTime, 
-            endTime: times.endTime,
-            isOvernightForced: times.isOvernightForced
-          };
-          
-          const handleIndividualTimeUpdate = (timesData) => {
-            handleIndividualDayTimeSelect(timesData, dateKey);
-          };
-          
-          return (
-            <View key={dateKey} style={styles.dateContainer}>
-              <TimeRangeSelector
-                title={formatDate(date)}
-                onTimeSelect={handleIndividualTimeUpdate}
-                initialTimes={timeData}
-                showOvernightToggle={!selectedService?.is_overnight}
-                dateRange={{ startDate: date, endDate: date }}
-                is_overnight={selectedService?.is_overnight || timeData.isOvernightForced}
-              />
-              {index < dates.length - 1 && <View style={styles.dateDivider} />}
-            </View>
-          );
-        })}
-      </View>
-    );
+    debugLog('MBAoi9uv43d: TimeSelectionCard sending updated data to parent');
+    onTimeSelect(updatedData);
   };
 
   const handleToggleIndividualDays = () => {
-    debugLog('MBA66777: TOGGLE button pressed');
-    debugLog('MBA66777: Current showIndividualDays state:', showIndividualDays);
+    debugLog('MBAoi9uv43d: TOGGLE button pressed');
+    debugLog('MBAoi9uv43d: Current showIndividualDays state:', showIndividualDays);
     
     if (showIndividualDays) {
       // Currently showing individual days, switching to default time range
-      debugLog('MBA66777: Switching FROM individual days TO default time range');
+      debugLog('MBAoi9uv43d: Switching FROM individual days TO default time range');
       
       // First, update the UI state
       setShowIndividualDays(false);
@@ -487,11 +335,11 @@ const TimeSelectionCard = ({
         dates: initialTimes.dates || []
       };
       
-      debugLog('MBA66777: Sending default time data to parent:', updatedData);
+      debugLog('MBAoi9uv43d: Sending default time data to parent:', updatedData);
       onTimeSelect(updatedData);
     } else {
       // Currently showing default time range, switching to individual days
-      debugLog('MBA66777: Switching FROM default time range TO individual days');
+      debugLog('MBAoi9uv43d: Switching FROM default time range TO individual days');
       
       // First update the UI state
       setShowIndividualDays(true);
@@ -504,7 +352,7 @@ const TimeSelectionCard = ({
       
       if (hasMultipleDays) {
         // Get dates from initialTimes.dates for multiple-days selection
-        debugLog('MBA66777: Creating time ranges for multiple individual dates');
+        debugLog('MBAoi9uv43d: Creating time ranges for multiple individual dates');
         
         initialTimes.dates.forEach(dateObj => {
           // Handle different date formats
@@ -521,14 +369,14 @@ const TimeSelectionCard = ({
           
           // Use current times values as default
           newTimeRanges[dateKey] = {
-            startTime: times.startTime,
-            endTime: times.endTime,
+            startTime: JSON.parse(JSON.stringify(times.startTime)),
+            endTime: JSON.parse(JSON.stringify(times.endTime)),
             isOvernightForced: times.isOvernightForced
           };
         });
       } else if (dateRange && dateRange.startDate && dateRange.endDate) {
         // Create ranges from dateRange
-        debugLog('MBA66777: Creating time ranges from dateRange');
+        debugLog('MBAoi9uv43d: Creating time ranges from dateRange');
         
         const startDate = new Date(dateRange.startDate);
         const endDate = new Date(dateRange.endDate);
@@ -537,10 +385,10 @@ const TimeSelectionCard = ({
         while (current <= endDate) {
           const dateKey = current.toISOString().split('T')[0];
           
-          // Use current times values as default
+          // Use current times values as default, with deep copy
           newTimeRanges[dateKey] = {
-            startTime: times.startTime,
-            endTime: times.endTime,
+            startTime: JSON.parse(JSON.stringify(times.startTime)),
+            endTime: JSON.parse(JSON.stringify(times.endTime)),
             isOvernightForced: times.isOvernightForced
           };
           
@@ -549,10 +397,10 @@ const TimeSelectionCard = ({
         }
       } else if (Object.keys(individualTimeRanges).length > 0) {
         // Use existing time ranges if we already have them
-        newTimeRanges = individualTimeRanges;
+        newTimeRanges = JSON.parse(JSON.stringify(individualTimeRanges));
       }
       
-      debugLog('MBA66777: Setting individual time ranges:', newTimeRanges);
+      debugLog('MBAoi9uv43d: Setting individual time ranges:', newTimeRanges);
       setIndividualTimeRanges(newTimeRanges);
       
       // Send full object with individual day data
@@ -564,100 +412,67 @@ const TimeSelectionCard = ({
     }
   };
 
-  const handleTimeRangeSelectorUpdate = (timesData) => {
-    debugLog('MBA7799: TimeRangeSelector update:', timesData);
+  // Utility to get dates from dateRange or initialTimes
+  const getDates = () => {
+    let dates = [];
     
-    // Don't automatically treat midnight end time as overnight
-    const isServiceOvernight = selectedService?.is_overnight === true;
-    const hasExplicitOvernightFlag = timesData.isOvernightForced === true;
-    const isMidnightEndTime = timesData.endTime && timesData.endTime.hours === 0 && timesData.endTime.minutes === 0;
+    // Check if we have multiple individual dates from the booking data
+    const hasMultipleDays = initialTimes && initialTimes.dates && initialTimes.dates.length > 0;
     
-    // Only set isOvernightForced if service is overnight or explicitly set
-    // Don't set it just because end time is 00:00
-    const effectiveOvernightFlag = isServiceOvernight || (hasExplicitOvernightFlag && !isMidnightEndTime);
-    
-    debugLog('MBA7799: Determining overnight status:', {
-      isServiceOvernight,
-      hasExplicitOvernightFlag,
-      isMidnightEndTime,
-      effectiveOvernightFlag
-    });
-    
-    // Check if end time is before start time (except for midnight case)
-    if (timesData.startTime && timesData.endTime) {
-      const startTimeInMinutes = timesData.startTime.hours * 60 + timesData.startTime.minutes;
-      const endTimeInMinutes = timesData.endTime.hours * 60 + timesData.endTime.minutes;
+    if (hasMultipleDays) {
+      // Get dates from the initialTimes.dates for multiple-days selection
+      debugLog('MBAoi9uv43d: Using multiple individual dates from initialTimes:', initialTimes.dates);
+      dates = initialTimes.dates.map(dateObj => {
+        // Handle different date formats (string or object with date property)
+        if (typeof dateObj === 'string') {
+          return new Date(dateObj);
+        } else if (dateObj && dateObj.date) {
+          return new Date(dateObj.date);
+        } else {
+          return new Date(dateObj);
+        }
+      });
+    } else if (dateRange && dateRange.startDate && dateRange.endDate) {
+      // Generate array of dates between start and end for date range
+      debugLog('MBAoi9uv43d: Generating dates from dateRange:', dateRange);
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+      const current = new Date(startDate);
       
-      // Special case: Midnight (00:00) as end time is treated as end of day (24:00)
-      // So we only need to validate when end time is NOT midnight
-      if (!isMidnightEndTime && endTimeInMinutes <= startTimeInMinutes) {
-        debugLog('MBA7799: Invalid time selection from TimeRangeSelector - end time cannot be before start time', {
-          startTime: timesData.startTime,
-          endTime: timesData.endTime
-        });
-        // Don't update times if invalid
-        return;
+      while (current <= endDate) {
+        dates.push(new Date(current));
+        current.setDate(current.getDate() + 1);
       }
     }
     
-    handleOvernightTimeSelect(
-      timesData.startTime, 
-      timesData.endTime, 
-      effectiveOvernightFlag
-    );
+    return dates;
   };
-
-  // Track showIndividualDays changes
-  useEffect(() => {
-    debugLog('MBA66777: showIndividualDays changed to', showIndividualDays);
-  }, [showIndividualDays]);
-  
-  // Add a log at render time
-  debugLog('MBA66777: TimeSelectionCard rendering with showIndividualDays =', showIndividualDays);
-
-  // Add an effect to detect when hasIndividualTimes changes in initialTimes
-  useEffect(() => {
-    // Skip on first render since we handle that separately
-    if (!isInitialRender.current) {
-      const hasIndividualTimesFlag = initialTimes && initialTimes.hasIndividualTimes === true;
-      
-      // If hasIndividualTimes was explicitly set to false in initialTimes,
-      // update our local state to match
-      if (hasIndividualTimesFlag === false && showIndividualDays === true) {
-        debugLog('MBA66777: Detected hasIndividualTimes changed to false, updating local state');
-        setShowIndividualDays(false);
-      } else if (hasIndividualTimesFlag === true && showIndividualDays === false) {
-        debugLog('MBA66777: Detected hasIndividualTimes changed to true, updating local state');
-        setShowIndividualDays(true);
-      }
-    }
-  }, [initialTimes.hasIndividualTimes, showIndividualDays]);
 
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         {/* Only show default time range selector when not showing individual days */}
         {!showIndividualDays && (
-          <TimeRangeSelector
-            title={selectedService?.is_overnight || isOvernightForced ? `Time Range` : `Default Time Range`}
-            onTimeSelect={handleTimeRangeSelectorUpdate}
+          <NewTimeRangeSelector
+            onTimeSelect={handleDefaultTimeSelect}
             initialTimes={times}
-            showOvernightToggle={!selectedService?.is_overnight && !isOvernightForced}
-            dateRange={dateRange}
             is_overnight={selectedService?.is_overnight || times.isOvernightForced || isOvernightForced || false}
+            uniqueId="default-time-range"
+            dateRange={dateRange}
+            selectedDates={initialTimes.dates || []}
           />
         )}
 
         {/* Only show customize button if not an overnight service */}
         {!selectedService?.is_overnight && !isOvernightForced && (
-          <View style={[styles.customizeButtonContainer, { zIndex: 1 }]}>
+          <View style={styles.customizeButtonContainer}>
             <TouchableOpacity 
               style={styles.customizeButton}
               onPress={handleToggleIndividualDays}
               activeOpacity={0.7}
             >
               <MaterialIcons name="schedule" size={20} color={theme.colors.mainColors.main} />
-              <Text style={[styles.customizeButtonText]}>
+              <Text style={styles.customizeButtonText}>
                 {showIndividualDays ? 'Use Default Time Range' : 'Customize Individual Day Schedules'}
               </Text>
             </TouchableOpacity>
@@ -665,32 +480,55 @@ const TimeSelectionCard = ({
         )}
 
         {/* Only show individual day schedules if not an overnight service and the toggle is on */}
-        {showIndividualDays && !selectedService?.is_overnight && !isOvernightForced && renderIndividualTimeRanges()}
-
-        {/* Only show presets for non-overnight services when not in individual days mode */}
-        {!showIndividualDays && !selectedService?.is_overnight && !isOvernightForced && (
-          <View style={[styles.presetsContainer, { zIndex: 1 }]}>
-            <Text style={[styles.presetsTitle]}>Quick Presets</Text>
-            <View style={styles.presetButtons}>
-              <TouchableOpacity 
-                style={styles.presetButton}
-                onPress={() => handlePresetSelect('morning')}
-              >
-                <Text style={[styles.presetButtonText]}>9 AM - 12 PM</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.presetButton}
-                onPress={() => handlePresetSelect('afternoon')}
-              >
-                <Text style={[styles.presetButtonText]}>1 PM - 5 PM</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.presetButton}
-                onPress={() => handlePresetSelect('fullDay')}
-              >
-                <Text style={[styles.presetButtonText]}>9 AM - 5 PM</Text>
-              </TouchableOpacity>
-            </View>
+        {showIndividualDays && !selectedService?.is_overnight && !isOvernightForced && (
+          <View style={styles.individualDaysContainer}>
+            <Text style={styles.sectionHeader}>Individual Day Schedules</Text>
+            <ScrollView>
+              {getDates().map((date, index) => {
+                const dateKey = date.toISOString().split('T')[0];
+                
+                // Get existing time data for this date or use default with deep copying
+                let timeData;
+                
+                // Check if we have a specific time range for this date in initialTimes
+                if (initialTimes && initialTimes[dateKey]) {
+                  const parsedStartTime = parseTimeValue(initialTimes[dateKey].startTime);
+                  const parsedEndTime = parseTimeValue(initialTimes[dateKey].endTime);
+                  
+                  timeData = {
+                    startTime: parsedStartTime || JSON.parse(JSON.stringify(times.startTime)),
+                    endTime: parsedEndTime || JSON.parse(JSON.stringify(times.endTime)),
+                    isOvernightForced: !!initialTimes[dateKey].isOvernightForced
+                  };
+                  
+                  debugLog(`MBAoi9uv43d: Found specific time data for date ${dateKey} in initialTimes`);
+                } 
+                // Otherwise check individualTimeRanges which is our local state
+                else if (individualTimeRanges && individualTimeRanges[dateKey]) {
+                  timeData = JSON.parse(JSON.stringify(individualTimeRanges[dateKey]));
+                  debugLog(`MBAoi9uv43d: Using time from individualTimeRanges for date ${dateKey}`);
+                } 
+                // If nothing found, use default times
+                else {
+                  timeData = { 
+                    startTime: JSON.parse(JSON.stringify(times.startTime)),
+                    endTime: JSON.parse(JSON.stringify(times.endTime)),
+                    isOvernightForced: times.isOvernightForced
+                  };
+                  debugLog(`MBAoi9uv43d: Using default times for date ${dateKey}`);
+                }
+                
+                return (
+                  <DayTimeSelector
+                    key={`day-${dateKey}`}
+                    date={date}
+                    initialTimes={timeData}
+                    onTimeChange={handleIndividualDayTimeSelect}
+                    is_overnight={selectedService?.is_overnight || false}
+                  />
+                );
+              })}
+            </ScrollView>
           </View>
         )}
       </View>
@@ -702,19 +540,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    position: 'relative',
-    zIndex: 3000,
   },
   card: {
     backgroundColor: theme.colors.background,
     borderRadius: 12,
-    position: 'relative',
-    zIndex: 3000,
   },
   customizeButtonContainer: {
     marginBottom: 24,
-    position: 'relative',
-    zIndex: 2800,
+    paddingHorizontal: 16,
   },
   customizeButton: {
     flexDirection: 'row',
@@ -726,8 +559,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.mainColors.main,
-    position: 'relative',
-    zIndex: 2800,
   },
   customizeButtonText: {
     color: theme.colors.mainColors.main,
@@ -735,66 +566,16 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
     textAlign: 'center',
   },
-  presetsContainer: {
-    gap: 12,
-    position: 'relative',
-    zIndex: 2700,
-  },
-  presetsTitle: {
-    fontSize: theme.fontSizes.medium,
-    fontFamily: theme.fonts.regular.fontFamily,
-    color: theme.colors.text,
-  },
-  presetButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    alignSelf: 'flex-start',
-    position: 'relative',
-    zIndex: 2700,
-  },
-  presetButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: theme.colors.modernBorder,
-  },
-  presetButtonText: {
-    color: theme.colors.text,
-    fontSize: theme.fontSizes.smallMedium,
-    fontFamily: theme.fonts.regular.fontFamily,
-    textAlign: 'center',
-  },
   individualDaysContainer: {
     gap: 12,
-    position: 'relative',
-    zIndex: 3100,
+    marginBottom: 16,
   },
   sectionHeader: {
     fontSize: theme.fontSizes.medium,
     fontFamily: theme.fonts.regular.fontFamily,
     color: theme.colors.text,
-  },
-  dateContainer: {
-    marginBottom: 8,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.modernBorder,
-    borderRadius: 8,
+    marginBottom: 12,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    position: 'relative',
-    zIndex: 3000,
-  },
-  dateDivider: {
-    height: 1,
-    backgroundColor: theme.colors.modernBorder,
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 0,
   },
 });
 
