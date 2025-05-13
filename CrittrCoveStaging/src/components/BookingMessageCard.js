@@ -41,6 +41,7 @@ const BookingMessageCard = ({
   const userTimezone = timeSettings?.timezone || 'US/Mountain';
   const [approvalModalVisible, setApprovalModalVisible] = useState(false);
   const [safeInitialData, setSafeInitialData] = useState(null);
+  const [showAllDates, setShowAllDates] = useState(false); // New state for expanded/collapsed dates
   
   // Create safe data on component load
   useEffect(() => {
@@ -308,6 +309,21 @@ const BookingMessageCard = ({
     }
   };
 
+  // Function to toggle dates expansion
+  const toggleDatesExpansion = () => {
+    setShowAllDates(!showAllDates);
+  };
+
+  // Determine if we need to show the "Show More" button
+  const occurrences = data.occurrences || [];
+  const hasMoreDates = occurrences.length > 3;
+  
+  // Get visible occurrences based on expanded state
+  const visibleOccurrences = showAllDates ? occurrences : occurrences.slice(0, 3);
+  
+  // Count how many more dates are hidden
+  const hiddenDatesCount = Math.max(0, occurrences.length - 3);
+
   return (
     <View style={getCardStyle()}>
       {/* Green bar on left or right side based on sender */}
@@ -355,13 +371,27 @@ const BookingMessageCard = ({
 
           <View style={styles.datesSection}>
             {type !== 'request_changes' ? (
-              <Text style={styles.label}>Dates:</Text>
+              <View style={styles.datesSectionHeader}>
+                <Text style={styles.label}>Dates:</Text>
+                {hasMoreDates && (
+                  <Text style={styles.datesCount}>({occurrences.length} total)</Text>
+                )}
+              </View>
             ) : (
               null
             )}
-            {(data.occurrences || []).map((occ, index) => {
+            {visibleOccurrences.map((occ, index) => {
+              const isLastVisibleItem = index === visibleOccurrences.length - 1;
+              const showBottomBorder = !(!showAllDates && isLastVisibleItem && hasMoreDates);
+              
               return (
-                <View key={index} style={styles.occurrenceContainer}>
+                <View 
+                  key={index} 
+                  style={[
+                    styles.occurrenceContainer,
+                    showBottomBorder ? null : { borderBottomWidth: 0 }
+                  ]}
+                >
                   <View style={styles.occurrenceItem}>
                     <Text style={styles.dateTimeText}>
                       {formatOccurrenceDateRange(occ)}
@@ -378,6 +408,23 @@ const BookingMessageCard = ({
                 </View>
               );
             })}
+
+            {/* Show more/less dates button */}
+            {hasMoreDates && (
+              <TouchableOpacity 
+                style={styles.showMoreButton} 
+                onPress={toggleDatesExpansion}
+              >
+                <Text style={styles.showMoreText}>
+                  {showAllDates ? "Show Fewer Dates" : `Show ${hiddenDatesCount} More Date${hiddenDatesCount !== 1 ? 's' : ''}`}
+                </Text>
+                <MaterialCommunityIcons 
+                  name={showAllDates ? "chevron-up" : "chevron-down"} 
+                  size={18} 
+                  color={theme.colors.primary} 
+                />
+              </TouchableOpacity>
+            )}
           </View>
 
           {isChangeRequest && (
@@ -563,6 +610,16 @@ const styles = StyleSheet.create({
   datesSection: {
     gap: 4,
   },
+  datesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  datesCount: {
+    fontSize: 14,
+    color: theme.colors.placeholder,
+    marginLeft: 8,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
   occurrenceContainer: {
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border + '40',
@@ -683,6 +740,31 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
     // fontStyle: 'italic',
+  },
+  showMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    marginTop: 8,
+    marginBottom: 4,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.primary + '40',
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  showMoreText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    marginRight: 5,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 
