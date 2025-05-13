@@ -34,7 +34,7 @@ CURSOR PROJECT GUIDELINES
 | From API  | Receive UTC -> Convert UTC to user TZ using time_utils.js   | Send UTC date times |
 
 2. Use `formatDateTimeRangeFromUTC` for ranges; otherwise `formatFromUTC`.
-3. 
+3. Any new functions that deal with date or time formatting should be coded in time_utils.js
 
 
 ---

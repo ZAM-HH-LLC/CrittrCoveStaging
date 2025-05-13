@@ -952,9 +952,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                           </View>
                         ) : (
                           <View>
-                            <Text style={styles.rateLabel}>Base Rate ({unitOfTime})</Text>
+                            <Text style={styles.rateLabel}>Base Rate</Text>
                             <Text style={styles.breakdownCalculation}>
-                              {formatCurrency(occurrence.rates.base_rate)} × {multiple} = {formatCurrency(occurrence.base_total)}
+                              {formatCurrency(occurrence.rates.base_rate)} ({unitOfTime}) × {multiple} = {formatCurrency(occurrence.base_total)}
                             </Text>
                           </View>
                         )}

@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import { TutorialContext } from '../context/TutorialContext';
 import CrossPlatformView from '../components/CrossPlatformView';
 import { theme } from '../styles/theme';
@@ -14,6 +14,7 @@ import ProfessionalServiceCard from '../components/ProfessionalServiceCard';
 import { getProfessionalServices } from '../api/API';
 import BookingCard from '../components/BookingCard';
 import TutorialModal from '../components/TutorialModal';
+import BookingApprovalModal from '../components/BookingApprovalModal';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -41,6 +42,10 @@ const Dashboard = ({ navigation }) => {
     subscription_plan: 0
   });
 
+  // Add state for the BookingApprovalModal
+  const [bookingModalVisible, setBookingModalVisible] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+
   const isLargeScreen = screenWidth > 900;
   const isMobile = screenWidth <= 900;
   const isProfessional = userRole === 'professional';
@@ -48,15 +53,38 @@ const Dashboard = ({ navigation }) => {
   // Filter bookings based on active filter
   const filteredBookings = bookings.filter(booking => {
     const now = new Date();
-    const bookingDate = new Date(booking.start_date);
+    let bookingDate = null;
+    
+    // Ensure we have a valid date before parsing
+    if (booking.start_date) {
+      try {
+        bookingDate = new Date(booking.start_date);
+        // Check if date is valid
+        if (isNaN(bookingDate.getTime())) {
+          debugLog("MBA5677: Invalid booking date", booking.start_date);
+          return false;
+        }
+      } catch (error) {
+        debugLog("MBA5677: Error parsing booking date", { date: booking.start_date, error });
+        return false;
+      }
+    }
+    
+    debugLog("MBA5677: Filtering booking", { 
+      id: booking.booking_id || booking.id,
+      date: booking.start_date || booking.date,
+      parsedDate: bookingDate ? bookingDate.toISOString() : null,
+      now: now.toISOString(),
+      filter: activeFilter
+    });
     
     switch (activeFilter) {
       case 'upcoming':
-        return bookingDate > now;
+        return bookingDate && bookingDate > now;
       case 'active':
-        return bookingDate <= now && !booking.completed;
+        return bookingDate && bookingDate <= now && !booking.completed;
       case 'past':
-        return bookingDate < now && booking.completed;
+        return bookingDate && bookingDate < now && booking.completed;
       default:
         return true;
     }
@@ -167,11 +195,52 @@ const Dashboard = ({ navigation }) => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (is_DEBUG) {
-        console.log('MBA5678 Dashboard response:', response.data);
+      debugLog('MBA5677: Dashboard response data', response.data);
+      
+      // Log the structure of the first booking for debugging
+      if (response.data && response.data.upcoming_bookings && response.data.upcoming_bookings.length > 0) {
+        const firstBooking = response.data.upcoming_bookings[0];
+        debugLog('MBA5677: First booking complete structure', firstBooking);
+        
+        // Log all the keys in the booking object to see available fields
+        debugLog('MBA5677: First booking keys', Object.keys(firstBooking));
+        
+        // Explicitly check for client_name
+        debugLog('MBA5677: First booking client_name field', {
+          client_name: firstBooking.client_name,
+          owner_name: firstBooking.owner_name,
+          client_name_exists: 'client_name' in firstBooking
+        });
       }
 
-      setBookings(response.data.upcoming_bookings || []);
+      // Process the incoming bookings to ensure dates are properly formatted
+      const processedBookings = (response.data.upcoming_bookings || []).map(booking => {
+        debugLog('MBA5677: Processing booking', booking);
+        
+        // Make sure we have a valid booking object
+        if (!booking) {
+          debugLog('MBA5677: Null booking received');
+          return null;
+        }
+        
+        // Normalize date format if needed
+        let normalizedDate = booking.start_date;
+        if (normalizedDate && normalizedDate.includes(' ')) {
+          // Handle if the date includes time
+          normalizedDate = normalizedDate.split(' ')[0];
+        }
+        
+        // Return a properly formatted booking object with the client_name explicitly mapped
+        return {
+          ...booking,
+          start_date: normalizedDate, // Ensure date is in YYYY-MM-DD format
+          client_name: booking.client_name || booking.owner_name // Ensure client_name is set
+        };
+      }).filter(booking => booking !== null); // Remove any null bookings
+
+      debugLog('MBA5677: Processed bookings', processedBookings);
+      setBookings(processedBookings);
+      
       setOnboardingProgress(response.data.onboarding_progress || {
         profile_complete: 0,
         has_bank_account: false,
@@ -220,6 +289,35 @@ const Dashboard = ({ navigation }) => {
   useEffect(() => {
     fetchDashboardData();
   }, [userRole, is_prototype]);
+
+  // Add useEffect to check for active bookings and select the active tab if there are any
+  useEffect(() => {
+    if (!isLoading && bookings.length > 0) {
+      const now = new Date();
+      
+      // Check if there are any active bookings (date <= now && !completed)
+      const hasActiveBookings = bookings.some(booking => {
+        try {
+          const bookingDate = booking.start_date ? new Date(booking.start_date) : null;
+          return bookingDate && bookingDate <= now && !booking.completed;
+        } catch (error) {
+          return false;
+        }
+      });
+      
+      debugLog("MBA5677: Checking for active bookings", { 
+        hasActiveBookings, 
+        bookingsCount: bookings.length,
+        currentActiveFilter: activeFilter
+      });
+      
+      // If there are active bookings, set the active filter to 'active'
+      if (hasActiveBookings && activeFilter !== 'active') {
+        debugLog("MBA5677: Setting active filter to 'active' due to active bookings");
+        setActiveFilter('active');
+      }
+    }
+  }, [bookings, isLoading]);
 
   // TODO: Fetch owner requests from the backend
   const ownerRequests = [
@@ -459,6 +557,19 @@ const Dashboard = ({ navigation }) => {
     </View>
   );
 
+  // Handle opening the booking modal
+  const handleViewBookingDetails = (bookingId) => {
+    setSelectedBookingId(bookingId);
+    setBookingModalVisible(true);
+    debugLog("MBA5677: Opening booking modal for ID:", bookingId);
+  };
+
+  // Handle closing the booking modal
+  const handleCloseBookingModal = () => {
+    setBookingModalVisible(false);
+    setSelectedBookingId(null);
+  };
+
   const renderBookings = () => (
     <View style={styles.bookingsContainer}>
       {isLoading ? (
@@ -466,24 +577,38 @@ const Dashboard = ({ navigation }) => {
           <ActivityIndicator size="small" color={colors.primary} />
         </View>
       ) : filteredBookings.length > 0 ? (
-        filteredBookings.map((booking) => (
-          <BookingCard
-            key={is_prototype ? booking.id : booking.booking_id}
-            booking={{
-              id: is_prototype ? booking.id : booking.booking_id,
-              ownerName: is_prototype ? booking.owner : booking.owner_name,
-              serviceName: is_prototype ? booking.service : booking.service_type,
-              date: is_prototype ? booking.date : booking.start_date,
-              time: is_prototype ? booking.time : booking.start_time,
-              status: is_prototype ? booking.status : booking.status,
-              pets: is_prototype ? [{ name: booking.pet }] : booking.pets
-            }}
-            type="professional"
-            onViewDetails={() => navigateToFrom(navigation, 'BookingDetails', 'Dashboard', { 
-              bookingId: is_prototype ? booking.id : booking.booking_id 
-            })}
-          />
-        ))
+        filteredBookings.map((booking) => {
+          debugLog('MBA5677: Rendering booking', { 
+            id: is_prototype ? booking.id : booking.booking_id,
+            date: is_prototype ? booking.date : booking.start_date,
+            time: is_prototype ? booking.time : booking.start_time,
+            client_name: is_prototype ? booking.owner : booking.client_name,
+            owner_name: is_prototype ? booking.owner : booking.owner_name
+          });
+          
+          const bookingId = is_prototype ? booking.id : booking.booking_id;
+          const clientName = is_prototype ? booking.owner : (booking.client_name || booking.owner_name);
+          
+          debugLog('MBA5677: Using client name', clientName);
+          
+          return (
+            <BookingCard
+              key={bookingId}
+              booking={{
+                id: bookingId,
+                client_name: clientName,
+                ownerName: clientName, // Keep for backward compatibility
+                serviceName: is_prototype ? booking.service : booking.service_type,
+                date: is_prototype ? booking.date : booking.start_date,
+                time: is_prototype ? booking.time : booking.start_time,
+                status: is_prototype ? booking.status : booking.status,
+                pets: is_prototype ? [{ name: booking.pet }] : booking.pets
+              }}
+              type="professional"
+              onViewDetails={() => handleViewBookingDetails(bookingId)}
+            />
+          );
+        })
       ) : (
         <View style={styles.emptyStateContainer}>
           <MaterialCommunityIcons name="calendar" size={48} color={theme.colors.textSecondary} />
@@ -592,6 +717,16 @@ const Dashboard = ({ navigation }) => {
         {renderBookings()}
         {renderServices()}
       </ScrollView>
+      
+      {/* Custom BookingApprovalModal with modified title */}
+      <BookingApprovalModal
+        visible={bookingModalVisible}
+        onClose={handleCloseBookingModal}
+        bookingId={selectedBookingId}
+        isProfessional={isProfessional}
+        modalTitle="Review Details" // Custom title for dashboard view
+        hideButtons={true} // Hide action buttons when viewed from dashboard
+      />
       
       {isTutorialVisible && stepData?.screen === 'Dashboard' && (
         <TutorialModal

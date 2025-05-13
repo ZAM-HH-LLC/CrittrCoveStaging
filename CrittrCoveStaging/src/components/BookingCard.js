@@ -3,7 +3,7 @@ import React, { useContext, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import { convertDateTimeFromUTC, formatDate } from '../utils/time_utils';
 
 const getStatusInfo = (status) => {
@@ -63,25 +63,53 @@ const getStatusInfo = (status) => {
 
 const BookingCard = ({ booking, type, onViewDetails }) => {
   const { id, status, date, time, serviceName } = booking;
-  const name = type === 'professional' ? booking.ownerName : booking.professionalName;
+  const name = type === 'professional' ? booking.client_name : booking.professionalName;
   const statusInfo = getStatusInfo(status);
   const pets = booking.pets || [];
   const { screenWidth, timeSettings } = useContext(AuthContext);
   const isMobile = screenWidth < 600;
   const [isHovered, setIsHovered] = useState(false);
 
+  // Add debugging for incoming date
+  debugLog("MBA5677: Original booking date/time", { date, time });
+
   // Convert time from UTC to user's timezone if needed
   const convertedDateTime = timeSettings?.timezone !== 'UTC' && date && time
-    ? convertDateTimeFromUTC(date, time, timeSettings.timezone, timeSettings.use_military_time)
+    ? convertDateTimeFromUTC(date, time, timeSettings?.timezone || 'America/Denver', timeSettings?.use_military_time || false)
     : date && time ? { date, time } : null;
 
+  // Format the date for display using the moment-based approach
+  const formattedDate = convertedDateTime?.date 
+    ? (() => {
+        debugLog("MBA5677: Formatting with direct date", convertedDateTime.date);
+        const parts = convertedDateTime.date.split('-');
+        if (parts.length === 3) {
+          const [year, month, day] = parts;
+          // Create date object directly
+          const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+          if (!isNaN(dateObj.getTime())) {
+            const monthName = dateObj.toLocaleString('default', { month: 'short' });
+            debugLog("MBA5677: Formatted date parts", { year, month, day, monthName, day: dateObj.getDate() });
+            return `${monthName} ${dateObj.getDate()}`;
+          }
+        }
+        // Fallback to original date if parsing fails
+        return convertedDateTime.date;
+      })()
+    : 'No date selected';
+    
   const convertedTime = convertedDateTime?.time;
-  const convertedDate = convertedDateTime?.date ? formatDate(convertedDateTime.date) : 'No date selected';
 
-  console.log('MBA134njo0vh03 convertedTime: ', convertedTime);
-  console.log('MBA134njo0vh03 convertedDate: ', convertedDate);
+  debugLog("MBA5677: Converted date/time", { 
+    formattedDate,
+    convertedTime,
+    convertedDateTime,
+    timezone: timeSettings?.timezone,
+    originalDate: date,
+    originalTime: time
+  });
+
   const getMetaText = () => {
-    // const dateText = date ? formatDate(date) : 'No date selected';
     const timeText = convertedTime || 'No time selected';
     const serviceText = serviceName || 'No service selected';
 
@@ -90,15 +118,15 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
         <View style={styles.mobileMetaInfo}>
           <View style={styles.mobileMetaRow}>
             <View style={styles.metaItemContainer}>
-              <MaterialCommunityIcons name="calendar" size={16} color={theme.colors.mybookings.metaText} />
-              <Text style={styles.metaText}>{convertedDate}</Text>
+              <MaterialCommunityIcons name="calendar" size={14} color={theme.colors.mybookings.metaText} />
+              <Text style={styles.metaText}>{formattedDate}</Text>
             </View>
             <View style={styles.metaItemContainer}>
-              <MaterialCommunityIcons name="clock-outline" size={16} color={theme.colors.mybookings.metaText} />
+              <MaterialCommunityIcons name="clock-outline" size={14} color={theme.colors.mybookings.metaText} />
               <Text style={styles.metaText}>{timeText}</Text>
             </View>
             <View style={styles.metaItemContainer}>
-              <MaterialCommunityIcons name="paw" size={16} color={theme.colors.mybookings.metaText} />
+              <MaterialCommunityIcons name="briefcase-outline" size={14} color={theme.colors.mybookings.metaText} />
               <Text style={styles.metaText}>{serviceText}</Text>
             </View>
           </View>
@@ -110,7 +138,7 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
       <View style={styles.metaInfo}>
         <View style={styles.metaItemContainer}>
           <MaterialCommunityIcons name="calendar" size={16} color={theme.colors.mybookings.metaText} />
-          <Text style={styles.metaText}>{convertedDate}</Text>
+          <Text style={styles.metaText}>{formattedDate}</Text>
         </View>
         <Text style={styles.metaText}> • </Text>
         <View style={styles.metaItemContainer}>
@@ -119,7 +147,7 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
         </View>
         <Text style={styles.metaText}> • </Text>
         <View style={styles.metaItemContainer}>
-          <MaterialCommunityIcons name="paw" size={16} color={theme.colors.mybookings.metaText} />
+          <MaterialCommunityIcons name="briefcase-outline" size={16} color={theme.colors.mybookings.metaText} />
           <Text style={styles.metaText}>{serviceText}</Text>
         </View>
       </View>
@@ -148,19 +176,37 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
           <View style={[styles.contentContainer, isMobile && styles.mobileContentContainer]}>
             <View style={[styles.headerContainer, isMobile && styles.mobileHeaderContainer]}>
               <View style={styles.nameAndPets}>
-                <Text style={styles.name}>{name}</Text>
-                <Text style={styles.petInfo}>
-                  {pets.length > 0 ? pets.map(pet => pet.name).join(', ') : 'No pets selected'}
-                </Text>
+                <View style={[styles.clientContainer, isMobile && styles.mobileClientContainer]}>
+                  <MaterialCommunityIcons 
+                    name="account" 
+                    size={isMobile ? 16 : 18} 
+                    color={theme.colors.mybookings.ownername} 
+                  />
+                  <Text style={[styles.name, isMobile && styles.mobileName]}>{name}</Text>
+                </View>
+                <View style={[styles.petContainer, isMobile && styles.mobilePetContainer]}>
+                  <MaterialCommunityIcons name="paw" size={isMobile ? 14 : 14} color={theme.colors.mybookings.metaText} />
+                  <Text style={[styles.petInfo, isMobile && styles.mobilePetInfo]}>
+                    {pets.length > 0 ? pets.map(pet => pet.name).join(', ') : 'No pets selected'}
+                  </Text>
+                </View>
               </View>
-              <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
+              <View style={[
+                styles.statusBadge, 
+                { backgroundColor: statusInfo.bgColor },
+                isMobile && styles.mobileStatusBadge
+              ]}>
                 <View style={styles.statusContent}>
                   <MaterialCommunityIcons 
                     name={statusInfo.icon} 
-                    size={16} 
+                    size={isMobile ? 12 : 16} 
                     color={statusInfo.textColor}
                   />
-                  <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
+                  <Text style={[
+                    styles.statusText, 
+                    { color: statusInfo.textColor },
+                    isMobile && styles.mobileStatusText
+                  ]}>
                     {statusInfo.text}
                   </Text>
                 </View>
@@ -268,17 +314,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  clientContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
   name: {
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.mybookings.ownerName,
-    marginBottom: 8,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  petContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   petInfo: {
     fontSize: 14,
     color: '#888975',
-    // marginBottom: 4,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   mobileDivider: {
@@ -322,6 +377,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  mobileClientContainer: {
+    marginBottom: 4,
+  },
+  mobileName: {
+    fontSize: 15,
+    color: theme.colors.mybookings.ownerName,
+  },
+  mobilePetContainer: {
+    marginBottom: 2,
+  },
+  mobilePetInfo: {
+    fontSize: 13,
+    color: theme.colors.mybookings.metaText,
+  },
+  mobileStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  mobileStatusText: {
+    fontSize: 10,
   },
 });
 

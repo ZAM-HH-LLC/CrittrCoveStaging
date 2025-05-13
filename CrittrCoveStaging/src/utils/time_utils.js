@@ -10,13 +10,46 @@ import { parseISO } from 'date-fns';
  */
 export const formatDate = (dateString) => {
     if (!dateString) return '';
-    console.log('MBA134njo0vh03 dateString: ', dateString);
-    // Parse the date string directly without timezone conversion
-    const date = parse(dateString, 'yyyy-MM-dd', new Date());
-    const month = date.toLocaleString('default', { month: 'short' });
-    const day = date.getDate();
-    console.log('MBA134njo0vh03 date/month/day: ', date, month, day);
-    return `${month} ${day}`;
+    
+    debugLog('MBA5677: Formatting date input', dateString);
+    
+    try {
+        // First try to parse as ISO date
+        const parsedDate = parseISO(dateString);
+        
+        // Check if the parsed date is valid
+        if (!isNaN(parsedDate.getTime())) {
+            const month = parsedDate.toLocaleString('default', { month: 'short' });
+            const day = parsedDate.getDate();
+            debugLog('MBA5677: Parsed as ISO date', { parsedDate, month, day });
+            return `${month} ${day}`;
+        }
+        
+        // Fallback to parse as YYYY-MM-DD format
+        const date = parse(dateString, 'yyyy-MM-dd', new Date());
+        
+        // Check if the parsed date is valid
+        if (!isNaN(date.getTime())) {
+            const month = date.toLocaleString('default', { month: 'short' });
+            const day = date.getDate();
+            debugLog('MBA5677: Parsed with date-fns', { date, month, day });
+            return `${month} ${day}`;
+        }
+        
+        // If both parsing methods failed, try moment
+        const momentDate = moment(dateString);
+        if (momentDate.isValid()) {
+            const formatted = momentDate.format('MMM D');
+            debugLog('MBA5677: Parsed with moment', { momentDate, formatted });
+            return formatted;
+        }
+        
+        debugLog('MBA5677: Failed to parse date', dateString);
+        return dateString; // Return original if all parsing fails
+    } catch (error) {
+        debugLog('MBA5677: Error formatting date', { dateString, error });
+        return dateString; // Return original on error
+    }
 };
 
 /**
@@ -108,69 +141,61 @@ export const convertToUTC = (date, time, fromTimezone) => {
  */
 export const convertDateTimeFromUTC = (date, time, timezone, useMilitaryTime = false) => {
     try {
-        console.log('MBA134njo0vh03 Converting UTC to local:', { date, time, timezone, useMilitaryTime });
+        debugLog('MBA5677: Converting UTC to local:', { date, time, timezone, useMilitaryTime });
         
-        // Parse UTC date and time
-        const [year, month, day] = date.split('-').map(Number);
-        const [hours, minutes] = time.split(':').map(Number);
+        // Ensure we have valid inputs
+        if (!date || !time) {
+            debugLog('MBA5677: Invalid input for conversion', { date, time });
+            return { date, time };
+        }
         
-        // Create UTC date string with Z suffix to indicate UTC
-        const utcDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00Z`;
+        // Parse UTC date and time properly
+        let utcDate;
         
-        // Create Date object from UTC string
-        const utcDate = new Date(utcDateStr);
+        // Handle different time formats
+        let formattedTime = time;
+        if (time.includes('.')) {
+            formattedTime = time.split('.')[0]; // Remove milliseconds if present
+        }
         
-        console.log('MBA134njo0vh03 UTC Date created:', utcDate.toISOString());
-
-        // For Mountain timezone, we need to check if it's daylight saving time
-        // March 5th, 2025 is during daylight saving time
-        const isDST = true; // Since we know this is March 5th, 2025, it's DST
-        const effectiveTimezone = timezone === 'US/Mountain' && isDST ? 'America/Denver' : timezone;
-
-        // Get the timezone offset in minutes
-        const offsetMinutes = getTimezoneOffset(effectiveTimezone, utcDate);
-        console.log('MBA134njo0vh03 Timezone offset in minutes:', offsetMinutes);
-
-        // For Mountain time during DST, we need to add an hour to the offset
-        const adjustedOffset = timezone === 'US/Mountain' && isDST ? offsetMinutes + 60 : offsetMinutes;
-        console.log('MBA134njo0vh03 Adjusted offset in minutes:', adjustedOffset);
-
-        // Create a new date with the adjusted offset applied
-        const localDate = new Date(utcDate.getTime() + adjustedOffset * 60000);
+        // Create a proper ISO string
+        const isoString = `${date}T${formattedTime}${formattedTime.includes('Z') ? '' : 'Z'}`;
+        debugLog('MBA5677: Created ISO string for UTC date', isoString);
         
-        // Format the local date and time based on military time preference
-        const localDateStr = format(localDate, 'yyyy-MM-dd');
-        const localTimeStr = format(localDate, useMilitaryTime ? 'HH:mm' : 'h:mm a');
-
-        console.log('MBA134njo0vh03 Date conversion details:', {
-            original: {
-                utc: `${date} ${time}`,
-                utcDate: utcDate.toISOString()
-            },
-            conversion: {
-                timezone,
-                effectiveTimezone,
-                isDST,
-                offsetMinutes,
-                adjustedOffset,
-                localDate: localDate.toISOString(),
-                localDateStr,
-                localTimeStr,
-                useMilitaryTime
-            },
-            result: {
-                date: localDateStr,
-                time: localTimeStr
-            }
+        // Create Date object
+        utcDate = new Date(isoString);
+        
+        // Verify date is valid
+        if (isNaN(utcDate.getTime())) {
+            debugLog('MBA5677: Invalid date created from input', { date, time, utcDate });
+            return { date, time };
+        }
+        
+        debugLog('MBA5677: Valid UTC Date created:', utcDate.toISOString());
+        
+        // Convert to user's timezone using moment for reliability
+        const utcMoment = moment.utc(utcDate);
+        const localMoment = utcMoment.tz(timezone || 'UTC');
+        
+        // Format the local date and time
+        const localDateStr = localMoment.format('YYYY-MM-DD');
+        const localTimeStr = localMoment.format(useMilitaryTime ? 'HH:mm' : 'h:mm A');
+        
+        debugLog('MBA5677: Date conversion result:', {
+            input: { date, time, timezone },
+            utc: utcDate.toISOString(),
+            utcMoment: utcMoment.format(),
+            localMoment: localMoment.format(),
+            output: { date: localDateStr, time: localTimeStr }
         });
-
+        
         return {
             date: localDateStr,
             time: localTimeStr
         };
     } catch (error) {
-        console.error('Error in convertDateTimeFromUTC:', error);
-        throw error;
+        debugLog('MBA5677: Error in convertDateTimeFromUTC:', error, { date, time, timezone });
+        return { date, time }; // Return original on error
     }
 };
 

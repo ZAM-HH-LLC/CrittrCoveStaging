@@ -28,7 +28,9 @@ const BookingApprovalModal = ({
   onRequestChangesSuccess,
   onRequestChangesError,
   initialData = null,
-  isProfessional = true
+  isProfessional = true,
+  modalTitle = "Booking Approval Request",
+  hideButtons = false
 }) => {
   const { screenWidth } = useContext(AuthContext);
   const isDesktop = screenWidth > 768;
@@ -397,7 +399,7 @@ const BookingApprovalModal = ({
 
   // Footer with action buttons
   const renderFooter = () => {
-    if (showChangeRequestInput) {
+    if (hideButtons || showChangeRequestInput) {
       return null;
     }
     
@@ -436,9 +438,9 @@ const BookingApprovalModal = ({
           styles.container, 
           isDesktop ? styles.desktopContainer : {}
         ]}>
-          {/* Header */}
+          {/* Header with customizable title */}
           <View style={styles.header}>
-            <Text style={styles.title}>Booking Approval Request</Text>
+            <Text style={styles.title}>{modalTitle}</Text>
             <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
             </TouchableOpacity>

@@ -1113,7 +1113,8 @@ const ProfileInfoTab = ({
             </View>
 
             {/* Show either Home & Facilities (for owners) or Insurance (for professionals) */}
-            {isProfessional ? renderInsuranceSection() : renderFacilitiesSection()}
+            {/* TODO: UNCOMMONT THIS SECTION after mvp launch and implementation of facilities and insurance */}
+            {/* {isProfessional ? renderInsuranceSection() : renderFacilitiesSection()} */}
 
             {/* TODO: UNCOMMONT THIS SECTION
             Portfolio Photos Section - comment this out for now
