@@ -50,7 +50,7 @@ ALLOWED_IMAGE_TYPES = [
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-01_-+_6(0#!lg5z^7(y!a-1rf!3bemc!4$+zcuz73p^=!bf@^x"
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -329,9 +329,6 @@ CORS_ALLOW_HEADERS = [
 
 # Django Channels
 ASGI_APPLICATION = "zenexotics_backend.asgi.application"
-
-# In settings.py
-SENDGRID_API_KEY = 'SG.1234567890'
 
 # Channel Layers
 CHANNEL_LAYERS = {
