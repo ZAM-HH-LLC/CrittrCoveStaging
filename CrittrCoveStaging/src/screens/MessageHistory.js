@@ -416,11 +416,15 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   },
   mobileHeader: {
     width: '100%',
-    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
     position: 'relative',
     zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
   },
   mobileContent: {
     flex: 1,
@@ -448,6 +452,8 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     position: 'relative',
     paddingVertical: 16,
     paddingHorizontal: 8,
+    width: '100%',
+    minHeight: 60,
   },
   mobileHeaderName: {
     fontSize: 18,
@@ -455,15 +461,19 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     color: theme.colors.text,
     textAlign: 'center',
     fontFamily: theme.fonts.header.fontFamily,
+    flexWrap: 'wrap',
+    maxWidth: '70%',
   },
   mobileHeaderNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexWrap: 'wrap',
   },
   backArrow: {
     position: 'absolute',
     left: 16,
+    zIndex: 10,
     padding: 8,
   },
   bookingRequestCard: {
@@ -706,6 +716,17 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center',
     marginBottom: 4,
+  },
+  mobileEditDraftButton: {
+    marginRight: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surface,
+    minWidth: 55,
+    alignSelf: 'flex-start',
   },
 });
 
@@ -2771,7 +2792,10 @@ const MessageHistory = ({ navigation, route }) => {
   };
 
   const renderMobileHeader = () => (
-    <View style={styles.mobileHeader}>
+    <View style={[
+      styles.mobileHeader,
+      { backgroundColor: theme.colors.surfaceContrast }  // Updated to use surfaceContrast
+    ]}>
       <View style={styles.mobileHeaderContent}>
         <TouchableOpacity 
           style={styles.backArrow}
@@ -2788,35 +2812,34 @@ const MessageHistory = ({ navigation, route }) => {
           <Text style={styles.mobileHeaderName}>
             {selectedConversationData?.name || selectedConversationData?.other_user_name}
           </Text>
-          {/* TODO: Add back after MVP
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity onPress={handleForceReconnect}>
-              {selectedConversationData?.other_participant_online ? (
-                <Badge
-                  size={8}
-                  style={{
-                    backgroundColor: '#4CAF50', // Green for online
-                    marginLeft: 4,
-                    alignSelf: 'center'
-                  }}
-                />
-              ) : (
-                <Badge
-                  size={8}
-                  style={{
-                    backgroundColor: '#F44336', // Red for offline
-                    marginLeft: 4,
-                    alignSelf: 'center'
-                  }}
-                />
-              )}
-            </TouchableOpacity>
-            
-            {isUsingFallback && (
-              <Text style={{ fontSize: 10, color: '#FFC107', marginLeft: 4 }}>Fallback</Text>
-            )} 
-          </View>*/}
         </View>
+        
+        {/* Add Edit Draft button positioned at the right */}
+        {hasDraft && draftData?.draft_id && (
+          <TouchableOpacity 
+            style={[styles.editDraftButton, styles.mobileEditDraftButton, { 
+              position: 'absolute', 
+              right: 10,
+              top: '50%',
+              transform: [{ translateY: -20 }]  // Adjusted to perfectly align with text
+            }]}
+            onPress={() => {
+              if (draftData?.draft_id) {
+                handleOpenExistingDraft(draftData.draft_id);
+              }
+            }}
+          >
+            <MaterialCommunityIcons 
+              name="pencil" 
+              size={16} 
+              color={theme.colors.primary} 
+            />
+            <View style={{ alignItems: 'center' }}>
+              <Text style={[styles.editDraftText, { fontSize: 12, lineHeight: 14 }]}>Edit</Text>
+              <Text style={[styles.editDraftText, { fontSize: 12, lineHeight: 14 }]}>Draft</Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
