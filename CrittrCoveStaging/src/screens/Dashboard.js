@@ -375,7 +375,7 @@ const Dashboard = ({ navigation }) => {
                 Welcome back{firstName ? ', ' + firstName : ''}! 👋
               </Text>
               <Text style={dynamicStyles.bookingCount}>
-                You have {bookings.filter(b => !b.completed).length} active bookings and {bookings.filter(b => new Date(b.start_date) > new Date()).length} upcoming appointments today.
+                You have {bookings.filter(b => !b.completed).length} active bookings today and {bookings.filter(b => new Date(b.start_date) > new Date()).length} upcoming appointments.
               </Text>
             </View>
           </View>
