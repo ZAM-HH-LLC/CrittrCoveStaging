@@ -717,14 +717,14 @@ export default function Navigation({ state, descriptors, navigation }) {
             />
           </TouchableOpacity>
           <View style={styles.mobileRightContent}>
-            <TouchableOpacity onPress={() => handleNavigation('Notifications', 'Overview')} style={styles.iconButton}>
+            {/* <TouchableOpacity onPress={() => handleNavigation('Notifications', 'Overview')} style={styles.iconButton}>
               <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
               {totalNotifications > 0 && (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationText}>{totalNotifications}</Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity> */}
             <TouchableOpacity onPress={toggleMenu} style={styles.profileContainer}>
               {isSignedIn ? (
                 <Avatar.Image 
