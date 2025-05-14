@@ -91,6 +91,8 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     padding: 16,
     maxWidth: screenWidth < 900 ? '' : 600,
     width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   selectedConversation: {
     backgroundColor: theme.colors.primary + '20',
@@ -618,9 +620,14 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     paddingHorizontal: 12,
     marginVertical: 6,
     height: 40,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   searchIcon: {
     marginRight: 8,
+  },
+  clearButton: {
+    padding: 4,
   },
   searchInput: {
     flex: 1,
@@ -628,6 +635,10 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     fontSize: 16,
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
+    outline: 'none',  // Remove outline for web
+    WebkitTapHighlightColor: 'transparent', // Remove tap highlight on iOS/Safari
+    WebkitAppearance: 'none', // Standardize appearance
+    outlineStyle: 'none', // Additional property for some browsers
   },
   messageHeaderContent: {
     flexDirection: 'row',
@@ -707,6 +718,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Add isLoading state for edit draft
+  const [isSearchFocused, setIsSearchFocused] = useState(false); // Add state for search input focus
   
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [selectedConversationData, setSelectedConversationData] = useState(null);
@@ -716,6 +728,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const { is_DEBUG, is_prototype, isCollapsed, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
   const [conversations, setConversations] = useState([]);
+  const [filteredConversations, setFilteredConversations] = useState([]); // Add filtered conversations state
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -1378,7 +1391,20 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [screenWidth]);
 
-  // Modify fetchConversations to include better logging
+  // Update conversations list when main conversation list or search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredConversations(conversations);
+    } else {
+      const lowercaseQuery = searchQuery.trim().toLowerCase();
+      const filtered = conversations.filter(conv => 
+        conv.other_user_name && conv.other_user_name.toLowerCase().includes(lowercaseQuery)
+      );
+      setFilteredConversations(filtered);
+    }
+  }, [conversations, searchQuery]);
+
+  // Modify fetchConversations to update filtered conversations
   const fetchConversations = async () => {
     try {
       // Don't reload if already loading or if conversations are already loaded and this isn't initialization
@@ -1417,6 +1443,7 @@ const MessageHistory = ({ navigation, route }) => {
         debugLog(`MBA3210: [OTHER USERS STATUS] Fetched ${conversationsWithOnlineStatus.length} conversations with online status data`);
         
         setConversations(conversationsWithOnlineStatus);
+        setFilteredConversations(conversationsWithOnlineStatus); // Update filtered conversations too
         return conversationsWithOnlineStatus;
       }
       return [];
@@ -2432,14 +2459,17 @@ const MessageHistory = ({ navigation, route }) => {
   // Add search functionality
   const handleSearch = (text) => {
     setSearchQuery(text);
-    // TODO: Implement search logic here
+    // Filtering is now handled by the useEffect defined above
   };
 
   // Update conversation list to include search
   const renderConversationList = () => (
     <View style={styles.conversationListContainer}>
       <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
+        <View style={[
+          styles.searchInputContainer, 
+          isSearchFocused && { borderColor: theme.colors.primary }
+        ]}>
           <MaterialCommunityIcons 
             name="magnify" 
             size={20} 
@@ -2452,10 +2482,24 @@ const MessageHistory = ({ navigation, route }) => {
             placeholderTextColor={theme.colors.placeholder}
             value={searchQuery}
             onChangeText={handleSearch}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearButton}
+              onPress={() => setSearchQuery('')}
+            >
+              <MaterialCommunityIcons 
+                name="close-circle" 
+                size={16} 
+                color={theme.colors.placeholder}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
-      {conversations.map((conv) => {
+      {filteredConversations.map((conv) => {
         const otherParticipantName = conv.participant1_id === CURRENT_USER_ID ? 
           conv.participant2_name : conv.participant1_name;
         

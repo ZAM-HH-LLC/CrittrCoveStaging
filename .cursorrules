@@ -154,3 +154,21 @@ Cross‑cutting invariants
 • Key names travelling between back‑end and front‑end must match 1‑for‑1
   (snake_case).  
 • Cursor must fix or warn about any type errors it introduces.
+
+### Server Operation Rules
+1. **ABSOLUTE PROHIBITION**: Cursor MUST NEVER run any server (frontend, backend, development server, etc.) commands like:
+   - `npm run start`, `npm run dev`, `npm run web`, `npm run ios`, `npm run android`, `npm run build`,`npm run build:ios`, `npm run build:android`, `npm run build:web`, `npm run build:all`
+   - `python manage.py runserver`
+   - Any command that starts a server process
+   - Any command containing keywords like "start", "run", "serve", "dev", etc. that might run a server
+
+2. **Server Operation**: The user ALWAYS handles server operations manually on their own system. Cursor MUST limit its role to:
+   - Code modifications
+   - Static file operations
+   - Non-server git operations that don't commit/push
+   - Information gathering through passive commands
+
+3. **When Server Operations Are Mentioned**:
+   - Explain that server operations should be performed by the user
+   - Provide the command the user should run themselves, but NEVER use run_terminal_cmd to execute it
+   - If needed, suggest testing alternatives that don't require a running server
