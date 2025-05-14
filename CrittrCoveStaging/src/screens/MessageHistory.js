@@ -1720,11 +1720,22 @@ const MessageHistory = ({ navigation, route }) => {
   const renderMessage = useCallback(({ item }) => {
     // Create a map to keep track of which bookings have change requests and latest message timestamps
     const bookingMessages = groupMessagesByBookingId(messages);
+    
+    // Track bookings that have been confirmed
+    const confirmedBookingIds = messages
+      .filter(m => m.type_of_message === 'booking_confirmed')
+      .map(m => m.metadata?.booking_id)
+      .filter(Boolean);
+    
     const hasChangeRequest = item.metadata?.booking_id && 
       messages.some(m => 
         m.type_of_message === 'request_changes' && 
         m.metadata?.booking_id === item.metadata.booking_id
       );
+    
+    // Determine if booking is confirmed
+    const bookingIsConfirmed = item.metadata?.booking_id && 
+      confirmedBookingIds.includes(item.metadata.booking_id);
     
     // Determine if this is the newest message for this booking
     let isNewestMessage = false;
@@ -1754,7 +1765,7 @@ const MessageHistory = ({ navigation, route }) => {
       const isApprovalMessage = item.type_of_message === 'send_approved_message';
       
       // Get booking status from metadata
-      const bookingStatus = item.metadata?.booking_status;
+      const bookingStatus = bookingIsConfirmed ? "Confirmed" : item.metadata?.booking_status;
       
       // Check if the pro should be able to edit the draft
       const showEditDraft = selectedConversationData?.is_professional && 
@@ -1817,7 +1828,7 @@ const MessageHistory = ({ navigation, route }) => {
             debugLog('MBA6428: Edit Draft button clicked, calling handleEditDraft with bookingId:', bookingId);
             handleEditDraft(bookingId);
           } : undefined}
-          bookingStatus={item.metadata?.booking_status}
+          bookingStatus={bookingStatus}
           hasChangeRequest={hasAssociatedChangeRequest}
           isNewestMessage={isNewestMessage}
           messageCreatedAt={messageCreatedAt}
@@ -1831,7 +1842,7 @@ const MessageHistory = ({ navigation, route }) => {
       // Get booking details from metadata
       const bookingId = item.metadata?.booking_id;
       const serviceType = item.metadata?.service_type;
-      const bookingStatus = item.metadata?.booking_status;
+      const bookingStatus = bookingIsConfirmed ? "Confirmed" : item.metadata?.booking_status;
       
       // Log for debugging
       debugLog('MBA6428: Rendering change request message:', {
@@ -1839,7 +1850,8 @@ const MessageHistory = ({ navigation, route }) => {
         isFromMe,
         content: item.content,
         metadata: item.metadata,
-        isNewestMessage
+        isNewestMessage,
+        isConfirmed: bookingIsConfirmed
       });
       
       return (
@@ -1878,6 +1890,63 @@ const MessageHistory = ({ navigation, route }) => {
           } : undefined}
           bookingStatus={bookingStatus}
           hasChangeRequest={false} // Change requests don't have change requests themselves
+          isNewestMessage={isNewestMessage}
+          messageCreatedAt={messageCreatedAt}
+        />
+      );
+    }
+
+    // Handle booking confirmation messages
+    if (item.type_of_message === 'booking_confirmed') {
+      const isFromMe = !item.sent_by_other_user;
+      
+      // Get booking details from metadata
+      const bookingId = item.metadata?.booking_id;
+      const serviceType = item.metadata?.service_type;
+      
+      // Get cost info from metadata
+      let totalCost = '0.00';
+      let payout = '0.00';
+      try {
+        if (item.metadata.cost_summary) {
+          totalCost = item.metadata.cost_summary.total_client_cost || '0.00';
+          payout = item.metadata.cost_summary.total_sitter_payout || '0.00';
+        }
+      } catch (error) {
+        console.error('Error parsing cost data:', error);
+      }
+      
+      debugLog('MBA6428: Rendering booking confirmation message:', {
+        bookingId,
+        isFromMe,
+        metadata: item.metadata,
+        totalCost,
+        payout
+      });
+      
+      return (
+        <BookingMessageCard
+          type="booking_confirmed"
+          data={{
+            booking_id: bookingId,
+            service_type: serviceType,
+            cost_summary: {
+              total_client_cost: totalCost,
+              total_sitter_payout: payout
+            }
+          }}
+          isFromMe={isFromMe}
+          onPress={() => {
+            // Navigate to booking details if we have a booking_id
+            if (bookingId) {
+              navigation.navigate('BookingDetails', { 
+                bookingId: bookingId,
+                from: 'MessageHistory'
+              });
+            }
+          }}
+          isProfessional={selectedConversationData?.is_professional}
+          bookingStatus="Confirmed"
           isNewestMessage={isNewestMessage}
           messageCreatedAt={messageCreatedAt}
         />

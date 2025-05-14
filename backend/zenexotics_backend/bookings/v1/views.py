@@ -1230,6 +1230,68 @@ class ApproveBookingView(APIView):
             booking.status = BookingStates.CONFIRMED
             booking.save()
 
+            # Send confirmation message
+            try:
+                # Get conversation between client and professional
+                from conversations.models import Conversation
+                from user_messages.models import UserMessage
+                from django.utils import timezone
+                
+                # Find the conversation
+                conversation = Conversation.objects.filter(
+                    (Q(participant1=request.user) & Q(participant2=booking.professional.user)) |
+                    (Q(participant1=booking.professional.user) & Q(participant2=request.user))
+                ).first()
+                
+                if conversation:
+                    # Get booking summary data for cost information
+                    cost_data = {
+                        'total_client_cost': "0.00",
+                        'total_sitter_payout': "0.00"
+                    }
+                    
+                    try:
+                        from booking_summary.models import BookingSummary
+                        booking_summary = BookingSummary.objects.get(booking=booking)
+                        cost_data = {
+                            'total_client_cost': str(booking_summary.total_client_cost),
+                            'total_sitter_payout': str(booking_summary.total_sitter_payout)
+                        }
+                    except Exception as cost_error:
+                        logger.error(f"Error fetching booking cost data: {str(cost_error)}")
+                    
+                    # Create confirmation message with complete metadata
+                    confirmation_message = UserMessage.objects.create(
+                        conversation=conversation,
+                        sender=request.user,
+                        content="Booking Confirmed",
+                        type_of_message='booking_confirmed',
+                        is_clickable=True,
+                        status='sent',
+                        booking=booking,
+                        metadata={
+                            'booking_id': booking.booking_id,
+                            'service_type': booking.service_id.service_name if booking.service_id else "Unknown Service",
+                            'booking_status': BookingStates.get_display_state(booking.status),
+                            'confirmed_at': timezone.now().isoformat(),
+                            'cost_summary': cost_data
+                        }
+                    )
+                    
+                    # Update conversation's last message and time
+                    conversation.last_message = "Booking Confirmed"
+                    conversation.last_message_time = timezone.now()
+                    conversation.save()
+                    
+                    logger.info(f"Sent confirmation message for booking {booking_id} in conversation {conversation.conversation_id}")
+                    logger.info(f"Confirmation message metadata: {confirmation_message.metadata}")
+                else:
+                    logger.error(f"Could not find conversation between client and professional for booking {booking_id}")
+            except Exception as msg_error:
+                logger.error(f"Error creating confirmation message: {str(msg_error)}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                # Don't fail the overall process if messaging fails
+            
             # Log the interaction
             InteractionLog.objects.create(
                 user=request.user,

@@ -473,7 +473,7 @@ const TimeSelectionCard = ({
             >
               <MaterialIcons name="schedule" size={20} color={theme.colors.mainColors.main} />
               <Text style={styles.customizeButtonText}>
-                {showIndividualDays ? 'Use Default Time Range' : 'Customize Individual Day Schedules'}
+                {showIndividualDays ? 'Set Default Time Range' : 'Customize Individual Day Schedules'}
               </Text>
             </TouchableOpacity>
           </View>

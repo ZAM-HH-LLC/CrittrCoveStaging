@@ -15,6 +15,7 @@ class UserMessage(models.Model):
         ('approval_request', 'Approval Request'), # This is a request for approval from the professional to client
         ('request_changes', 'Request Changes'), # This is a request for changes from the professional
         ('send_approved_message', 'Send Approved Message'), # This is a message sent by the client to the pro after the booking is approved
+        ('booking_confirmed', 'Booking Confirmed'), # This is a message sent when a booking is confirmed
     ]
 
     message_id = models.AutoField(primary_key=True)

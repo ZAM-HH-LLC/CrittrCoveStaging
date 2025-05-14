@@ -24,7 +24,7 @@ const checkDSTChange = (startDate, startTime, endDate, endTime, timezone) => {
 };
 
 const BookingMessageCard = ({ 
-  type,  // 'request', 'approval', or 'request_changes'
+  type,  // 'request', 'approval', 'request_changes', or 'booking_confirmed'
   data,
   isFromMe,
   onPress,
@@ -65,19 +65,20 @@ const BookingMessageCard = ({
 
   const isConfirmed = bookingStatus === 'Confirmed';
   const isChangeRequest = type === 'request_changes';
+  const isBookingConfirmed = type === 'booking_confirmed';
   const shouldShowAsApproval = type === 'approval' || isChangeRequest;
   
   // Determine if we should show the overlay based on message type and recency
-  // - Show "Booking Confirmed" on all messages if the booking is confirmed
+  // - Show "Booking Confirmed" on all earlier messages for confirmed bookings
   // - Show "Changes Requested" on approval messages if there's a change request AND this isn't the newest message
   // - Show "Booking Updated" on change request messages if they're not the newest message and there's a newer approval
-  const shouldShowOverlay = isConfirmed || 
+  const shouldShowOverlay = (isConfirmed && !isBookingConfirmed) || 
     (type === 'approval' && hasChangeRequest && !isNewestMessage) ||
     (isChangeRequest && !isNewestMessage);
   
   // What overlay text to show
   const getOverlayText = () => {
-    if (isConfirmed) return 'Booking Confirmed';
+    if (isConfirmed && !isBookingConfirmed) return 'Booking Confirmed';
     
     if (type === 'approval' && hasChangeRequest && !isNewestMessage) {
       return 'Changes Requested';
@@ -100,6 +101,8 @@ const BookingMessageCard = ({
         return 'calendar-check';
       case 'request_changes':
         return 'calendar-edit';
+      case 'booking_confirmed':
+        return 'check-circle-outline';
       default:
         return 'calendar';
     }
@@ -113,6 +116,8 @@ const BookingMessageCard = ({
         return 'Approval Request';
       case 'request_changes':
         return 'Request Changes';
+      case 'booking_confirmed':
+        return 'Booking Confirmed';
       default:
         return 'Booking';
     }
@@ -127,11 +132,19 @@ const BookingMessageCard = ({
     if (shouldShowAsApproval) {
       baseStyle.push(styles.approvalCard);
     }
+    
+    if (isBookingConfirmed) {
+      baseStyle.push(styles.confirmedCard);
+    }
 
     return baseStyle;
   };
 
   const getHeaderStyle = () => {
+    if (isBookingConfirmed) {
+      return [styles.header, styles.confirmedHeader];
+    }
+    
     return [
       styles.header,
       shouldShowAsApproval ? styles.approvalHeader : styles.requestHeader
@@ -156,35 +169,28 @@ const BookingMessageCard = ({
   };
 
   const handleOpenApprovalModal = () => {
-    // Use the modal for approval type cards or change request cards
-    if (shouldShowAsApproval) {
-      if (!safeInitialData) {
-        // If safeInitialData isn't ready yet, create it now
-        const tempData = {
-          ...data,
-          occurrences: data.occurrences?.map(occ => ({
-            ...occ,
-            rates: occ.rates || {
-              base_rate: 0,
-              additional_animal_rate: 0,
-              applies_after: 1,
-              holiday_rate: 0,
-              holiday_days: 0,
-              additional_rates: []
-            }
-          })) || []
-        };
-        setSafeInitialData(tempData);
-      }
-      
-      debugLog('MBA9876 Opening approval modal with booking ID:', data.booking_id);
-      setApprovalModalVisible(true);
-    } else {
-      // For other types, use the onPress callback
-      if (onPress) {
-        onPress();
-      }
+    // Process initial data for any message type
+    if (!safeInitialData) {
+      // If safeInitialData isn't ready yet, create it now
+      const tempData = {
+        ...data,
+        occurrences: data.occurrences?.map(occ => ({
+          ...occ,
+          rates: occ.rates || {
+            base_rate: 0,
+            additional_animal_rate: 0,
+            applies_after: 1,
+            holiday_rate: 0,
+            holiday_days: 0,
+            additional_rates: []
+          }
+        })) || []
+      };
+      setSafeInitialData(tempData);
     }
+    
+    debugLog('MBA9876 Opening approval modal with booking ID:', data.booking_id);
+    setApprovalModalVisible(true);
   };
 
   const handleApprovalSuccess = (response) => {
@@ -296,15 +302,25 @@ const BookingMessageCard = ({
 
   // Get the cost value based on user type (professional vs client)
   const getCostValue = () => {
-    const costSummary = data.cost_summary || {};
+    // First check if the cost_summary object exists
+    if (data.cost_summary) {
+      if (isProfessional) {
+        // Display pro payout for professionals
+        const amount = data.cost_summary.total_sitter_payout || '0.00';
+        return typeof amount === 'number' ? amount.toFixed(2) : parseFloat(amount).toFixed(2);
+      } else {
+        // Display client cost for clients
+        const amount = data.cost_summary.total_client_cost || '0.00';
+        return typeof amount === 'number' ? amount.toFixed(2) : parseFloat(amount).toFixed(2);
+      }
+    }
     
+    // Fallback to direct properties (for backward compatibility)
     if (isProfessional) {
-      // Display pro payout for professionals
-      const amount = costSummary.total_sitter_payout || costSummary.total_pro_payout || '0.00';
+      const amount = data.total_sitter_payout || '0.00';
       return typeof amount === 'number' ? amount.toFixed(2) : parseFloat(amount).toFixed(2);
     } else {
-      // Display client cost for clients
-      const amount = costSummary.total_client_cost || '0.00';
+      const amount = data.total_owner_cost || '0.00';
       return typeof amount === 'number' ? amount.toFixed(2) : parseFloat(amount).toFixed(2);
     }
   };
@@ -334,16 +350,23 @@ const BookingMessageCard = ({
         ]} />
       )}
       
+      {/* Green border for confirmation message */}
+      {isBookingConfirmed && (
+        <View style={styles.confirmationBorder} />
+      )}
+      
       <View style={styles.cardContent}>
         <View style={getHeaderStyle()}>
           <MaterialCommunityIcons 
             name={getIcon()} 
             size={24} 
-            color={isChangeRequest ? theme.colors.warning : theme.colors.primary}
+            color={isChangeRequest ? theme.colors.warning : 
+                   isBookingConfirmed ? theme.colors.success : theme.colors.primary}
           />
           <Text style={[
             styles.title,
             isChangeRequest ? styles.changeRequestTitle : 
+            isBookingConfirmed ? styles.confirmedTitle :
             shouldShowAsApproval ? styles.approvalTitle : styles.requestTitle
           ]}>
             {getTitle()}
@@ -351,132 +374,180 @@ const BookingMessageCard = ({
         </View>
 
         <View style={styles.content}>
-          <View style={styles.infoSection}>
-            <View style={styles.row}>
-              <Text style={styles.label}>Booking ID:</Text>
-              <Text style={styles.value}>{data.booking_id || 'N/A'}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Service:</Text>
-              <Text style={styles.value}>{data.service_type || 'N/A'}</Text>
-            </View>
+          {/* Booking confirmation message specific content */}
+          {isBookingConfirmed ? (
+            <>
+              <TouchableOpacity 
+                style={styles.confirmationContainerClickable}
+                onPress={handleOpenApprovalModal}
+              >
+                <View style={styles.confirmationContainer}>
+                  <Text style={styles.confirmationText}>
+                    This booking has been confirmed and is ready to go!
+                  </Text>
+                </View>
+                
+                <View style={styles.infoSection}>
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Booking ID:</Text>
+                    <Text style={styles.value}>{data.booking_id || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Service:</Text>
+                    <Text style={styles.value}>{data.service_type || 'N/A'}</Text>
+                  </View>
 
-            <View style={styles.row}>
-              <Text style={styles.label}>{isProfessional ? 'Your Payout:' : 'Total Cost:'}</Text>
-              <Text style={styles.value}>
-                ${getCostValue()}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.datesSection}>
-            {type !== 'request_changes' ? (
-              <View style={styles.datesSectionHeader}>
-                <Text style={styles.label}>Dates:</Text>
-                {hasMoreDates && (
-                  <Text style={styles.datesCount}>({occurrences.length} total)</Text>
-                )}
-              </View>
-            ) : (
-              null
-            )}
-            {visibleOccurrences.map((occ, index) => {
-              const isLastVisibleItem = index === visibleOccurrences.length - 1;
-              const showBottomBorder = !(!showAllDates && isLastVisibleItem && hasMoreDates);
-              
-              return (
-                <View 
-                  key={index} 
-                  style={[
-                    styles.occurrenceContainer,
-                    showBottomBorder ? null : { borderBottomWidth: 0 }
-                  ]}
-                >
-                  <View style={styles.occurrenceItem}>
-                    <Text style={styles.dateTimeText}>
-                      {formatOccurrenceDateRange(occ)}
+                  <View style={styles.row}>
+                    <Text style={styles.label}>{isProfessional ? 'Your Payout:' : 'Total Cost:'}</Text>
+                    <Text style={styles.value}>
+                      ${isProfessional ? 
+                        (data.cost_summary?.total_sitter_payout || '0.00') : 
+                        (data.cost_summary?.total_client_cost || '0.00')}
                     </Text>
-                    <Text style={styles.durationText}>
-                      Event Duration: {getOccurrenceDuration(occ)} ({occ.timezone || userTimezone.split('/')[1] || userTimezone})
-                    </Text>
-                    {occ.dst_message ? (
-                      <Text style={styles.dstMessage}>
-                        {occ.dst_message}
-                      </Text>
-                    ) : null}
                   </View>
                 </View>
-              );
-            })}
-
-            {/* Show more/less dates button */}
-            {hasMoreDates && (
-              <TouchableOpacity 
-                style={styles.showMoreButton} 
-                onPress={toggleDatesExpansion}
-              >
-                <Text style={styles.showMoreText}>
-                  {showAllDates ? "Show Fewer Dates" : `Show ${hiddenDatesCount} More Date${hiddenDatesCount !== 1 ? 's' : ''}`}
-                </Text>
-                <MaterialCommunityIcons 
-                  name={showAllDates ? "chevron-up" : "chevron-down"} 
-                  size={18} 
-                  color={theme.colors.primary} 
-                />
+                
+                <View style={styles.buttonContainer}>
+                  <View style={styles.detailsButton}>
+                    <Text style={styles.detailsButtonText}>View Details</Text>
+                  </View>
+                </View>
               </TouchableOpacity>
-            )}
-          </View>
+            </>
+          ) : (
+            /* Original content for other message types */
+            <>
+              <View style={styles.infoSection}>
+                <View style={styles.row}>
+                  <Text style={styles.label}>Booking ID:</Text>
+                  <Text style={styles.value}>{data.booking_id || 'N/A'}</Text>
+                </View>
+                <View style={styles.row}>
+                  <Text style={styles.label}>Service:</Text>
+                  <Text style={styles.value}>{data.service_type || 'N/A'}</Text>
+                </View>
 
-          {isChangeRequest && (
-            <View style={styles.changeMessageContainer}>
-              <Text style={styles.changeMessageLabel}>Change Request Message:</Text>
-              <Text style={styles.changeMessageText}>{data.content || 'No details provided'}</Text>
-            </View>
+                <View style={styles.row}>
+                  <Text style={styles.label}>{isProfessional ? 'Your Payout:' : 'Total Cost:'}</Text>
+                  <Text style={styles.value}>
+                    ${getCostValue()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.datesSection}>
+                {type !== 'request_changes' ? (
+                  <View style={styles.datesSectionHeader}>
+                    <Text style={styles.label}>Dates:</Text>
+                    {hasMoreDates && (
+                      <Text style={styles.datesCount}>({occurrences.length} total)</Text>
+                    )}
+                  </View>
+                ) : (
+                  null
+                )}
+                {visibleOccurrences.map((occ, index) => {
+                  const isLastVisibleItem = index === visibleOccurrences.length - 1;
+                  const showBottomBorder = !(!showAllDates && isLastVisibleItem && hasMoreDates);
+                  
+                  return (
+                    <View 
+                      key={index} 
+                      style={[
+                        styles.occurrenceContainer,
+                        showBottomBorder ? null : { borderBottomWidth: 0 }
+                      ]}
+                    >
+                      <View style={styles.occurrenceItem}>
+                        <Text style={styles.dateTimeText}>
+                          {formatOccurrenceDateRange(occ)}
+                        </Text>
+                        <Text style={styles.durationText}>
+                          Event Duration: {getOccurrenceDuration(occ)} ({occ.timezone || userTimezone.split('/')[1] || userTimezone})
+                        </Text>
+                        {occ.dst_message ? (
+                          <Text style={styles.dstMessage}>
+                            {occ.dst_message}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Show more/less dates button */}
+                {hasMoreDates && (
+                  <TouchableOpacity 
+                    style={styles.showMoreButton} 
+                    onPress={toggleDatesExpansion}
+                  >
+                    <Text style={styles.showMoreText}>
+                      {showAllDates ? "Show Fewer Dates" : `Show ${hiddenDatesCount} More Date${hiddenDatesCount !== 1 ? 's' : ''}`}
+                    </Text>
+                    <MaterialCommunityIcons 
+                      name={showAllDates ? "chevron-up" : "chevron-down"} 
+                      size={18} 
+                      color={theme.colors.primary} 
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {isChangeRequest && (
+                <View style={styles.changeMessageContainer}>
+                  <Text style={styles.changeMessageLabel}>Change Request Message:</Text>
+                  <Text style={styles.changeMessageText}>{data.content || 'No details provided'}</Text>
+                </View>
+              )}
+
+              <View style={styles.buttonContainer}>
+                {/* Review Details button - visible to both users */}
+                <TouchableOpacity 
+                  style={[
+                    styles.detailsButton,
+                    (isConfirmed && !isBookingConfirmed) && styles.disabledButton
+                  ]}
+                  onPress={handleOpenApprovalModal}
+                  disabled={isConfirmed && !isBookingConfirmed}
+                >
+                  <Text style={styles.detailsButtonText}>
+                    {isBookingConfirmed ? "View Details" : "Review Details"}
+                  </Text>
+                </TouchableOpacity>
+                
+                {/* Approve button - only visible to clients for approval requests */}
+                {type === 'approval' && !isProfessional && !isConfirmed && !hasChangeRequest && (
+                  <TouchableOpacity 
+                    style={styles.approveButton}
+                    onPress={handleApprove}
+                  >
+                    <Text style={styles.approveButtonText}>Approve</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* Edit button - visible to pros for booking requests */}
+                {type === 'request' && isProfessional && onEditDraft && !isConfirmed && (
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={onEditDraft}
+                  >
+                    <Text style={styles.editButtonText}>Edit Draft</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* Edit Details button - visible to pros for change requests */}
+                {isChangeRequest && isProfessional && !isConfirmed && (
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={onEditDraft}
+                  >
+                    <Text style={styles.editButtonText}>Edit Details</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
           )}
-
-          <View style={styles.buttonContainer}>
-            {/* Review Details button - visible to both users */}
-            <TouchableOpacity 
-              style={[
-                styles.detailsButton,
-                (isConfirmed) && styles.disabledButton
-              ]}
-              onPress={handleOpenApprovalModal}
-              disabled={isConfirmed}
-            >
-              <Text style={styles.detailsButtonText}>Review Details</Text>
-            </TouchableOpacity>
-            
-            {/* Approve button - only visible to clients for approval requests */}
-            {type === 'approval' && !isProfessional && !isConfirmed && !hasChangeRequest && (
-              <TouchableOpacity 
-                style={styles.approveButton}
-                onPress={handleApprove}
-              >
-                <Text style={styles.approveButtonText}>Approve</Text>
-              </TouchableOpacity>
-            )}
-            
-            {/* Edit button - visible to pros for booking requests */}
-            {type === 'request' && isProfessional && onEditDraft && !isConfirmed && (
-              <TouchableOpacity 
-                style={styles.editButton}
-                onPress={onEditDraft}
-              >
-                <Text style={styles.editButtonText}>Edit Draft</Text>
-              </TouchableOpacity>
-            )}
-            
-            {/* Edit Details button - visible to pros for change requests */}
-            {isChangeRequest && isProfessional && !isConfirmed && (
-              <TouchableOpacity 
-                style={styles.editButton}
-                onPress={onEditDraft}
-              >
-                <Text style={styles.editButtonText}>Edit Details</Text>
-              </TouchableOpacity>
-            )}
-          </View>
         </View>
       </View>
 
@@ -500,6 +571,9 @@ const BookingMessageCard = ({
         onRequestChangesError={handleRequestChangesError}
         initialData={safeInitialData}
         isProfessional={isProfessional}
+        isReadOnly={isConfirmed || isBookingConfirmed}
+        hideButtons={isConfirmed || isBookingConfirmed}
+        modalTitle={isBookingConfirmed || isConfirmed ? "Booking Details" : "Booking Approval Request"}
       />
     </View>
   );
@@ -534,6 +608,10 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border, // Changed to regular border color
     borderWidth: 1,
   },
+  confirmedCard: {
+    borderColor: theme.colors.success,
+    borderWidth: 2,
+  },
   colorBar: {
     width: 4, // Width of the green vertical bar
     backgroundColor: theme.colors.primary, // Green color
@@ -565,6 +643,9 @@ const styles = StyleSheet.create({
   },
   approvalHeader: {
     borderBottomColor: theme.colors.border + '40',
+  },
+  confirmedHeader: {
+    borderBottomColor: theme.colors.success,
   },
   title: {
     fontSize: 16,
@@ -765,6 +846,35 @@ const styles = StyleSheet.create({
     marginRight: 5,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  confirmationContainerClickable: {
+    flex: 1,
+    width: '100%',
+    borderRadius: 8,
+  },
+  confirmationContainer: {
+    backgroundColor: theme.colors.success + '15', // Light green background
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  confirmationText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    textAlign: 'center',
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '500',
+  },
+  confirmedTitle: {
+    color: theme.colors.success,
+  },
+  confirmationBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: theme.colors.success,
   },
 });
 

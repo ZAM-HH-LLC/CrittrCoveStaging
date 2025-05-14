@@ -30,7 +30,8 @@ const BookingApprovalModal = ({
   initialData = null,
   isProfessional = true,
   modalTitle = "Booking Approval Request",
-  hideButtons = false
+  hideButtons = false,
+  isReadOnly = false
 }) => {
   const { screenWidth } = useContext(AuthContext);
   const isDesktop = screenWidth > 768;
@@ -70,6 +71,14 @@ const BookingApprovalModal = ({
       fetchBookingDetails();
     }
   }, [visible, bookingId]);
+
+  // Update modal title based on mode
+  const getModalTitle = () => {
+    if (isReadOnly) {
+      return "Booking Details";
+    }
+    return modalTitle;
+  };
 
   // Update bookingData when initialData changes
   useEffect(() => {
@@ -366,32 +375,31 @@ const BookingApprovalModal = ({
   const renderChangeRequestInput = () => {
     return (
       <View style={styles.changeRequestContainer}>
-        <Text style={styles.changeRequestTitle}>Request Changes</Text>
-        <Text style={styles.changeRequestDescription}>
-          Please describe the changes you'd like to request:
-        </Text>
         <TextInput
           style={styles.changeRequestInput}
-          multiline
-          numberOfLines={4}
-          placeholder="Explain what changes you need..."
-          placeholderTextColor={theme.colors.placeHolderText}
+          placeholder="Enter details about your requested changes..."
           value={changeRequestMessage}
           onChangeText={setChangeRequestMessage}
+          multiline={true}
+          numberOfLines={3}
+          placeholderTextColor={theme.colors.placeHolderText}
         />
-        <View style={styles.changeRequestButtons}>
-          <TouchableOpacity 
-            style={styles.cancelButton} 
-            onPress={handleCancelChangeRequest}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.submitButton} 
-            onPress={handleSubmitChangeRequest}
-          >
-            <Text style={styles.submitButtonText}>Submit Request</Text>
-          </TouchableOpacity>
+        <View style={styles.buttonWrapper}>
+          <View style={styles.changeRequestButtons}>
+            <TouchableOpacity
+              style={styles.cancelRequestButton}
+              onPress={handleCancelChangeRequest}
+            >
+              <Text style={styles.cancelRequestButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.submitRequestButton}
+              onPress={handleSubmitChangeRequest}
+              disabled={!changeRequestMessage.trim()}
+            >
+              <Text style={styles.submitRequestButtonText}>Request Changes</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -399,31 +407,69 @@ const BookingApprovalModal = ({
 
   // Footer with action buttons
   const renderFooter = () => {
-    if (hideButtons || showChangeRequestInput) {
+    // Don't render any footer if the buttons should be hidden
+    if (hideButtons) {
       return null;
     }
     
-    return (
-      <>
-      {!isProfessional ? (
-        <View style={styles.footer}>
-          <TouchableOpacity 
-            style={styles.requestChangesButton}
-            onPress={handleShowChangeRequest}
+    // Read-only mode for confirmed bookings - just show a close button
+    if (isReadOnly) {
+      return (
+        <View style={styles.footerContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.closeButton]}
+            onPress={handleClose}
           >
-            <Text style={styles.requestChangesText}>Request Changes</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.approveButton}
-            onPress={handleApprove}
-          >
-            <Text style={styles.approveText}>Approve Booking</Text>
+            <Text style={styles.buttonText}>Close</Text>
           </TouchableOpacity>
         </View>
-      ) : null}
-      </>
-    );
+      );
+    }
+    
+    // Show change request input or default buttons
+    if (showChangeRequestInput) {
+      return null; // Don't render footer when change request input is shown
+    }
+    
+    if (isProfessional) {
+      // Professional only gets Close button
+      return (
+        <View style={styles.footerContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.closeButton]}
+            onPress={handleClose}
+          >
+            <Text style={styles.buttonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    } else {
+      // Client gets two or three buttons: Close, Approve, Request Changes
+      return (
+        <View style={styles.footerContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.closeButton]}
+            onPress={handleClose}
+          >
+            <Text style={styles.buttonText}>Close</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.button, styles.changeButton]}
+            onPress={handleShowChangeRequest}
+          >
+            <Text style={styles.buttonText}>Request Changes</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.button, styles.approveButton]}
+            onPress={handleApprove}
+          >
+            <Text style={styles.approveText}>Approve</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
   };
 
   return (
@@ -436,27 +482,30 @@ const BookingApprovalModal = ({
       <SafeAreaView style={styles.safeArea}>
         <View style={[
           styles.container, 
-          isDesktop ? styles.desktopContainer : {}
+          isDesktop ? styles.desktopContainer : {},
+          showChangeRequestInput ? styles.shortenedContainer : {}
         ]}>
           {/* Header with customizable title */}
           <View style={styles.header}>
-            <Text style={styles.title}>{modalTitle}</Text>
+            <Text style={styles.title}>{getModalTitle()}</Text>
             <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
           
-          {/* Scrollable Content */}
+          {/* Content */}
           {showChangeRequestInput ? (
+            // Render change request input as direct content
             renderChangeRequestInput()
           ) : (
+            // Render scrollable booking details
             <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
               {renderContent()}
             </ScrollView>
           )}
           
-          {/* Footer with action buttons */}
-          {renderFooter()}
+          {/* Footer with action buttons - only shown when not in change request mode */}
+          {!showChangeRequestInput && renderFooter()}
         </View>
       </SafeAreaView>
     </Modal>
@@ -467,6 +516,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
   },
   container: {
     flex: 1,
@@ -506,7 +556,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
-  footer: {
+  footerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
@@ -514,7 +564,7 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
   },
-  requestChangesButton: {
+  button: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -525,7 +575,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  requestChangesText: {
+  buttonText: {
     color: theme.colors.primary,
     fontSize: 16,
     fontWeight: '600',
@@ -679,23 +729,9 @@ const styles = StyleSheet.create({
   // Change request styles
   changeRequestContainer: {
     padding: 16,
-    flex: 1,
-  },
-  changeRequestTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.header.fontFamily,
-  },
-  changeRequestDescription: {
-    fontSize: 14,
-    color: theme.colors.text,
-    marginBottom: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
   },
   changeRequestInput: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.background,
     borderColor: theme.colors.border,
     borderWidth: 1,
     borderRadius: 8,
@@ -705,41 +741,69 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: 'top',
     fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 16,
+  },
+  buttonWrapper: {
+    alignItems: 'center',
+    width: '100%',
   },
   changeRequestButtons: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    width: 300,
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 16,
   },
-  cancelButton: {
+  cancelRequestButton: {
+    width: 140,
+    height: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border || '#E0E0E0',
+    borderRadius: 8,
+    backgroundColor: 'white',
+  },
+  cancelRequestButtonText: {
+    color: theme.colors.text || '#333333',
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  submitRequestButton: {
+    width: 140,
+    height: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.olive || '#707855',
+    borderRadius: 8,
+  },
+  submitRequestButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  changeButton: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    flex: 1,
+    marginLeft: 8,
   },
-  cancelButtonText: {
-    color: theme.colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  submitButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: theme.fonts.regular.fontFamily,
+  shortenedContainer: {
+    flex: 0,
+    backgroundColor: theme.colors.background,
+    margin: Platform.OS === 'web' ? 0 : 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    width: '90%',
+    maxWidth: 500,
+    minHeight: 320,
   },
 });
 
