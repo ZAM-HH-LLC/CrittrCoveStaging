@@ -212,11 +212,20 @@ const NewTimeRangeSelector = ({
       
       // Calculate nights between dates
       const diffTime = Math.abs(endDate - startDate);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      // If same day or 1 day apart, it's 1 night
-      // Otherwise, it's diffDays - 1 nights
-      const nights = diffDays >= 1 ? diffDays - 1 : 0;
+      // For date ranges, use correct date math (without time component)
+      // This ensures dates like May 14-16 (3 days) result in 2 nights, not 1 night
+      let diffDays;
+      
+      // Normalize dates to remove time component
+      const normalizedStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const normalizedEndDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      // Calculate the actual number of calendar days between the dates (inclusive)
+      diffDays = Math.round(Math.abs(normalizedEndDate - normalizedStartDate) / (1000 * 60 * 60 * 24)) + 1;
+      
+      // The number of nights is always one less than the number of days
+      const nights = diffDays > 1 ? diffDays - 1 : 0;
       
       if (nights === 0) {
         return "Same day";
