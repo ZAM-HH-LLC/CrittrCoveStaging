@@ -18,16 +18,39 @@ import dj_database_url
 # Load environment variables
 load_dotenv()
 
+# Environment configuration
+ENVIRONMENT = os.environ.get('DJANGO_ENVIRONMENT', 'development')
+IS_PRODUCTION = ENVIRONMENT == 'production'
+IS_STAGING = ENVIRONMENT == 'staging'
+IS_DEVELOPMENT = ENVIRONMENT == 'development'
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Media files configuration
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+if IS_PRODUCTION or IS_STAGING:
+    # AWS S3 settings
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+    AWS_LOCATION = 'media'
+    AWS_S3_FILE_OVERWRITE = False
+    
+    # S3 as default storage
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
+else:
+    # Local storage settings
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
-# Storage configuration
-DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
-FILE_UPLOAD_PERMISSIONS = 0o644  # Set appropriate file permissions
+# File upload permissions
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 # Storage paths for different apps
 USER_PROFILE_PHOTOS_DIR = 'users/profile_photos'
@@ -53,14 +76,16 @@ ALLOWED_IMAGE_TYPES = [
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not IS_PRODUCTION
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    '10.0.2.2',  # Add this line
-    # Add other hosts as needed
-]
+# Domain configuration
+DOMAIN_MAP = {
+    'development': ['localhost', '127.0.0.1', '10.0.2.2'],
+    'staging': ['staging.crittrcove.com', '.elasticbeanstalk.com'],
+    'production': ['beta.crittrcove.com', 'crittrcove.com', '.elasticbeanstalk.com']
+}
+
+ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
 
 
 # Application definition
@@ -236,12 +261,26 @@ SIMPLE_JWT = {
 
 AUTH_USER_MODEL = 'users.User'  # Replace 'users' with your app name if different
 
-# Define the base URL for the frontend
-FRONTEND_BASE_URL = "http://localhost:19006"
+# Frontend base URL by environment
+FRONTEND_URL_MAP = {
+    'development': 'http://localhost:19006',
+    'staging': 'https://staging.crittrcove.com',
+    'production': 'https://crittrcove.com'
+}
 
-CORS_ALLOWED_ORIGINS = [
-    FRONTEND_BASE_URL,  # Use the FRONTEND_BASE_URL variable
-]
+FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', FRONTEND_URL_MAP.get(ENVIRONMENT))
+
+# CORS settings by environment
+CORS_ALLOWED_ORIGINS = [FRONTEND_BASE_URL]
+if FRONTEND_BASE_URL != FRONTEND_URL_MAP['development']:
+    # Add additional domains if needed
+    if IS_STAGING:
+        CORS_ALLOWED_ORIGINS.append('https://staging.crittrcove.com')
+    if IS_PRODUCTION:
+        CORS_ALLOWED_ORIGINS.extend([
+            'https://beta.crittrcove.com',
+            'https://crittrcove.com'
+        ])
 
 # Email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -309,7 +348,7 @@ LOGGING = {
 # Add these settings for better session handling
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 86400 * 7  # 7 days
-SESSION_COOKIE_SECURE = False  # Set to True in production
+SESSION_COOKIE_SECURE = IS_PRODUCTION or IS_STAGING
 SESSION_COOKIE_HTTPONLY = True
 SESSION_SAVE_EVERY_REQUEST = True
 
@@ -342,3 +381,6 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# Session security
+CSRF_COOKIE_SECURE = IS_PRODUCTION or IS_STAGING
