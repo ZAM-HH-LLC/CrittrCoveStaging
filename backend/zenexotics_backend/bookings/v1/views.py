@@ -1846,7 +1846,7 @@ class ConnectionsView(APIView):
             try:
                 professional = Professional.objects.get(user=user)
                 is_professional = True
-                logger.info(f"MBA78vebt393 User is a professional with ID {professional.professional_id}")
+                logger.info(f"MBA9452: User is a professional with ID {professional.professional_id}")
             except Professional.DoesNotExist:
                 return Response(
                     {"error": "User must be a professional to access connections"},
@@ -1854,6 +1854,14 @@ class ConnectionsView(APIView):
                 )
             
             if is_professional:
+                # Get the user's timezone
+                from core.time_utils import get_user_time_settings
+                user_settings = get_user_time_settings(user.id)
+                user_tz = pytz.timezone(user_settings['timezone'])
+                current_date = timezone.now().astimezone(user_tz).date()
+                
+                logger.info(f"MBA9452: Current date in user timezone: {current_date}")
+                
                 # Get all clients for this professional (both invited and with bookings)
                 clients = Client.objects.filter(
                     Q(booking__professional=professional) |  # Clients who have bookings with this professional
@@ -1868,7 +1876,7 @@ class ConnectionsView(APIView):
                         (Q(participant1=client.user) & Q(participant2=request.user))
                     ).order_by('last_message_time')
                     
-                    logger.info(f"MBA78vebt393 Found {conversations.count()} conversations between user {request.user.id} and client {client.user.id}")
+                    logger.info(f"MBA9452: Found {conversations.count()} conversations between user {request.user.id} and client {client.user.id}")
                     
                     # Find the conversation where the requesting user is the professional
                     conversations = Conversation.objects.filter(
@@ -1880,7 +1888,7 @@ class ConnectionsView(APIView):
                     for conversation in conversations:
                         # Check the role map to ensure the requesting user is the professional
                         role_map = conversation.role_map
-                        logger.info(f"MBA78vebt393 Checking conversation role map: {role_map}")
+                        logger.info(f"MBA9452: Checking conversation role map: {role_map}")
                         
                         # Check if any key in the role map has "professional" as its value
                         for key, role in role_map.items():
@@ -1888,45 +1896,46 @@ class ConnectionsView(APIView):
                                 # If we found a professional role, check if this is our user
                                 if key.startswith('user_') or key == str(request.user.id):
                                     conversation_id = conversation.conversation_id
-                                    logger.info(f"MBA78vebt393 Found conversation where user is professional: conversation_id={conversation_id}, role_map={role_map}")
+                                    logger.info(f"MBA9452: Found conversation where user is professional: conversation_id={conversation_id}, role_map={role_map}")
                                     break
                         else:
-                            logger.info(f"MBA78vebt393 Skipping conversation - user is not professional: conversation_id={conversation.conversation_id}, role_map={role_map}")
+                            logger.info(f"MBA9452: Skipping conversation - user is not professional: conversation_id={conversation.conversation_id}, role_map={role_map}")
                         
                         if not conversation_id:
-                            logger.info(f"MBA78vebt393 No conversation found where user is professional for client: user_id={request.user.id}, client_id={client.id}, conversations_checked={list(conversations.values_list('conversation_id', flat=True))}")
+                            logger.info(f"MBA9452: No conversation found where user is professional for client: user_id={request.user.id}, client_id={client.id}, conversations_checked={list(conversations.values_list('conversation_id', flat=True))}")
                     
-                    # Get active and completed bookings counts
-                    active_bookings_count = Booking.objects.filter(
+                    # Check for active bookings (any booking that isn't completed or cancelled)
+                    has_active_booking = Booking.objects.filter(
                         client=client,
                         professional=professional,
                         status__in=[
-                            BookingStates.CONFIRMED,
-                            BookingStates.CONFIRMED_PENDING_CLIENT_APPROVAL,
-                            BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_CLIENT_APPROVAL,
-                            BookingStates.PENDING_INITIAL_PROFESSIONAL_CHANGES,
-                            BookingStates.PENDING_PROFESSIONAL_CHANGES
+                            BookingStates.CONFIRMED
                         ]
-                    ).count()
+                    ).exists()
                     
-                    completed_bookings_count = Booking.objects.filter(
+                    # Check for past bookings - bookings with status COMPLETED and at least one occurrence with end_date < current_date
+                    has_past_booking = 0
+                    completed_bookings = Booking.objects.filter(
                         client=client,
                         professional=professional,
                         status=BookingStates.COMPLETED
-                    ).count()
+                    )
+                    
+                    if completed_bookings.exists():
+                        # For each completed booking, check if any occurrence has end_date earlier than current date
+                        for booking in completed_bookings:
+                            past_occurrences = BookingOccurrence.objects.filter(
+                                booking=booking,
+                                end_date__lt=current_date
+                            )
+                            if past_occurrences.exists():
+                                has_past_booking = 1
+                                break
+                    
+                    logger.info(f"MBA9452: Client {client.id} has_active_booking={has_active_booking}, has_past_booking={has_past_booking}")
                     
                     # Get the client's pets
                     pets = Pet.objects.filter(owner=client.user)
-                    
-                    # Get the last booking date and status
-                    last_booking = Booking.objects.filter(
-                        client=client,
-                        professional=professional
-                    ).order_by('-created_at').first()
-                    
-                    last_booking_date = last_booking.created_at.date() if last_booking else None
-                    last_booking_status = last_booking.status if last_booking else None
                     
                     # Build the connection data
                     connection_data = {
@@ -1935,15 +1944,13 @@ class ConnectionsView(APIView):
                         'name': client.user.name,
                         'profile_image': client.user.profile_image_url if hasattr(client.user, 'profile_image_url') else None,
                         'about_me': client.about_me,
-                        'last_booking_date': last_booking_date,
-                        'last_booking_status': last_booking_status,
+                        'has_past_booking': has_past_booking,
                         'pets': [{'id': pet.pet_id, 'name': pet.name, 'species': pet.species} for pet in pets],
-                        'active_bookings_count': active_bookings_count,
-                        'completed_bookings_count': completed_bookings_count,
+                        'active_bookings_count': 1 if has_active_booking else 0,
                         'conversation_id': conversation_id if conversation_id else None
                     }
                     
-                    logger.info(f"MBA78vebt393 Built connection data for client {client.user.id}: {connection_data}")
+                    logger.info(f"MBA9452: Built connection data for client {client.user.id}: {connection_data}")
                     
                     connections.append(connection_data)
                 
@@ -1964,7 +1971,7 @@ class ConnectionsView(APIView):
                 })
                 
         except Exception as e:
-            logger.error(f"MBA78vebt393 Error in ConnectionsView: {str(e)}")
+            logger.error(f"MBA9452: Error in ConnectionsView: {str(e)}")
             return Response(
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

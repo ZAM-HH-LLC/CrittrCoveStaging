@@ -16,12 +16,44 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
   const [isViewMessagesHovered, setIsViewMessagesHovered] = useState(false);
   const [isCreateBookingHovered, setIsCreateBookingHovered] = useState(false);
   
-  debugLog('MBA4321 Rendering ConnectionCard:', {
+  // Determine booking status tag
+  const getBookingStatusTag = () => {
+    if (connection.active_bookings_count > 0) {
+      return {
+        icon: "calendar-check",
+        iconColor: "#4CAF50",
+        text: "Active Bookings",
+        containerStyle: styles.activeBookingsContainer,
+        textStyle: styles.activeBookingsText
+      };
+    } else if (connection.has_past_booking === 1) {
+      return {
+        icon: "history",
+        iconColor: "#9C27B0",
+        text: "Past Bookings",
+        containerStyle: styles.pastBookingsContainer,
+        textStyle: styles.pastBookingsText
+      };
+    } else {
+      return {
+        icon: "calendar-remove",
+        iconColor: "#898974",
+        text: "No Bookings Yet",
+        containerStyle: styles.noBookingsContainer,
+        textStyle: styles.noBookingsText
+      };
+    }
+  };
+  
+  const bookingStatus = getBookingStatusTag();
+  
+  debugLog('MBA9452: Rendering ConnectionCard:', {
     connectionId: connection.id,
     connectionName: connection.name,
     connectionType: type,
     conversationId: connection.conversation_id,
-    lastBookingDate: connection.last_booking_date,
+    hasActivePastBooking: connection.has_past_booking,
+    activeBookingsCount: connection.active_bookings_count,
     isMobile,
     isWideScreen,
     isExtraWideScreen,
@@ -71,20 +103,12 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                 </View>
               )}
               
-              {connection.last_booking_date ? (
-                <View style={styles.pastBookingsContainer}>
-                  <MaterialCommunityIcons name="calendar-clock" size={14} color={"#9C27B0"} />
-                  <Text style={styles.pastBookingsText}>
-                    Past Bookings
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.noBookingsContainer}>
-                  <Text style={styles.noBookingsText}>
-                    No Bookings Yet
-                  </Text>
-                </View>
-              )}
+              <View style={bookingStatus.containerStyle}>
+                <MaterialCommunityIcons name={bookingStatus.icon} size={14} color={bookingStatus.iconColor} />
+                <Text style={bookingStatus.textStyle}>
+                  {bookingStatus.text}
+                </Text>
+              </View>
             </View>
           </View>
           
@@ -328,27 +352,28 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   noBookingsContainer: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F5F5F4',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F0',
     borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginTop: 2,
+    padding: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
   },
   noBookingsText: {
     fontSize: 12,
-    color: theme.colors.placeholder,
+    color: '#898974',
     fontFamily: theme.fonts.regular.fontFamily,
+    marginLeft: 6,
   },
   pastBookingsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#F3E5F5',
+    backgroundColor: '#F9F2FC',
     borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginTop: 2,
+    padding: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
   },
   pastBookingsText: {
     marginLeft: 6,
@@ -420,6 +445,21 @@ const styles = StyleSheet.create({
   buttonHovered: {
     transform: [{translateY: -3}],
     boxShadow: '0px 6px 10px rgba(0, 0, 0, 0.15)',
+  },
+  activeBookingsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9E5',
+    borderRadius: 4,
+    padding: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  activeBookingsText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: '#4CAF50',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 

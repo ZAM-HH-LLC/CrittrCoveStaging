@@ -47,6 +47,7 @@ CURSOR PROJECT GUIDELINES
 3. Avoid code duplication—centralise shared logic.
 4. Add any constants that may be used multiple times to the constants.py. 
 5. Never modify code in <app_name>/views.py or <app_name>/urls.py unless explicitly told to do so.
+6. NEVER try to run the backend server yourself in your responses to me. DO NOT USE THE "runserver" COMMAND.
 
 ---
 
@@ -57,7 +58,7 @@ CURSOR PROJECT GUIDELINES
 4. Error/success responses → show modal + toast.  
 5. Reduce needless round‑trips (e.g., only save pets/services if modified).
 6. NEVER create new components in the ui or edit the styling of the ui unless explicitly told to do so.
-7. NEVER try to run the frontend server yourself in your responses to me.
+7. NEVER try to run the frontend server yourself in your responses to me. DO NOT USE THE "npm run start" COMMAND.
 
 ---
 

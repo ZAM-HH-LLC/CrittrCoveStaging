@@ -9,6 +9,7 @@ class Booking(models.Model):
         ('Confirmed Pending Professional Changes', 'Confirmed Pending Professional Changes'),
         ('Confirmed', 'Confirmed'),
         ('Denied', 'Denied'),
+        ('Completed', 'Completed'),
         ('Cancelled', 'Cancelled'),
         ('Draft', 'Draft'),
     ]

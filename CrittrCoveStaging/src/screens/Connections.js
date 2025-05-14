@@ -141,7 +141,7 @@ const Connections = () => {
   const filterConnectionsLocally = () => {
     if (!allConnections.length) return;
     
-    debugLog('MBA4321 Filtering connections locally with filter:', activeFilter);
+    debugLog('MBA9452: Filtering connections locally with filter:', activeFilter);
     
     if (activeFilter === 'all') {
       setConnections(allConnections);
@@ -154,18 +154,18 @@ const Connections = () => {
     switch (activeFilter) {
       case 'active_bookings':
         filtered = allConnections.filter(connection => 
-          connection.upcoming_booking_date != null
+          connection.active_bookings_count > 0
         );
         break;
       case 'no_bookings':
         filtered = allConnections.filter(connection => 
-          connection.upcoming_booking_date == null
+          connection.active_bookings_count === 0 && connection.has_past_booking === 0
         );
         break;
       case 'past_bookings':
-        // This would require additional data from the API to implement properly
-        // For now, we'll just show all connections
-        filtered = allConnections;
+        filtered = allConnections.filter(connection => 
+          connection.active_bookings_count === 0 && connection.has_past_booking === 1
+        );
         break;
       default:
         filtered = allConnections;
@@ -180,12 +180,12 @@ const Connections = () => {
     
     // If query is empty, reapply the current filter
     if (!query.trim()) {
-      debugLog('MBA4321 Empty search query, reapplying current filter');
+      debugLog('MBA9452: Empty search query, reapplying current filter');
       filterConnectionsLocally();
       return;
     }
 
-    debugLog('MBA4321 Searching connections with query:', query);
+    debugLog('MBA9452: Searching connections with query:', query);
     
     // Get the base set of connections to search from (already filtered by activeFilter)
     let baseConnections = [];
@@ -196,16 +196,18 @@ const Connections = () => {
       switch (activeFilter) {
         case 'active_bookings':
           baseConnections = allConnections.filter(connection => 
-            connection.upcoming_booking_date != null
+            connection.active_bookings_count > 0
           );
           break;
         case 'no_bookings':
           baseConnections = allConnections.filter(connection => 
-            connection.upcoming_booking_date == null
+            connection.active_bookings_count === 0 && connection.has_past_booking === 0
           );
           break;
         case 'past_bookings':
-          baseConnections = allConnections;
+          baseConnections = allConnections.filter(connection => 
+            connection.active_bookings_count === 0 && connection.has_past_booking === 1
+          );
           break;
         default:
           baseConnections = allConnections;
@@ -216,13 +218,9 @@ const Connections = () => {
     const searchLower = query.toLowerCase();
     const filtered = baseConnections.filter(connection => 
       connection.name.toLowerCase().includes(searchLower) || 
-      connection.email.toLowerCase().includes(searchLower) ||
       (activeTab === 'clients' && connection.pets?.some(pet => 
-        pet.name.toLowerCase().includes(searchLower) || 
-        pet.type.toLowerCase().includes(searchLower)
-      )) ||
-      (activeTab === 'professionals' && connection.services?.some(service => 
-        service.toLowerCase().includes(searchLower)
+        pet.name?.toLowerCase().includes(searchLower) || 
+        pet.species?.toLowerCase().includes(searchLower)
       ))
     );
 
@@ -477,8 +475,8 @@ const Connections = () => {
                           ref={searchInputRef}
                           style={styles.searchInput}
                           placeholder={activeTab === 'clients' 
-                            ? "Search by client name, email, or pet" 
-                            : "Search by professional name, email, or service"
+                            ? "Search by client name or pet" 
+                            : "Search by professional name or service"
                           }
                           value={searchQuery}
                           onChangeText={handleSearch}
