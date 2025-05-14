@@ -1284,6 +1284,16 @@ export const createDraftFromBooking = async (bookingId) => {
     return response.data;
   } catch (error) {
     debugLog('MBA6428: Error creating draft from booking:', error);
+    // Return a structured error object instead of throwing
+    if (error.response?.data) {
+      return {
+        error: true,
+        status: error.response.status,
+        message: error.response.data.error || 'Failed to create draft from booking',
+        data: error.response.data
+      };
+    }
+    // Still throw for network errors or other unexpected issues
     throw error;
   }
 };

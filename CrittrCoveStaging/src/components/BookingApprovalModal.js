@@ -74,9 +74,18 @@ const BookingApprovalModal = ({
 
   // Update modal title based on mode
   const getModalTitle = () => {
+    // Debug log to help with modal title decisions
+    debugLog('MBA4321: Modal title decision factors:', {
+      isReadOnly,
+      modalTitle,
+      bookingId
+    });
+    
     if (isReadOnly) {
       return "Booking Details";
     }
+    
+    // Keep the provided modal title
     return modalTitle;
   };
 
@@ -407,6 +416,15 @@ const BookingApprovalModal = ({
 
   // Footer with action buttons
   const renderFooter = () => {
+    // Log the current state for debugging
+    debugLog('MBA4321: Footer render state:', {
+      hideButtons,
+      isReadOnly,
+      showChangeRequestInput,
+      isProfessional,
+      modalTitle
+    });
+    
     // Don't render any footer if the buttons should be hidden
     if (hideButtons) {
       return null;
@@ -444,6 +462,9 @@ const BookingApprovalModal = ({
         </View>
       );
     } else {
+      // For booking updates or regular approvals, show all action buttons
+      const isBookingUpdate = modalTitle === "Booking Update";
+      
       // Client gets two or three buttons: Close, Approve, Request Changes
       return (
         <View style={styles.footerContainer}>
@@ -465,7 +486,7 @@ const BookingApprovalModal = ({
             style={[styles.button, styles.approveButton]}
             onPress={handleApprove}
           >
-            <Text style={styles.approveText}>Approve</Text>
+            <Text style={styles.approveText}>{isBookingUpdate ? "Approve Update" : "Approve"}</Text>
           </TouchableOpacity>
         </View>
       );

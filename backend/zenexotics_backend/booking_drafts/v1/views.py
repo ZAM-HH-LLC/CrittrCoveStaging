@@ -2638,10 +2638,19 @@ class CreateDraftFromBookingView(APIView):
                 logger.error(f"MBA6428: Unauthorized access attempt by {request.user.email} for booking {booking_id}")
                 return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
             
-            # Delete any existing drafts for this booking
-            existing_drafts = BookingDraft.objects.filter(booking=booking)
+            # Get the client
+            client = booking.client
+            
+            # Delete ANY existing drafts between this professional and client, not just for this booking
+            existing_drafts = BookingDraft.objects.filter(
+                booking__professional=professional,
+                booking__client=client
+            )
+            
             if existing_drafts.exists():
-                logger.info(f"MBA6428: Deleting {existing_drafts.count()} existing drafts for booking {booking_id}")
+                draft_ids = list(existing_drafts.values_list('draft_id', flat=True))
+                draft_count = existing_drafts.count()
+                logger.info(f"MBA6428: Deleting {draft_count} existing drafts between professional {professional.professional_id} and client {client.id}: {draft_ids}")
                 existing_drafts.delete()
             
             # Create a new draft

@@ -1727,6 +1727,40 @@ const MessageHistory = ({ navigation, route }) => {
       .map(m => m.metadata?.booking_id)
       .filter(Boolean);
     
+    // Find approval requests for already confirmed bookings
+    const bookingsWithUpdates = {};
+    
+    // For each confirmed booking, check if there are newer approval requests
+    confirmedBookingIds.forEach(bookingId => {
+      const messagesForBooking = messages.filter(m => 
+        m.metadata?.booking_id === bookingId
+      ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      // Find the confirmation message for this booking
+      const confirmationMessage = messagesForBooking.find(m => 
+        m.type_of_message === 'booking_confirmed'
+      );
+      
+      // Find any newer approval request messages for this booking
+      if (confirmationMessage) {
+        const confirmationTime = new Date(confirmationMessage.timestamp);
+        const newerApprovalRequests = messagesForBooking.filter(m => 
+          m.type_of_message === 'send_approved_message' && 
+          new Date(m.timestamp) > confirmationTime
+        );
+        
+        // If we found newer approval requests, mark this booking as having updates
+        if (newerApprovalRequests.length > 0) {
+          bookingsWithUpdates[bookingId] = true;
+          debugLog('MBA6428: Detected booking update for confirmed booking:', {
+            bookingId,
+            confirmationTime,
+            newerApprovalRequests: newerApprovalRequests.map(m => m.message_id)
+          });
+        }
+      }
+    });
+    
     const hasChangeRequest = item.metadata?.booking_id && 
       messages.some(m => 
         m.type_of_message === 'request_changes' && 
@@ -1736,6 +1770,10 @@ const MessageHistory = ({ navigation, route }) => {
     // Determine if booking is confirmed
     const bookingIsConfirmed = item.metadata?.booking_id && 
       confirmedBookingIds.includes(item.metadata.booking_id);
+      
+    // Check if this confirmed booking has newer approval requests
+    const hasNewerApprovalRequests = item.metadata?.booking_id && 
+      bookingsWithUpdates[item.metadata.booking_id];
     
     // Determine if this is the newest message for this booking
     let isNewestMessage = false;
@@ -1767,6 +1805,35 @@ const MessageHistory = ({ navigation, route }) => {
       // Get booking status from metadata
       const bookingStatus = bookingIsConfirmed ? "Confirmed" : item.metadata?.booking_status;
       
+      // For approval requests: determine if this is for an already confirmed booking
+      // by checking if there's a booking_confirmed message with an earlier timestamp
+      const isUpdateToConfirmedBooking = isApprovalMessage && bookingIsConfirmed && bookingId && 
+        messages.some(m => 
+          m.type_of_message === 'booking_confirmed' && 
+          m.metadata?.booking_id === bookingId &&
+          new Date(m.timestamp) < new Date(item.timestamp)
+        );
+      
+      // Check if there are newer request changes messages for this booking update
+      const hasNewerRequestChanges = isUpdateToConfirmedBooking && bookingId &&
+        messages.some(m =>
+          m.type_of_message === 'request_changes' &&
+          m.metadata?.booking_id === bookingId &&
+          new Date(m.timestamp) > new Date(item.timestamp)
+        );
+      
+      // Log info if this is an update to a confirmed booking
+      if (isUpdateToConfirmedBooking) {
+        debugLog('MBA6428: Detected approval request for already confirmed booking:', {
+          messageId: item.message_id,
+          bookingId,
+          isApprovalMessage,
+          bookingIsConfirmed,
+          isUpdateToConfirmedBooking,
+          hasNewerRequestChanges
+        });
+      }
+      
       // Check if the pro should be able to edit the draft
       const showEditDraft = selectedConversationData?.is_professional && 
         (item.type_of_message === 'initial_booking_request' || 
@@ -1794,6 +1861,7 @@ const MessageHistory = ({ navigation, route }) => {
       return (
         <BookingMessageCard
           type={item.type_of_message === 'initial_booking_request' ? 'request' : 'approval'}
+          displayType={isUpdateToConfirmedBooking ? 'booking_update' : undefined}
           data={{
             ...item.metadata,
             booking_id: item.metadata.booking_id,
@@ -1829,9 +1897,10 @@ const MessageHistory = ({ navigation, route }) => {
             handleEditDraft(bookingId);
           } : undefined}
           bookingStatus={bookingStatus}
-          hasChangeRequest={hasAssociatedChangeRequest}
+          hasChangeRequest={hasAssociatedChangeRequest || hasNewerRequestChanges}
           isNewestMessage={isNewestMessage}
           messageCreatedAt={messageCreatedAt}
+          isAfterConfirmation={isUpdateToConfirmedBooking}
         />
       );
     }
@@ -1844,14 +1913,58 @@ const MessageHistory = ({ navigation, route }) => {
       const serviceType = item.metadata?.service_type;
       const bookingStatus = bookingIsConfirmed ? "Confirmed" : item.metadata?.booking_status;
       
+      // For a request_changes message, it should be considered the newest if:
+      // 1. It's the most recent message for this booking (already calculated)
+      // 2. OR there are no newer approval requests for this booking after this request_changes message
+      let isNewestChangeRequest = isNewestMessage;
+      
+      if (!isNewestChangeRequest && item.type_of_message === 'request_changes' && bookingId) {
+        // Check if there are any newer approval messages
+        const hasNewerApprovalMessages = messages.some(m => 
+          m.type_of_message === 'send_approved_message' && 
+          m.metadata?.booking_id === bookingId &&
+          new Date(m.timestamp) > new Date(item.timestamp)
+        );
+        
+        // If there are no newer approval messages, this can be treated as the newest message
+        isNewestChangeRequest = !hasNewerApprovalMessages;
+        
+        debugLog('MBA4321: Checking if request_changes is effectively newest:', {
+          messageId: item.message_id,
+          originalIsNewest: isNewestMessage,
+          hasNewerApprovals: hasNewerApprovalMessages,
+          effectivelyNewest: isNewestChangeRequest
+        });
+      }
+      
+      // Check if this change request is related to a booking update
+      // (i.e., an approval that came after a booking confirmation)
+      const isRelatedToUpdate = bookingIsConfirmed && bookingId &&
+        messages.some(m => 
+          (m.type_of_message === 'send_approved_message' || m.type_of_message === 'booking_confirmed') &&
+          m.metadata?.booking_id === bookingId
+        );
+      
       // Log for debugging
-      debugLog('MBA6428: Rendering change request message:', {
+      debugLog('MBA4321: Rendering change request message:', {
         bookingId,
         isFromMe,
         content: item.content,
         metadata: item.metadata,
         isNewestMessage,
-        isConfirmed: bookingIsConfirmed
+        isNewestChangeRequest,
+        isConfirmed: bookingIsConfirmed,
+        isRelatedToUpdate,
+        hasOlderBookingConfirmedMessage: messages.some(m => 
+          m.type_of_message === 'booking_confirmed' && 
+          m.metadata?.booking_id === bookingId &&
+          new Date(m.timestamp) < new Date(item.timestamp)
+        ),
+        hasOlderApprovalMessage: messages.some(m => 
+          m.type_of_message === 'send_approved_message' && 
+          m.metadata?.booking_id === bookingId &&
+          new Date(m.timestamp) < new Date(item.timestamp)
+        )
       });
       
       return (
@@ -1890,8 +2003,9 @@ const MessageHistory = ({ navigation, route }) => {
           } : undefined}
           bookingStatus={bookingStatus}
           hasChangeRequest={false} // Change requests don't have change requests themselves
-          isNewestMessage={isNewestMessage}
+          isNewestMessage={isNewestChangeRequest} // Use enhanced newest message check
           messageCreatedAt={messageCreatedAt}
+          isAfterConfirmation={isRelatedToUpdate} // Flag for change requests after an update
         />
       );
     }
@@ -1921,7 +2035,8 @@ const MessageHistory = ({ navigation, route }) => {
         isFromMe,
         metadata: item.metadata,
         totalCost,
-        payout
+        payout,
+        hasNewerApprovalRequests
       });
       
       return (
@@ -1949,6 +2064,11 @@ const MessageHistory = ({ navigation, route }) => {
           bookingStatus="Confirmed"
           isNewestMessage={isNewestMessage}
           messageCreatedAt={messageCreatedAt}
+          onEditDraft={selectedConversationData?.is_professional ? () => {
+            debugLog('MBA6428: Edit Draft button clicked for confirmed booking with bookingId:', bookingId);
+            handleEditDraft(bookingId);
+          } : undefined}
+          hasNewerApprovalRequests={hasNewerApprovalRequests}
         />
       );
     }
@@ -2444,31 +2564,8 @@ const MessageHistory = ({ navigation, route }) => {
         <Text style={styles.messageHeaderName}>
           {selectedConversationData?.other_user_name}
         </Text>
-        {/* <TouchableOpacity onPress={handleForceReconnect} style={{ marginLeft: 8 }}>
-          {selectedConversationData?.other_participant_online ? (
-            <Badge
-              size={8}
-              style={{
-                backgroundColor: '#4CAF50', // Green for online
-                marginLeft: 8
-              }}
-            />
-          ) : (
-            <Badge
-              size={8}
-              style={{
-                backgroundColor: '#F44336', // Red for offline
-                marginLeft: 8
-              }}
-            />
-          )}
-        </TouchableOpacity>
         
-        {isUsingFallback && (
-          <Text style={{ fontSize: 10, color: '#FFC107', marginLeft: 4 }}>Fallback</Text>
-        )} */}
-        
-        {hasDraft && (
+        {hasDraft && draftData?.draft_id && (
           <TouchableOpacity 
             style={styles.editDraftButton}
             onPress={() => {
@@ -2739,8 +2836,19 @@ const MessageHistory = ({ navigation, route }) => {
       // Call our new API function to create a draft from the booking
       const response = await createDraftFromBooking(bookingId);
       
+      // Check for error in response
+      if (response.error) {
+        debugLog('MBA6428: Error returned from createDraftFromBooking:', response);
+        Alert.alert('Error', response.message || 'Failed to create draft from booking. Please try again.');
+        return;
+      }
+      
       if (response && response.draft_id) {
         debugLog('MBA6428: Draft created successfully:', response);
+        
+        // Update local state with the new draft info
+        setHasDraft(true);
+        setDraftData(response.draft_data);
         
         // Use the returned draft_id for opening the booking step modal
         setCurrentBookingId(response.draft_id);
@@ -3064,6 +3172,12 @@ const MessageHistory = ({ navigation, route }) => {
         onClose={() => {
           setShowBookingStepModal(false);
           setCurrentBookingId(null);
+          
+          // Refresh message data when modal is closed to get latest draft status
+          if (selectedConversation) {
+            debugLog('MBA6428: Refreshing message data after closing BookingStepModal');
+            fetchMessages(selectedConversation, 1);
+          }
         }}
         navigation={navigation}
         bookingId={currentBookingId}
@@ -3083,6 +3197,13 @@ const MessageHistory = ({ navigation, route }) => {
             // Close the modal and clean up
             setShowBookingStepModal(false);
             setCurrentBookingId(null);
+            
+            // Refresh message data to get latest draft status
+            if (selectedConversation) {
+              debugLog('MBA6428: Refreshing message data after booking error');
+              fetchMessages(selectedConversation, 1);
+            }
+            
             return;
           }
           
@@ -3113,6 +3234,12 @@ const MessageHistory = ({ navigation, route }) => {
           // Close the modal and clean up
           setShowBookingStepModal(false);
           setCurrentBookingId(null);
+          
+          // Refresh message data to get latest draft status
+          if (selectedConversation) {
+            debugLog('MBA6428: Refreshing message data after successful booking completion');
+            fetchMessages(selectedConversation, 1);
+          }
 
           // Show success message to the user
           const successMessage = bookingData.isUpdate

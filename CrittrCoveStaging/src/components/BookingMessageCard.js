@@ -25,6 +25,7 @@ const checkDSTChange = (startDate, startTime, endDate, endTime, timezone) => {
 
 const BookingMessageCard = ({ 
   type,  // 'request', 'approval', 'request_changes', or 'booking_confirmed'
+  displayType, // Optional override for the display title (e.g., 'booking_update')
   data,
   isFromMe,
   onPress,
@@ -35,7 +36,9 @@ const BookingMessageCard = ({
   bookingStatus, // Added to know if booking is confirmed
   hasChangeRequest, // Boolean to indicate if this approval has a pending change request
   isNewestMessage = false, // Flag to indicate if this is the newest message for this booking
-  messageCreatedAt // Timestamp of when the message was created
+  messageCreatedAt, // Timestamp of when the message was created
+  hasNewerApprovalRequests = false, // Flag to indicate if this booking_confirmed message has newer approval requests
+  isAfterConfirmation = false // Flag to indicate if this approval message comes after a booking confirmation
 }) => {
   const { timeSettings } = useContext(AuthContext);
   const userTimezone = timeSettings?.timezone || 'US/Mountain';
@@ -68,22 +71,58 @@ const BookingMessageCard = ({
   const isBookingConfirmed = type === 'booking_confirmed';
   const shouldShowAsApproval = type === 'approval' || isChangeRequest;
   
+  // Special flag for change requests that are for a confirmed booking
+  const isChangeRequestForConfirmedBooking = isChangeRequest && isConfirmed;
+  
   // Determine if we should show the overlay based on message type and recency
-  // - Show "Booking Confirmed" on all earlier messages for confirmed bookings
+  // - Show "Booking Confirmed" on all earlier messages for confirmed bookings EXCEPT
+  //   for approval messages that come after a booking confirmation
   // - Show "Changes Requested" on approval messages if there's a change request AND this isn't the newest message
   // - Show "Booking Updated" on change request messages if they're not the newest message and there's a newer approval
-  const shouldShowOverlay = (isConfirmed && !isBookingConfirmed) || 
+  // - Show "Booking Updated" on the booking_confirmed message if there's a newer approval request 
+  //   for the same booking ID (NOT on the approval request itself)
+  // - Show "Booking Updated" on booking update messages if they have newer request changes
+  const shouldShowOverlay = 
+    // Show "Booking Confirmed" on earlier messages, but NOT on approval messages that come after a confirmation
+    // AND not on request_changes messages that are the newest message
+    (isConfirmed && !isBookingConfirmed && type !== 'approval' && !isAfterConfirmation && !(isChangeRequest && isNewestMessage)) || 
+    // Show "Changes Requested" on approval messages with pending changes that aren't newest
     (type === 'approval' && hasChangeRequest && !isNewestMessage) ||
-    (isChangeRequest && !isNewestMessage);
+    // Show "Booking Updated" on change request messages that aren't newest
+    (isChangeRequest && !isNewestMessage) ||
+    // Show "Booking Updated" on booking_confirmed messages with newer approval requests
+    (isBookingConfirmed && hasNewerApprovalRequests) ||
+    // Show "Booking Updated" on booking update messages (displayType === 'booking_update') with newer request changes
+    (displayType === 'booking_update' && hasChangeRequest && !isNewestMessage) ||
+    // Show "Booking Updated" on approval messages that come after confirmation but aren't the newest message
+    (type === 'approval' && isAfterConfirmation && !isNewestMessage);
   
   // What overlay text to show
   const getOverlayText = () => {
-    if (isConfirmed && !isBookingConfirmed) return 'Booking Confirmed';
+    // For booking_confirmed messages with newer approval requests, show "Booking Updated"
+    if (isBookingConfirmed && hasNewerApprovalRequests) return 'Booking Updated';
     
+    // For booking update messages with newer request changes, show "Booking Updated"
+    if (displayType === 'booking_update' && hasChangeRequest && !isNewestMessage) return 'Booking Updated';
+    
+    // For approval messages that come after a confirmation but aren't newest, show "Booking Updated"
+    if (type === 'approval' && isAfterConfirmation && !isNewestMessage) return 'Booking Updated';
+    
+    // For approval messages that come after a confirmation and are newest, don't show an overlay
+    if (type === 'approval' && isAfterConfirmation && isNewestMessage) return '';
+    
+    // For request changes messages that are the newest, don't show an overlay
+    if (isChangeRequest && isNewestMessage) return '';
+    
+    // For other messages when booking is confirmed, show "Booking Confirmed"
+    if (isConfirmed && !isBookingConfirmed && !isAfterConfirmation && !(isChangeRequest && isNewestMessage)) return 'Booking Confirmed';
+    
+    // For approval messages with change requests that aren't newest
     if (type === 'approval' && hasChangeRequest && !isNewestMessage) {
       return 'Changes Requested';
     }
     
+    // For change request messages that aren't newest
     if (isChangeRequest && !isNewestMessage) {
       return 'Booking Updated';
     }
@@ -92,6 +131,29 @@ const BookingMessageCard = ({
   };
   
   const overlayText = getOverlayText();
+  
+  // Log message state for debugging
+  debugLog('MBA4321: Message state for booking', data.booking_id, {
+    type,
+    displayType,
+    isFromMe,
+    isProfessional,
+    bookingStatus,
+    hasChangeRequest,
+    isNewestMessage,
+    isAfterConfirmation,
+    hasNewerApprovalRequests,
+    shouldShowOverlay,
+    overlayText,
+    messageCreatedAt: messageCreatedAt || 'N/A',
+    // Add detailed logic checks to help debug overlay decisions
+    overlayLogicChecks: {
+      isConfirmedButNotConfirmationMessage: isConfirmed && !isBookingConfirmed,
+      isChangeRequestAndNewestMessage: isChangeRequest && isNewestMessage,
+      isApprovalWithChangeRequest: type === 'approval' && hasChangeRequest && !isNewestMessage,
+      isBookingConfirmedWithNewerApprovals: isBookingConfirmed && hasNewerApprovalRequests
+    }
+  });
 
   const getIcon = () => {
     switch (type) {
@@ -109,6 +171,16 @@ const BookingMessageCard = ({
   };
 
   const getTitle = () => {
+    // If a display type is provided, use it to override the title
+    if (displayType === 'booking_update') {
+      return 'Booking Update';
+    }
+    
+    // For change requests that come after a booking update, adjust the display
+    if (type === 'request_changes' && isAfterConfirmation) {
+      return 'Update Change Request';
+    }
+    
     switch (type) {
       case 'request':
         return 'Booking Request';
@@ -377,9 +449,11 @@ const BookingMessageCard = ({
           {/* Booking confirmation message specific content */}
           {isBookingConfirmed ? (
             <>
+              {/* Card content is clickable to view details */}
               <TouchableOpacity 
                 style={styles.confirmationContainerClickable}
                 onPress={handleOpenApprovalModal}
+                activeOpacity={0.7}
               >
                 <View style={styles.confirmationContainer}>
                   <Text style={styles.confirmationText}>
@@ -407,13 +481,28 @@ const BookingMessageCard = ({
                     </Text>
                   </View>
                 </View>
-                
-                <View style={styles.buttonContainer}>
-                  <View style={styles.detailsButton}>
-                    <Text style={styles.detailsButtonText}>View Details</Text>
-                  </View>
-                </View>
               </TouchableOpacity>
+              
+              {/* Buttons are separate from the clickable card content */}
+              <View style={styles.buttonContainer}>
+                {/* View Details button */}
+                <TouchableOpacity
+                  style={[styles.detailsButton, { flex: 1 }]}
+                  onPress={handleOpenApprovalModal}
+                >
+                  <Text style={styles.detailsButtonText}>View Details</Text>
+                </TouchableOpacity>
+                
+                {/* Edit Details button for professionals */}
+                {isProfessional && onEditDraft && (
+                  <TouchableOpacity 
+                    style={[styles.editButton, { flex: 1 }]}
+                    onPress={onEditDraft}
+                  >
+                    <Text style={styles.editButtonText}>Edit Details</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </>
           ) : (
             /* Original content for other message types */
@@ -506,10 +595,12 @@ const BookingMessageCard = ({
                 <TouchableOpacity 
                   style={[
                     styles.detailsButton,
-                    (isConfirmed && !isBookingConfirmed) && styles.disabledButton
+                    // Only disable the button if it's a regular message with the Booking Confirmed overlay
+                    // Don't disable for isAfterConfirmation messages (booking updates) or displayType === 'booking_update'
+                    (isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update') && styles.disabledButton
                   ]}
                   onPress={handleOpenApprovalModal}
-                  disabled={isConfirmed && !isBookingConfirmed}
+                  disabled={isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update'}
                 >
                   <Text style={styles.detailsButtonText}>
                     {isBookingConfirmed ? "View Details" : "Review Details"}
@@ -537,7 +628,7 @@ const BookingMessageCard = ({
                 )}
                 
                 {/* Edit Details button - visible to pros for change requests */}
-                {isChangeRequest && isProfessional && !isConfirmed && (
+                {isChangeRequest && isProfessional && onEditDraft && (
                   <TouchableOpacity 
                     style={styles.editButton}
                     onPress={onEditDraft}
@@ -571,9 +662,16 @@ const BookingMessageCard = ({
         onRequestChangesError={handleRequestChangesError}
         initialData={safeInitialData}
         isProfessional={isProfessional}
-        isReadOnly={isConfirmed || isBookingConfirmed}
-        hideButtons={isConfirmed || isBookingConfirmed}
-        modalTitle={isBookingConfirmed || isConfirmed ? "Booking Details" : "Booking Approval Request"}
+        // Only set read-only mode for confirmed messages that aren't booking updates
+        isReadOnly={(isConfirmed || isBookingConfirmed) && displayType !== 'booking_update' && !isAfterConfirmation}
+        // Only hide buttons for confirmed messages that aren't booking updates
+        hideButtons={(isConfirmed || isBookingConfirmed) && displayType !== 'booking_update' && !isAfterConfirmation}
+        modalTitle={
+          displayType === 'booking_update' ? "Booking Update" :
+          isAfterConfirmation ? "Booking Update" :
+          isBookingConfirmed || isConfirmed ? "Booking Details" : 
+          "Booking Approval Request"
+        }
       />
     </View>
   );
