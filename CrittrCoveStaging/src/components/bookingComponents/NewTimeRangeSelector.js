@@ -13,6 +13,7 @@ const NewTimeRangeSelector = ({
   uniqueId = 'default',
   dateRange = null,
   selectedDates = [],
+  isIndividualDaySelector = false,
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
   
@@ -306,8 +307,10 @@ const NewTimeRangeSelector = ({
       <View style={styles.timeSelectionContainer}>
         {/* Start time picker with date */}
         <View style={styles.timePickerContainer}>
-          {startDate && (
+          {startDate && (isIndividualDaySelector || times.isOvernightForced || is_overnight) ? (
             <Text style={styles.dateLabel}>{formatDate(startDate)}</Text>
+          ) : (
+            <Text style={styles.dateLabel}>Applies to all individual days</Text>
           )}
           <Text style={styles.timeLabel}>Start Time</Text>
           <TouchableOpacity
@@ -330,8 +333,10 @@ const NewTimeRangeSelector = ({
         
         {/* End time picker with date */}
         <View style={styles.timePickerContainer}>
-          {endDate && (
+          {endDate && (isIndividualDaySelector || times.isOvernightForced || is_overnight) ? (
             <Text style={styles.dateLabel}>{formatDate(endDate)}</Text>
+          ) : (
+            <Text style={styles.dateLabel}>Applies to all individual days</Text>
           )}
           <Text style={styles.timeLabel}>End Time</Text>
           <TouchableOpacity

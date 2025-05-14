@@ -114,6 +114,7 @@ const DayTimeSelector = ({
         is_overnight={is_overnight}
         uniqueId={uniqueId}
         selectedDates={[date]}
+        isIndividualDaySelector={true}
       />
     </View>
   );
