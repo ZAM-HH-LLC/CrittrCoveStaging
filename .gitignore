@@ -26,6 +26,8 @@ wheels/
 htmlcov/
 .env*
 *.env
+.aws/*
+.aws
 .venv
 env/
 venv/
