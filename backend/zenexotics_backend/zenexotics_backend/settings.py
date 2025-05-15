@@ -371,13 +371,10 @@ ASGI_APPLICATION = "zenexotics_backend.asgi.application"
 
 # Channel Layers
 CHANNEL_LAYERS = {
-    # "default": {
-    #     "BACKEND": "channels.layers.InMemoryChannelLayer",
-    # },
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "BACKEND": "channels_redis.core.RedisChannelLayer" if os.environ.get("IS_PRODUCTION") or os.environ.get("IS_STAGING") else "channels.layers.InMemoryChannelLayer",
         "CONFIG": {
-            "hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379/0")],
+            "hosts": [os.environ.get("REDIS_URL")] if os.environ.get("IS_PRODUCTION") or os.environ.get("IS_STAGING") else [os.environ.get("REDIS_URL", "redis://localhost:6379/0")],
         },
     },
 }

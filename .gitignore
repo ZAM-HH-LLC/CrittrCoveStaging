@@ -31,11 +31,20 @@ htmlcov/
 .venv
 env/
 venv/
+staticfiles/*
+backend/zenexotics_backend/staticfiles/*
+backend/zenexotics_backend/staticfiles/
 venv/*
 ENV/
 env.bak/
 venv.bak/
 backend/zenexotics_backend/.env
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
 
 # dependencies
 node_modules/

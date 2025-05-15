@@ -1,1 +1,1 @@
-web: gunicorn zenexotics_backend.wsgi --bind 0.0.0.0:8000 --workers 3 
+web: gunicorn --workers=2 --threads=4 zenexotics_backend.wsgi:application 
