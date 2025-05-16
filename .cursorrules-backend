@@ -1,5 +1,11 @@
 # CrittrCove Backend Deployment Guide
 # This file maintains context about AWS Elastic Beanstalk deployment setup
+# the goal here is to successfully deploy the backend to the aws elastic beanstalk
+#    and correct all the errors i am having with the deploy.sh script (file location below)
+
+## 0. .cursorrules-backend changes:
+    - When asked to make changes to the .cursorrules-backend, always use the existing one here:
+    FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/.cursorrules-backend
 
 ## 1. Project Structure
    - Root Directory: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging
@@ -19,12 +25,14 @@
 
 ### 3.1 Deployment Configuration Files
    - Procfile:
-     - Location: backend/zenexotics_backend/Procfile
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/Procfile
      - Purpose: Instructs EB how to run the application
      - Content: `web: gunicorn zenexotics_backend.wsgi:application --log-file -`
      - Used by: Elastic Beanstalk to start the web application
+     - Important: No trailing characters or whitespace after the command
 
    - .elasticbeanstalk/config.yml:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.elasticbeanstalk/config.yml
      - Purpose: Configures EB CLI deployment settings
      - Key settings:
        - environment: Crittrcovestaging-env
@@ -34,7 +42,9 @@
      - Used by: EB CLI during deploy.sh execution
 
    - .ebextensions/:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/
      - 01_packages.config:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/01_packages.config
        - Purpose: Core EB environment configuration
        - Key settings:
          - WSGIPath: zenexotics_backend.wsgi:application
@@ -42,49 +52,116 @@
          - Environment variables: PYTHONPATH, DJANGO_ENVIRONMENT, DJANGO_SETTINGS_MODULE
      
      - 02_python.config:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/02_python.config
        - Purpose: Manages Python-specific deployment tasks
        - Commands:
-         - 01_install_dependencies: Installs from requirements-eb.txt
-         - 02_migrations: Runs database migrations (leader instance only)
-         - 03_collectstatic: Collects static files (leader instance only)
+         - 01_install_dependencies: Installs from requirements-eb.txt using the virtual environment path
+         - 02_print_dependencies: Prints list of installed packages for debugging
+         - 03_migrations: Runs database migrations (leader instance only)
+         - 04_collectstatic: Collects static files (leader instance only)
+     
+     - 00_options.config:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/00_options.config
+       - Purpose: Sets environment options for AWS Elastic Beanstalk
+       - Key settings:
+         - DJANGO_SETTINGS_MODULE: "zenexotics_backend.settings"
+         - PYTHONPATH: "/var/app/current:$PYTHONPATH"
+         - WSGIPath: "zenexotics_backend.wsgi:application"
+         - Static file mapping
+     
+     - 03_db_and_static.config:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/03_db_and_static.config
+       - Purpose: Configures database and static file settings
+     
+     - 04_db_connection.config:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/04_db_connection.config
+       - Purpose: Advanced database connection management
+     
+     - 05_django_settings.config:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/05_django_settings.config
+       - Purpose: Dynamically patches Django settings for optimal EB configuration
+       - Key features:
+         - Adds DB connection timeout settings (CONN_MAX_AGE)
+         - Adds ATOMIC_REQUESTS setting for better transaction handling
 
    - .aws/:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.aws/
      - config:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.aws/config
        - Purpose: Configures AWS CLI default region and output format
        - Content: Sets region to us-east-2, output to json
      - credentials:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.aws/credentials
        - Purpose: Contains AWS access credentials
-       - Note: Should be automatically populated from environment variables
      
    - Platform Hooks:
-     - Note: The .platform directory doesn't currently exist but may be needed
-     - Typical structure if implemented:
-       - .platform/hooks/predeploy/: Scripts run before deployment
-       - .platform/hooks/postdeploy/: Scripts run after deployment
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/
+     - Prebuild Hooks:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/hooks/prebuild/
+       - 01_upgrade_pip.sh: 
+         - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/hooks/prebuild/01_upgrade_pip.sh
+         - Purpose: Upgrades pip before installing dependencies
+         - Content: Updated to use wildcard path (`/var/app/venv/*/bin/pip install --upgrade pip`)
+       - 02_install_dotenv.sh:
+         - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/hooks/prebuild/02_install_dotenv.sh
+         - Purpose: Specifically installs python-dotenv package
+         - Added to ensure dotenv module is available during Django startup
+     - Postdeploy Hooks:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/hooks/postdeploy/
+       - 01_restart_app.sh: 
+         - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/hooks/postdeploy/01_restart_app.sh
+         - Purpose: Restarts Nginx and web application
+     - Predeploy Hooks:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/hooks/predeploy/
+       - Purpose: Executes before application code is deployed
+     - Config Hooks:
+       - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/confighooks/prebuild/
+       - 01_install_dependencies.sh:
+         - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/confighooks/prebuild/01_install_dependencies.sh
+         - Purpose: Installs dependencies from requirements-eb.txt
+         - Updated to use wildcard path for virtual environment
 
 ### 3.2 Requirements Files
    - requirements.txt:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/requirements.txt
      - Purpose: Basic requirements for development
-     - Key packages: Django, gunicorn, psycopg2-binary
    
    - requirements-eb.txt:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/requirements-eb.txt
      - Purpose: Complete requirements for EB deployment
-     - Additional packages: django-storages, dj-database-url, boto3, python-dotenv
-     - Note: This is the file used during EB deployment (via 02_python.config)
+     - Updated to ensure python-dotenv==1.0.0 is included
 
 ### 3.3 Environment Variables
    - .env.staging:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.env.staging
      - Purpose: Contains all environment variables for staging deployment
-     - Contains: AWS credentials, database URL, secret keys, etc.
-     - Note: This file exists and already has all needed credentials
    
    - .env.production:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.env.production
      - Purpose: Contains all environment variables for production deployment
+
+### 3.4 Utility Scripts
+   - deploy.sh:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/deploy.sh
+     - Purpose: Main deployment script
+     - Updated to ensure python-dotenv is in requirements and hooks are executable
+     
+   - rebuild_env.sh:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/rebuild_env.sh
+     - Purpose: Script to help rebuild the environment using staged deployment
+     
+   - create_deployment_package.sh:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/create_deployment_package.sh
+     - Purpose: Creates an optimized deployment package that stays under EB size limits
+     
+   - check_deployment.sh:
+     - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/check_deployment.sh
+     - Purpose: Diagnoses common deployment issues and suggests fixes
 
 ## 4. Deployment Process
 
 ### 4.1 Deployment Script (deploy.sh)
-   - Location: backend/zenexotics_backend/deploy.sh
+   - FULL PATH: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/deploy.sh
    - Usage: `./deploy.sh [staging|production]`
    - Key steps:
      1. Validates environment argument (staging/production)
@@ -106,36 +183,78 @@
    - Environment status: `eb status`
    - SSH into instance: `eb ssh`
    - Open dashboard: `eb console`
+   - View configuration: `eb config`
+   - List environments: `eb list`
 
 ## 5. Critical Rules
 
 ### 5.1 Never do these things:
-   - Never terminate existing EB environment
+   - ABSOLUTELY NEVER terminate existing EB environment - NEVER use `eb terminate` command
    - Never modify capitalization of environment names
    - Never deploy to production without testing in staging
    - Never remove the `--staged` flag from eb deploy
+   - Never leave trailing characters in Procfile or requirements files
+   - Never create duplicate files or directories outside of /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/
+   - Never add files to parent directories - all files must be in the correct path
 
 ### 5.2 Always do these things:
    - Always work with existing Crittrcovestaging-env
    - Always check logs after deployment (`eb logs`)
    - Always maintain proper environment variables
    - Always test locally before deploying
+   - Always make shell scripts executable with chmod +x
+   - Always use the correct virtual environment path in EB configurations
+   - Always use full paths when creating or editing files
+   - Always create files ONLY in the /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/ directory or its subdirectories
 
 ## 6. Current Working State
    - Environment files (.env.staging, .env.production) exist and contain credentials
    - EB CLI configuration exists and has been updated to correct capitalization
    - Required configuration files (Procfile, .ebextensions) are in place
    - AWS CLI and EB CLI are installed and properly configured
+   - Platform hooks (.platform directory) are set up to handle pip upgrade and application restart
 
 ## 7. Troubleshooting Steps
    - If deployment fails, first check `eb logs` for detailed error messages
+   - For dependency errors, check requirements-eb.txt for compatibility
+   - For script execution errors, ensure all scripts are executable (chmod +x)
    - Verify environment settings with `eb printenv`
    - Test connectivity with `eb ssh` to access instance
    - Verify the WSGI application path is correct in 01_packages.config
    - Check for Django configuration errors in settings.py
    - Validate database connectivity and credentials
+   - Look for trailing characters or whitespace in configuration files
 
-## 8. Required Actions
-   - Run deployment: `./deploy.sh staging`
-   - Check logs after deployment: `eb logs`
-   - Continue running these commands until deployment succeeds
+## 8. Common Deployment Errors
+   - "Command .platform/hooks/prebuild/01_upgrade_pip.sh failed" - Script is not executable or has incorrect line endings
+   - "Container commands build failed" - Error in one of the container commands in .ebextensions
+   - "No matching distribution found" - Incompatible package versions in requirements files
+   - "Instance deployment failed" - Check eb-engine.log for detailed error messages
+   - "chown /var/app/staging/venve/bin/python: no such file or directory" - Virtual environment path issue
+   - "ModuleNotFoundError: No module named 'dotenv'" - Missing python-dotenv in requirements-eb.txt or installation failed
+   - "Connection refused while connecting to upstream" - Django application server is not running correctly
+
+## 9. Current Deployment Issues
+   - The environment is currently showing a "Red" health status
+   - Key error in logs: "ModuleNotFoundError: No module named 'dotenv'"
+   - Root cause: Despite python-dotenv being in requirements-eb.txt, it's not being properly installed
+   - Solution being implemented: 
+     1. Added dedicated script to ensure python-dotenv installation (.platform/hooks/prebuild/02_install_dotenv.sh)
+     2. Updated deploy.sh to verify python-dotenv is in requirements-eb.txt
+     3. Modified deploy.sh to make all hooks executable
+
+## 10. File Location Rules
+   - All AWS Elastic Beanstalk config files MUST be located in:
+     - /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.ebextensions/
+     - /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/.platform/
+   - All deployment scripts MUST be located in:
+     - /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/
+   - All requirement files MUST be located in:
+     - /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend/
+   - Any duplicate files in parent directories SHOULD be removed
+   
+## 11. Zip Deployment Limitations
+   - Amazon Elastic Beanstalk has a file size limit of 524,288,000 bytes (approximately 500MB)
+   - Current application.zip size: 1,253,657,643 bytes (about 1.25GB) which exceeds the limit
+   - Error when uploading manually: "Source bundle is empty or exceeds maximum allowed size: 524288000"
+   - Solution: Created create_deployment_package.sh to generate an optimized package
