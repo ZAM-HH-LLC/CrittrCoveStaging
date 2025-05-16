@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Simple deployment script for CrittrCove
+# CrittrCove Backend Deployment Script
 # Usage: ./deploy.sh [staging|production]
 
 # Exit on error
@@ -31,24 +31,30 @@ if [ "$ENVIRONMENT" == "production" ]; then
   fi
 fi
 
-# Set application and environment names
-APP_NAME="crittrcove_staging"
+# Set environment names - fixed capitalization to match existing EB environment
 if [ "$ENVIRONMENT" == "staging" ]; then
   ENV_NAME="Crittrcovestaging-env"
 else
   ENV_NAME="CrittrCove-production"
 fi
 
-# Get credentials from .env file
+# Get environment variable file
 if [ "$ENVIRONMENT" == "staging" ]; then
   ENV_FILE=".env.staging"
 else
   ENV_FILE=".env.production"
 fi
 
+# Check if environment file exists
+if [ ! -f "$ENV_FILE" ]; then
+  echo "❌ Environment file $ENV_FILE not found!"
+  echo "Please create $ENV_FILE based on env_templates/${ENVIRONMENT}.env"
+  exit 1
+fi
+
 echo "📝 Deploying to $ENVIRONMENT environment using $ENV_FILE..."
 
-# Python environment and dependency setup
+# Setup environment
 echo "🔧 Setting up environment..."
 cd "$(dirname "$0")"
 
@@ -56,17 +62,25 @@ cd "$(dirname "$0")"
 AWS_REGION="us-east-2"
 
 echo "🚀 Deploying application to Elastic Beanstalk..."
-echo "   Application: $APP_NAME"
 echo "   Environment: $ENV_NAME"
 echo "   Region: $AWS_REGION"
 
-# Deploy with EB CLI
-if eb status "$ENV_NAME" &> /dev/null; then
-  echo "🔄 Environment exists, updating..."
-  eb deploy "$ENV_NAME"
-else
-  echo "🆕 Environment doesn't exist, creating..."
-  eb create "$ENV_NAME" --single
+# SAFETY CHECK - Never delete environments
+echo "✅ SAFETY: This script will NEVER delete or recreate environments."
+echo "✅ Deploying code to EXISTING environment: $ENV_NAME"
+
+# Ensure AWS EB CLI is configured with correct application and environment
+echo "📋 Checking AWS EB CLI configuration..."
+if ! eb list | grep -q "$ENV_NAME"; then
+  echo "⚠️ Current directory is not configured for $ENV_NAME."
+  echo "Updating configuration to use $ENV_NAME..."
+  
+  # Set the current environment as default for deployment
+  eb use "$ENV_NAME"
 fi
+
+# Deploy using EB CLI to EXISTING environment
+echo "🔄 Starting deployment..."
+eb deploy "$ENV_NAME" --staged
 
 echo "✅ Deployment complete!" 

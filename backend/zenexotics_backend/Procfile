@@ -1,1 +1,1 @@
-web: gunicorn --workers=2 --threads=4 zenexotics_backend.wsgi:application 
+web: gunicorn zenexotics_backend.wsgi:application --log-file - 

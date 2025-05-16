@@ -1,0 +1,141 @@
+# CrittrCove Backend Deployment Guide
+# This file maintains context about AWS Elastic Beanstalk deployment setup
+
+## 1. Project Structure
+   - Root Directory: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging
+   - Backend Location: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/backend/zenexotics_backend
+   - Frontend Location: /Users/mattaertker/Documents/GitHub/CrittrCoveStaging/CrittrCoveStaging
+
+## 2. AWS Elastic Beanstalk Environment
+   - Environment Name: Crittrcovestaging-env (exact capitalization matters)
+   - Application Name: crittrcove_staging
+   - AWS Region: us-east-2
+   - AWS CLI Version: 2.27.15
+   - EB CLI Version: 3.23.3
+   - Platform: Python 3.9
+   - Instance Type: t2.micro (configured in 01_packages.config)
+
+## 3. Critical Files Overview
+
+### 3.1 Deployment Configuration Files
+   - Procfile:
+     - Location: backend/zenexotics_backend/Procfile
+     - Purpose: Instructs EB how to run the application
+     - Content: `web: gunicorn zenexotics_backend.wsgi:application --log-file -`
+     - Used by: Elastic Beanstalk to start the web application
+
+   - .elasticbeanstalk/config.yml:
+     - Purpose: Configures EB CLI deployment settings
+     - Key settings:
+       - environment: Crittrcovestaging-env
+       - application_name: crittrcove_staging
+       - default_platform: Python 3.9
+       - default_region: us-east-2
+     - Used by: EB CLI during deploy.sh execution
+
+   - .ebextensions/:
+     - 01_packages.config:
+       - Purpose: Core EB environment configuration
+       - Key settings:
+         - WSGIPath: zenexotics_backend.wsgi:application
+         - InstanceType: t2.micro
+         - Environment variables: PYTHONPATH, DJANGO_ENVIRONMENT, DJANGO_SETTINGS_MODULE
+     
+     - 02_python.config:
+       - Purpose: Manages Python-specific deployment tasks
+       - Commands:
+         - 01_install_dependencies: Installs from requirements-eb.txt
+         - 02_migrations: Runs database migrations (leader instance only)
+         - 03_collectstatic: Collects static files (leader instance only)
+
+   - .aws/:
+     - config:
+       - Purpose: Configures AWS CLI default region and output format
+       - Content: Sets region to us-east-2, output to json
+     - credentials:
+       - Purpose: Contains AWS access credentials
+       - Note: Should be automatically populated from environment variables
+     
+   - Platform Hooks:
+     - Note: The .platform directory doesn't currently exist but may be needed
+     - Typical structure if implemented:
+       - .platform/hooks/predeploy/: Scripts run before deployment
+       - .platform/hooks/postdeploy/: Scripts run after deployment
+
+### 3.2 Requirements Files
+   - requirements.txt:
+     - Purpose: Basic requirements for development
+     - Key packages: Django, gunicorn, psycopg2-binary
+   
+   - requirements-eb.txt:
+     - Purpose: Complete requirements for EB deployment
+     - Additional packages: django-storages, dj-database-url, boto3, python-dotenv
+     - Note: This is the file used during EB deployment (via 02_python.config)
+
+### 3.3 Environment Variables
+   - .env.staging:
+     - Purpose: Contains all environment variables for staging deployment
+     - Contains: AWS credentials, database URL, secret keys, etc.
+     - Note: This file exists and already has all needed credentials
+   
+   - .env.production:
+     - Purpose: Contains all environment variables for production deployment
+
+## 4. Deployment Process
+
+### 4.1 Deployment Script (deploy.sh)
+   - Location: backend/zenexotics_backend/deploy.sh
+   - Usage: `./deploy.sh [staging|production]`
+   - Key steps:
+     1. Validates environment argument (staging/production)
+     2. Production deploys require confirmation
+     3. Sets environment name based on parameter
+     4. Checks for existence of appropriate .env file
+     5. Verifies EB CLI configuration
+     6. Uses `eb deploy ENV_NAME --staged` for deployment
+   - Safety feature: Never deletes or recreates environments
+
+### 4.2 Authentication Flow
+   - AWS credentials are stored in .env.staging file
+   - EB CLI accesses these credentials automatically
+   - No need to manually pass credentials in the script
+
+### 4.3 Critical Commands
+   - Deployment: `./deploy.sh staging`
+   - Log viewing: `eb logs`
+   - Environment status: `eb status`
+   - SSH into instance: `eb ssh`
+   - Open dashboard: `eb console`
+
+## 5. Critical Rules
+
+### 5.1 Never do these things:
+   - Never terminate existing EB environment
+   - Never modify capitalization of environment names
+   - Never deploy to production without testing in staging
+   - Never remove the `--staged` flag from eb deploy
+
+### 5.2 Always do these things:
+   - Always work with existing Crittrcovestaging-env
+   - Always check logs after deployment (`eb logs`)
+   - Always maintain proper environment variables
+   - Always test locally before deploying
+
+## 6. Current Working State
+   - Environment files (.env.staging, .env.production) exist and contain credentials
+   - EB CLI configuration exists and has been updated to correct capitalization
+   - Required configuration files (Procfile, .ebextensions) are in place
+   - AWS CLI and EB CLI are installed and properly configured
+
+## 7. Troubleshooting Steps
+   - If deployment fails, first check `eb logs` for detailed error messages
+   - Verify environment settings with `eb printenv`
+   - Test connectivity with `eb ssh` to access instance
+   - Verify the WSGI application path is correct in 01_packages.config
+   - Check for Django configuration errors in settings.py
+   - Validate database connectivity and credentials
+
+## 8. Required Actions
+   - Run deployment: `./deploy.sh staging`
+   - Check logs after deployment: `eb logs`
+   - Continue running these commands until deployment succeeds
