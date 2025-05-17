@@ -76,12 +76,12 @@ ALLOWED_IMAGE_TYPES = [
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = not IS_PRODUCTION
+DEBUG = not IS_PRODUCTION or IS_STAGING
 
 # Domain configuration
 DOMAIN_MAP = {
-    'development': ['localhost', '127.0.0.1', '10.0.2.2'],
-    'staging': ['staging.crittrcove.com', '.elasticbeanstalk.com'],
+    'development': ['localhost', '127.0.0.1', '10.0.2.2', '*.elasticbeanstalk.com'],
+    'staging': ['staging.crittrcove.com', '*.elasticbeanstalk.com'],
     'production': ['beta.crittrcove.com', 'crittrcove.com', '.elasticbeanstalk.com']
 }
 
@@ -370,14 +370,22 @@ CORS_ALLOW_HEADERS = [
 ASGI_APPLICATION = "zenexotics_backend.asgi.application"
 
 # Channel Layers
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer" if os.environ.get("IS_PRODUCTION") or os.environ.get("IS_STAGING") else "channels.layers.InMemoryChannelLayer",
-        "CONFIG": {
-            "hosts": [os.environ.get("REDIS_URL")] if os.environ.get("IS_PRODUCTION") or os.environ.get("IS_STAGING") else [os.environ.get("REDIS_URL", "redis://localhost:6379/0")],
+CHANNEL_LAYERS = {}
+if os.environ.get("IS_PRODUCTION") or os.environ.get("IS_STAGING"):
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379/0")],
+            },
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 # Session security
 CSRF_COOKIE_SECURE = IS_PRODUCTION or IS_STAGING
