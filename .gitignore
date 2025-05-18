@@ -2,6 +2,7 @@
 
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 *.so
@@ -29,6 +30,7 @@ htmlcov/
 .aws/*
 .aws
 .venv
+eb-venv/
 env/
 venv/
 staticfiles/*
@@ -44,6 +46,7 @@ backend/zenexotics_backend/.env
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+.ebextensions/02_environment.config
 
 
 # dependencies

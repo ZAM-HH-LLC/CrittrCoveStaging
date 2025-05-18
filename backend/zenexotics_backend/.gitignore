@@ -1,6 +1,7 @@
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+.ebextensions/02_environment.config
 
 # Python
 __pycache__/

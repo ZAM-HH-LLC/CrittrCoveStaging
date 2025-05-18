@@ -11,10 +11,10 @@ def is_venv_active():
 
 def main():
     """Run administrative tasks."""
-    if not is_venv_active():
-        print("Warning: Virtual environment is not activated!")
-        print("Please activate it using: source venv/bin/activate")
-        sys.exit(1)
+    # if not is_venv_active():
+    #     print("Warning: Virtual environment is not activated!")
+    #     print("Please activate it using: source venv/bin/activate")
+    #     sys.exit(1)
 
     # Set the default Django settings module
     if 'test' in sys.argv:
