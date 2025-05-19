@@ -1,5 +1,3 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # Python
 __pycache__/
 *.pyc
@@ -34,6 +32,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Git
+.git/
+.gitignore
+
 # IDE
 .vscode/
 .idea/
@@ -60,54 +62,14 @@ venv.bak/
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
 
-# Static files
-staticfiles/
-staticfiles/*
-
-# Media files
-media/
-media/*
-
 # Test files
 tests/
 tests/*
 
-# Node/React Native (if needed)
-node_modules/
-.expo/
-web/
-web-build/
-dist/
-*.tsbuildinfo
+# Media files (these will be handled by S3)
+media/
+media/*
 
-# Expo
-.expo/*
-web-build/*
-
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# Elastic Beanstalk Files
-.elasticbeanstalk/*
-!.elasticbeanstalk/*.cfg.yml
-!.elasticbeanstalk/*.global.yml
+# Static files
+staticfiles/
+staticfiles/* 

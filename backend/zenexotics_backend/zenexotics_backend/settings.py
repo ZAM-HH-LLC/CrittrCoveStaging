@@ -18,17 +18,19 @@ import dj_database_url
 # Load environment variables
 load_dotenv()
 
-# Environment configuration
+# Environment configuration - default development
 ENVIRONMENT = os.environ.get('DJANGO_ENVIRONMENT', 'development')
 IS_PRODUCTION = ENVIRONMENT == 'production'
 IS_STAGING = ENVIRONMENT == 'staging'
 IS_DEVELOPMENT = ENVIRONMENT == 'development'
+# HTTPS toggle for staging
+HTTPS_ENABLED_FOR_STAGING = False
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Media files configuration
-if IS_PRODUCTION or IS_STAGING:
+if not IS_DEVELOPMENT:
     # AWS S3 settings
     AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -75,18 +77,22 @@ ALLOWED_IMAGE_TYPES = [
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = not IS_PRODUCTION or IS_STAGING
-
 # Domain configuration
 DOMAIN_MAP = {
-    'development': ['localhost', '127.0.0.1', '10.0.2.2', '*.elasticbeanstalk.com'],
-    'staging': ['staging.crittrcove.com', '*.elasticbeanstalk.com'],
+    'development': ['localhost', '127.0.0.1', '10.0.2.2', '.elasticbeanstalk.com'],
+    'staging': ['staging.crittrcove.com', '.elasticbeanstalk.com'],
     'production': ['beta.crittrcove.com', 'crittrcove.com', '.elasticbeanstalk.com']
 }
 
-ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
+# Allow override via environment variable
+ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
+if ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',')]
+else:
+    ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
 
+# Always disable DEBUG in staging/production
+DEBUG = IS_DEVELOPMENT
 
 # Application definition
 
@@ -161,6 +167,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = "zenexotics_backend.urls"
@@ -229,8 +236,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -348,7 +356,12 @@ LOGGING = {
 # Add these settings for better session handling
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 86400 * 7  # 7 days
-SESSION_COOKIE_SECURE = IS_PRODUCTION or IS_STAGING
+
+
+# Session and CSRF cookie security
+SESSION_COOKIE_SECURE = IS_PRODUCTION or (IS_STAGING and HTTPS_ENABLED_FOR_STAGING)
+CSRF_COOKIE_SECURE = IS_PRODUCTION or (IS_STAGING and HTTPS_ENABLED_FOR_STAGING)
+SECURE_SSL_REDIRECT = IS_PRODUCTION or (IS_STAGING and HTTPS_ENABLED_FOR_STAGING)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_SAVE_EVERY_REQUEST = True
 
@@ -371,7 +384,7 @@ ASGI_APPLICATION = "zenexotics_backend.asgi.application"
 
 # Channel Layers
 CHANNEL_LAYERS = {}
-if os.environ.get("IS_PRODUCTION") or os.environ.get("IS_STAGING"):
+if IS_PRODUCTION or IS_STAGING:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -387,5 +400,42 @@ else:
         },
     }
 
-# Session security
-CSRF_COOKIE_SECURE = IS_PRODUCTION or IS_STAGING
+# Security settings
+SECURE_HSTS_SECONDS = 31536000 if (not IS_DEVELOPMENT) else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not IS_DEVELOPMENT
+SECURE_HSTS_PRELOAD = not IS_DEVELOPMENT
+
+# CSRF trusted origins
+CSRF_TRUSTED_ORIGINS = []
+if IS_STAGING:
+    CSRF_TRUSTED_ORIGINS = [
+        'http://staging-eb.crittrcove.com',
+        'http://CrittrcoveStaging-app-env.eba-vz3ksxtg.us-east-2.elasticbeanstalk.com.elasticbeanstalk.com',
+        'http://3.149.106.214'
+    ]
+elif IS_PRODUCTION:
+    CSRF_TRUSTED_ORIGINS = [
+        'https://crittrcove.com',
+        'https://<your-elasticbeanstalk-url>.elasticbeanstalk.com'
+    ] # haven't setup production elastic beanstalk yet - TODO: add url here for production
+# For development, you usually don't need to set this unless you use a custom port/domain.
+
+print("MBA IS_DEVELOPMENT: ", IS_DEVELOPMENT)
+# printing settings for debugging:
+if not IS_DEVELOPMENT:
+    print("MBA Settings for production:")
+    print(f"MBA CSRF_COOKIE_SECURE: {CSRF_COOKIE_SECURE}")
+    print(f"MBA SECURE_SSL_REDIRECT: {SECURE_SSL_REDIRECT}")
+    print(f"MBA SECURE_HSTS_SECONDS: {SECURE_HSTS_SECONDS}")
+    print(f"MBA SECURE_HSTS_INCLUDE_SUBDOMAINS: {SECURE_HSTS_INCLUDE_SUBDOMAINS}")
+    print(f"MBA SECURE_HSTS_PRELOAD: {SECURE_HSTS_PRELOAD}")
+    print(f"MBA SESSION_COOKIE_SECURE: {SESSION_COOKIE_SECURE}")
+    print(f"MBA SESSION_COOKIE_HTTPONLY: {SESSION_COOKIE_HTTPONLY}")
+    print(f"MBA SESSION_SAVE_EVERY_REQUEST: {SESSION_SAVE_EVERY_REQUEST}")
+    print(f"MBA CORS_ALLOW_CREDENTIALS: {CORS_ALLOW_CREDENTIALS}")
+    print(f"MBA CORS_EXPOSE_HEADERS: {CORS_EXPOSE_HEADERS}")
+    print(f"MBA CORS_ALLOW_HEADERS: {CORS_ALLOW_HEADERS}")
+    print(f"MBA ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+    print(f"MBA DEBUG: {DEBUG}")
+    print(f"MBA ENVIRONMENT: {ENVIRONMENT}")
+    print(f"MBA FRONTEND_BASE_URL: {FRONTEND_BASE_URL}")

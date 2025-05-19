@@ -11,11 +11,6 @@ find /var/app/venv -type d -maxdepth 1 2>/dev/null || echo "No virtual environme
 
 # Check if required files exist
 echo "Checking for critical files:"
-if [ -f "/var/app/staging/requirements-eb.txt" ]; then 
-  echo "✓ requirements-eb.txt exists"
-else
-  echo "✗ requirements-eb.txt not found!"
-fi
 
 if [ -f "/var/app/staging/manage.py" ]; then
   echo "✓ manage.py exists"
