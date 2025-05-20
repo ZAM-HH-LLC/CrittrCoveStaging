@@ -56,12 +56,27 @@ export default function SignIn() {
     setLoading(true);
     try {
       debugLog('MBA67890 Starting login process');
+      debugLog('MBA67890 API Base URL:', API_BASE_URL);
+      debugLog('MBA67890 Login request details:', {
+        url: `${API_BASE_URL}/api/token/`,
+        method: 'POST',
+        data: {
+          email: email.toLowerCase(),
+          password: '***' // masked for security
+        }
+      });
 
       debugLog('MBA67890 Attempting to authenticate with backend');
       
       const response = await axios.post(`${API_BASE_URL}/api/token/`, {
         email: email.toLowerCase(),
         password: password,
+      });
+
+      debugLog('MBA67890 Login response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
       });
 
       const { access, refresh } = response.data;

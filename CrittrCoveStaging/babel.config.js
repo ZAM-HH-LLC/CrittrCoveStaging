@@ -11,6 +11,7 @@ module.exports = function(api) {
         whitelist: null,
         safe: false,
         allowUndefined: true,
+        systemvars: true,
       }],
       '@babel/plugin-transform-template-literals',
       '@babel/plugin-transform-export-namespace-from',
