@@ -7,6 +7,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.python-version
 build/
 develop-eggs/
 dist/
@@ -59,6 +60,7 @@ venv.bak/
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+.ebextensions/02_environment.config
 
 # Static files
 staticfiles/

@@ -24,7 +24,7 @@ IS_PRODUCTION = ENVIRONMENT == 'production'
 IS_STAGING = ENVIRONMENT == 'staging'
 IS_DEVELOPMENT = ENVIRONMENT == 'development'
 # HTTPS toggle for staging
-HTTPS_ENABLED_FOR_STAGING = False
+HTTPS_ENABLED_FOR_STAGING = True
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,7 +40,7 @@ if not IS_DEVELOPMENT:
     AWS_DEFAULT_ACL = 'public-read'
     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
     AWS_LOCATION = 'media'
-    AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_FILE_OVERWRITE = True
     
     # S3 as default storage
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
@@ -159,6 +159,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'zenexotics_backend.middleware_skip_ssl_redirect_for_health.SkipSSLRedirectForHealthCheckMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -280,15 +281,49 @@ FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', FRONTEND_URL_MAP.get(ENV
 
 # CORS settings by environment
 CORS_ALLOWED_ORIGINS = [FRONTEND_BASE_URL]
-if FRONTEND_BASE_URL != FRONTEND_URL_MAP['development']:
-    # Add additional domains if needed
-    if IS_STAGING:
-        CORS_ALLOWED_ORIGINS.append('https://staging.crittrcove.com')
-    if IS_PRODUCTION:
-        CORS_ALLOWED_ORIGINS.extend([
-            'https://beta.crittrcove.com',
-            'https://crittrcove.com'
-        ])
+if IS_STAGING:
+    # Always allow both the deployed staging frontend and localhost for testing
+    CORS_ALLOWED_ORIGINS.append('https://staging.crittrcove.com')
+    CORS_ALLOWED_ORIGINS.append('https://staging-eb.crittrcove.com')
+    CORS_ALLOWED_ORIGINS.append('https://staging-ec2.crittrcove.com')
+    CORS_ALLOWED_ORIGINS.append('http://localhost:19006')
+if IS_PRODUCTION:
+    CORS_ALLOWED_ORIGINS.extend([
+        'https://beta.crittrcove.com',
+        'https://crittrcove.com'
+    ])
+
+# CORS/CSRF trusted origins for all environments
+CSRF_TRUSTED_ORIGINS = []
+if IS_STAGING:
+    CSRF_TRUSTED_ORIGINS = [
+        'https://staging.crittrcove.com',
+        'https://staging-eb.crittrcove.com',
+        'https://staging-ec2.crittrcove.com',
+        'https://CrittrCoveStagingApp-env.eba-um5ew2ck.us-east-2.elasticbeanstalk.com',
+        'http://CrittrCoveStagingApp-env.eba-um5ew2ck.us-east-2.elasticbeanstalk.com'
+    ]
+    # If you want to allow local dev to POST to staging, add:
+    CSRF_TRUSTED_ORIGINS.append('http://localhost:19006')
+if IS_PRODUCTION:
+    CSRF_TRUSTED_ORIGINS = [
+        'https://crittrcove.com',
+        'https://beta.crittrcove.com'
+    ]
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -361,23 +396,15 @@ SESSION_COOKIE_AGE = 86400 * 7  # 7 days
 # Session and CSRF cookie security
 SESSION_COOKIE_SECURE = IS_PRODUCTION or (IS_STAGING and HTTPS_ENABLED_FOR_STAGING)
 CSRF_COOKIE_SECURE = IS_PRODUCTION or (IS_STAGING and HTTPS_ENABLED_FOR_STAGING)
+# The below field causes a race condition when adding a load balancer.
+# the workaround is to set the target group health check to be HTTPS once it is created.
 SECURE_SSL_REDIRECT = IS_PRODUCTION or (IS_STAGING and HTTPS_ENABLED_FOR_STAGING)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_SAVE_EVERY_REQUEST = True
 
-CORS_ALLOW_CREDENTIALS = True
-CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
+# NOTE: To redirect all HTTP traffic to HTTPS, set up a redirect rule in your AWS load balancer for port 80 to 443.
+# This is best practice for staging/production. It ensures all users use HTTPS and protects credentials in transit.
+# You do NOT need to do this for local development.
 
 # Django Channels
 ASGI_APPLICATION = "zenexotics_backend.asgi.application"
@@ -405,20 +432,8 @@ SECURE_HSTS_SECONDS = 31536000 if (not IS_DEVELOPMENT) else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not IS_DEVELOPMENT
 SECURE_HSTS_PRELOAD = not IS_DEVELOPMENT
 
-# CSRF trusted origins
-CSRF_TRUSTED_ORIGINS = []
-if IS_STAGING:
-    CSRF_TRUSTED_ORIGINS = [
-        'http://staging-eb.crittrcove.com',
-        'http://CrittrcoveStaging-app-env.eba-vz3ksxtg.us-east-2.elasticbeanstalk.com.elasticbeanstalk.com',
-        'http://3.149.106.214'
-    ]
-elif IS_PRODUCTION:
-    CSRF_TRUSTED_ORIGINS = [
-        'https://crittrcove.com',
-        'https://<your-elasticbeanstalk-url>.elasticbeanstalk.com'
-    ] # haven't setup production elastic beanstalk yet - TODO: add url here for production
-# For development, you usually don't need to set this unless you use a custom port/domain.
+if IS_PRODUCTION or IS_STAGING:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 print("MBA IS_DEVELOPMENT: ", IS_DEVELOPMENT)
 # printing settings for debugging:
