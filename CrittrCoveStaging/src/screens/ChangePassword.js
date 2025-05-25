@@ -1,12 +1,14 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, StyleSheet, Platform, SafeAreaView, TouchableOpacity, StatusBar } from 'react-native';
-import { TextInput, Button, Text } from 'react-native-paper';
+import { View, StyleSheet, Platform, SafeAreaView, TouchableOpacity, StatusBar, Text, TextInput, ActivityIndicator, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
+import CustomButton from '../components/CustomButton';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 const ChangePassword = ({ navigation }) => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -14,7 +16,11 @@ const ChangePassword = ({ navigation }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const { isSignedIn } = useContext(AuthContext);
+  const [loading, setLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { isSignedIn, screenWidth: contextScreenWidth, isCollapsed } = useContext(AuthContext);
   const [token, setToken] = useState(null);
 
   useEffect(() => {
@@ -39,14 +45,8 @@ const ChangePassword = ({ navigation }) => {
       return;
     }
 
+    setLoading(true);
     try {
-      console.log('Sending request to:', `${API_BASE_URL}/api/users/change-password/`);
-      console.log('Request payload:', {
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
-      console.log('Auth token:', token);
-
       const response = await axios.post(
         `${API_BASE_URL}/api/users/change-password/`,
         {
@@ -58,8 +58,6 @@ const ChangePassword = ({ navigation }) => {
         }
       );
 
-      console.log('Response:', response);
-
       if (response.status === 200) {
         setSuccess('Password changed successfully');
         setCurrentPassword('');
@@ -67,99 +65,215 @@ const ChangePassword = ({ navigation }) => {
         setConfirmPassword('');
       }
     } catch (error) {
-      console.error('Error details:', error);
       setError(error.response?.data?.error || 'Failed to change password');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.backButton}>
-        <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.primary} />
-      </TouchableOpacity>
-      <Text style={styles.headerText}>Change Password</Text>
-    </View>
-  );
+  const handleForgotPassword = () => {
+    navigation.navigate('ResetPassword');
+  };
+
+  const styles = createStyles(contextScreenWidth, isCollapsed);
 
   return (
-    <SafeAreaView style={styles.container}>
-      {renderHeader()}
-      <View style={Platform.OS === 'web' ? styles.webContent : styles.content}>
-        <TextInput
-          label="Current Password"
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secureTextEntry
-          style={styles.input}
-        />
-        <TextInput
-          label="New Password"
-          value={newPassword}
-          onChangeText={setNewPassword}
-          secureTextEntry
-          style={styles.input}
-        />
-        <TextInput
-          label="Confirm New Password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-          style={styles.input}
-        />
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {success ? <Text style={styles.successText}>{success}</Text> : null}
-        <Button mode="contained" onPress={handleChangePassword} style={styles.button}>
-          Change Password
-        </Button>
-      </View>
-    </SafeAreaView>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.content}>
+          <TouchableOpacity onPress={() => navigation.navigate('MyProfile', { initialTab: 'settings_payments' })} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
+            <Text style={styles.backText}>Change Password</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.card}>
+            <Text style={styles.title}>Change Password</Text>
+            
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Current Password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry={!showCurrentPassword}
+                placeholderTextColor={theme.colors.placeHolderText}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+              >
+                <MaterialCommunityIcons
+                  name={showCurrentPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color={theme.colors.placeHolderText}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="New Password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+                placeholderTextColor={theme.colors.placeHolderText}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowNewPassword(!showNewPassword)}
+              >
+                <MaterialCommunityIcons
+                  name={showNewPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color={theme.colors.placeHolderText}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Confirm New Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                placeholderTextColor={theme.colors.placeHolderText}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                <MaterialCommunityIcons
+                  name={showConfirmPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color={theme.colors.placeHolderText}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {success ? <Text style={styles.successText}>{success}</Text> : null}
+
+            <CustomButton 
+              title="Change Password" 
+              onPress={handleChangePassword}
+              disabled={loading}
+              style={styles.button}
+            />
+
+            {loading && <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />}
+
+            <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+    marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
+    transition: 'margin-left 0.3s ease',
+  },
+  safeArea: {
+    flex: 1,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   content: {
     flex: 1,
-    padding: 20,
-  },
-  webContent: {
-    width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-    padding: 20,
-  },
-  header: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    padding: 20,
   },
   backButton: {
-    marginRight: 16,
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
   },
-  headerText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
+  backText: {
+    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  card: {
+    backgroundColor: theme.colors.surfaceContrast,
+    borderRadius: 12,
+    padding: 40,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '600',
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  inputContainer: {
+    position: 'relative',
+    marginBottom: 20,
   },
   input: {
-    marginBottom: 10,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    padding: 15,
+    fontSize: 16,
+    color: theme.colors.text,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingRight: 50,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 15,
+    padding: 5,
   },
   button: {
-    marginTop: 20,
+    marginTop: 10,
+    marginBottom: 20,
   },
   errorText: {
     color: theme.colors.error,
-    marginBottom: 10,
+    textAlign: 'center',
+    marginBottom: 15,
+    fontSize: 14,
   },
   successText: {
-    color: theme.colors.success,
-    marginBottom: 10,
+    color: theme.colors.success || '#4CAF50',
+    textAlign: 'center',
+    marginBottom: 15,
+    fontSize: 14,
+  },
+  loader: {
+    marginTop: 10,
+  },
+  forgotPasswordButton: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  forgotPasswordText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });
 

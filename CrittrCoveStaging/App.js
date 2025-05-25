@@ -20,7 +20,6 @@ import { ToastProvider } from './src/components/ToastProvider';
 // Import all your screen components
 import HomeScreen from './src/screens/HomeScreen';
 import AboutScreen from './src/screens/AboutScreen';
-import OwnerProfile from './src/screens/OwnerProfile';
 import MyProfile from './src/screens/MyProfile';
 import SignIn from './src/screens/SignIn';
 import SignUp from './src/screens/SignUp';
@@ -32,7 +31,6 @@ import BecomeProfessional from './src/screens/BecomeProfessional';
 import MoreScreen from './src/screens/MoreScreen';
 import AvailabilitySettings from './src/screens/AvailabilitySettings';
 // import Messages from './src/screens/Messages';
-import MyPets from './src/screens/MyPets';
 import OwnerHistory from './src/screens/OwnerHistory';
 import MessageHistory from './src/screens/MessageHistory';
 import PaymentMethods from './src/screens/PaymentMethods';
@@ -46,10 +44,8 @@ import Owners from './src/screens/Owners';
 import ProfessionalProfile from './src/screens/ProfessionalProfile';
 import MyContracts from './src/screens/MyContracts';
 import ChangePassword from './src/screens/ChangePassword';
-import AddPet from './src/screens/AddPet';
 import SearchProfessionalsListing from './src/screens/SearchProfessionalsListing';
 import MyBookings from './src/screens/MyBookings';
-import BookingDetails from './src/screens/BookingDetails';
 import ServiceManagerScreen from './src/screens/ServiceManagerScreen';
 import BlogScreen from './src/screens/BlogScreen';
 import BlogPost from './src/screens/BlogPost';
@@ -63,7 +59,6 @@ const Tab = createBottomTabNavigator();
 const screens = [
   { name: 'Home', component: HomeScreen },
   { name: 'About', component: AboutScreen },
-  { name: 'OwnerProfile', component: OwnerProfile },
   { name: 'MyProfile', component: MyProfile },  
   { name: 'SignIn', component: SignIn },
   { name: 'SignUp', component: SignUp },
@@ -78,7 +73,6 @@ const screens = [
   { name: 'More', component: MoreScreen },
   { name: 'Owners', component: Owners },
   { name: 'AvailabilitySettings', component: AvailabilitySettings },
-  { name: 'MyPets', component: MyPets },
   { name: 'PaymentMethods', component: PaymentMethods },
   { name: 'Settings', component: Settings },
   { name: 'PrivacyPolicy', component: PrivacyPolicy },
@@ -89,9 +83,7 @@ const screens = [
   { name: 'ProfessionalProfile', component: ProfessionalProfile },
   { name: 'MyContracts', component: MyContracts },
   { name: 'ChangePassword', component: ChangePassword },
-  { name: 'AddPet', component: AddPet },
   { name: 'MyBookings', component: MyBookings },
-  { name: 'BookingDetails', component: BookingDetails },
   { name: 'ServiceManager', component: ServiceManagerScreen },
   { name: 'Blog', component: BlogScreen },
   { name: 'BlogPost', component: BlogPost },
@@ -111,7 +103,6 @@ const linking = {
     screens: {
       Home: '*',  // This will catch all unmatched routes
       About: 'about',
-      OwnerProfile: 'owner-profile',
       MyProfile: 'my-profile',
       SignIn: 'signin',
       SignUp: {
@@ -146,7 +137,6 @@ const linking = {
       More: 'more',
       Owners: 'owners',
       AvailabilitySettings: 'availability-settings',
-      MyPets: 'my-pets',
       PaymentMethods: 'payment-methods',
       Settings: 'settings',
       PrivacyPolicy: 'privacy-policy',
@@ -162,14 +152,7 @@ const linking = {
       },
       MyContracts: 'my-contracts',
       ChangePassword: 'change-password',
-      AddPet: {
-        path: 'add-pet',
-        parse: {
-          pet: () => undefined
-        }
-      },
       MyBookings: 'my-bookings',
-      BookingDetails: 'booking-details',
       ServiceManager: 'service-manager',
       Blog: 'blog',
       BlogPost: 'blog-post',

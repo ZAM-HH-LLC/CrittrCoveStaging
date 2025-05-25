@@ -5,7 +5,6 @@ import { theme } from '../styles/theme';
 
 // Called in DefaultSettingsModal.js
 // Called in MyProfile.js
-// Called in BookingDetails.js
 
 const DatePicker = ({ 
   value, 

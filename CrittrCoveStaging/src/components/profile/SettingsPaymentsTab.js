@@ -60,6 +60,7 @@ const SettingsPaymentsTab = ({
   onSwitchPlan,
   userRole,
   isApprovedProfessional,
+  navigation,
 }) => {
   const [timezone, setTimezone] = useState(propTimezone || 'UTC');
   const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
@@ -352,7 +353,7 @@ const SettingsPaymentsTab = ({
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy Settings</Text>
+          <Text style={styles.sectionTitle}>Privacy & Security Settings</Text>
           {renderPrivacySettings()}
         </View>
 
@@ -425,7 +426,7 @@ const SettingsPaymentsTab = ({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Privacy Settings</Text>
+        <Text style={styles.sectionTitle}>Privacy & Security Settings</Text>
         {renderPrivacySettings()}
       </View>
 
@@ -534,6 +535,22 @@ const SettingsPaymentsTab = ({
             onValueChange={(value) => handleUpdateSetting('profile_visibility', value)}
             trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
           />
+        </View>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="lock-reset" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Change Password</Text>
+              <Text style={styles.settingDescription}>Update your account password</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('ChangePassword')}
+          >
+            <Text style={styles.actionButtonText}>Change</Text>
+          </TouchableOpacity>
         </View>
         
         {/* TODO: Add location privacy toggle after MVP launch */}

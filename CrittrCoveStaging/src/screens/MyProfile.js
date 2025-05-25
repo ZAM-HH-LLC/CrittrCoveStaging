@@ -461,6 +461,7 @@ const MyProfile = () => {
         return (
           <SettingsPaymentsTab
             {...profileData}
+            navigation={navigation}
             onUpdateSetting={(id, value) => {
               debugLog('Updating setting:', { id, value });
               // Create an update object with just the changed setting

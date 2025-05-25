@@ -797,25 +797,6 @@ export const createBooking = async (ownerId, freelancerId, initialData = {}) => 
   return newBookingId;
 };
 
-// Update fetchBookingDetails with better logging
-export const fetchBookingDetails = async (bookingId) => {
-  // console.log('Fetching booking details');
-  
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  const bookingDetails = mockBookingDetails[bookingId];
-  if (!bookingDetails) {
-    console.error('Booking not found:', {
-      requestedId: bookingId,
-      availableBookings: Object.keys(mockBookingDetails)
-    });
-    throw new Error('Booking not found');
-  }
-  
-  return bookingDetails;
-};
-
 // Export mockBookingDetails for debugging
 export const _mockBookingDetails = mockBookingDetails;
 
