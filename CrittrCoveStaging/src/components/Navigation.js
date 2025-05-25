@@ -443,7 +443,7 @@ export default function Navigation({ state, descriptors, navigation }) {
       return [
         { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
         { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
-        // { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
+        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         // { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
         // ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),

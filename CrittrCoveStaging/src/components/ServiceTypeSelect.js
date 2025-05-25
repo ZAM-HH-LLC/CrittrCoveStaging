@@ -33,6 +33,12 @@ const ServiceTypeSelect = ({ value, onChange }) => {
         value={value}
         onChangeText={handleTextChange}
         onFocus={() => value.length > 0 && setShowSuggestions(true)}
+        onBlur={() => {
+          // Delay hiding suggestions to allow for suggestion selection
+          setTimeout(() => {
+            setShowSuggestions(false);
+          }, 150);
+        }}
       />
       {showSuggestions && (
         <View style={styles.suggestionsWrapper}>
