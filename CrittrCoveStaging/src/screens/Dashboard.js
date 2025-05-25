@@ -345,12 +345,12 @@ const Dashboard = ({ navigation }) => {
     return (
       <View style={styles.headerContainer}>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.notificationButton}>
+          {/* <TouchableOpacity style={styles.notificationButton}>
             <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationCount}>3</Text>
             </View>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           <TouchableOpacity 
             style={styles.profileButton}
             onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard')}
@@ -406,6 +406,7 @@ const Dashboard = ({ navigation }) => {
               <Text style={dynamicStyles.statLabel}>Complete your profile to get started</Text>
             </TouchableOpacity>
 
+            {/* TODO: Add back after MVP 
             <TouchableOpacity 
               style={styles.statCard}
               onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'settings_payments' })}
@@ -420,7 +421,7 @@ const Dashboard = ({ navigation }) => {
               </View>
               <Text style={dynamicStyles.statValue}>Bank Account</Text>
               <Text style={dynamicStyles.statLabel}>Connect your bank to receive payments</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             <TouchableOpacity 
               style={styles.statCard}
@@ -438,6 +439,7 @@ const Dashboard = ({ navigation }) => {
               <Text style={dynamicStyles.statLabel}>Add services to start accepting bookings</Text>
             </TouchableOpacity>
 
+            {/* TODO: Add back after MVP 
             <TouchableOpacity 
               style={styles.statCard}
               onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'settings_payments' })}
@@ -452,7 +454,7 @@ const Dashboard = ({ navigation }) => {
               </View>
               <Text style={dynamicStyles.statValue}>Subscription</Text>
               <Text style={dynamicStyles.statLabel}>Upgrade for more features</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </>
         ) : (
           // Owner onboarding cards
@@ -473,6 +475,7 @@ const Dashboard = ({ navigation }) => {
               <Text style={dynamicStyles.statLabel}>Complete your profile to get started</Text>
             </TouchableOpacity>
 
+            {/* TODO: Add back after MVP 
             <TouchableOpacity 
               style={styles.statCard}
               onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'settings_payments' })}
@@ -487,7 +490,7 @@ const Dashboard = ({ navigation }) => {
               </View>
               <Text style={dynamicStyles.statValue}>Payment Method</Text>
               <Text style={dynamicStyles.statLabel}>Add a payment method to book services</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             <TouchableOpacity 
               style={styles.statCard}
@@ -505,6 +508,7 @@ const Dashboard = ({ navigation }) => {
               <Text style={dynamicStyles.statLabel}>Add your pets to book services</Text>
             </TouchableOpacity>
 
+            {/* TODO: Add back after MVP 
             <TouchableOpacity 
               style={styles.statCard}
               onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'settings_payments' })}
@@ -519,7 +523,7 @@ const Dashboard = ({ navigation }) => {
               </View>
               <Text style={dynamicStyles.statValue}>Subscription</Text>
               <Text style={dynamicStyles.statLabel}>Upgrade for more features</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </>
         )}
       </View>

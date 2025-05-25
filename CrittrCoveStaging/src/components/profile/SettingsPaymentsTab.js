@@ -342,7 +342,9 @@ const SettingsPaymentsTab = ({
   const renderDesktopLayout = () => (
     <View style={styles.desktopContainer}>
       <View style={styles.leftColumn}>
-        {renderPlansSection()}
+        {/*
+        TODO: Add back in after MVP 
+        {renderPlansSection()} */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Preferences</Text>
@@ -391,6 +393,7 @@ const SettingsPaymentsTab = ({
         </View>
       </View>
 
+      {/* TODO: Add back in after MVP 
       <View style={styles.rightColumn}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Current Plan</Text>
@@ -401,19 +404,20 @@ const SettingsPaymentsTab = ({
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Billing History</Text>
-          {/* Add billing history items here */}
+          {/* Add billing history items here
           <TouchableOpacity style={styles.viewAllButton}>
             <Text style={styles.viewAllText}>View All Transactions</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </View> */}
     </View>
   );
 
   const renderMobileLayout = () => (
     <ScrollView style={styles.mobileContainer}>
+      {/* TODO: Add back after MVP 
       {renderPlansSection()}
-      {renderPaymentMethodsSection()}
+      {renderPaymentMethodsSection()} */}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notification Settings</Text>
