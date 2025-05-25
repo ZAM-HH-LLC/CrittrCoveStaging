@@ -2,147 +2,84 @@ import React, { useState, useContext, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, SafeAreaView, Image } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog, getStorage, setStorage } from '../context/AuthContext';
 import MessageNotificationContext from '../context/MessageNotificationContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appbar, Menu, useTheme, Avatar } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
 
 let previousRoute, currentRoute;
 
 export const handleBack = async (navigation) => {
   try {
-    if (Platform.OS === 'web') {
-      previousRoute = sessionStorage.getItem('previousRoute');
-      currentRoute = sessionStorage.getItem('currentRoute');
+    // Get previous and current routes from storage
+    const previousRoute = await getStorage('previousRoute');
+    const currentRoute = await getStorage('currentRoute');
+    
+    debugLog('MBAuieo2o34nf handleBack - routes from storage', { previousRoute, currentRoute });
+    
+    if (previousRoute) {
+      // Get the active tab from the previous route if it exists
+      const activeTab = await getStorage('MyProfileActiveTab');
+      debugLog('MBAuieo2o34nf handleBack - active tab from storage', { activeTab });
       
-      if (previousRoute) {
-        console.log('MBA98386196v Previous Route Before:', previousRoute);
-        console.log('MBA98386196v Current Route Before:', currentRoute);
-        
-        // Get the previous-previous route
-        const prevPrevRoute = sessionStorage.getItem('prevPrevRoute');
-        
-        // Navigate to previous route
-        navigation.navigate(previousRoute);
-        
-        // Update the chain
-        sessionStorage.setItem('currentRoute', previousRoute);
-        sessionStorage.setItem('previousRoute', prevPrevRoute || '');
-        
-        console.log('MBA98386196v Previous Route After:', sessionStorage.getItem('previousRoute'));
-        console.log('MBA98386196v Current Route After:', sessionStorage.getItem('currentRoute'));
+      // Navigate to the previous route
+      if (previousRoute === 'MyProfile' && activeTab) {
+        navigation.navigate(previousRoute, { initialTab: activeTab });
       } else {
-        console.log('MBA98386196v No Previous Route');
-        // Default to More screen if no previous route
-        navigation.navigate('More');
+        navigation.navigate(previousRoute);
       }
+      
+      // Update storage with new current and previous routes
+      await setStorage('currentRoute', previousRoute);
+      await setStorage('previousRoute', currentRoute);
+      
+      debugLog('MBAuieo2o34nf handleBack - navigation complete', { 
+        newCurrentRoute: previousRoute,
+        newPreviousRoute: currentRoute
+      });
     } else {
-      previousRoute = await AsyncStorage.getItem('previousRoute');
-      currentRoute = await AsyncStorage.getItem('currentRoute');
-      
-      if (previousRoute) {
-        // Get the previous-previous route
-        const prevPrevRoute = await AsyncStorage.getItem('prevPrevRoute');
-        
-        // Navigate to previous route
-        navigation.navigate(previousRoute);
-        
-        // Update the chain
-        await AsyncStorage.setItem('currentRoute', previousRoute);
-        await AsyncStorage.setItem('previousRoute', prevPrevRoute || '');
-        
-        console.log('MBA98386196v Previous Route:', previousRoute);
-        console.log('MBA98386196v Current Route:', currentRoute);
-      } else {
-        // Default to More screen if no previous route
-        navigation.navigate('More');
-      }
-    }
-
-    if (previousRoute === currentRoute) {
-      // console.log('Two routes are the same');
-      navigation.navigate('More');
-      return;
+      // If no previous route, go to More screen
+      navigation.navigate('Dashboard');
+      debugLog('MBAuieo2o34nf handleBack - no previous route, going to More');
     }
   } catch (error) {
-    console.error('Error handling back navigation:', error);
-    navigation.navigate('More');
+    debugLog('MBAuieo2o34nf handleBack - error', error);
+    // If there's an error, go to More screen
+    navigation.navigate('Dashboard');
   }
 };
 
 export const navigateToFrom = async (navigation, toLocation, fromLocation, params = {}) => {
   try {
-    if (Platform.OS === 'web') {
-      // Store the current previousRoute as prevPrevRoute before updating
-      const currentPreviousRoute = sessionStorage.getItem('previousRoute');
-      if (currentPreviousRoute) {
-        sessionStorage.setItem('prevPrevRoute', currentPreviousRoute);
+    // Store current route as previous before navigation
+    const currentRoute = await getStorage('currentRoute');
+    await setStorage('previousRoute', currentRoute);
+    
+    // Special handling for MyProfile screen
+    if (toLocation === 'MyProfile') {
+      const activeTab = await getStorage('MyProfileActiveTab');
+      if (activeTab) {
+        params.initialTab = activeTab;
       }
-      
-      sessionStorage.setItem('previousRoute', fromLocation);
-      sessionStorage.setItem('currentRoute', toLocation);
-      console.log('MBA98386196v Web - Set previousRoute:', fromLocation);
-      console.log('MBA98386196v Web - Set currentRoute:', toLocation);
-    } else {
-      // Store the current previousRoute as prevPrevRoute before updating
-      const currentPreviousRoute = await AsyncStorage.getItem('previousRoute');
-      if (currentPreviousRoute) {
-        await AsyncStorage.setItem('prevPrevRoute', currentPreviousRoute);
-      }
-      
-      await AsyncStorage.setItem('previousRoute', fromLocation);
-      await AsyncStorage.setItem('currentRoute', toLocation);
-      console.log('MBA98386196v Mobile - Set previousRoute:', fromLocation);
-      console.log('MBA98386196v Mobile - Set currentRoute:', toLocation);
     }
     
-    // Check if we're navigating to a tab within a screen
-    if (params.screen) {
-      console.log('MBA98386196v Navigating to tab:', params.screen, 'within screen:', toLocation);
-      
-      // Special handling for MyProfile screen to ensure tab is highlighted
-      if (toLocation === 'MyProfile') {
-        console.log('MBA98386196v Special handling for MyProfile screen');
-        // Store in appropriate storage for reload persistence
-        if (Platform.OS === 'web') {
-          sessionStorage.setItem('myProfileActiveTab', params.screen);
-        } else {
-          await AsyncStorage.setItem('myProfileActiveTab', params.screen);
-        }
-        
-        // Use reset to ensure the navigation state is clean and the tab is highlighted
-        navigation.reset({
-          index: 0,
-          routes: [
-            { 
-              name: toLocation, 
-              params: {
-                ...params,
-                initialTab: params.screen // Add initialTab parameter for MyProfile
-              } 
-            }
-          ],
-        });
-      } else {
-        // For other screens with tabs
-        navigation.reset({
-          index: 0,
-          routes: [
-            { 
-              name: toLocation, 
-              params: params 
-            }
-          ],
-        });
-      }
-    } else {
-      // Regular navigation
-      navigation.navigate(toLocation, params);
-    }
-  } catch (error) {
-    console.error('Error navigating:', error);
+    // Navigate to the new screen
     navigation.navigate(toLocation, params);
+    
+    // Update current route in storage
+    await setStorage('currentRoute', toLocation);
+    
+    debugLog('MBAuieo2o34nf navigateToFrom - navigation complete', {
+      from: fromLocation,
+      to: toLocation,
+      params,
+      previousRoute: currentRoute,
+      newCurrentRoute: toLocation
+    });
+  } catch (error) {
+    debugLog('MBAuieo2o34nf navigateToFrom - error', error);
   }
 };
 
@@ -207,11 +144,7 @@ export default function Navigation({ state, descriptors, navigation }) {
       try {
         let route;
         
-        if (Platform.OS === 'web') {
-          route = sessionStorage.getItem('currentRoute');
-        } else {
-          route = await AsyncStorage.getItem('currentRoute');
-        }
+        route = await getStorage('currentRoute');
         
         // Only log in debug mode, not every time
         if (is_DEBUG && route !== currentRoute) {
@@ -242,7 +175,45 @@ export default function Navigation({ state, descriptors, navigation }) {
     return unsubscribe;
   }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, is_DEBUG]);
 
-  const professionalsTitle = Platform.OS === 'web' ? 'Search Pros' : 'Professionals';
+  // Listen for browser back/forward navigation and update currentRoute
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handlePopState = async () => {
+        const route = await getStorage('currentRoute');
+        debugLog('MBAuieo2o34nf popstate detected, updating currentRoute from storage', { route });
+        if (route && route !== currentRoute) {
+          setCurrentRoute(route);
+          updateRoute && updateRoute(route);
+        }
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [currentRoute, updateRoute]);
+
+  // Sync currentRoute in storage with navigation state changes
+  useEffect(() => {
+    const updateCurrentRouteInStorage = async () => {
+      try {
+        const navState = navigation.getState && navigation.getState();
+        let routeName = '';
+        if (navState) {
+          const route = navState.routes[navState.index];
+          routeName = route?.name || '';
+        }
+        if (routeName) {
+          await setStorage('currentRoute', routeName);
+          debugLog('MBAuieo2o34nf navigation state change - set currentRoute in storage', { routeName });
+          setCurrentRoute(routeName);
+          updateRoute && updateRoute(routeName);
+        }
+      } catch (error) {
+        debugLog('MBAuieo2o34nf error updating currentRoute in storage', error);
+      }
+    };
+    const unsubscribe = navigation.addListener('state', updateCurrentRouteInStorage);
+    return unsubscribe;
+  }, [navigation, updateRoute]);
 
   const handleNavigation = async (screenName, tabName = null) => {
     closeMenu();
@@ -264,13 +235,8 @@ export default function Navigation({ state, descriptors, navigation }) {
         return;
       }
       
-      if (Platform.OS === 'web') {
-        sessionStorage.setItem('previousRoute', currentRoute);
-        sessionStorage.setItem('currentRoute', screenName);
-      } else {
-        await AsyncStorage.setItem('previousRoute', currentRoute);
-        await AsyncStorage.setItem('currentRoute', screenName);
-      }
+      setStorage('previousRoute', currentRoute);
+      setStorage('currentRoute', screenName);
       
       // Update local state
       setCurrentRoute(screenName);
@@ -303,24 +269,12 @@ export default function Navigation({ state, descriptors, navigation }) {
   useEffect(() => {
     const initializeRouteTracking = async () => {
       try {
-        if (Platform.OS === 'web') {
-          // Web: Use sessionStorage
-          const currentRoute = sessionStorage.getItem('currentRoute');
-          if (!currentRoute) {
-            const initialRoute = isSignedIn 
-              ? 'Dashboard'
-              : 'Home';
-            sessionStorage.setItem('currentRoute', initialRoute);
-          }
-        } else {
-          // Mobile: Use AsyncStorage
-          const currentRoute = await AsyncStorage.getItem('currentRoute');
-          if (!currentRoute) {
-            const initialRoute = isSignedIn 
-              ? 'Dashboard'
-              : 'Home';
-            await AsyncStorage.setItem('currentRoute', initialRoute);
-          }
+        const currentRoute = await getStorage('currentRoute');
+        if (!currentRoute) {
+          const initialRoute = isSignedIn 
+            ? 'Dashboard'
+            : 'Home';
+          await setStorage('currentRoute', initialRoute);
         }
       } catch (error) {
         console.error('Error initializing route tracking:', error);
@@ -344,11 +298,7 @@ export default function Navigation({ state, descriptors, navigation }) {
       }
       
       await switchRole(newRole);
-      if (Platform.OS === 'web') {
-        sessionStorage.setItem('userRole', newRole);
-      } else {
-        await AsyncStorage.setItem('userRole', newRole);
-      }
+      await setStorage('userRole', newRole);
       
       // Handle different screens according to requirements
       switch (currentScreen) {

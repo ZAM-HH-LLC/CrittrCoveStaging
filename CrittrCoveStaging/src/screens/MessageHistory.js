@@ -1285,7 +1285,7 @@ const MessageHistory = ({ navigation, route }) => {
       if (Platform.OS === 'web') {
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.set('conversationId', selectedConversation);
-        window.history.pushState({}, '', newUrl.toString());
+        window.history.replaceState({}, '', newUrl.toString());
       }
 
       // Reset pagination state

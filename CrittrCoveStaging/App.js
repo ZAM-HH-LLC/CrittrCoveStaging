@@ -6,7 +6,7 @@ import { createStackNavigator, TransitionPresets } from '@react-navigation/stack
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Navigation from './src/components/Navigation';
 import { theme } from './src/styles/theme';
-import { AuthProvider, AuthContext, debugLog } from './src/context/AuthContext';
+import { AuthProvider, AuthContext, debugLog, getStorage, setStorage } from './src/context/AuthContext';
 import { MessageNotificationProvider } from './src/context/MessageNotificationContext';
 import { API_BASE_URL } from './src/config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -210,27 +210,16 @@ const MVPWarning = () => {
 
   useEffect(() => {
     const checkBannerStatus = async () => {
-      if (Platform.OS === 'web') {
-        const hidden = sessionStorage.getItem('mvp_banner_hidden');
-        if (hidden === 'true') {
-          setIsVisible(false);
-        }
-      } else {
-        const hidden = await AsyncStorage.getItem('mvp_banner_hidden');
-        if (hidden === 'true') {
-          setIsVisible(false);
-        }
+      const hidden = await getStorage('mvp_banner_hidden');
+      if (hidden === 'true') {
+        setIsVisible(false);
       }
     };
     checkBannerStatus();
   }, []);
 
   const hideBanner = async () => {
-    if (Platform.OS === 'web') {
-      sessionStorage.setItem('mvp_banner_hidden', 'true');
-    } else {
-      await AsyncStorage.setItem('mvp_banner_hidden', 'true');
-    }
+    await setStorage('mvp_banner_hidden', 'true');
     setIsVisible(false);
   };
 
@@ -330,15 +319,6 @@ function AppContent() {
   if (isLoading || !initialRoute) {
     return null; // Or a loading spinner component
   }
-
-  const hideBanner = async () => {
-    if (Platform.OS === 'web') {
-      sessionStorage.setItem('mvp_banner_hidden', 'true');
-    } else {
-      await AsyncStorage.setItem('mvp_banner_hidden', 'true');
-    }
-    setIsVisible(false);
-  };
 
   return (
     <>

@@ -127,17 +127,9 @@ class AuthService {
     try {
       let accessToken, refreshToken;
       
-      if (Platform.OS === 'web') {
-        console.log('MBA98765 Web platform detected, using sessionStorage');
-        accessToken = sessionStorage.getItem('userToken');
-        refreshToken = sessionStorage.getItem('refreshToken');
-      } else {
-        console.log('MBA98765 Mobile platform detected, using AsyncStorage');
-        [accessToken, refreshToken] = await AsyncStorage.multiGet([
-          'userToken',
-          'refreshToken'
-        ]);
-      }
+      console.log('MBA98765 Attempting to retrieve tokens from storage');
+      accessToken = await getStorage('userToken');
+      refreshToken = await getStorage('refreshToken');
       
       this.accessToken = accessToken;
       this.refreshToken = refreshToken;
@@ -321,13 +313,32 @@ export const AuthContext = createContext();
 export const getStorage = async (key) => {
   try {
     if (Platform.OS === 'web') {
-      return sessionStorage.getItem(key);
+      const value = sessionStorage.getItem(key);
+      debugLog('MBAuieo2o34nf getStorage web:', { key, value });
+      return value;
     } else {
-      return await AsyncStorage.getItem(key);
+      const value = await AsyncStorage.getItem(key);
+      debugLog('MBAuieo2o34nf getStorage mobile:', { key, value });
+      return value;
     }
   } catch (error) {
-    console.error('Error getting from storage:', error);
+    console.error('MBAuieo2o34nf Error getting from storage:', error);
     return null;
+  }
+};
+
+// Add setStorage function
+export const setStorage = async (key, value) => {
+  try {
+    if (Platform.OS === 'web') {
+      sessionStorage.setItem(key, value);
+      debugLog('MBAuieo2o34nf setStorage web:', { key, value });
+    } else {
+      await AsyncStorage.setItem(key, value);
+      debugLog('MBAuieo2o34nf setStorage mobile:', { key, value });
+    }
+  } catch (error) {
+    console.error('MBAuieo2o34nf Error setting storage:', error);
   }
 };
 

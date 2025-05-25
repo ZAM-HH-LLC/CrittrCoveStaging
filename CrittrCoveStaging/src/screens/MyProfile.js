@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { theme } from '../styles/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthContext, debugLog } from '../context/AuthContext';
+import { AuthContext, debugLog, getStorage, setStorage } from '../context/AuthContext';
 import { TutorialContext } from '../context/TutorialContext';
 import FloatingSaveButton from '../components/FloatingSaveButton';
 import ServiceManager from '../components/ServiceManager';
@@ -60,7 +60,6 @@ const MyProfile = () => {
     completeTutorial,
   } = useContext(TutorialContext);
 
-  // Define loadActiveTab at component level so it's accessible throughout the component
   const loadActiveTab = async () => {
     try {
       // First, check URL parameters directly when on web
@@ -69,66 +68,43 @@ const MyProfile = () => {
         const tabFromUrl = urlParams.get('initialTab') || urlParams.get('screen');
         
         if (tabFromUrl && ['profile_info', 'pets_preferences', 'settings_payments', 'services_availability'].includes(tabFromUrl)) {
-          debugLog('MBA54321 MyProfile retrieved tab from URL params', { tabFromUrl });
+          debugLog('MBAuieo2o34nf MyProfile retrieved tab from URL params', { tabFromUrl });
           setActiveTab(tabFromUrl);
           // Store this tab in storage for persistence
-          sessionStorage.setItem('myProfileActiveTab', tabFromUrl);
+          await setStorage('MyProfileActiveTab', tabFromUrl);
           return;
         }
       }
       
       // Then check navigation params
       const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-      debugLog('MBA54321 MyProfile navigation params', params);
+      debugLog('MBAuieo2o34nf MyProfile navigation params', params);
       
       if (params?.initialTab) {
-        debugLog('MBA54321 MyProfile received initialTab param', { initialTab: params.initialTab });
+        debugLog('MBAuieo2o34nf MyProfile received initialTab param', { initialTab: params.initialTab });
         setActiveTab(params.initialTab);
-        // Store in storage
-        if (Platform.OS === 'web') {
-          sessionStorage.setItem('myProfileActiveTab', params.initialTab);
-        } else {
-          await AsyncStorage.setItem('myProfileActiveTab', params.initialTab);
-        }
+        await setStorage('MyProfileActiveTab', params.initialTab);
         return;
       } else if (params?.screen) {
-        debugLog('MBA54321 MyProfile received screen param', { screen: params.screen });
+        debugLog('MBAuieo2o34nf MyProfile received screen param', { screen: params.screen });
         setActiveTab(params.screen);
-        // Store in storage
-        if (Platform.OS === 'web') {
-          sessionStorage.setItem('myProfileActiveTab', params.screen);
-        } else {
-          await AsyncStorage.setItem('myProfileActiveTab', params.screen);
-        }
+        await setStorage('MyProfileActiveTab', params.screen);
         return;
       } else if (stepData?.tab) {
-        debugLog('MBA54321 MyProfile received tab from stepData', { tab: stepData.tab });
+        debugLog('MBAuieo2o34nf MyProfile received tab from stepData', { tab: stepData.tab });
         setActiveTab(stepData.tab);
-        // Store in storage
-        if (Platform.OS === 'web') {
-          sessionStorage.setItem('myProfileActiveTab', stepData.tab);
-        } else {
-          await AsyncStorage.setItem('myProfileActiveTab', stepData.tab);
-        }
+        await setStorage('MyProfileActiveTab', stepData.tab);
         return;
       }
       
       // If we reach here, attempt to load from storage
-      if (Platform.OS === 'web') {
-        const storedTab = sessionStorage.getItem('myProfileActiveTab');
-        if (storedTab) {
-          debugLog('MBA54321 MyProfile loaded tab from sessionStorage', { storedTab });
-          setActiveTab(storedTab);
-        }
-      } else {
-        const storedTab = await AsyncStorage.getItem('myProfileActiveTab');
-        if (storedTab) {
-          debugLog('MBA54321 MyProfile loaded tab from AsyncStorage', { storedTab });
-          setActiveTab(storedTab);
-        }
+      const storedTab = await getStorage('MyProfileActiveTab');
+      if (storedTab) {
+        debugLog('MBAuieo2o34nf MyProfile loaded tab from storage', { storedTab });
+        setActiveTab(storedTab);
       }
     } catch (error) {
-      debugLog('MBA54321 Error loading active tab', error);
+      debugLog('MBAuieo2o34nf Error loading active tab', error);
     }
   };
 
@@ -141,21 +117,18 @@ const MyProfile = () => {
   useEffect(() => {
     const storeActiveTab = async () => {
       try {
+        await setStorage('MyProfileActiveTab', activeTab);
+        
+        // Update URL params without reloading the page
         if (Platform.OS === 'web') {
-          sessionStorage.setItem('myProfileActiveTab', activeTab);
-          
-          // Update URL params without reloading the page
           const url = new URL(window.location.href);
           url.searchParams.set('initialTab', activeTab);
           window.history.replaceState({}, '', url.toString());
-          
-          debugLog('MBA54321 Stored active tab in sessionStorage and URL', { activeTab });
-        } else {
-          await AsyncStorage.setItem('myProfileActiveTab', activeTab);
-          debugLog('MBA54321 Stored active tab in AsyncStorage', { activeTab });
         }
+        
+        debugLog('MBAuieo2o34nf Stored active tab', { activeTab });
       } catch (error) {
-        debugLog('MBA54321 Error storing active tab', error);
+        debugLog('MBAuieo2o34nf Error storing active tab', error);
       }
     };
     
@@ -560,21 +533,17 @@ const MyProfile = () => {
                     <TouchableOpacity
                       key={tab.id}
                       style={[styles.tab, activeTab === tab.id && styles.activeTab]}
-                      onPress={() => {
+                      onPress={async () => {
                         setActiveTab(tab.id);
                         // Update URL params without navigation
                         if (Platform.OS === 'web') {
                           const url = new URL(window.location.href);
                           url.searchParams.set('initialTab', tab.id);
                           window.history.replaceState({}, '', url.toString());
-                          // Also store in sessionStorage for reload persistence
-                          sessionStorage.setItem('myProfileActiveTab', tab.id);
-                          debugLog('MBA54321 Tab clicked - updated URL and storage', { tabId: tab.id });
-                        } else {
-                          // For mobile, just update AsyncStorage
-                          AsyncStorage.setItem('myProfileActiveTab', tab.id);
-                          debugLog('MBA54321 Tab clicked - updated storage', { tabId: tab.id });
                         }
+                        // Store in storage
+                        await setStorage('MyProfileActiveTab', tab.id);
+                        debugLog('MBAuieo2o34nf Tab clicked - updated storage', { tabId: tab.id });
                       }}
                     >
                       <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>
