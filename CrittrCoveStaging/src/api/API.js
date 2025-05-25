@@ -717,6 +717,39 @@ export const fixPetOwner = async (petId) => {
 };
 
 /**
+ * Delete a pet from the user's account
+ * This function sends a DELETE request to remove a pet record
+ * @param {string|number} petId - The ID of the pet to delete
+ * @returns {Promise<Object>} - Success response from the backend
+ */
+export const deletePet = async (petId) => {
+  try {
+    const token = await getStorage('userToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    debugLog('MBA789', 'Deleting pet with ID:', petId);
+
+    const response = await axios.delete(
+      `${API_BASE_URL}/api/pets/v1/${petId}/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    debugLog('MBA789', 'Pet deleted successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA789', 'Error deleting pet:', error);
+    throw error;
+  }
+};
+
+/**
  * Creates a new professional service
  * @param {Object} serviceData - Data for the new service
  * @returns {Promise<Object>} - The created service data

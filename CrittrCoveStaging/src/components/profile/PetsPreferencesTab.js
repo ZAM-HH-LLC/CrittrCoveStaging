@@ -4,8 +4,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { debugLog } from '../../context/AuthContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { addPet, updatePet, fixPetOwner } from '../../api/API';
+import { addPet, updatePet, fixPetOwner, deletePet } from '../../api/API';
 import { useToast } from '../../components/ToastProvider';
+import ConfirmationModal from '../ConfirmationModal';
+import { calculateAge } from '../../data/calculations';
 
 const PetsPreferencesTab = ({
   pets = [],
@@ -48,6 +50,14 @@ const PetsPreferencesTab = ({
 
   // Add this near other state declarations
   const [showSuccessModals, setShowSuccessModals] = useState(true);
+
+  // Add state for delete confirmation modal
+  const [deleteConfirmation, setDeleteConfirmation] = useState({
+    visible: false,
+    petId: null,
+    petName: '',
+    isDeleting: false
+  });
 
   // Add window resize listener
   useEffect(() => {
@@ -259,6 +269,90 @@ const PetsPreferencesTab = ({
         duration: 5000
       });
     }
+  };
+  
+  const handleDeletePet = async (petId) => {
+    // Find the pet to get its name for the confirmation
+    const petToDelete = pets.find(pet => pet.id === petId);
+    const petName = petToDelete ? petToDelete.name : 'this pet';
+    
+    // Show confirmation modal
+    setDeleteConfirmation({
+      visible: true,
+      petId: petId,
+      petName: petName,
+      isDeleting: false
+    });
+  };
+  
+  const confirmDeletePet = async () => {
+    try {
+      const { petId, petName } = deleteConfirmation;
+      
+      // Set deleting state
+      setDeleteConfirmation(prev => ({ ...prev, isDeleting: true }));
+      
+      debugLog("MBA456", "Attempting to delete pet with ID:", petId);
+      
+      // Show deleting toast
+      toast({
+        message: `Deleting ${petName}...`,
+        type: 'info',
+        duration: 3000
+      });
+      
+      // Call the delete pet API
+      await deletePet(petId);
+      debugLog("MBA456", "Successfully deleted pet:", petId);
+      
+      // Remove the pet from the parent component's state
+      onDeletePet(petId);
+      
+      // Hide modal
+      setDeleteConfirmation({
+        visible: false,
+        petId: null,
+        petName: '',
+        isDeleting: false
+      });
+      
+      // Show success toast
+      toast({
+        message: `${petName} has been successfully deleted.`,
+        type: 'success',
+        duration: 3000
+      });
+      
+    } catch (error) {
+      debugLog("MBA456", "Error deleting pet:", error);
+      
+      // Reset deleting state but keep modal open
+      setDeleteConfirmation(prev => ({ ...prev, isDeleting: false }));
+      
+      // Show error toast
+      let errorMessage = "There was a problem deleting the pet. Please try again or contact support.";
+      
+      if (error.response && error.response.data) {
+        if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        }
+      }
+      
+      toast({
+        message: errorMessage,
+        type: 'error',
+        duration: 5000
+      });
+    }
+  };
+  
+  const cancelDeletePet = () => {
+    setDeleteConfirmation({
+      visible: false,
+      petId: null,
+      petName: '',
+      isDeleting: false
+    });
   };
   
   const formatDateForBackend = (dateString) => {
@@ -790,7 +884,7 @@ const PetsPreferencesTab = ({
       const petName = typeof pet.name === 'string' ? pet.name : '';
       const petBreed = typeof pet.breed === 'string' ? pet.breed : '';
       const petType = typeof pet.type === 'string' ? pet.type : '';
-      const petBirthday = typeof pet.birthday === 'string' ? pet.birthday : 'No birthday set';
+      const petAgeString = pet.birthday ? calculateAge(pet.birthday) : 'No age set';
       
       return (
         <View key={pet.id} style={styles.petCard}>
@@ -831,48 +925,127 @@ const PetsPreferencesTab = ({
                         </View>
                       </TouchableOpacity>
                     </View>
-                    <View style={styles.editActions}>
-                      <TouchableOpacity 
-                        style={styles.saveButton}
-                        onPress={(event) => {
-                          // Prevent event propagation
-                          event.stopPropagation();
-                          // Prevent duplicates
-                          if (savingPet) {
-                            debugLog("MBA5555", "Save button already clicked, ignoring");
-                            return;
-                          }
-                          debugLog("MBA5555", "SAVE BUTTON - Clicked for pet:", pet.id);
-                          handleSavePetEdit(pet.id);
-                        }}
-                        disabled={savingPet}
-                      >
-                        <Text style={styles.saveButtonText}>
-                          {isNewPet ? 'Create Pet' : 'Save Pet'}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.editButton}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          handleCancelPetEdit(pet.id);
-                        }}
-                      >
-                        <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.editButton}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          togglePetDetails(pet.id);
-                        }}
-                      >
-                        <MaterialCommunityIcons 
-                          name={isExpanded ? "chevron-up" : "chevron-down"} 
-                          size={24} 
-                          color={theme.colors.text}
-                        />
-                      </TouchableOpacity>
+                    <View style={[
+                      styles.editActions,
+                      windowWidth < 600 && styles.editActionsSmallScreen
+                    ]}>
+                      {windowWidth < 600 ? (
+                        // Small screen layout: two rows of buttons
+                        <>
+                          <View style={styles.buttonRowTop}>
+                            {!isNewPet && (
+                              <TouchableOpacity 
+                                style={styles.deleteButton}
+                                onPress={(event) => {
+                                  event.stopPropagation();
+                                  handleDeletePet(pet.id);
+                                }}
+                              >
+                                <MaterialCommunityIcons name="delete" size={20} color={theme.colors.error} />
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity 
+                              style={styles.saveButton}
+                              onPress={(event) => {
+                                // Prevent event propagation
+                                event.stopPropagation();
+                                // Prevent duplicates
+                                if (savingPet) {
+                                  debugLog("MBA5555", "Save button already clicked, ignoring");
+                                  return;
+                                }
+                                debugLog("MBA5555", "SAVE BUTTON - Clicked for pet:", pet.id);
+                                handleSavePetEdit(pet.id);
+                              }}
+                              disabled={savingPet}
+                            >
+                              <Text style={styles.saveButtonText}>
+                                {isNewPet ? 'Create Pet' : 'Save Pet'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                          <View style={styles.buttonRowBottom}>
+                            <TouchableOpacity 
+                              style={styles.editButton}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                handleCancelPetEdit(pet.id);
+                              }}
+                            >
+                              <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.editButton}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                togglePetDetails(pet.id);
+                              }}
+                            >
+                              <MaterialCommunityIcons 
+                                name={isExpanded ? "chevron-up" : "chevron-down"} 
+                                size={24} 
+                                color={theme.colors.text}
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      ) : (
+                        // Large screen layout: single row
+                        <>
+                          <TouchableOpacity 
+                            style={styles.saveButton}
+                            onPress={(event) => {
+                              // Prevent event propagation
+                              event.stopPropagation();
+                              // Prevent duplicates
+                              if (savingPet) {
+                                debugLog("MBA5555", "Save button already clicked, ignoring");
+                                return;
+                              }
+                              debugLog("MBA5555", "SAVE BUTTON - Clicked for pet:", pet.id);
+                              handleSavePetEdit(pet.id);
+                            }}
+                            disabled={savingPet}
+                          >
+                            <Text style={styles.saveButtonText}>
+                              {isNewPet ? 'Create Pet' : 'Save Pet'}
+                            </Text>
+                          </TouchableOpacity>
+                          {!isNewPet && (
+                            <TouchableOpacity 
+                              style={styles.deleteButton}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                handleDeletePet(pet.id);
+                              }}
+                            >
+                              <MaterialCommunityIcons name="delete" size={20} color={theme.colors.error} />
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity 
+                            style={styles.editButton}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              handleCancelPetEdit(pet.id);
+                            }}
+                          >
+                            <MaterialCommunityIcons name="close" size={20} color={theme.colors.error} />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={styles.editButton}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              togglePetDetails(pet.id);
+                            }}
+                          >
+                            <MaterialCommunityIcons 
+                              name={isExpanded ? "chevron-up" : "chevron-down"} 
+                              size={24} 
+                              color={theme.colors.text}
+                            />
+                          </TouchableOpacity>
+                        </>
+                      )}
                     </View>
                   </View>
                   
@@ -986,39 +1159,59 @@ const PetsPreferencesTab = ({
                     source={require('../../../assets/default-pet-image.png')}
                     style={styles.petPhoto}
                   />
-                  <View style={styles.petInfo}>
+                  <View style={[
+                    styles.petInfo,
+                    windowWidth < 600 && styles.petInfoWithButtonPadding
+                  ]}>
                     <Text style={styles.petName}>{petName}</Text>
                     <View style={styles.petDetailsContainer}>
                       <Text style={styles.petDetails}>
-                        {petBreed ? petBreed : 'No breed'} • {petBirthday} • {petType ? petType : 'No type'}
+                        {petBreed ? petBreed : 'No breed'} • {petAgeString} • {petType ? petType : 'No type'}
                       </Text>
                     </View>
                   </View>
                 </>
               )}
             </View>
-            <View style={styles.petActions}>
-              {!isEditing ? (
-                <>
-                  <TouchableOpacity 
-                    style={styles.editButton}
-                    onPress={() => handleEditPet(pet.id)}
-                  >
-                    <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.editButton}
-                    onPress={() => togglePetDetails(pet.id)}
-                  >
-                    <MaterialCommunityIcons 
-                      name={isExpanded ? "chevron-up" : "chevron-down"} 
-                      size={24} 
-                      color={theme.colors.text}
-                    />
-                  </TouchableOpacity>
-                </>
-              ) : null}
-            </View>
+            {!isEditing && windowWidth < 600 ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.editButtonTopRight]}
+                  onPress={() => handleEditPet(pet.id)}
+                >
+                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.chevronButtonBottomRight]}
+                  onPress={() => togglePetDetails(pet.id)}
+                >
+                  <MaterialCommunityIcons
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={24}
+                    color={theme.colors.text}
+                  />
+                </TouchableOpacity>
+              </>
+            ) : !isEditing ? (
+              <View style={styles.petActions}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => handleEditPet(pet.id)}
+                >
+                  <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => togglePetDetails(pet.id)}
+                >
+                  <MaterialCommunityIcons
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={24}
+                    color={theme.colors.text}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </TouchableOpacity>
 
           {isExpanded && (
@@ -1063,7 +1256,7 @@ const PetsPreferencesTab = ({
                       style={styles.editInput}
                       value={editedPetData.pottyBreakSchedule || ''}
                       onChangeText={(text) => handleEditChange(pet.id, 'pottyBreakSchedule', text)}
-                      placeholder="Enter potty break schedule"
+                      placeholder="Potty break schedule"
                       placeholderTextColor={theme.colors.placeholder}
                       multiline
                     />
@@ -1078,7 +1271,7 @@ const PetsPreferencesTab = ({
                       style={styles.editInput}
                       value={editedPetData.specialCareInstructions || ''}
                       onChangeText={(text) => handleEditChange(pet.id, 'specialCareInstructions', text)}
-                      placeholder="Enter special care instructions"
+                      placeholder="Special care instructions"
                       placeholderTextColor={theme.colors.placeholder}
                       multiline
                     />
@@ -1185,6 +1378,8 @@ const PetsPreferencesTab = ({
                                 style={[
                                   styles.optionButton,
                                   (editedPetData.childrenFriendly === null && option === "N/A") || 
+                                  (editedPetData.childrenFriendly === true && option === "Yes") || 
+                                  (editedPetData.childrenFriendly === false && option === "No") ||
                                   editedPetData.childrenFriendly === option ? styles.selectedOption : null
                                 ]}
                                 onPress={() => handleEditChange(pet.id, 'childrenFriendly', option === "N/A" ? null : option)}
@@ -1192,6 +1387,8 @@ const PetsPreferencesTab = ({
                                 <Text style={[
                                   styles.optionText,
                                   (editedPetData.childrenFriendly === null && option === "N/A") || 
+                                  (editedPetData.childrenFriendly === true && option === "Yes") || 
+                                  (editedPetData.childrenFriendly === false && option === "No") ||
                                   editedPetData.childrenFriendly === option ? styles.selectedOptionText : null
                                 ]}>
                                   {option}
@@ -1213,6 +1410,8 @@ const PetsPreferencesTab = ({
                                 style={[
                                   styles.optionButton,
                                   (editedPetData.catFriendly === null && option === "N/A") || 
+                                  (editedPetData.catFriendly === true && option === "Yes") || 
+                                  (editedPetData.catFriendly === false && option === "No") ||
                                   editedPetData.catFriendly === option ? styles.selectedOption : null
                                 ]}
                                 onPress={() => handleEditChange(pet.id, 'catFriendly', option === "N/A" ? null : option)}
@@ -1220,6 +1419,8 @@ const PetsPreferencesTab = ({
                                 <Text style={[
                                   styles.optionText,
                                   (editedPetData.catFriendly === null && option === "N/A") || 
+                                  (editedPetData.catFriendly === true && option === "Yes") || 
+                                  (editedPetData.catFriendly === false && option === "No") ||
                                   editedPetData.catFriendly === option ? styles.selectedOptionText : null
                                 ]}>
                                   {option}
@@ -1241,6 +1442,8 @@ const PetsPreferencesTab = ({
                                 style={[
                                   styles.optionButton,
                                   (editedPetData.dogFriendly === null && option === "N/A") || 
+                                  (editedPetData.dogFriendly === true && option === "Yes") || 
+                                  (editedPetData.dogFriendly === false && option === "No") ||
                                   editedPetData.dogFriendly === option ? styles.selectedOption : null
                                 ]}
                                 onPress={() => handleEditChange(pet.id, 'dogFriendly', option === "N/A" ? null : option)}
@@ -1248,6 +1451,8 @@ const PetsPreferencesTab = ({
                                 <Text style={[
                                   styles.optionText,
                                   (editedPetData.dogFriendly === null && option === "N/A") || 
+                                  (editedPetData.dogFriendly === true && option === "Yes") || 
+                                  (editedPetData.dogFriendly === false && option === "No") ||
                                   editedPetData.dogFriendly === option ? styles.selectedOptionText : null
                                 ]}>
                                   {option}
@@ -1269,6 +1474,8 @@ const PetsPreferencesTab = ({
                                 style={[
                                   styles.optionButton,
                                   (editedPetData.spayedNeutered === null && option === "N/A") || 
+                                  (editedPetData.spayedNeutered === true && option === "Yes") || 
+                                  (editedPetData.spayedNeutered === false && option === "No") ||
                                   editedPetData.spayedNeutered === option ? styles.selectedOption : null
                                 ]}
                                 onPress={() => handleEditChange(pet.id, 'spayedNeutered', option === "N/A" ? null : option)}
@@ -1276,6 +1483,8 @@ const PetsPreferencesTab = ({
                                 <Text style={[
                                   styles.optionText,
                                   (editedPetData.spayedNeutered === null && option === "N/A") || 
+                                  (editedPetData.spayedNeutered === true && option === "Yes") || 
+                                  (editedPetData.spayedNeutered === false && option === "No") ||
                                   editedPetData.spayedNeutered === option ? styles.selectedOptionText : null
                                 ]}>
                                   {option}
@@ -1297,6 +1506,8 @@ const PetsPreferencesTab = ({
                                 style={[
                                   styles.optionButton,
                                   (editedPetData.houseTrained === null && option === "N/A") || 
+                                  (editedPetData.houseTrained === true && option === "Yes") || 
+                                  (editedPetData.houseTrained === false && option === "No") ||
                                   editedPetData.houseTrained === option ? styles.selectedOption : null
                                 ]}
                                 onPress={() => handleEditChange(pet.id, 'houseTrained', option === "N/A" ? null : option)}
@@ -1304,6 +1515,8 @@ const PetsPreferencesTab = ({
                                 <Text style={[
                                   styles.optionText,
                                   (editedPetData.houseTrained === null && option === "N/A") || 
+                                  (editedPetData.houseTrained === true && option === "Yes") || 
+                                  (editedPetData.houseTrained === false && option === "No") ||
                                   editedPetData.houseTrained === option ? styles.selectedOptionText : null
                                 ]}>
                                   {option}
@@ -1325,6 +1538,8 @@ const PetsPreferencesTab = ({
                                 style={[
                                   styles.optionButton,
                                   (editedPetData.microchipped === null && option === "N/A") || 
+                                  (editedPetData.microchipped === true && option === "Yes") || 
+                                  (editedPetData.microchipped === false && option === "No") ||
                                   editedPetData.microchipped === option ? styles.selectedOption : null
                                 ]}
                                 onPress={() => handleEditChange(pet.id, 'microchipped', option === "N/A" ? null : option)}
@@ -1332,6 +1547,8 @@ const PetsPreferencesTab = ({
                                 <Text style={[
                                   styles.optionText,
                                   (editedPetData.microchipped === null && option === "N/A") || 
+                                  (editedPetData.microchipped === true && option === "Yes") || 
+                                  (editedPetData.microchipped === false && option === "No") ||
                                   editedPetData.microchipped === option ? styles.selectedOptionText : null
                                 ]}>
                                   {option}
@@ -1353,6 +1570,8 @@ const PetsPreferencesTab = ({
                                 style={[
                                   styles.optionButton,
                                   (editedPetData.canBeLeftAlone === null && option === "N/A") || 
+                                  (editedPetData.canBeLeftAlone === true && option === "Yes") || 
+                                  (editedPetData.canBeLeftAlone === false && option === "No") ||
                                   editedPetData.canBeLeftAlone === option ? styles.selectedOption : null
                                 ]}
                                 onPress={() => handleEditChange(pet.id, 'canBeLeftAlone', option === "N/A" ? null : option)}
@@ -1360,6 +1579,8 @@ const PetsPreferencesTab = ({
                                 <Text style={[
                                   styles.optionText,
                                   (editedPetData.canBeLeftAlone === null && option === "N/A") || 
+                                  (editedPetData.canBeLeftAlone === true && option === "Yes") || 
+                                  (editedPetData.canBeLeftAlone === false && option === "No") ||
                                   editedPetData.canBeLeftAlone === option ? styles.selectedOptionText : null
                                 ]}>
                                   {option}
@@ -1493,7 +1714,7 @@ const PetsPreferencesTab = ({
                           <Text style={styles.vetInfoText}>{pet.adoptionDate || 'Not specified'}</Text>
                         )}
                       </View>
-                      <View style={styles.vetInfoItem}>
+                      {/* TODO: add back after MVP <View style={styles.vetInfoItem}>
                         <Text style={styles.vetInfoLabel}>Vet documents:</Text>
                         {isEditing ? (
                           <View style={styles.documentActionContainer}>
@@ -1512,7 +1733,7 @@ const PetsPreferencesTab = ({
                             <Text style={styles.documentButtonText}>View documents</Text>
                           </TouchableOpacity>
                         )}
-                      </View>
+                      </View> */}
                     </View>
                   </View>
                 )}
@@ -2039,6 +2260,13 @@ const PetsPreferencesTab = ({
   return (
     <ScrollView style={styles.container}>
       {renderDatePickerModal()}
+      <ConfirmationModal
+        visible={deleteConfirmation.visible}
+        onClose={cancelDeletePet}
+        onConfirm={confirmDeletePet}
+        actionText={`delete ${deleteConfirmation.petName}`}
+        isLoading={deleteConfirmation.isDeleting}
+      />
       <View style={[styles.section, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Pets</Text>
@@ -2580,6 +2808,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  editActionsSmallScreen: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  buttonRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  buttonRowBottom: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 4,
   },
   dateInfoContainer: {
     flexDirection: 'column',
@@ -2774,6 +3021,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  deleteButton: {
+    padding: 8,
+    marginRight: 4,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Error modal styles
   errorModalContent: {
     backgroundColor: theme.colors.surface,
@@ -2826,6 +3080,21 @@ const styles = StyleSheet.create({
   },
   successModalButtonText: {
     // Same styles, but we might want to customize in the future
+  },
+  editButtonTopRight: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 2,
+  },
+  chevronButtonBottomRight: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    zIndex: 2,
+  },
+  petInfoWithButtonPadding: {
+    paddingRight: 20, // enough space for both buttons
   },
 });
 

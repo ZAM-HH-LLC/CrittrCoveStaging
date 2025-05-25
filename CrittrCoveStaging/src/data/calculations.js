@@ -1,18 +1,27 @@
 // This is a calculation for the addpet.js file
 export const calculateAge = (birthday) => {
-    const today = new Date();
-    const birthDate = new Date(birthday);
-    let ageYears = today.getFullYear() - birthDate.getFullYear();
-    let ageMonths = today.getMonth() - birthDate.getMonth();
+  if (!birthday) return '';
+  const today = new Date();
+  const birthDate = new Date(birthday);
+  let ageYears = today.getFullYear() - birthDate.getFullYear();
+  let ageMonths = today.getMonth() - birthDate.getMonth();
 
-    if (ageMonths < 0) {
-      ageYears--;
-      ageMonths += 12;
-    }
+  if (ageMonths < 0) {
+    ageYears--;
+    ageMonths += 12;
+  }
 
-    setAgeYears(ageYears.toString());
-    setAgeMonths(ageMonths.toString());
-  };
+  let result = '';
+  if (ageYears > 0) {
+    result += `${ageYears} year${ageYears > 1 ? 's' : ''}`;
+  }
+  if (ageMonths > 0) {
+    if (result) result += ' ';
+    result += `${ageMonths} month${ageMonths > 1 ? 's' : ''}`;
+  }
+  if (!result) result = '< 1 month';
+  return result;
+};
 
 export const calculateProratedMultiplier = (startDate, endDate, startTime, endTime, timeUnit) => {
     // Parse the dates and times separately

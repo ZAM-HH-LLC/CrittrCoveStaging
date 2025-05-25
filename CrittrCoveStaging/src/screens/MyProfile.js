@@ -26,6 +26,8 @@ import TabBar from '../components/TabBar';
 import { userProfile, updateProfileInfo } from '../api/API';
 
 const MyProfile = () => {
+  debugLog('MBA5678: MyProfile component rendering/mounting');
+  
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
   const { screenWidth, isCollapsed, is_DEBUG, userRole, isApprovedProfessional, user, logout } = useContext(AuthContext);
@@ -178,12 +180,16 @@ const MyProfile = () => {
   }, [screenWidth]);
 
   useEffect(() => {
+    debugLog('MBA5678: MyProfile useEffect running - about to call loadProfileData');
     loadProfileData();
   }, []);
 
   const loadProfileData = async () => {
     try {
       setLoading(true);
+      // Log the userToken before making the API call
+      const token = await getStorage('userToken');
+      debugLog('MBA5678: userToken before userProfile call:', token);
       const response = await userProfile();
       setProfileData(response);
       

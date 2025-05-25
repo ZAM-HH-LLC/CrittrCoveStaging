@@ -115,6 +115,12 @@ def get_user_pets(user):
     try:
         pets = Pet.objects.filter(owner=user)
         
+        def format_date_for_frontend(date_obj):
+            """Convert date object to MM-DD-YYYY format for frontend"""
+            if not date_obj:
+                return None
+            return date_obj.strftime('%m-%d-%Y')
+        
         pet_data = []
         for pet in pets:
             pet_data.append({
@@ -122,10 +128,55 @@ def get_user_pets(user):
                 'name': pet.name,
                 'type': pet.species,
                 'breed': pet.breed,
+                'pet_type': pet.pet_type,
                 'age': f"{pet.age_years or 0} years {pet.age_months or 0} months",
+                'ageYears': pet.age_years,
+                'ageMonths': pet.age_months,
                 'weight': pet.weight,
+                'birthday': format_date_for_frontend(pet.birthday),
+                'sex': pet.sex,
                 'profile_photo': pet.profile_photo.url if pet.profile_photo else None,
-                'description': pet.pet_description
+                'photo_gallery': pet.photo_gallery,
+                'adoptionDate': format_date_for_frontend(pet.adoption_date),
+                'description': pet.pet_description,
+                'childrenFriendly': pet.friendly_with_children,
+                'catFriendly': pet.friendly_with_cats,
+                'dogFriendly': pet.friendly_with_dogs,
+                'spayedNeutered': pet.spayed_neutered,
+                'houseTrained': pet.house_trained,
+                'microchipped': pet.microchipped,
+                'feedingInstructions': pet.feeding_schedule,
+                'pottyBreakSchedule': pet.potty_break_schedule,
+                'energyLevel': pet.energy_level,
+                'canBeLeftAlone': pet.can_be_left_alone,
+                'medications': pet.medications,
+                'medicalNotes': pet.medication_notes,
+                'specialCareInstructions': pet.special_care_instructions,
+                'vetName': pet.vet_name,
+                'vetAddress': pet.vet_address,
+                'vetPhone': pet.vet_phone,
+                'insuranceProvider': pet.insurance_provider,
+                'vetDocuments': pet.vet_documents,
+                'created_at': pet.created_at.isoformat() if pet.created_at else None,
+                'age_years': pet.age_years,
+                'age_months': pet.age_months,
+                'adoption_date': pet.adoption_date.isoformat() if pet.adoption_date else None,
+                'friendly_with_children': pet.friendly_with_children,
+                'friendly_with_cats': pet.friendly_with_cats,
+                'friendly_with_dogs': pet.friendly_with_dogs,
+                'spayed_neutered': pet.spayed_neutered,
+                'house_trained': pet.house_trained,
+                'feeding_schedule': pet.feeding_schedule,
+                'potty_break_schedule': pet.potty_break_schedule,
+                'energy_level': pet.energy_level,
+                'can_be_left_alone': pet.can_be_left_alone,
+                'medication_notes': pet.medication_notes,
+                'special_care_instructions': pet.special_care_instructions,
+                'vet_name': pet.vet_name,
+                'vet_address': pet.vet_address,
+                'vet_phone': pet.vet_phone,
+                'insurance_provider': pet.insurance_provider,
+                'vet_documents': pet.vet_documents,
             })
         return pet_data
     except Exception as e:

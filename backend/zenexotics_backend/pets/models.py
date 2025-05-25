@@ -63,14 +63,15 @@ class Pet(models.Model):
     ]
     
     SEX_CHOICES = [
-        ('M', 'Male'),
-        ('F', 'Female'),
+        ('Male', 'Male'),
+        ('Female', 'Female'),
     ]
     
     ENERGY_LEVEL_CHOICES = [
-        ('LOW', 'Low'),
-        ('MODERATE', 'Moderate'),
-        ('HIGH', 'High'),
+        ('Low', 'Low'),
+        ('Medium', 'Medium'),
+        ('High', 'High'),
+        ('N/A', 'N/A'),
     ]
 
     # Basic Information
@@ -101,7 +102,7 @@ class Pet(models.Model):
     )
     weight = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     birthday = models.DateField(null=True, blank=True)
-    sex = models.CharField(max_length=1, choices=SEX_CHOICES, null=True, blank=True)
+    sex = models.CharField(max_length=10, choices=SEX_CHOICES, null=True, blank=True)
     
     # Photos
     profile_photo = models.ImageField(
