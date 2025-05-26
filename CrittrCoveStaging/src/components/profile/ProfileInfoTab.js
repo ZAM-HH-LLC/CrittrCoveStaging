@@ -293,7 +293,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
             isLocation ? (
               <View style={styles.locationContent}>
                 <Text style={styles.addressInstructions}>
-                  Start typing your address and select from the suggestions to ensure accuracy.
+                Enter your complete street address (e.g., "123 Main Street"). Only valid street addresses will appear in suggestions.
                 </Text>
                 <AddressAutocomplete
                   value={currentAddressValue}
@@ -302,7 +302,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
                     setCurrentAddressValue(address.formatted_address);
                     debugLog('MBA8901', 'Address selected in modal:', address);
                   }}
-                  placeholder="Enter your address in Colorado..."
+                  placeholder="Enter address in Colorado Springs..."
                   style={styles.addressAutocomplete}
                 />
                 {selectedAddress && (
