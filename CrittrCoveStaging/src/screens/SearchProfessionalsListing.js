@@ -12,7 +12,7 @@ import BackHeader from '../components/BackHeader';
 const SearchProfessionalsListing = ({ navigation, route }) => {
   const { width: windowWidth } = useWindowDimensions();
   const { screenWidth, isCollapsed, is_DEBUG } = useContext(AuthContext);
-  const [isSingleView, setIsSingleView] = useState(screenWidth <= 1050);
+  const [isSingleView, setIsSingleView] = useState(screenWidth <= 1200);
   const [isMobile, setIsMobile] = useState(screenWidth <= 900);
   const [activeView, setActiveView] = useState(isSingleView ? 'filters' : 'all');
   const [professionals, setProfessionals] = useState(mockProfessionals); // Use mock data
@@ -33,9 +33,9 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
 
   useEffect(() => {
     const updateLayout = () => {
-      setIsSingleView(screenWidth <= 1050);
+      setIsSingleView(screenWidth <= 1200);
       setIsMobile(screenWidth <= 900);
-      setActiveView(screenWidth <= 1050 ? 'filters' : 'all');
+      setActiveView(screenWidth <= 1200 ? 'filters' : 'all');
     };
     updateLayout();
   }, [screenWidth]);
@@ -295,7 +295,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       );
     }
 
-    // Single view (below 1050px)
+    // Single view (below 1200px)
     return (
       <View style={styles.containerMobile}>
         {activeView === 'filters' && (
