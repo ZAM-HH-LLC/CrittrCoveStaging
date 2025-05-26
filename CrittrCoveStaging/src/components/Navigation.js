@@ -318,7 +318,7 @@ export default function Navigation({ state, descriptors, navigation }) {
           let newTab = currentTab;
           
           // If switching to owner and current tab is professional-only, switch to profile_info
-          if (newRole === 'owner' && currentTab === 'services_availability') {
+          if (newRole === 'petOwner' && currentTab === 'services_availability') {
             newTab = 'profile_info';
           }
           
@@ -374,7 +374,7 @@ export default function Navigation({ state, descriptors, navigation }) {
           
         case 'ServiceManager':
           // When professional is on services and switches to client, go to client dashboard
-          if (newRole === 'owner') {
+          if (newRole === 'petOwner') {
             navigateToFrom(navigation, 'Dashboard', currentScreen);
           } else {
             // Should never happen, but if somehow client is on this screen and switches to pro, stay here
@@ -531,7 +531,7 @@ export default function Navigation({ state, descriptors, navigation }) {
                       });
                     }
                     if (isProfessionalRole) {
-                      handleRoleSwitch('owner');
+                      handleRoleSwitch('petOwner');
                     }
                   }}
                   activeOpacity={0.7}
@@ -706,7 +706,7 @@ export default function Navigation({ state, descriptors, navigation }) {
                         });
                       }
                       if (isProfessionalRole) {
-                        handleRoleSwitch('owner');
+                        handleRoleSwitch('petOwner');
                         setIsMenuOpen(false);
                       }
                     }}

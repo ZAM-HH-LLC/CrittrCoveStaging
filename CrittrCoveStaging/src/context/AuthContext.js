@@ -498,7 +498,28 @@ export const AuthProvider = ({ children }) => {
               setIsSignedIn(true);
               await fetchUserName();
               const status = await getProfessionalStatus(token);
-              setUserRole(status.suggestedRole);
+              
+              // Check for stored user role preference first
+              let storedRole = null;
+              try {
+                storedRole = await getStorage('userRole');
+              } catch (error) {
+                console.error('MBA98765 Error getting stored role:', error);
+              }
+              
+              // Use stored role if valid, otherwise use suggested role
+              const finalRole = (storedRole && (storedRole === 'professional' || storedRole === 'petOwner')) 
+                ? storedRole 
+                : status.suggestedRole;
+              
+              debugLog('MBA98765 Role selection:', { 
+                storedRole, 
+                suggestedRole: status.suggestedRole, 
+                finalRole,
+                isApprovedProfessional: status.isApprovedProfessional 
+              });
+              
+              setUserRole(finalRole);
               setIsApprovedProfessional(status.isApprovedProfessional);
               await fetchTimeSettings();
             } else {
@@ -647,8 +668,13 @@ export const AuthProvider = ({ children }) => {
       // Then clear tokens and storage
       await authService.current.clearTokens();
       await AsyncStorage.multiRemove(['userRole', 'isApprovedProfessional']);
-      await sessionStorage.removeItem('userRole');
-      await sessionStorage.removeItem('isApprovedProfessional');
+      
+      // Clear sessionStorage items for web
+      if (Platform.OS === 'web') {
+        sessionStorage.removeItem('userRole');
+        sessionStorage.removeItem('isApprovedProfessional');
+        sessionStorage.removeItem('currentProfessional');
+      }
     } catch (error) {
       // TODO: implement an error handler for this instead of debugLog
       debugLog('Error during sign out:', error);

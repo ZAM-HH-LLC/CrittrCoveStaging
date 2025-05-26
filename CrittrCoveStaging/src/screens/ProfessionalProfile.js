@@ -120,6 +120,7 @@ if (Platform.OS === 'web') {
 
 const ProfessionalProfile = ({ route, navigation }) => {
   const { width: windowWidth } = useWindowDimensions();
+  const { screenWidth, isCollapsed, is_DEBUG } = useContext(AuthContext);
   const [professionalData, setProfessionalData] = useState(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [bioModalVisible, setBioModalVisible] = useState(false);
@@ -127,46 +128,37 @@ const ProfessionalProfile = ({ route, navigation }) => {
   const [specialistModalVisible, setSpecialistModalVisible] = useState(false);
   const [favoriteServices, setFavoriteServices] = useState([]);
   const [servicesModalVisible, setServicesModalVisible] = useState(false);
+  const [isMobile, setIsMobile] = useState(screenWidth <= 900);
   const isWideScreen = useResponsiveLayout();
-  const dynamicStyles = {
-    profileSection: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      alignItems: 'center',
-      width: '100%',
-      display: windowWidth >= 600 ? 'flex' : 'block',
-    },
-    profileSectionMobile: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      alignItems: 'center',
-      width: '100%',
-      maxWidth: 500,
-      alignSelf: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-    },
-    servicesBox: {
-      backgroundColor: theme.colors.surface,
-      padding: 24,
-      paddingTop: 0,
-      borderRadius: 12,
-      marginTop: 24,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 3,
-      width: '100%',
-      maxWidth: Platform.OS === 'web' ? 600 : undefined,
-      alignSelf: 'center',
-    },
-  };
+
+  // Calculate marginLeft to account for sidebar on desktop
+  const marginLeft = screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0;
+
+  // Debug component lifecycle
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA9999: ProfessionalProfile component mounted');
+    }
+    return () => {
+      if (is_DEBUG) {
+        console.log('MBA9999: ProfessionalProfile component unmounting');
+      }
+    };
+  }, []);
+
+  // Debug professional data changes
+  useEffect(() => {
+    if (is_DEBUG) {
+      console.log('MBA9999: Professional data changed:', professionalData ? professionalData.name : 'null');
+    }
+  }, [professionalData]);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setIsMobile(screenWidth <= 900);
+    };
+    updateLayout();
+  }, [screenWidth]);
 
   useEffect(() => {
     // Check if we can go back and if SearchProfessionalsListing exists in history
@@ -176,37 +168,74 @@ const ProfessionalProfile = ({ route, navigation }) => {
   }, [navigation]);
 
   const handleBack = () => {
+    if (is_DEBUG) {
+      console.log('MBA9999: handleBack called, Platform:', Platform.OS);
+    }
+    
     if (Platform.OS === 'web') {
       sessionStorage.removeItem('currentProfessional');
+      if (is_DEBUG) {
+        console.log('MBA9999: Navigating back to SearchProfessionalsListing');
+      }
       // Always use navigate to ensure consistent behavior
       navigation.navigate('SearchProfessionalsListing');
     } else {
+      if (is_DEBUG) {
+        console.log('MBA9999: Using navigation.goBack()');
+      }
       navigation.goBack();
     }
   };
 
-  // Handle browser back button
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const handlePopState = () => {
-        handleBack();
-      };
-
-      window.addEventListener('popstate', handlePopState);
-      return () => window.removeEventListener('popstate', handlePopState);
-    }
-  }, []);
+  // Handle browser back button - REMOVED due to causing navigation issues
+  // The browser's native back button will work with React Navigation
+  // useEffect(() => {
+  //   if (Platform.OS === 'web') {
+  //     // Popstate handling removed - was causing automatic navigation
+  //   }
+  // }, []);
 
   useEffect(() => {
     const loadProfessionalData = async () => {
+      if (is_DEBUG) {
+        console.log('MBA9999: loadProfessionalData called', {
+          hasRouteParams: !!route?.params?.professional,
+          platform: Platform.OS
+        });
+      }
+      
       if (route?.params?.professional) {
+        if (is_DEBUG) {
+          console.log('MBA9999: Setting professional data from route params:', route.params.professional.name);
+        }
         setProfessionalData(route.params.professional);
+        // Also store in sessionStorage for web reload persistence
+        if (Platform.OS === 'web') {
+          sessionStorage.setItem('currentProfessional', JSON.stringify(route.params.professional));
+        }
       } else if (Platform.OS === 'web') {
         // Try to get professional data from sessionStorage on web reload
         const storedProfessional = sessionStorage.getItem('currentProfessional');
+        if (is_DEBUG) {
+          console.log('MBA9999: Checking sessionStorage for professional data:', !!storedProfessional);
+        }
+        
         if (storedProfessional) {
-          setProfessionalData(JSON.parse(storedProfessional));
+          try {
+            const parsedProfessional = JSON.parse(storedProfessional);
+            if (is_DEBUG) {
+              console.log('MBA9999: Setting professional data from sessionStorage:', parsedProfessional.name);
+            }
+            setProfessionalData(parsedProfessional);
+          } catch (error) {
+            console.error('MBA9999: Error parsing stored professional data:', error);
+            // Only redirect if we can't parse the data
+            navigation.replace('SearchProfessionalsListing');
+          }
         } else {
+          if (is_DEBUG) {
+            console.log('MBA9999: No professional data found, redirecting to search');
+          }
           // If no data, redirect back to search
           navigation.replace('SearchProfessionalsListing');
         }
@@ -214,7 +243,7 @@ const ProfessionalProfile = ({ route, navigation }) => {
     };
 
     loadProfessionalData();
-  }, [route?.params?.professional]);
+  }, [route?.params?.professional, navigation, is_DEBUG]);
 
   // Store professional data in AsyncStorage for mobile
   useEffect(() => {
@@ -225,7 +254,11 @@ const ProfessionalProfile = ({ route, navigation }) => {
 
   const getContentWidth = () => {
     if (Platform.OS === 'web') {
-      return Math.min(1000, windowWidth - 32); // 32px for padding
+      // Account for sidebar width on desktop
+      const availableWidth = screenWidth > 900 
+        ? windowWidth - (isCollapsed ? 70 : 250) 
+        : windowWidth;
+      return Math.min(1000, availableWidth - 32); // 32px for padding
     }
     return windowWidth - 32; // 16px padding on each side
   };
@@ -395,7 +428,7 @@ const ProfessionalProfile = ({ route, navigation }) => {
       padding: 24,
       borderRadius: 12,
       width: Platform.OS === 'web' ? 
-        (windowWidth <= 650 ? '90%' : '60%') : 
+        (screenWidth <= 650 ? '90%' : '60%') : 
         '90%',
       maxWidth: 800,
       maxHeight: '90%',
@@ -496,7 +529,7 @@ const ProfessionalProfile = ({ route, navigation }) => {
   );
 
   const renderAvailability = () => (
-    <View style={dynamicStyles.servicesBox}>
+    <View style={dynamicStyles.dynamicServicesBox}>
       <View style={styles.calendarSection}>
         <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Availability</Text>
         <Calendar
@@ -604,6 +637,62 @@ const ProfessionalProfile = ({ route, navigation }) => {
     }
   };
 
+  // Create dynamic styles that account for sidebar
+  const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
+    mainContainer: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      height: Platform.OS === 'web' ? '100vh' : '100%',
+      overflow: 'hidden',
+      position: Platform.OS === 'web' ? 'fixed' : 'relative',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
+      transition: Platform.OS === 'web' ? 'margin-left 0.3s ease' : undefined,
+    },
+    dynamicProfileSection: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      alignItems: 'center',
+      width: '100%',
+      display: windowWidth >= 600 ? 'flex' : 'block',
+    },
+    dynamicProfileSectionMobile: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      alignItems: 'center',
+      width: '100%',
+      maxWidth: 500,
+      alignSelf: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+    },
+    dynamicServicesBox: {
+      backgroundColor: theme.colors.surface,
+      padding: 24,
+      paddingTop: 0,
+      borderRadius: 12,
+      marginTop: 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3,
+      width: '100%',
+      maxWidth: Platform.OS === 'web' ? 600 : undefined,
+      alignSelf: 'center',
+    },
+  });
+
+  const dynamicStyles = createStyles(screenWidth, isCollapsed);
+
   // Add this new function to render profile section based on screen size
   const renderProfileSection = () => {
     if (windowWidth >= 600) {
@@ -627,7 +716,7 @@ const ProfessionalProfile = ({ route, navigation }) => {
     } else {
       // Mobile version - fixed layout
       return (
-        <View style={[dynamicStyles.profileSection, dynamicStyles.profileSectionMobile]}>
+        <View style={[dynamicStyles.dynamicProfileSection, dynamicStyles.dynamicProfileSectionMobile]}>
           {renderProfilePhoto()}
           <Text style={styles.name}>{professionalData.name}</Text>
           <Text style={styles.location}>{professionalData.location}</Text>
@@ -641,148 +730,151 @@ const ProfessionalProfile = ({ route, navigation }) => {
   };
 
   return (
-    <CrossPlatformView fullWidthHeader={true} contentWidth="1200px">
-      <BackHeader 
-        title="Professional Profile" 
-        onBackPress={handleBack}
-      />
-      <ScrollView contentContainerStyle={styles.scrollViewContent}>
-        <View style={[styles.content, { width: getContentWidth() }]}>
-          <View style={[styles.twoColumnLayout, !isWideScreen && styles.singleColumnLayout]}>
-            {renderProfileSection()}
-            <View style={styles.rightColumn}>
-              {renderGallery()}
-              {renderServices()}
-              {!isWideScreen && renderAvailability()}
-              {renderSpecialistExperience()}
-              {renderReviews()}
-              {renderHomeSection()}
-              {!isWideScreen && renderMap()}
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Bio Modal */}
-      <Modal
-        visible={bioModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setBioModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles2.modalContent}>
-            <Text style={styles.bioText}>{professionalData.bio}</Text>
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={() => setBioModalVisible(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Reviews Modal */}
-      <Modal
-        visible={reviewsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setReviewsModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles2.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>All Reviews</Text>
-              <TouchableOpacity 
-                style={styles.modalCloseIcon}
-                onPress={() => setReviewsModalVisible(false)}
-              >
-                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView 
-              style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
-            >
-              {mockReviews.map((review) => (
-                <View key={review.id} style={styles.modalReviewItem}>
-                  {renderReview(review)}
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Specialist Experience Modal */}
-      <Modal
-        visible={specialistModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSpecialistModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles2.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Specialist Experience</Text>
-              <TouchableOpacity 
-                style={styles.modalCloseIcon}
-                onPress={() => setSpecialistModalVisible(false)}
-              >
-                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView 
-              style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
-            >
-              <Text style={styles.bioText}>{professionalData?.bio}</Text>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Services Modal */}
-      <Modal
-        visible={servicesModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setServicesModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles2.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>All Services</Text>
-              <TouchableOpacity 
-                style={styles.modalCloseIcon}
-                onPress={() => setServicesModalVisible(false)}
-              >
-                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView 
-              style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
-            >
-              <View style={styles.modalServicesGrid}>
-                {mockServicesForCards.map(service => (
-                  <ServiceCard 
-                    key={service.id}
-                    service={service}
-                    onHeartPress={toggleFavorite}
-                    isFavorite={favoriteServices.includes(service.id)}
-                    professionalName={professionalData.name}
-                    professionalId={professionalData.id}
-                    navigation={navigation}
-                  />
-                ))}
+    <View style={dynamicStyles.mainContainer}>
+      <CrossPlatformView fullWidthHeader={true} contentWidth="1200px">
+        <BackHeader 
+          title="Professional Profile" 
+          onBackPress={handleBack}
+        />
+        <ScrollView contentContainerStyle={styles.scrollViewContent}>
+          <View style={[styles.content, { width: getContentWidth() }]}>
+            <View style={[styles.twoColumnLayout, !isWideScreen && styles.singleColumnLayout]}>
+              {renderProfileSection()}
+              <View style={styles.rightColumn}>
+                {/* TODO: Add back after MVP launch */}
+                {/* {renderGallery()} */}
+                {renderServices()}
+                {!isWideScreen && renderAvailability()}
+                {renderSpecialistExperience()}
+                {renderReviews()}
+                {renderHomeSection()}
+                {!isWideScreen && renderMap()}
               </View>
-            </ScrollView>
+            </View>
           </View>
-        </View>
-      </Modal>
-    </CrossPlatformView>
+        </ScrollView>
+
+        {/* Bio Modal */}
+        <Modal
+          visible={bioModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setBioModalVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles2.modalContent}>
+              <Text style={styles.bioText}>{professionalData.bio}</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setBioModalVisible(false)}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Reviews Modal */}
+        <Modal
+          visible={reviewsModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setReviewsModalVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles2.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>All Reviews</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseIcon}
+                  onPress={() => setReviewsModalVisible(false)}
+                >
+                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                style={styles.modalScroll}
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                {mockReviews.map((review) => (
+                  <View key={review.id} style={styles.modalReviewItem}>
+                    {renderReview(review)}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Specialist Experience Modal */}
+        <Modal
+          visible={specialistModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setSpecialistModalVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles2.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Specialist Experience</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseIcon}
+                  onPress={() => setSpecialistModalVisible(false)}
+                >
+                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                style={styles.modalScroll}
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                <Text style={styles.bioText}>{professionalData?.bio}</Text>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Services Modal */}
+        <Modal
+          visible={servicesModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setServicesModalVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles2.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>All Services</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseIcon}
+                  onPress={() => setServicesModalVisible(false)}
+                >
+                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                style={styles.modalScroll}
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                <View style={styles.modalServicesGrid}>
+                  {mockServicesForCards.map(service => (
+                    <ServiceCard 
+                      key={service.id}
+                      service={service}
+                      onHeartPress={toggleFavorite}
+                      isFavorite={favoriteServices.includes(service.id)}
+                      professionalName={professionalData.name}
+                      professionalId={professionalData.id}
+                      navigation={navigation}
+                    />
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </CrossPlatformView>
+    </View>
   );
 };
 

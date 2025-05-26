@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,11 @@ const ProfessionalCard = ({ professional, index }) => {
   const navigation = useNavigation();
   
   const handlePress = () => {
+    // Store professional data in sessionStorage for web reload persistence
+    if (Platform.OS === 'web') {
+      sessionStorage.setItem('currentProfessional', JSON.stringify(professional));
+    }
+    
     navigation.navigate('ProfessionalProfile', { 
       professional: professional 
     });

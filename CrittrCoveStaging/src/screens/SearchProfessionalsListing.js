@@ -18,7 +18,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
   const [professionals, setProfessionals] = useState(mockProfessionals); // Use mock data
   const [filters, setFilters] = useState({});
   const [isMapMinimized, setIsMapMinimized] = useState(false);
-  const [isLeftColumnExpanded, setIsLeftColumnExpanded] = useState(false);
+  const [isLeftColumnExpanded, setIsLeftColumnExpanded] = useState(true);
   const [showingSearch, setShowingSearch] = useState(true);
   const [region, setRegion] = useState({
     latitude: 38.8339,
@@ -267,7 +267,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
                   if (view === 'map') {
                     setActiveView('map');
                   } else {
-                    setActiveView('filters');
+                    setShowingSearch(true);
                   }
                 }}
             />
