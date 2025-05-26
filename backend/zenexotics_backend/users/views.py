@@ -238,9 +238,9 @@ class TutorialStatusViewSet(viewsets.ModelViewSet):
         tutorial_status, created = TutorialStatus.objects.get_or_create(
             user=request.user,
             defaults={
-                'done_client_tutorial': False,
-                'done_pro_tutorial': False,
-            }
+                'done_client_tutorial': True,
+                'done_pro_tutorial': True,
+            } # TODO: implement true tutorial after MVP launch
         )
         serializer = self.get_serializer(tutorial_status)
         return Response(serializer.data)

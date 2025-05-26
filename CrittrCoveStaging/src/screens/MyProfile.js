@@ -354,6 +354,7 @@ const MyProfile = () => {
             state={profileData?.state}
             zip={profileData?.zip}
             country={profileData?.country}
+            coordinates={profileData?.coordinates}
             bio={profileData?.bio}
             about_me={profileData?.about_me}
             name={profileData?.name}

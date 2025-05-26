@@ -64,6 +64,15 @@ def get_user_profile_data(user):
                 'country': address.country,
                 'coordinates': address.coordinates
             })
+            
+            # Add individual coordinate fields for backward compatibility
+            if address.coordinates and isinstance(address.coordinates, dict):
+                response_data.update({
+                    'latitude': address.coordinates.get('latitude'),
+                    'longitude': address.coordinates.get('longitude'),
+                    'formatted_address': address.coordinates.get('formatted_address')
+                })
+            
             logger.debug(f"helpers.py: Found address for user {user.id}")
         except Address.DoesNotExist:
             # Default empty address if not found
@@ -74,7 +83,10 @@ def get_user_profile_data(user):
                 'state': '',
                 'zip': '',
                 'country': 'USA',
-                'coordinates': None
+                'coordinates': None,
+                'latitude': None,
+                'longitude': None,
+                'formatted_address': None
             })
             logger.debug(f"helpers.py: No address found for user {user.id}")
         
@@ -288,62 +300,7 @@ def get_user_payment_methods(user):
         # Additional payment methods would be added here when implemented
     ]
 
-def geocode_address(address_str, city, state, zip_code, country="USA"):
-    """
-    Convert an address to latitude and longitude coordinates using a geocoding service.
-    
-    Args:
-        address_str: Street address
-        city: City name
-        state: State name
-        zip_code: ZIP/Postal code
-        country: Country name (default: USA)
-        
-    Returns:
-        dict: A dictionary with 'lat' and 'lng' keys, or None if geocoding failed
-    """
-    try:
-        # Format the complete address
-        full_address = f"{address_str}, {city}, {state} {zip_code}, {country}"
-        logger.debug(f"helpers.py: Geocoding address: {full_address}")
-        
-        # Check if we're using Google Maps API for geocoding
-        if hasattr(settings, 'GOOGLE_MAPS_API_KEY') and settings.GOOGLE_MAPS_API_KEY:
-            url = "https://maps.googleapis.com/maps/api/geocode/json"
-            params = {
-                "address": full_address,
-                "key": settings.GOOGLE_MAPS_API_KEY
-            }
-            
-            response = requests.get(url, params=params)
-            data = response.json()
-            
-            if data["status"] == "OK" and data["results"]:
-                location = data["results"][0]["geometry"]["location"]
-                return {
-                    "lat": location["lat"],
-                    "lng": location["lng"]
-                }
-        
-        # Fallback to a simple mock geocoding for development 
-        # (you'd want to replace this with a real geocoding service in production)
-        logger.warning("helpers.py: Using mock geocoding - replace with actual geocoding service in production")
-        import hashlib
-        
-        # Generate deterministic but fake coordinates based on the address
-        # This is just for development - DO NOT use in production
-        address_hash = hashlib.md5(full_address.encode()).hexdigest()
-        fake_lat = 30 + (int(address_hash[:8], 16) % 10000) / 10000.0
-        fake_lng = -90 + (int(address_hash[8:16], 16) % 20000) / 10000.0
-        
-        return {
-            "lat": fake_lat,
-            "lng": fake_lng
-        }
-        
-    except Exception as e:
-        logger.error(f"helpers.py: Geocoding error: {str(e)}")
-        return None
+
 
 def update_user_profile(user, data):
     """
@@ -477,19 +434,12 @@ def update_user_profile(user, data):
                 response_data['country'] = data['country']
                 address_updated = True
             
-            # If address components changed, update coordinates through geocoding
-            if address_updated and address.address_line_1 and address.city and address.state:
-                coordinates = geocode_address(
-                    address.address_line_1,
-                    address.city,
-                    address.state,
-                    address.zip,
-                    address.country
-                )
-                
-                if coordinates:
-                    address.coordinates = coordinates
-                    logger.debug(f"helpers.py: Updated coordinates for user {user.id}: {coordinates}")
+            # Handle coordinates if provided from frontend geocoding
+            if 'coordinates' in data and isinstance(data['coordinates'], dict):
+                address.coordinates = data['coordinates']
+                response_data['coordinates'] = data['coordinates']
+                address_updated = True
+                logger.debug(f"helpers.py: Updated coordinates for user {user.id}: {data['coordinates']}")
             
             # Save the address
             address.save()

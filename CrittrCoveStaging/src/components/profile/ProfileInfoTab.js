@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
@@ -7,6 +7,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { AuthContext, debugLog } from '../../context/AuthContext';
 import { updateProfileInfo } from '../../api/API';
 import { useToast } from '../../components/ToastProvider';
+import { geocodeAddressGraceful } from '../../utils/geocoding';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -28,6 +30,7 @@ const INSURANCE_OPTIONS = [
   { id: 'custom', label: 'Custom Insurance', description: 'Upload my own insurance card' }
 ];
 
+// Legacy AddressForm - keeping for reference but not used
 const AddressForm = ({ address, setAddress }) => (
   <View style={styles.addressForm}>
     <TextInput
@@ -51,26 +54,18 @@ const AddressForm = ({ address, setAddress }) => (
       />
       <TextInput
         style={[styles.addressInput, { flex: 1 }]}
-        value={address.state}
+        value={address.state || 'Colorado'}
         onChangeText={(text) => setAddress(prev => ({ ...prev, state: text }))}
         placeholder="State"
       />
     </View>
-    <View style={styles.addressRow}>
-      <TextInput
-        style={[styles.addressInput, { flex: 1 }]}
-        value={address.zip}
-        onChangeText={(text) => setAddress(prev => ({ ...prev, zip: text }))}
-        placeholder="ZIP Code"
-        keyboardType="numeric"
-      />
-      <TextInput
-        style={[styles.addressInput, { flex: 2 }]}
-        value={address.country}
-        onChangeText={(text) => setAddress(prev => ({ ...prev, country: text }))}
-        placeholder="Country"
-      />
-    </View>
+    <TextInput
+      style={styles.addressInput}
+      value={address.zip}
+      onChangeText={(text) => setAddress(prev => ({ ...prev, zip: text }))}
+      placeholder="ZIP Code"
+      keyboardType="numeric"
+    />
   </View>
 );
 
@@ -78,14 +73,8 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
   const [localValue, setLocalValue] = useState('');
   const [localInsurance, setLocalInsurance] = useState(selectedInsurance);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [addressForm, setAddressForm] = useState({
-    street: '',
-    apartment: '',
-    city: '',
-    state: '',
-    zip: '',
-    country: ''
-  });
+  const [selectedAddress, setSelectedAddress] = useState(null);
+  const [currentAddressValue, setCurrentAddressValue] = useState('');
   const [insuranceStep, setInsuranceStep] = useState(1); // 1: Choose type, 2: Upload/Select insurance
   const [insuranceType, setInsuranceType] = useState(null); // 'own' or 'platform'
 
@@ -96,33 +85,9 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
         setInsuranceStep(1);
         setInsuranceType(null);
       } else if (isLocation) {
-        // Initialize the address form
-        const newAddressForm = {
-          street: '',
-          apartment: '',
-          city: '',
-          state: '',
-          zip: '',
-          country: 'USA'
-        };
-
-        // If value is an object, use its properties
-        if (value && typeof value === 'object') {
-          if ('address' in value) {
-            newAddressForm.street = value.address || '';
-            newAddressForm.apartment = value.apartment || '';
-          } else if ('street' in value) {
-            newAddressForm.street = value.street || '';
-            newAddressForm.apartment = value.apartment || '';
-          }
-          
-          newAddressForm.city = value.city || '';
-          newAddressForm.state = value.state || '';
-          newAddressForm.zip = value.zip || '';
-          newAddressForm.country = value.country || 'USA';
-        }
-        
-        setAddressForm(newAddressForm);
+        // Initialize address autocomplete with current value
+        setCurrentAddressValue(value || '');
+        setSelectedAddress(null);
       } else {
         setLocalValue(value || '');
       }
@@ -133,9 +98,14 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
     if (isInsurance) {
       onSave(localInsurance);
     } else if (isLocation) {
-      // Pass the entire addressForm object, not a formatted string
-      debugLog('MBA12345', 'Saving location with addressForm:', addressForm);
-      onSave(addressForm);
+      if (!selectedAddress) {
+        // Show error - address must be validated
+        Alert.alert('Invalid Address', 'Please select a valid address from the suggestions.');
+        return;
+      }
+      // Pass the selected address object with all components and coordinates
+      debugLog('MBA8901', 'Saving location with selected address:', selectedAddress);
+      onSave(selectedAddress);
     } else {
       onSave(localValue);
     }
@@ -173,7 +143,9 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Please enable location services to use this feature.');
+        if (Platform.OS === 'web') {
+          Alert.alert('Permission denied: Please enable location services to use this feature.');
+        }
         return;
       }
       
@@ -320,23 +292,31 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
           {isInsurance ? renderInsuranceContent() : (
             isLocation ? (
               <View style={styles.locationContent}>
-                {!isProfessional && (
-                  <TouchableOpacity 
-                    style={styles.locationButton}
-                    onPress={handleGetCurrentLocation}
-                    disabled={isLoadingLocation}
-                  >
-                    {isLoadingLocation ? (
-                      <ActivityIndicator color={theme.colors.background} />
-                    ) : (
-                      <>
-                        <MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.background} />
-                        <Text style={styles.locationButtonText}>Use Current Location</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                <Text style={styles.addressInstructions}>
+                  Start typing your address and select from the suggestions to ensure accuracy.
+                </Text>
+                <AddressAutocomplete
+                  value={currentAddressValue}
+                  onAddressSelect={(address) => {
+                    setSelectedAddress(address);
+                    setCurrentAddressValue(address.formatted_address);
+                    debugLog('MBA8901', 'Address selected in modal:', address);
+                  }}
+                  placeholder="Enter your address in Colorado..."
+                  style={styles.addressAutocomplete}
+                />
+                {selectedAddress && (
+                  <View style={styles.selectedAddressInfo}>
+                    <MaterialCommunityIcons 
+                      name="check-circle" 
+                      size={16} 
+                      color={theme.colors.success} 
+                    />
+                    <Text style={styles.selectedAddressText}>
+                      Address validated and ready to save
+                    </Text>
+                  </View>
                 )}
-                <AddressForm address={addressForm} setAddress={setAddressForm} />
               </View>
             ) : (
               <TextInput
@@ -350,17 +330,17 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
             )
           )}
           
-          <View style={styles.modalButtons}>
+          <View style={[styles.modalButtons, { zIndex: -1 }]}>
             <TouchableOpacity style={styles.modalCancelButton} onPress={onClose}>
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[
                 styles.modalSaveButton,
-                isLocation && !addressForm.street && styles.modalSaveButtonDisabled
+                isLocation && !selectedAddress && styles.modalSaveButtonDisabled
               ]} 
               onPress={handleSave}
-              disabled={isLocation && !addressForm.street}
+              disabled={isLocation && !selectedAddress}
             >
               <Text style={styles.modalSaveText}>Save</Text>
             </TouchableOpacity>
@@ -381,6 +361,7 @@ const ProfileInfoTab = ({
   state,
   zip,
   country,
+  coordinates,
   bio,
   about_me,
   emergencyContact,
@@ -456,12 +437,16 @@ const ProfileInfoTab = ({
       isProfessional
     });
     
+    // Use formatted address if available, otherwise fall back to constructed address
+    const locationDisplay = coordinates?.formatted_address || 
+                           `${address || ''}${city ? `, ${city}` : ''}${state ? `, ${state}` : ''}`;
+    
     // Initialize display values on mount ONLY
     setDisplayValues({
       name: name || authName || "Your Name",
       email: email || "",
       bio: isProfessional ? bio : about_me,
-      location: `${address || ''}${city ? `, ${city}` : ''}${state ? `, ${state}` : ''}`
+      location: locationDisplay
     });
   }, []); // Empty dependency array - only run on mount
 
@@ -510,9 +495,8 @@ const ProfileInfoTab = ({
         return (value.street || value.address || '') !== originalValues.address ||
                (value.apartment || '') !== originalValues.apartment ||
                (value.city || '') !== originalValues.city ||
-               (value.state || '') !== originalValues.state ||
-               (value.zip || '') !== originalValues.zip ||
-               (value.country || 'USA') !== originalValues.country;
+               (value.state || 'Colorado') !== originalValues.state ||
+               (value.zip || '') !== originalValues.zip;
       }
     }
     
@@ -524,19 +508,10 @@ const ProfileInfoTab = ({
   const handleEdit = (field, currentValue) => {
     debugLog('MBA230uvj0834h9', `Edit ${field}:`, currentValue);
     
-    // For location field, pass an address object with all components
+    // For location field, pass the current display value as a string for the modal
     if (field === 'location') {
-      const addressObject = {
-        address: originalValues.address || '',
-        apartment: originalValues.apartment || '',
-        city: originalValues.city || '',
-        state: originalValues.state || '',
-        zip: originalValues.zip || '',
-        country: originalValues.country || 'USA'
-      };
-      
-      // Set this once - avoid dependence on originalValues in useEffect
-      setEditValue(addressObject);
+      // Use the current display value (formatted address or constructed address)
+      setEditValue(currentValue || '');
     } else {
       setEditValue(currentValue);
     }
@@ -554,61 +529,108 @@ const ProfileInfoTab = ({
   };
 
   // Update extractAddressComponents to handle address objects correctly
-  const extractAddressComponents = (locationData) => {
-    // TODO: In the future, implement a proper address validation library
-    // that contains all US addresses (and eventually international addresses)
-    // to provide autocomplete and validation as the user types.
+  const extractAddressComponents = async (locationData) => {
+    let addressComponents = {};
     
-    // If we're getting an addressForm object from our modal
-    if (locationData && typeof locationData === 'object') {
+    // If we're getting a validated address object from AddressAutocomplete
+    if (locationData && typeof locationData === 'object' && 'components' in locationData) {
+      debugLog('MBA8901', 'Processing validated address from autocomplete:', locationData);
+      
+      addressComponents = {
+        address: locationData.components.street || '',
+        apartment: locationData.components.apartment || '',
+        city: locationData.components.city || '',
+        state: locationData.components.state || 'Colorado',
+        zip: locationData.components.zip || ''
+      };
+      
+      // Coordinates are already included from the autocomplete
+      if (locationData.coordinates) {
+        addressComponents.coordinates = locationData.coordinates;
+        debugLog('MBA8901', 'Using coordinates from validated address:', locationData.coordinates);
+      }
+    }
+    // Legacy: If we're getting an addressForm object from our old modal
+    else if (locationData && typeof locationData === 'object') {
       // If it's an address form with street property
       if ('street' in locationData) {
-        return {
+        addressComponents = {
           address: locationData.street || '',
           apartment: locationData.apartment || '',
           city: locationData.city || '',
-          state: locationData.state || '',
-          zip: locationData.zip || '',
-          country: locationData.country || 'USA'
+          state: locationData.state || 'Colorado',
+          zip: locationData.zip || ''
         };
       }
-      
       // If it's our own object with address property
-      if ('address' in locationData) {
-        return {
+      else if ('address' in locationData) {
+        addressComponents = {
           address: locationData.address || '',
           apartment: locationData.apartment || '',
           city: locationData.city || '',
-          state: locationData.state || '',
-          zip: locationData.zip || '',
-          country: locationData.country || 'USA'
+          state: locationData.state || 'Colorado',
+          zip: locationData.zip || ''
         };
       }
+      
+      // Only try to geocode if we don't already have coordinates
+      if (!addressComponents.coordinates && addressComponents.address && addressComponents.city && addressComponents.state) {
+        debugLog('MBA7890', 'Attempting to geocode legacy address:', addressComponents);
+        
+        const coordinates = await geocodeAddressGraceful({
+          street: addressComponents.address,
+          apartment: addressComponents.apartment,
+          city: addressComponents.city,
+          state: addressComponents.state,
+          zip: addressComponents.zip
+        });
+
+        if (coordinates) {
+          debugLog('MBA7890', 'Geocoding successful, adding coordinates:', coordinates);
+          addressComponents.coordinates = coordinates;
+        } else {
+          debugLog('MBA7890', 'Geocoding failed, saving address without coordinates');
+        }
+      }
     }
-    
     // If we're getting a string (legacy format)
-    // This is a fallback for backward compatibility
-    if (typeof locationData === 'string') {
+    else if (typeof locationData === 'string') {
       const components = locationData.split(',').map(part => part.trim());
-      return {
+      addressComponents = {
         address: components[0] || '',
         apartment: '',
         city: components[1] || '',
-        state: components[2] || '',
-        zip: components[3] || '',
-        country: components[4] || 'USA'
+        state: components[2] || 'Colorado',
+        zip: components[3] || ''
+      };
+      
+      // Try to geocode string addresses
+      if (addressComponents.address && addressComponents.city && addressComponents.state) {
+        const coordinates = await geocodeAddressGraceful({
+          street: addressComponents.address,
+          apartment: addressComponents.apartment,
+          city: addressComponents.city,
+          state: addressComponents.state,
+          zip: addressComponents.zip
+        });
+
+        if (coordinates) {
+          addressComponents.coordinates = coordinates;
+        }
+      }
+    }
+    // Default empty object if all else fails
+    else {
+      addressComponents = {
+        address: '',
+        apartment: '',
+        city: '',
+        state: 'Colorado',
+        zip: ''
       };
     }
     
-    // Default empty object if all else fails
-    return {
-      address: '',
-      apartment: '',
-      city: '',
-      state: '',
-      zip: '',
-      country: 'USA'
-    };
+    return addressComponents;
   };
 
   // Set original values when props change
@@ -624,9 +646,8 @@ const ProfileInfoTab = ({
       address: address || '',
       apartment: '',
       city: city || '',
-      state: state || '',
+      state: state || 'Colorado',
       zip: zip || '',
-      country: country || 'USA',
       insurance: insurance
     });
   }, []); // Empty dependency array - only run once on mount
@@ -671,7 +692,7 @@ const ProfileInfoTab = ({
           break;
         case 'location':
           debugLog('MBA12345', 'Extracting address components from:', value);
-          const locationComponents = extractAddressComponents(value);
+          const locationComponents = await extractAddressComponents(value);
           debugLog('MBA12345', 'Extracted components:', locationComponents);
           
           profileData = {
@@ -679,9 +700,14 @@ const ProfileInfoTab = ({
             apartment: locationComponents.apartment,
             city: locationComponents.city,
             state: locationComponents.state,
-            zip: locationComponents.zip,
-            country: locationComponents.country || 'USA'
+            zip: locationComponents.zip
           };
+
+          // Add coordinates if geocoding was successful
+          if (locationComponents.coordinates) {
+            profileData.coordinates = locationComponents.coordinates;
+            debugLog('MBA7890', 'Including coordinates in profile update:', locationComponents.coordinates);
+          }
           break;
         case 'insurance':
           profileData = { insurance: value };
@@ -744,8 +770,9 @@ const ProfileInfoTab = ({
           }));
         }
       } else if (field === 'location') {
-        // Simple location formatting
-        const newLocation = `${updatedProfile.address || ''}${updatedProfile.city ? `, ${updatedProfile.city}` : ''}${updatedProfile.state ? `, ${updatedProfile.state}` : ''}`;
+        // Use formatted address if available, otherwise construct from components
+        const newLocation = updatedProfile.coordinates?.formatted_address || 
+                           `${updatedProfile.address || ''}${updatedProfile.city ? `, ${updatedProfile.city}` : ''}${updatedProfile.state ? `, ${updatedProfile.state}` : ''}`;
         setDisplayValues({
           ...displayValues, 
           location: newLocation
@@ -759,8 +786,7 @@ const ProfileInfoTab = ({
           apartment: updatedProfile.apartment || prevValues.apartment,
           city: updatedProfile.city || prevValues.city,
           state: updatedProfile.state || prevValues.state,
-          zip: updatedProfile.zip || prevValues.zip,
-          country: updatedProfile.country || prevValues.country
+          zip: updatedProfile.zip || prevValues.zip
         }));
       } else if (field === 'insurance') {
         setSelectedInsurance(value);
@@ -1508,6 +1534,30 @@ const styles = StyleSheet.create({
   locationContent: {
     gap: 16,
     paddingBottom: 16,
+  },
+  addressInstructions: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  addressAutocomplete: {
+    marginBottom: 12,
+  },
+  selectedAddressInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: theme.colors.success + '10',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.success + '30',
+  },
+  selectedAddressText: {
+    fontSize: 14,
+    color: theme.colors.success,
+    fontWeight: '500',
   },
   addressForm: {
     gap: 12,
