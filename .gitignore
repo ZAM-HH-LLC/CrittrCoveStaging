@@ -42,11 +42,10 @@ env.bak/
 venv.bak/
 backend/zenexotics_backend/.env
 
-# Elastic Beanstalk Files
-.elasticbeanstalk/*
-!.elasticbeanstalk/*.cfg.yml
-!.elasticbeanstalk/*.global.yml
-.ebextensions/02_environment.config
+# backend deployment files
+deploy-crittrcove.sh
+DEPLOYMENT.md
+rollback.sh
 
 
 # dependencies
