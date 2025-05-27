@@ -3,23 +3,28 @@ import { View, StyleSheet, Platform, Dimensions, TouchableOpacity, Text, useWind
 import SearchRefiner from '../components/SearchRefiner';
 import ProfessionalList from '../components/ProfessionalList';
 import MapView from '../components/MapView';
+import ProfessionalServicesModal from '../components/ProfessionalServicesModal';
 import { theme } from '../styles/theme';
-import { mockProfessionals } from '../data/mockData'; // Import mock data
+// import { mockProfessionals } from '../data/mockData'; // TODO: Remove mock data after implementing real search
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import BackHeader from '../components/BackHeader';
+import { searchProfessionals } from '../api/API';
 
 const SearchProfessionalsListing = ({ navigation, route }) => {
   const { width: windowWidth } = useWindowDimensions();
-  const { screenWidth, isCollapsed, is_DEBUG } = useContext(AuthContext);
+  const { screenWidth, isCollapsed } = useContext(AuthContext);
   const [isSingleView, setIsSingleView] = useState(screenWidth <= 1200);
   const [isMobile, setIsMobile] = useState(screenWidth <= 900);
   const [activeView, setActiveView] = useState(isSingleView ? 'filters' : 'all');
-  const [professionals, setProfessionals] = useState(mockProfessionals); // Use mock data
+  const [professionals, setProfessionals] = useState([]); // Start with empty array
   const [filters, setFilters] = useState({});
   const [isMapMinimized, setIsMapMinimized] = useState(false);
   const [isLeftColumnExpanded, setIsLeftColumnExpanded] = useState(true);
   const [showingSearch, setShowingSearch] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState(null);
+  const [currentSearchParams, setCurrentSearchParams] = useState(null);
   const [region, setRegion] = useState({
     latitude: 38.8339,
     longitude: -104.8214,
@@ -30,6 +35,8 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     categories: ['Dogs', 'Within 5 miles'],
     // Add other filter categories as needed
   });
+  const [servicesModalVisible, setServicesModalVisible] = useState(false);
+  const [selectedProfessional, setSelectedProfessional] = useState(null);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -50,6 +57,53 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     return unsubscribe;
   }, [navigation, isSingleView]);
 
+  // Load initial professionals when component mounts
+  useEffect(() => {
+    loadInitialProfessionals();
+  }, []);
+
+  const loadInitialProfessionals = async () => {
+    setIsLoading(true);
+    try {
+      debugLog('MBA9999', 'Loading initial professionals for Colorado Springs');
+      
+      // Load first 20 professionals in Colorado Springs area with no filters
+      const searchParams = {
+        animal_types: [],
+        location: 'Colorado Springs, Colorado',
+        service_query: '',
+        overnight_service: false,
+        price_min: 0,
+        price_max: 999999,
+        radius_miles: 30,
+        page: 1,
+        page_size: 20
+      };
+      
+      const results = await searchProfessionals(searchParams);
+      
+      debugLog('MBA9999', 'Initial professionals loaded:', results);
+      setSearchResults(results);
+      setProfessionals(results.professionals || []);
+      setCurrentSearchParams(searchParams);
+      
+    } catch (error) {
+      debugLog('MBA9999', 'Error loading initial professionals:', error);
+      console.error('Error loading initial professionals:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSearchResults = (results, searchParams = null) => {
+    debugLog('MBA9999', 'Received search results:', results);
+    setSearchResults(results);
+    setProfessionals(results.professionals || []);
+    if (searchParams) {
+      setCurrentSearchParams(searchParams);
+    }
+  };
+
   const handleFiltersChange = (newFilters) => {
     setFilters(newFilters);
     // Implement filtering logic here
@@ -60,7 +114,19 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
   };
 
   const handleProfessionalSelect = (professional) => {
-    navigation.navigate('ProfessionalProfile', { professional });
+    // Instead of navigating to profile, show services modal
+    setSelectedProfessional(professional);
+    setServicesModalVisible(true);
+  };
+
+  const handleShowServicesModal = (professional) => {
+    setSelectedProfessional(professional);
+    setServicesModalVisible(true);
+  };
+
+  const handleCloseServicesModal = () => {
+    setServicesModalVisible(false);
+    setSelectedProfessional(null);
   };
 
   const toggleMapSize = () => {
@@ -255,21 +321,24 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
               <SearchRefiner 
                 onFiltersChange={handleFiltersChange}
                 onShowProfessionals={handleShowProfessionals}
+                onSearchResults={handleSearchResults}
+                initialFilters={currentSearchParams}
               />
             ) : (
             <ProfessionalList
               professionals={professionals}
               onLoadMore={handleLoadMore}
               onProfessionalSelect={handleProfessionalSelect}
-                isMobile={isMobile}
-                filters={activeFilters}
-                onFilterPress={(view) => {
-                  if (view === 'map') {
-                    setActiveView('map');
-                  } else {
-                    setShowingSearch(true);
-                  }
-                }}
+              isMobile={isMobile}
+              filters={activeFilters}
+              searchParams={currentSearchParams}
+              onFilterPress={(view) => {
+                if (view === 'map') {
+                  setActiveView('map');
+                } else {
+                  setShowingSearch(true);
+                }
+              }}
             />
             )}
           </View>
@@ -287,6 +356,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
             <MapView
               professionals={professionals}
               onMarkerPress={handleProfessionalSelect}
+              onShowServicesModal={handleShowServicesModal}
               region={region}
               isMobile={isMobile}
             />
@@ -303,7 +373,9 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
             <SearchRefiner 
               onFiltersChange={handleFiltersChange} 
               onShowProfessionals={handleShowProfessionals}
+              onSearchResults={handleSearchResults}
               isMobile={isSingleView}
+              initialFilters={currentSearchParams}
             />
           </>
         )}
@@ -316,6 +388,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
               onProfessionalSelect={handleProfessionalSelect}
               isMobile={isSingleView}
               filters={activeFilters}
+              searchParams={currentSearchParams}
               onFilterPress={(view) => {
                 if (view === 'map') {
                   setActiveView('map');
@@ -337,6 +410,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
             <MapView
               professionals={professionals}
               onMarkerPress={handleProfessionalSelect}
+              onShowServicesModal={handleShowServicesModal}
               region={region}
               isMobile={isSingleView}
             />
@@ -349,16 +423,18 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
   return (
     <View style={styles.mainContainer}>
       <SafeAreaView style={styles.container}>
-        {isSingleView && (
-          <BackHeader 
-            title="Search Results" 
-            onBackPress={() => navigation.goBack()}
-          />
-        )}
         <View style={styles.content}>
           {renderContent()}
         </View>
       </SafeAreaView>
+      
+      {/* Professional Services Modal */}
+      <ProfessionalServicesModal
+        visible={servicesModalVisible}
+        onClose={handleCloseServicesModal}
+        professional={selectedProfessional}
+        primaryService={selectedProfessional?.primary_service}
+      />
     </View>
   );
 };

@@ -30,6 +30,8 @@ djangorestframework==3.14.0
 djangorestframework-simplejwt==5.3.0
 dotenv==0.9.9
 fabric==3.2.2
+geographiclib==2.0
+geopy==2.4.1
 gunicorn==21.2.0
 hyperlink==21.0.0
 idna==3.10
@@ -57,6 +59,7 @@ requests==2.32.3
 s3transfer==0.11.5
 semantic-version==2.10.0
 service-identity==24.2.0
+setuptools==80.8.0
 six==1.17.0
 sqlparse==0.5.3
 termcolor==2.4.0

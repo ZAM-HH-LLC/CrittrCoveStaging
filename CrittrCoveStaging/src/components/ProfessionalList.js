@@ -2,54 +2,70 @@ import React from 'react';
 import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { useNavigation } from '@react-navigation/native';
 
-const ProfessionalCard = ({ professional, index }) => {
-  const navigation = useNavigation();
+import { BACKEND_TO_FRONTEND_TIME_UNIT } from '../data/mockData';
+import { debugLog } from '../context/AuthContext';
+
+const ProfessionalCard = ({ professional, index, onPress }) => {
+  // Debug log for unit_of_time mapping
+  if (professional.primary_service?.unit_of_time) {
+    debugLog("MBA4001: Unit of time mapping", {
+      backend_value: professional.primary_service.unit_of_time,
+      frontend_value: BACKEND_TO_FRONTEND_TIME_UNIT[professional.primary_service.unit_of_time],
+      professional_name: professional.name
+    });
+  }
   
   const handlePress = () => {
-    // Store professional data in sessionStorage for web reload persistence
-    if (Platform.OS === 'web') {
-      sessionStorage.setItem('currentProfessional', JSON.stringify(professional));
+    if (onPress) {
+      onPress();
     }
-    
-    navigation.navigate('ProfessionalProfile', { 
-      professional: professional 
-    });
+  };
+
+  // Get profile picture source - use default if no URL provided
+  const getProfilePictureSource = () => {
+    if (professional.profile_picture_url) {
+      return { uri: professional.profile_picture_url };
+    }
+    return require('../../assets/default-profile.png');
   };
 
   return (
     <TouchableOpacity style={styles.listItem} onPress={handlePress}>
       <View style={styles.cardContent}>
         <View style={styles.leftSection}>
-      <Image 
-            source={professional.profilePicture} 
-        style={styles.profileImage}
-      />
+          <Image 
+            source={getProfilePictureSource()} 
+            style={styles.profileImage}
+          />
         </View>
         
         <View style={styles.mainContent}>
-        <View style={styles.header}>
+          <View style={styles.header}>
             <View style={styles.nameSection}>
-              <Text style={styles.name}>{index + 1}. {professional.name}</Text>
+              <Text style={styles.name}>{index + 1}. {professional.primary_service?.service_name || 'Various Services'}</Text>
               <Text style={styles.location}>{professional.location}</Text>
-              {professional.distance && (
-                <Text style={styles.distance}>{professional.distance}</Text>
-              )}
+              <Text style={styles.distance}>{professional.name}</Text>
             </View>
             
             <View style={styles.priceSection}>
               <Text style={styles.fromText}>from</Text>
               <Text style={styles.amount}>
                 <Text style={styles.dollarSign}>$</Text>
-                {professional.price}
+                {professional.primary_service ? professional.primary_service.price_per_visit : 'N/A'}
               </Text>
-              <Text style={styles.perNight}>per night</Text>
+              <Text style={styles.perNight}>
+                {professional.primary_service ? 
+                  (BACKEND_TO_FRONTEND_TIME_UNIT[professional.primary_service.unit_of_time] || professional.primary_service.unit_of_time) : 
+                  'per visit'}
+              </Text>
             </View>
           </View>
         </View>
-          </View>
+      </View>
 
+      {/* TODO: Comment out reviews section until we implement reviews */}
+      {/* 
       <View style={styles.reviewSection}>
         <View style={styles.ratingContainer}>
           <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
@@ -80,11 +96,101 @@ const ProfessionalCard = ({ professional, index }) => {
           </View>
         )}
       </View>
+      */}
     </TouchableOpacity>
   );
 };
 
-const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isMobile, filters, onFilterPress }) => {
+const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isMobile, filters, onFilterPress, searchParams = null }) => {
+  
+  // Function to generate appropriate empty state message
+  const getEmptyStateMessage = () => {
+    if (!searchParams) {
+      return {
+        title: "No professionals found",
+        message: "Please try adjusting your search criteria."
+      };
+    }
+
+    const { animal_types = [], location = '', service_query = '', overnight_service = false } = searchParams;
+    
+    // Check if location is Colorado Springs area
+    const isColoradoSprings = location.toLowerCase().includes('colorado springs') || 
+                             location.toLowerCase().includes('colorado') ||
+                             location === '';
+
+    // If no professionals in Colorado Springs area at all
+    if (isColoradoSprings && animal_types.length === 0 && !service_query && !overnight_service) {
+      return {
+        title: "No professionals in the Colorado Springs area yet!",
+        message: "Please come back later when we onboard more professionals to your area."
+      };
+    }
+
+    // Build specific message based on search criteria
+    let criteria = [];
+    
+    if (animal_types.length > 0) {
+      const animalText = animal_types.length === 1 ? 
+        `${animal_types[0]} care` : 
+        `care for ${animal_types.join(', ')}`;
+      criteria.push(animalText);
+    }
+    
+    if (service_query) {
+      criteria.push(`"${service_query}" services`);
+    }
+    
+    if (overnight_service) {
+      criteria.push('overnight services');
+    }
+    
+    if (location && !isColoradoSprings) {
+      criteria.push(`in ${location}`);
+    }
+
+    if (criteria.length > 0) {
+      const criteriaText = criteria.join(', ');
+      return {
+        title: `No professionals found with ${criteriaText}`,
+        message: "Please try adjusting your search parameters or expanding your search area."
+      };
+    }
+
+    return {
+      title: "No professionals found",
+      message: "Please try adjusting your search criteria."
+    };
+  };
+
+  const renderEmptyState = () => {
+    const emptyState = getEmptyStateMessage();
+    
+    debugLog("MBA4001: Showing empty state", {
+      searchParams,
+      emptyStateTitle: emptyState.title,
+      emptyStateMessage: emptyState.message
+    });
+    
+    return (
+      <View style={styles.emptyStateContainer}>
+        <MaterialCommunityIcons 
+          name="account-search" 
+          size={80} 
+          color={theme.colors.textSecondary} 
+        />
+        <Text style={styles.emptyStateTitle}>{emptyState.title}</Text>
+        <Text style={styles.emptyStateMessage}>{emptyState.message}</Text>
+        <TouchableOpacity 
+          style={styles.adjustSearchButton}
+          onPress={() => onFilterPress && onFilterPress()}
+        >
+          <Text style={styles.adjustSearchButtonText}>Adjust Search</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderHeader = () => (
     <View style={[styles.header, {borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingBottom: theme.spacing.medium}]}>
       <View style={styles.headerContent}>
@@ -119,6 +225,16 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
     </View>
   );
 
+  // If no professionals, show empty state
+  if (!professionals || professionals.length === 0) {
+    return (
+      <View style={styles.container}>
+        {renderHeader()}
+        {renderEmptyState()}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {renderHeader()}
@@ -131,7 +247,7 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
             onPress={() => onProfessionalSelect(item)}
           />
         )}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.professional_id.toString()}
         onEndReached={onLoadMore}
         onEndReachedThreshold={0.5}
         contentContainerStyle={styles.listContent}
@@ -152,10 +268,9 @@ const styles = StyleSheet.create({
   },
   listItem: {
     width: '100%',
-    height: '100%',
     backgroundColor: theme.colors.surfaceContrast,
-    // marginBottom: theme.spacing.medium,
-    // borderRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -169,6 +284,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: theme.spacing.medium,
     paddingTop: theme.spacing.medium,
+    paddingBottom: theme.spacing.medium,
   },
   leftSection: {
     marginRight: theme.spacing.medium,
@@ -325,6 +441,38 @@ const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
     gap: theme.spacing.small,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.large,
+  },
+  emptyStateTitle: {
+    fontSize: theme.fontSizes.large,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginTop: theme.spacing.medium,
+    marginBottom: theme.spacing.small,
+    textAlign: 'center',
+  },
+  emptyStateMessage: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: theme.spacing.large,
+    lineHeight: 22,
+  },
+  adjustSearchButton: {
+    paddingHorizontal: theme.spacing.large,
+    paddingVertical: theme.spacing.medium,
+    borderRadius: 8,
+    backgroundColor: theme.colors.primary,
+  },
+  adjustSearchButtonText: {
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '600',
+    color: theme.colors.whiteText,
   },
 });
 

@@ -1331,5 +1331,83 @@ export const createDraftFromBooking = async (bookingId) => {
   }
 };
 
-// implement new api call herre
+/**
+ * Search for professionals based on various criteria
+ * @param {Object} searchParams - Search parameters
+ * @param {Array} searchParams.animal_types - Array of animal types (e.g., ['dogs', 'cats'])
+ * @param {string} searchParams.location - Location string (city, zip, etc.)
+ * @param {string} searchParams.service_query - Service search query
+ * @param {boolean} searchParams.overnight_service - Whether overnight service is required
+ * @param {number} searchParams.price_min - Minimum price
+ * @param {number} searchParams.price_max - Maximum price
+ * @param {number} searchParams.radius_miles - Search radius in miles (default 30)
+ * @param {number} searchParams.page - Page number for pagination (default 1)
+ * @param {number} searchParams.page_size - Number of results per page (default 20)
+ * @returns {Promise<Object>} - Search results with professionals array and pagination info
+ */
+export const searchProfessionals = async (searchParams = {}) => {
+  try {
+    debugLog('MBA9999', 'Searching professionals with params:', searchParams);
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.post('/api/professionals/v1/search/', searchParams);
+    
+    debugLog('MBA9999', 'Professional search completed successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA9999', 'Error searching professionals:', error.response?.data || error.message);
+    
+    // Handle auth errors gracefully
+    const processedError = handleAuthError(error);
+    throw processedError;
+  }
+};
+
+/**
+ * Get detailed services for a specific professional (for client view)
+ * @param {number} professionalId - The ID of the professional
+ * @returns {Promise<Array>} - Array of detailed service objects with rates and descriptions
+ */
+export const getProfessionalServicesDetailed = async (professionalId) => {
+  try {
+    debugLog('MBA9999', 'Getting detailed services for professional:', professionalId);
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.get(`/api/professionals/v1/services/${professionalId}/`);
+    
+    debugLog('MBA9999', 'Professional services fetched successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA9999', 'Error fetching professional services:', error.response?.data || error.message);
+    
+    // Handle auth errors gracefully
+    const processedError = handleAuthError(error);
+    throw processedError;
+  }
+};
+
+/**
+ * Create a conversation between the current user (client) and a professional
+ * @param {number} professionalId - The ID of the professional to contact
+ * @returns {Promise<Object>} - Object containing conversation_id, is_professional, and other_user_name
+ */
+export const createConversation = async (professionalId) => {
+  try {
+    debugLog('MBA3456', 'Creating conversation with professional:', professionalId);
+    
+    const apiClient = await getApiClient();
+    const response = await apiClient.post('/api/conversations/v1/create/', {
+      professional_id: professionalId
+    });
+    
+    debugLog('MBA3456', 'Conversation created successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA3456', 'Error creating conversation:', error.response?.data || error.message);
+    
+    // Handle auth errors gracefully
+    const processedError = handleAuthError(error);
+    throw processedError;
+  }
+};
 

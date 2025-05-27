@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator, Platform, Dimensions } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import ServiceManager from '../components/ServiceManager';
 import { theme } from '../styles/theme';
 import BackHeader from '../components/BackHeader';
@@ -16,7 +16,7 @@ const ServiceManagerScreen = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
-  const { isCollapsed, is_DEBUG } = useContext(AuthContext);
+  const { isCollapsed, is_DEBUG, isSignedIn, userRole } = useContext(AuthContext);
   const showToast = useToast();
 
   useEffect(() => {
@@ -49,8 +49,16 @@ const ServiceManagerScreen = () => {
   };
 
   useEffect(() => {
-    fetchServices();
-  }, [is_DEBUG]);
+    // Only fetch services if user is signed in and has a role
+    if (isSignedIn && userRole) {
+      debugLog('MBA7890', 'Fetching services for user:', { userRole, isSignedIn });
+      fetchServices();
+    } else {
+      // Clear services if user is not signed in
+      setServices([]);
+      setIsLoading(false);
+    }
+  }, [isSignedIn, userRole]);
 
   // Effect to handle unsaved changes
   useEffect(() => {
@@ -59,6 +67,16 @@ const ServiceManagerScreen = () => {
       setHasUnsavedChanges(false);
     }
   }, [hasUnsavedChanges]);
+
+  // Fetch services when screen comes into focus (ensures fresh data after navigation)
+  useFocusEffect(
+    useCallback(() => {
+      if (isSignedIn && userRole) {
+        debugLog('MBA7890', 'Screen focused, fetching services for user:', { userRole, isSignedIn });
+        fetchServices();
+      }
+    }, [isSignedIn, userRole])
+  );
 
   useEffect(() => {
     const setRouteHistory = async () => {

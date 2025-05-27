@@ -272,3 +272,64 @@ def open_conversation(request):
             {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_conversation(request):
+    """
+    Create a conversation between the current user (client) and a professional.
+    
+    Required POST data:
+    - professional_id: ID from the professionals table
+    
+    Returns:
+    - conversation_id: The ID of the created/found conversation
+    - is_professional: Boolean indicating if current user is the professional
+    - other_user_name: Name of the other participant
+    """
+    try:
+        current_user = request.user
+        professional_id = request.data.get('professional_id')
+        
+        if not professional_id:
+            return Response(
+                {'error': 'professional_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        logger.info(f"MBA3456: Creating conversation between client {current_user.id} and professional {professional_id}")
+
+        # Get the professional and their user
+        try:
+            professional = get_object_or_404(Professional, professional_id=professional_id)
+            professional_user = professional.user
+            logger.info(f"MBA3456: Found professional user: {professional_user.name}")
+        except Exception as e:
+            logger.error(f"MBA3456: Error finding professional: {str(e)}")
+            return Response(
+                {'error': f'Professional not found: {str(e)}'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Use the helper function with client role for current user
+        conversation, is_professional = find_or_create_conversation(
+            current_user, 
+            professional_user, 
+            'client'  # Current user is the client
+        )
+
+        logger.info(f"MBA3456: Successfully created/found conversation {conversation.conversation_id}")
+
+        return Response({
+            'conversation_id': conversation.conversation_id,
+            'is_professional': is_professional,
+            'other_user_name': professional_user.name,
+            'status': 'success'
+        })
+
+    except Exception as e:
+        logger.error(f"MBA3456: Error in create_conversation: {str(e)}")
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

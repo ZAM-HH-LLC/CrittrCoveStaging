@@ -15,6 +15,12 @@ from services.models import Service
 from django.shortcuts import get_object_or_404
 from payment_methods.models import PaymentMethod
 from django.db.models import Q
+from user_addresses.models import Address, AddressType
+from geopy.distance import geodesic
+import requests
+import random
+from django.contrib.postgres.search import TrigramSimilarity
+from django.db.models import Case, When, Value, IntegerField
 
 # Configure logging to print to console
 logger = logging.getLogger(__name__)
@@ -29,6 +35,56 @@ class SimplePetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pet
         fields = ['pet_id', 'name', 'species', 'breed']
+
+def geocode_location(location_string):
+    """
+    Geocode a location string using Nominatim API
+    Returns (latitude, longitude) tuple or None if failed
+    """
+    if not location_string or location_string.strip() == '':
+        return None
+        
+    try:
+        url = 'https://nominatim.openstreetmap.org/search'
+        params = {
+            'q': f"{location_string}, Colorado, USA",
+            'format': 'json',
+            'limit': '1',
+            'countrycodes': 'us',
+            'addressdetails': '1'
+        }
+        
+        headers = {
+            'User-Agent': 'CrittrCove/1.0 (contact@crittrcove.com)'
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data and len(data) > 0:
+                result = data[0]
+                lat = float(result['lat'])
+                lng = float(result['lon'])
+                
+                # Validate coordinates are within Colorado bounds
+                if 37.0 <= lat <= 41.0 and -109.0 <= lng <= -102.0:
+                    return (lat, lng)
+                    
+        return None
+    except Exception as e:
+        logger.error(f"Geocoding failed for '{location_string}': {str(e)}")
+        return None
+
+def calculate_distance(coord1, coord2):
+    """
+    Calculate distance between two coordinate pairs using geopy
+    Returns distance in miles
+    """
+    try:
+        return geodesic(coord1, coord2).miles
+    except Exception:
+        return float('inf')
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -108,61 +164,322 @@ def get_professional_dashboard(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def get_professional_client_view(request, professional_id):
-    logger.debug(f"Client view endpoint called for professional_id: {professional_id}")
-    logger.debug(f"Request user: {request.user.id}")
-    
+def search_professionals(request):
+    """
+    Search for professionals based on various criteria
+    """
     try:
-        # Check if the user is either a client or a professional
-        is_client = hasattr(request.user, 'client_profile')
-        is_professional = hasattr(request.user, 'professional_profile')
-        logger.debug(f"User permissions - is_client: {is_client}, is_professional: {is_professional}")
+        # Get search parameters
+        data = request.data
+        animal_types = data.get('animal_types', [])
+        location = data.get('location', '').strip()
+        service_query = data.get('service_query', '').strip()
+        overnight_service = data.get('overnight_service', False)
+        price_min = data.get('price_min', 0)
+        price_max = data.get('price_max', 999999)
+        radius_miles = data.get('radius_miles', 30)
+        page = data.get('page', 1)
+        page_size = data.get('page_size', 20)
         
-        if not (is_client or is_professional):
-            logger.warning(f"User {request.user.id} attempted to access client view without proper role")
-            return Response(
-                {'error': 'User must be a client or professional to view this information'},
-                status=status.HTTP_403_FORBIDDEN
+        logger.debug(f"Search parameters: {data}")
+        logger.debug(f"Current user: {request.user.id} ({request.user.name})")
+        
+        # Start with all professionals who have approved services, excluding current user
+        professionals_query = Professional.objects.filter(
+            service__moderation_status='APPROVED',
+            service__is_active=True,
+            service__searchable=True
+        ).exclude(
+            user=request.user  # Exclude the current user from search results
+        ).distinct()
+        
+        logger.debug(f"Found {professionals_query.count()} professionals after excluding current user")
+        
+        # Get user coordinates if location is provided
+        user_coords = None
+        if location:
+            user_coords = geocode_location(location)
+            if not user_coords:
+                logger.warning(f"Could not geocode location: {location}")
+        
+        # If no location provided, default to Colorado Springs for radius search
+        if not user_coords:
+            user_coords = (38.8339, -104.8214)  # Colorado Springs coordinates
+        
+        # Filter professionals by location (must have coordinates)
+        professionals_with_location = []
+        for professional in professionals_query:
+            try:
+                address = Address.objects.get(
+                    user=professional.user,
+                    address_type=AddressType.SERVICE
+                )
+                
+                if address.coordinates and isinstance(address.coordinates, dict):
+                    prof_lat = address.coordinates.get('latitude')
+                    prof_lng = address.coordinates.get('longitude')
+                    
+                    if prof_lat and prof_lng:
+                        prof_coords = (float(prof_lat), float(prof_lng))
+                        distance = calculate_distance(user_coords, prof_coords)
+                        
+                        if distance <= radius_miles:
+                            professionals_with_location.append({
+                                'professional': professional,
+                                'address': address,
+                                'distance': distance,
+                                'coordinates': prof_coords
+                            })
+            except Address.DoesNotExist:
+                continue
+        
+        logger.debug(f"Found {len(professionals_with_location)} professionals within {radius_miles} miles")
+        
+        # Now filter services for each professional
+        results = []
+        
+        for prof_data in professionals_with_location:
+            professional = prof_data['professional']
+            address = prof_data['address']
+            
+            # Get all approved services for this professional
+            services = Service.objects.filter(
+                professional=professional,
+                moderation_status='APPROVED',
+                is_active=True,
+                searchable=True
             )
+            
+            # Filter by animal types if specified
+            if animal_types:
+                animal_filtered_services = []
+                for service in services:
+                    if service.animal_types and isinstance(service.animal_types, dict):
+                        # Check if any of the requested animal types are in the service's animal_types
+                        service_animals = list(service.animal_types.keys())
+                        if any(animal.lower() in [sa.lower() for sa in service_animals] for animal in animal_types):
+                            animal_filtered_services.append(service)
+                services = animal_filtered_services
+            
+            # Filter by price range
+            price_filtered_services = [
+                service for service in services
+                if price_min <= float(service.base_rate) <= price_max
+            ]
+            services = price_filtered_services
+            
+            if not services:
+                continue
+            
+            # Separate services by overnight requirement and service query relevance
+            exact_matches = []
+            fuzzy_matches = []
+            
+            for service in services:
+                # Check overnight requirement
+                if overnight_service and not service.is_overnight:
+                    # If overnight is required but service doesn't offer it, it's a fuzzy match
+                    is_exact_match = False
+                else:
+                    # If overnight not required, or service offers overnight, it could be exact
+                    is_exact_match = True
+                
+                # Check service query relevance
+                relevance_score = 0
+                if service_query:
+                    service_name_lower = service.service_name.lower()
+                    service_desc_lower = service.description.lower()
+                    query_lower = service_query.lower()
+                    
+                    # Exact match in name gets highest score
+                    if query_lower in service_name_lower:
+                        relevance_score = 3
+                    # Exact match in description gets medium score
+                    elif query_lower in service_desc_lower:
+                        relevance_score = 2
+                    # Partial word matches get lower score
+                    elif any(word in service_name_lower or word in service_desc_lower 
+                            for word in query_lower.split()):
+                        relevance_score = 1
+                    
+                    # If no relevance and we have a service query, skip this service
+                    if relevance_score == 0:
+                        continue
+                
+                service_data = {
+                    'service': service,
+                    'relevance_score': relevance_score,
+                    'is_overnight_match': service.is_overnight if overnight_service else True
+                }
+                
+                # Categorize as exact or fuzzy match
+                if is_exact_match and (not service_query or relevance_score >= 2):
+                    exact_matches.append(service_data)
+                else:
+                    fuzzy_matches.append(service_data)
 
-        # Get professional profile
-        try:
-            professional = Professional.objects.get(professional_id=professional_id)
-            logger.debug(f"Found professional: {professional.professional_id}")
-        except Professional.DoesNotExist:
-            logger.warning(f"Professional with ID {professional_id} not found")
-            return Response(
-                {'error': 'Professional not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Serialize the professional data
-        logger.debug("Serializing professional data")
-        serializer = ClientProfessionalProfileSerializer(professional)
-        logger.debug("Successfully serialized professional data")
-        return Response(serializer.data)
+            # Select the best service for this professional
+            best_service = None
+            if exact_matches:
+                # Sort exact matches by relevance score, then by price
+                exact_matches.sort(key=lambda x: (-x['relevance_score'], x['service'].base_rate))
+                best_service = exact_matches[0]['service']
+                match_type = 'exact'
+            elif fuzzy_matches:
+                # Sort fuzzy matches by relevance score, then by price
+                fuzzy_matches.sort(key=lambda x: (-x['relevance_score'], x['service'].base_rate))
+                best_service = fuzzy_matches[0]['service']
+                match_type = 'fuzzy'
+            
+            if best_service:
+                # Format location string
+                location_parts = []
+                if address.city:
+                    location_parts.append(address.city)
+                if address.state:
+                    location_parts.append(address.state)
+                if address.zip:
+                    location_parts.append(address.zip)
+                location_str = ', '.join(location_parts)
+                
+                # Get profile picture URL
+                profile_picture_url = None
+                if professional.user.profile_picture:
+                    profile_picture_url = professional.user.profile_picture.url
+                
+                # Ensure coordinates are valid before including in result
+                coord_lat = address.coordinates.get('latitude')
+                coord_lng = address.coordinates.get('longitude')
+                
+                if coord_lat is None or coord_lng is None:
+                    continue  # Skip this professional if coordinates are invalid
+                
+                result = {
+                    'professional_id': professional.professional_id,
+                    'name': professional.user.name,
+                    'profile_picture_url': profile_picture_url,
+                    'location': location_str,
+                    'coordinates': {
+                        'latitude': float(coord_lat),
+                        'longitude': float(coord_lng)
+                    },
+                    'primary_service': {
+                        'service_id': best_service.service_id,
+                        'service_name': best_service.service_name,
+                        'price_per_visit': float(best_service.base_rate),
+                        'unit_of_time': best_service.unit_of_time,
+                        'is_overnight': best_service.is_overnight
+                    },
+                    'match_type': match_type,
+                    'distance': prof_data['distance']
+                }
+                results.append(result)
+        
+        logger.debug(f"Found {len(results)} professionals with matching services")
+        
+        # Separate exact and fuzzy matches for randomization
+        exact_results = [r for r in results if r['match_type'] == 'exact']
+        fuzzy_results = [r for r in results if r['match_type'] == 'fuzzy']
+        
+        # Randomize each group separately
+        random.shuffle(exact_results)
+        random.shuffle(fuzzy_results)
+        
+        # Combine with exact matches first
+        final_results = exact_results + fuzzy_results
+        
+        # Apply pagination
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_results = final_results[start_idx:end_idx]
+        
+        # Remove match_type from final response (internal use only)
+        for result in paginated_results:
+            del result['match_type']
+            del result['distance']  # Remove distance for now as requested
+        
+        response_data = {
+            'professionals': paginated_results,
+            'total_count': len(final_results),
+            'has_more': end_idx < len(final_results),
+            'page': page,
+            'page_size': page_size
+        }
+        
+        return Response(response_data)
 
     except Exception as e:
-        logger.error(f"Error in get_professional_client_view: {str(e)}")
+        logger.error(f"Error in search_professionals: {str(e)}")
         logger.exception("Full traceback:")
         return Response(
-            {'error': 'An error occurred while fetching professional data'},
+            {'error': 'An error occurred while searching professionals'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_professional_services(request, professional_id):
+    """
+    Get detailed services for a specific professional (for client view).
+    Only returns APPROVED and active services that are searchable.
+    """
     try:
         professional = get_object_or_404(Professional, professional_id=professional_id)
+        
+        # Get all approved, active, and searchable services for the professional
         services = Service.objects.filter(
             professional=professional,
-            moderation_status='APPROVED'
-        ).values('service_id', 'service_name')
+            moderation_status='APPROVED',
+            is_active=True,
+            searchable=True
+        ).prefetch_related('additional_rates')
+
+        # Prepare response data in the same format as get_professional_services_with_rates
+        services_data = []
+        for service in services:
+            # Get additional rates for this service
+            additional_rates = [
+                {
+                    'rate_id': rate.rate_id,
+                    'title': rate.title,
+                    'description': rate.description,
+                    'rate': str(rate.rate)  # Convert Decimal to string for JSON serialization
+                }
+                for rate in service.additional_rates.all()
+            ]
+
+            # Format the holiday rate with appropriate symbol
+            holiday_rate = str(service.holiday_rate)
+            if service.holiday_rate_is_percent:
+                formatted_holiday_rate = f"{holiday_rate}%"
+            else:
+                formatted_holiday_rate = f"${holiday_rate}"
+
+            # Format same as the services app endpoint
+            service_data = {
+                'service_id': service.service_id,
+                'service_name': service.service_name,
+                'description': service.description,
+                'animal_types': service.animal_types,
+                'base_rate': str(service.base_rate),
+                'additional_animal_rate': str(service.additional_animal_rate),
+                'holiday_rate': formatted_holiday_rate,
+                'holiday_rate_is_percent': service.holiday_rate_is_percent,
+                'applies_after': service.applies_after,
+                'unit_of_time': service.unit_of_time,
+                'is_overnight': service.is_overnight,
+                'is_active': service.is_active,
+                'moderation_status': service.moderation_status,
+                'additional_rates': additional_rates
+            }
+            services_data.append(service_data)
+
+        return Response(services_data)
         
-        return Response(list(services))
     except Exception as e:
         logger.error(f"Error in get_professional_services: {str(e)}")
         return Response(

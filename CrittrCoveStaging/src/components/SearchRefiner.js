@@ -11,9 +11,10 @@ import { debounce } from 'lodash';
 import MultiSelect from 'react-native-element-dropdown/src/components/MultiSelect';
 import CustomMultiSelect from '../components/CustomMultiSelect';
 import { SERVICE_TYPES, GENERAL_CATEGORIES } from '../data/mockData';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import Tooltip from './Tooltip';
 import ServiceTypeSelect from './ServiceTypeSelect';
+import { searchProfessionals } from '../api/API';
 
 // All available animal types from CategorySelectionStep
 const ALL_ANIMAL_TYPES = [
@@ -266,13 +267,13 @@ const AnimalTypeButton = ({ icon, label, selected, onPress }) => (
   </TouchableOpacity>
 );
 
-const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
-  const [location, setLocation] = useState('');
+const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearchResults, initialFilters }) => {
+  const [location, setLocation] = useState(initialFilters?.location || '');
   const [locationSuggestions, setLocationSuggestions] = useState([]);
-  const [service, setService] = useState('');
-  const [selectedAnimals, setSelectedAnimals] = useState([]);
-  const [overnightService, setOvernightService] = useState(false);
-  const [priceRange, setPriceRange] = useState(200);
+  const [service, setService] = useState(initialFilters?.service_query || '');
+  const [selectedAnimals, setSelectedAnimals] = useState(initialFilters?.animal_types || []);
+  const [overnightService, setOvernightService] = useState(initialFilters?.overnight_service || false);
+  const [priceRange, setPriceRange] = useState(initialFilters?.price_max || 200);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [verifiedOnly, setVerifiedOnly] = useState(false);
@@ -280,7 +281,19 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
   const [showOtherAnimalInput, setShowOtherAnimalInput] = useState(false);
   const [otherAnimalSearch, setOtherAnimalSearch] = useState('');
   const [otherAnimalSuggestions, setOtherAnimalSuggestions] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const { screenWidth } = useContext(AuthContext);
+
+  // Update state when initialFilters change
+  React.useEffect(() => {
+    if (initialFilters) {
+      setLocation(initialFilters.location || '');
+      setService(initialFilters.service_query || '');
+      setSelectedAnimals(initialFilters.animal_types || []);
+      setOvernightService(initialFilters.overnight_service || false);
+      setPriceRange(initialFilters.price_max || 200);
+    }
+  }, [initialFilters]);
 
   const handleAnimalSelect = (animal) => {
     if (selectedAnimals.includes(animal)) {
@@ -294,6 +307,55 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
     setShowOtherAnimalInput(false);
     setOtherAnimalSearch('');
     setOtherAnimalSuggestions([]);
+  };
+
+  const handleSearch = async () => {
+    setIsSearching(true);
+    
+    try {
+      debugLog('MBA9999', 'Starting professional search with filters:', {
+        selectedAnimals,
+        location,
+        service,
+        overnightService,
+        priceRange
+      });
+
+      // Prepare search parameters
+      const searchParams = {
+        animal_types: selectedAnimals,
+        location: location.trim(),
+        service_query: service.trim(),
+        overnight_service: overnightService,
+        price_min: 0,
+        price_max: priceRange,
+        radius_miles: 30,
+        page: 1,
+        page_size: 20
+      };
+
+      // Call the search API
+      const results = await searchProfessionals(searchParams);
+      
+      debugLog('MBA9999', 'Search completed successfully:', results);
+
+      // Pass results and search parameters to parent component
+      if (onSearchResults) {
+        onSearchResults(results, searchParams);
+      }
+
+      // Show professionals list
+      if (onShowProfessionals) {
+        onShowProfessionals();
+      }
+
+    } catch (error) {
+      debugLog('MBA9999', 'Search failed:', error);
+      // TODO: Show error toast to user
+      console.error('Search failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -326,14 +388,14 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
           <AnimalTypeButton
             icon="dog"
             label="Dogs"
-            selected={selectedAnimals.includes('dogs')}
-            onPress={() => handleAnimalSelect('dogs')}
+            selected={selectedAnimals.includes('Dogs')}
+            onPress={() => handleAnimalSelect('Dogs')}
           />
           <AnimalTypeButton
             icon="cat"
             label="Cats"
-            selected={selectedAnimals.includes('cats')}
-            onPress={() => handleAnimalSelect('cats')}
+            selected={selectedAnimals.includes('Cats')}
+            onPress={() => handleAnimalSelect('Cats')}
           />
           <TouchableOpacity 
             style={[styles.animalTypeButton, showOtherAnimalInput && styles.animalTypeButtonSelected]} 
@@ -490,18 +552,13 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile }) => {
 
       {/* Search Button - Always show */}
       <TouchableOpacity 
-        style={styles.searchButton}
-        onPress={() => {
-          if (isMobile) {
-            // For mobile, we need to switch to the list view
-            onShowProfessionals();
-          } else {
-            // For desktop, just show professionals
-            onShowProfessionals();
-          }
-        }}
+        style={[styles.searchButton, isSearching && styles.searchButtonDisabled]}
+        onPress={handleSearch}
+        disabled={isSearching}
       >
-        <Text style={styles.searchButtonText}>Search</Text>
+        <Text style={styles.searchButtonText}>
+          {isSearching ? 'Searching...' : 'Search'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -834,6 +891,10 @@ const styles = StyleSheet.create({
     color: theme.colors.whiteText,
     fontSize: theme.fontSizes.medium,
     fontWeight: '600',
+  },
+  searchButtonDisabled: {
+    backgroundColor: theme.colors.border,
+    opacity: 0.6,
   },
   otherAnimalInputWrapper: {
     backgroundColor: theme.colors.background,

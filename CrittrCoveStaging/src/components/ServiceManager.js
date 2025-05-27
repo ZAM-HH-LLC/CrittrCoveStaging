@@ -1,4 +1,4 @@
-import React, { useState, useRef, useContext } from 'react';
+import React, { useState, useRef, useContext, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -58,6 +58,16 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   const buttonRef = useRef(null);
   const collapseButtonRef = useRef(null);
   const showToast = useToast();
+
+  // Reset local state when services change (e.g., when user changes)
+  useEffect(() => {
+    setCollapsedServices([]);
+    setAllCollapsed(false);
+    setEditingService(null);
+    setShowModal(false);
+    setShowDeleteModal(false);
+    setServiceToDelete(null);
+  }, [services]);
 
   const toggleCollapseAll = () => {
     if (allCollapsed) {

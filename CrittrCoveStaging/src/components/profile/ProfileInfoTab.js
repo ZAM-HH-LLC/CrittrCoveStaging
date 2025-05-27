@@ -476,27 +476,35 @@ const ProfileInfoTab = ({
     if (field === 'location') {
       // If it's an object, check all address fields
       if (typeof value === 'object') {
+        // Handle AddressAutocomplete format (with components)
+        const newAddress = value.components?.street || value.street || value.address || '';
+        const newApartment = value.components?.apartment || value.apartment || '';
+        const newCity = value.components?.city || value.city || '';
+        const newState = value.components?.state || value.state || 'Colorado';
+        const newZip = value.components?.zip || value.zip || '';
+        
         debugLog('MBA12345', 'Checking location changes:', {
           originalAddress: originalValues.address,
-          newAddress: value.street || value.address,
+          newAddress: newAddress,
           originalApartment: originalValues.apartment,
-          newApartment: value.apartment,
+          newApartment: newApartment,
           originalCity: originalValues.city,
-          newCity: value.city,
+          newCity: newCity,
           originalState: originalValues.state,
-          newState: value.state,
+          newState: newState,
           originalZip: originalValues.zip,
-          newZip: value.zip,
-          originalCountry: originalValues.country,
-          newCountry: value.country
+          newZip: newZip
         });
         
         // Check all fields that could have changed
-        return (value.street || value.address || '') !== originalValues.address ||
-               (value.apartment || '') !== originalValues.apartment ||
-               (value.city || '') !== originalValues.city ||
-               (value.state || 'Colorado') !== originalValues.state ||
-               (value.zip || '') !== originalValues.zip;
+        const hasChanges = newAddress !== originalValues.address ||
+                          newApartment !== originalValues.apartment ||
+                          newCity !== originalValues.city ||
+                          newState !== originalValues.state ||
+                          newZip !== originalValues.zip;
+        
+        debugLog('MBA12345', `Location has changes: ${hasChanges}`);
+        return hasChanges;
       }
     }
     
