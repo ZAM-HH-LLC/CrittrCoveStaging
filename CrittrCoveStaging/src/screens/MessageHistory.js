@@ -672,6 +672,40 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     fontSize: 14,
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  createBookingContainer: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    zIndex: 10,
+    pointerEvents: 'box-none',
+  },
+  createBookingHangingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: screenWidth <= 600 ? 12 : 16,
+    paddingVertical: screenWidth <= 600 ? 8 : 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    width: '50%',
+    justifyContent: 'center',
+  },
+  createBookingHangingText: {
+    marginLeft: 8,
+    color: theme.colors.primary,
+    fontSize: screenWidth <= 600 ? 14 : 16,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
   conversationUnreadBadge: {
     position: 'relative',
     backgroundColor: theme.colors.error,
@@ -2726,6 +2760,25 @@ const MessageHistory = ({ navigation, route }) => {
         {screenWidth > 900 && renderMessageHeader()}
         {/* Messages */}
         <View style={styles.messageSection}>
+          {/* Create Booking Button overlay */}
+          {selectedConversationData?.is_professional && (
+            <View style={styles.createBookingContainer}>
+              <TouchableOpacity 
+                style={styles.createBookingHangingButton}
+                onPress={handleCreateBooking}
+              >
+                <MaterialCommunityIcons 
+                  name="calendar-plus" 
+                  size={20} 
+                  color={theme.colors.primary} 
+                />
+                <Text style={styles.createBookingHangingText}>
+                  Create Booking
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          
           <View style={styles.messagesContainer}>
             {isLoadingMessages ? (
               <View style={styles.loadingContainer}>
@@ -2768,17 +2821,16 @@ const MessageHistory = ({ navigation, route }) => {
                   <TouchableOpacity 
                     style={styles.dropdownItem}
                     onPress={() => {
-                      handleCreateBooking();
                       setShowDropdown(false);
                     }}
                   >
                     <MaterialCommunityIcons 
-                      name="calendar-plus" 
+                      name="image" 
                       size={20} 
-                      color={theme.colors.primary} 
+                      color={theme.colors.placeholder} 
                     />
-                    <Text style={styles.dropdownText}>
-                      {selectedConversationData?.is_professional ? "Create Booking" : "Request Booking"}
+                    <Text style={[styles.dropdownText, { color: theme.colors.placeholder }]}>
+                      Coming Soon - Images
                     </Text>
                   </TouchableOpacity>
                 </View>
