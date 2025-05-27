@@ -33,7 +33,6 @@ import AvailabilitySettings from './src/screens/AvailabilitySettings';
 // import Messages from './src/screens/Messages';
 import OwnerHistory from './src/screens/OwnerHistory';
 import MessageHistory from './src/screens/MessageHistory';
-import PaymentMethods from './src/screens/PaymentMethods';
 import Settings from './src/screens/Settings';
 import PrivacyPolicy from './src/screens/PrivacyPolicy';
 import ProfessionalSettings from './src/screens/ProfessionalSettings';
@@ -73,7 +72,6 @@ const screens = [
   { name: 'More', component: MoreScreen },
   { name: 'Owners', component: Owners },
   { name: 'AvailabilitySettings', component: AvailabilitySettings },
-  { name: 'PaymentMethods', component: PaymentMethods },
   { name: 'Settings', component: Settings },
   { name: 'PrivacyPolicy', component: PrivacyPolicy },
   { name: 'ProfessionalSettings', component: ProfessionalSettings },
@@ -137,7 +135,6 @@ const linking = {
       More: 'more',
       Owners: 'owners',
       AvailabilitySettings: 'availability-settings',
-      PaymentMethods: 'payment-methods',
       Settings: 'settings',
       PrivacyPolicy: 'privacy-policy',
       ProfessionalSettings: 'professional-settings',

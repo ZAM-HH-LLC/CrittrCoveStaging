@@ -542,11 +542,11 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Preload Stripe modules when user signs in
-  useEffect(() => {
-    if (isSignedIn && !is_prototype) {
-      initStripe();
-    }
-  }, [isSignedIn, is_prototype]);
+  // useEffect(() => {
+  //   if (isSignedIn && !is_prototype) {
+  //     initStripe();
+  //   }
+  // }, [isSignedIn, is_prototype]);
   
 
   // Separate screen width handling from auth

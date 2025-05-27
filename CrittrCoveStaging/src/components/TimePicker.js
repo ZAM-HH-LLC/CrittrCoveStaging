@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   webInput: {
-    padding: '8px 36px 8px 12px',
+    // padding: '8px 36px 8px 12px',
     fontSize: theme.fontSizes.medium,
     marginLeft: 12,
     width: '90%',
