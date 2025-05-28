@@ -11,7 +11,6 @@ import os
 
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "zenexotics_backend.settings")
 
@@ -26,16 +25,14 @@ print("🔥 ASGI: Loading ASGI configuration...")
 print("🔥 ASGI: JWTAuthMiddleware imported:", JWTAuthMiddleware)
 print("🔥 ASGI: websocket_urlpatterns:", user_messages.routing.websocket_urlpatterns)
 
-# Create the websocket application with middleware
-websocket_app = AllowedHostsOriginValidator(
-    JWTAuthMiddleware(
-        URLRouter(
-            user_messages.routing.websocket_urlpatterns
-        )
+# Create the websocket application with middleware stack (removed AllowedHostsOriginValidator for testing)
+websocket_app = JWTAuthMiddleware(
+    URLRouter(
+        user_messages.routing.websocket_urlpatterns
     )
 )
 
-print("🔥 ASGI: WebSocket application created with middleware stack")
+print("🔥 ASGI: WebSocket application created with middleware stack (no AllowedHostsOriginValidator)")
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
