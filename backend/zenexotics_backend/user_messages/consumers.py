@@ -20,8 +20,8 @@ class MessageConsumer(AsyncWebsocketConsumer):
         
         # Reject connection if user is not authenticated
         if user.is_anonymous:
-            logger.warning("Anonymous user attempted to connect to WebSocket")
-            await self.close()
+            logger.warning(f"WebSocket Consumer: Anonymous user attempted to connect - rejecting with 403")
+            await self.close(code=4003)  # Custom close code for authentication failure
             return
         
         # Set user's notification group
