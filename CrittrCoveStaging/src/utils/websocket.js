@@ -15,8 +15,7 @@ class WebSocketManager {
     this.disconnectTimeout = null;
     this.messageHandlers = new Map();
     this.connectionId = null;
-    // For staging, use ws:// since daphne is running on HTTP (nginx handles HTTPS termination)
-    this.wsUrl = API_BASE_URL.replace('https://', 'ws://').replace('http://', 'ws://');
+    this.wsUrl = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
     this._reconnectTimeout = null;
     this.forceDisconnect = false;
     this._hasVisibilityListener = false;
