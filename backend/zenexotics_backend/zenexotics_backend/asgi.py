@@ -22,6 +22,10 @@ django_asgi_app = get_asgi_application()
 import user_messages.routing
 from user_messages.middleware import JWTAuthMiddleware
 
+print("🔥 ASGI: Loading ASGI configuration...")
+print("🔥 ASGI: JWTAuthMiddleware imported:", JWTAuthMiddleware)
+print("🔥 ASGI: websocket_urlpatterns:", user_messages.routing.websocket_urlpatterns)
+
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
     "websocket": AllowedHostsOriginValidator(
@@ -32,3 +36,5 @@ application = ProtocolTypeRouter({
         )
     ),
 })
+
+print("🔥 ASGI: Application configured successfully")
