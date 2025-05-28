@@ -18,14 +18,17 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "zenexotics_backend.settings")
 # Initialize Django ASGI application first
 django_asgi_app = get_asgi_application()
 
-# Import websocket routing after Django is initialized
+# Import websocket routing and middleware after Django is initialized
 import user_messages.routing
+from user_messages.middleware import JWTAuthMiddleware
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
     "websocket": AllowedHostsOriginValidator(
-        URLRouter(
-            user_messages.routing.websocket_urlpatterns
+        JWTAuthMiddleware(
+            URLRouter(
+                user_messages.routing.websocket_urlpatterns
+            )
         )
     ),
 })
