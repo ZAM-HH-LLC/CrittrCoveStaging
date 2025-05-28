@@ -26,15 +26,21 @@ print("🔥 ASGI: Loading ASGI configuration...")
 print("🔥 ASGI: JWTAuthMiddleware imported:", JWTAuthMiddleware)
 print("🔥 ASGI: websocket_urlpatterns:", user_messages.routing.websocket_urlpatterns)
 
+# Create the websocket application with middleware
+websocket_app = AllowedHostsOriginValidator(
+    JWTAuthMiddleware(
+        URLRouter(
+            user_messages.routing.websocket_urlpatterns
+        )
+    )
+)
+
+print("🔥 ASGI: WebSocket application created with middleware stack")
+
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AllowedHostsOriginValidator(
-        JWTAuthMiddleware(
-            URLRouter(
-                user_messages.routing.websocket_urlpatterns
-            )
-        )
-    ),
+    "websocket": websocket_app,
 })
 
 print("🔥 ASGI: Application configured successfully")
+print("🔥 ASGI: Final application:", application)

@@ -40,7 +40,12 @@ class JWTAuthMiddleware(BaseMiddleware):
     """
     Custom middleware for JWT authentication in WebSockets
     """
+    def __init__(self, inner):
+        print("🔥 JWT Middleware: Initializing JWTAuthMiddleware")
+        super().__init__(inner)
+    
     async def __call__(self, scope, receive, send):
+        print(f"🔥 JWT Middleware: __call__ invoked with scope type: {scope.get('type')}")
         logger.info(f"WebSocket JWT: Processing connection, scope type: {scope.get('type')}")
         
         # Get query parameters from URL
@@ -68,6 +73,7 @@ class JWTAuthMiddleware(BaseMiddleware):
                 scope['user'] = AnonymousUser()
         
         logger.info(f"WebSocket JWT: Final user: {scope['user']}")
+        print(f"🔥 JWT Middleware: Final user set to: {scope['user']}")
         
         # Continue processing
         return await super().__call__(scope, receive, send) 
