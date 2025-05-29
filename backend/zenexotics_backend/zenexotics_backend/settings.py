@@ -79,7 +79,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # Domain configuration
 DOMAIN_MAP = {
-    'development': ['localhost', '127.0.0.1', '10.0.2.2'],
+    'development': ['localhost', '127.0.0.1', '10.0.2.2', '0.0.0.0'],
     'staging': ['staging-ec2.crittrcove.com', '52.15.198.223'],
     'production': ['beta.crittrcove.com', 'crittrcove.com']
 }

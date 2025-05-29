@@ -27,13 +27,23 @@ class SupportedLocationsView(APIView):
             for location in locations
         ]
         
-        # Always include "Other" option if not already in the database
-        if not any(loc["name"] == "Other" for loc in locations_data):
+        # Add Colorado Springs and Denver if not already in database
+        if not any(loc["name"] == "Colorado Springs" for loc in locations_data):
             locations_data.append({
-                "name": "Other",
+                "name": "Colorado Springs",
+                "supported": True
+            })
+        if not any(loc["name"] == "Denver" for loc in locations_data):
+            locations_data.append({
+                "name": "Denver", 
                 "supported": False
             })
-        
+            
+        # Always include Other option
+        locations_data.append({
+            "name": "Other",
+            "supported": False
+        })
         return Response({"locations": locations_data})
 
 

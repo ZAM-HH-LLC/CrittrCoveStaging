@@ -344,6 +344,7 @@ export default function SignUp() {
     password2: confirmPassword, // Add confirmation password
     phone_number: '', // Add empty phone number for now
     location: inviteVerified ? 'Colorado Springs' : location, // Use default location for invited users
+    ...(inviteToken && { invitation_token: inviteToken }) // Only include invitation_token if it exists
   };
 
   return (

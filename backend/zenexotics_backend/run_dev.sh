@@ -6,23 +6,35 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$SCRIPT_DIR"
 
-# Path to virtual environment
-VENV_PATH="./venv"
-
-# Check if virtual environment exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Virtual environment not found at $VENV_PATH"
-    echo "Please create it first with: python -m venv venv"
-    exit 1
+# Detect OS
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    # Windows
+    VENV_ACTIVATE="./venv/Scripts/activate"
+    PYTHON_CMD="python"
+else
+    # Mac/Linux
+    VENV_ACTIVATE="./venv/bin/activate"
+    PYTHON_CMD="python3"
 fi
 
-# Activate virtual environment
-source "$VENV_PATH/bin/activate"
+# Check if virtual environment exists
+if [ ! -d "./venv" ]; then
+    echo "Virtual environment not found. Creating one..."
+    $PYTHON_CMD -m venv venv
+fi
 
-# Check if activation was successful
-if [ $? -ne 0 ]; then
-    echo "Failed to activate virtual environment"
-    exit 1
+# Check if venv is already activated
+if [[ "$VIRTUAL_ENV" == "" ]]; then
+    echo "Activating virtual environment..."
+    source "$VENV_ACTIVATE"
+    
+    # Check if activation was successful
+    if [ $? -ne 0 ]; then
+        echo "Failed to activate virtual environment"
+        exit 1
+    fi
+else
+    echo "Virtual environment is already activated"
 fi
 
 echo "Virtual environment activated successfully!"

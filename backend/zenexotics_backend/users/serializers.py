@@ -27,7 +27,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True, required=True)
     timezone = serializers.CharField(required=False, default='UTC')
     use_military_time = serializers.BooleanField(required=False, default=False)
-    invitation_token = serializers.CharField(required=False, allow_blank=True)
+    invitation_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = User
@@ -45,7 +45,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         
         # Handle invitation token validation, if provided
         invitation_token = attrs.get('invitation_token')
-        if invitation_token:
+        if invitation_token and invitation_token.strip():  # Only validate if token is provided and not empty
             try:
                 invitation = Invitation.objects.get(token=invitation_token)
                 

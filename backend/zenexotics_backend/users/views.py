@@ -27,11 +27,6 @@ logger = logging.getLogger(__name__)
 
 # Create your views here.
 
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    permission_classes = [permissions.AllowAny]
-    serializer_class = RegisterSerializer
-
 class PasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]
 
