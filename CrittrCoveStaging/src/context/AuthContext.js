@@ -613,6 +613,9 @@ export const AuthProvider = ({ children }) => {
       await authService.current.setTokens(token, refreshTokenValue);
       setIsSignedIn(true);
       
+      // Fetch user name immediately after setting tokens
+      await fetchUserName();
+      
       // Fetch time settings immediately to ensure they're available
       try {
         const timeSettingsData = await getTimeSettings();
