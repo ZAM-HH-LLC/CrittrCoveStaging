@@ -59,6 +59,10 @@ const PetsPreferencesTab = ({
     isDeleting: false
   });
 
+  // Add these new state variables at the top of the component with other state declarations
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
+
   // Add window resize listener
   useEffect(() => {
     const updateWidth = () => {
@@ -2085,6 +2089,10 @@ const PetsPreferencesTab = ({
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
+
+    // Generate years array (current year - 100 to current year + 10)
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 111 }, (_, i) => currentYear - 100 + i);
     
     return (
       <Modal
@@ -2107,18 +2115,90 @@ const PetsPreferencesTab = ({
               </TouchableOpacity>
             </View>
             
-            {/* Calendar Header */}
+            {/* Calendar Header with Dropdowns */}
             <View style={styles.calendarHeader}>
-              <TouchableOpacity onPress={goToPreviousMonth} style={styles.calendarNavButton}>
-                <MaterialCommunityIcons name="chevron-left" size={24} color={theme.colors.primary} />
-              </TouchableOpacity>
-              
-              <Text style={styles.calendarMonthYear}>{monthNames[displayMonth]} {displayYear}</Text>
-              
-              <TouchableOpacity onPress={goToNextMonth} style={styles.calendarNavButton}>
-                <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.primary} />
-              </TouchableOpacity>
+              <View style={styles.dropdownContainer}>
+                <TouchableOpacity 
+                  style={styles.dropdownButton}
+                  onPress={() => {
+                    // Show month picker
+                    setShowMonthPicker(true);
+                    setShowYearPicker(false);
+                  }}
+                >
+                  <Text style={styles.dropdownButtonText}>{monthNames[displayMonth]}</Text>
+                  <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.text} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.dropdownButton}
+                  onPress={() => {
+                    // Show year picker
+                    setShowYearPicker(true);
+                    setShowMonthPicker(false);
+                  }}
+                >
+                  <Text style={styles.dropdownButtonText}>{displayYear}</Text>
+                  <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {/* Month Picker Dropdown */}
+            {showMonthPicker && (
+              <View style={styles.dropdownList}>
+                <ScrollView style={styles.dropdownScrollView}>
+                  {monthNames.map((month, index) => (
+                    <TouchableOpacity
+                      key={month}
+                      style={[
+                        styles.dropdownItem,
+                        displayMonth === index && styles.dropdownItemSelected
+                      ]}
+                      onPress={() => {
+                        setDisplayMonth(index);
+                        setShowMonthPicker(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        displayMonth === index && styles.dropdownItemTextSelected
+                      ]}>
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Year Picker Dropdown */}
+            {showYearPicker && (
+              <View style={styles.dropdownList}>
+                <ScrollView style={styles.dropdownScrollView}>
+                  {years.map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.dropdownItem,
+                        displayYear === year && styles.dropdownItemSelected
+                      ]}
+                      onPress={() => {
+                        setDisplayYear(year);
+                        setShowYearPicker(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        displayYear === year && styles.dropdownItemTextSelected
+                      ]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
             
             {/* Weekday Headers */}
             <View style={styles.weekdayLabels}>
@@ -3095,6 +3175,66 @@ const styles = StyleSheet.create({
   },
   petInfoWithButtonPadding: {
     paddingRight: 20, // enough space for both buttons
+  },
+  dropdownContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    minWidth: 120,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    color: theme.colors.text,
+    marginRight: 8,
+  },
+  dropdownList: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    zIndex: 1000,
+    maxHeight: 200,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  dropdownScrollView: {
+    maxHeight: 200,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  dropdownItemSelected: {
+    backgroundColor: theme.colors.primary + '20',
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: theme.colors.text,
+  },
+  dropdownItemTextSelected: {
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
 });
 
