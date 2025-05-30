@@ -302,7 +302,7 @@ function AppContent() {
 
   return (
     <>
-      {isVisible && <MVPWarning />}
+      {/* {isVisible && <MVPWarning />} */}
       {Platform.OS === 'web' ? (
         <Stack.Navigator
           initialRouteName={initialRoute}

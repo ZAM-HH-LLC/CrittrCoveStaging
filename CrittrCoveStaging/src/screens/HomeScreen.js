@@ -357,7 +357,7 @@ export default function HomeScreen({ navigation }) {
                 </View>
               </View>
               <View style={styles.buttonContainer}>
-                <TouchableOpacity style={styles.actionButton} onPress={() => navigateToFrom(navigation, 'Waitlist', 'Home')}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => navigateToFrom(navigation, 'SignUp', 'Home')}>
                   <Text style={styles.buttonText}>Sign up Today!</Text>
                 </TouchableOpacity>
               </View>
@@ -405,7 +405,7 @@ export default function HomeScreen({ navigation }) {
                 </View>
               </View>
               <View style={styles.buttonContainer}>
-                <TouchableOpacity style={styles.actionButton} onPress={() => navigateToFrom(navigation, 'Waitlist', 'Home')}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => navigateToFrom(navigation, 'SignUp', 'Home')}>
                   <Text style={styles.buttonText}>Become a Professional</Text>
                 </TouchableOpacity>
               </View>

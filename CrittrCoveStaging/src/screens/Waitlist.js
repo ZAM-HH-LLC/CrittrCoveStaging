@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, ScrollView, Clipboard } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, ScrollView, Clipboard, Modal, FlatList } from 'react-native';
 import { theme } from '../styles/theme';
 import BackHeader from '../components/BackHeader';
 import CrossPlatformView from '../components/CrossPlatformView';
@@ -25,6 +25,112 @@ const CrossPlatformContent = ({ children }) => {
   }
   // For native, just return children
   return <>{children}</>;
+};
+
+const ValidationModal = ({ visible, message, onClose }) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalText}>{message}</Text>
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={onClose}
+          >
+            <Text style={styles.modalButtonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const CityDropdown = ({ selectedCity, onSelectCity }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const cities = [
+    { id: '1', name: 'Colorado Springs' },
+    { id: '2', name: 'Denver' },
+    { id: '3', name: 'Boulder' },
+    { id: '4', name: 'Fort Collins' },
+    { id: '5', name: 'Pueblo' },
+    { id: '6', name: 'Aurora' },
+    { id: '7', name: 'Littleton' },
+    { id: '8', name: 'Castle Rock' },
+    { id: '9', name: 'Parker' },
+    { id: '10', name: 'Centennial' },
+    { id: '11', name: 'Other' }
+  ];
+
+  const filteredCities = cities.filter(city => 
+    city.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Always include "Other" in the results if it's not already there
+  const displayCities = filteredCities.some(city => city.name === 'Other')
+    ? filteredCities
+    : [...filteredCities, { id: '11', name: 'Other' }];
+
+  const renderCityItem = ({ item }) => (
+    <TouchableOpacity
+      style={[
+        styles.cityItem,
+        item.name === 'Other' && styles.otherCityItem
+      ]}
+      onPress={() => {
+        onSelectCity(item.name);
+        setIsOpen(false);
+      }}
+    >
+      <Text style={[
+        styles.cityItemText,
+        item.name === 'Other' && styles.otherCityText
+      ]}>
+        {item.name}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={styles.dropdownContainer}>
+      <TouchableOpacity
+        style={[styles.dropdownButton, !selectedCity && styles.requiredField]}
+        onPress={() => setIsOpen(!isOpen)}
+      >
+        <Text style={styles.dropdownButtonText}>
+          {selectedCity || 'Select your city'}
+        </Text>
+        <MaterialCommunityIcons
+          name={isOpen ? "chevron-up" : "chevron-down"}
+          size={24}
+          color={theme.colors.primary}
+        />
+      </TouchableOpacity>
+
+      {isOpen && (
+        <View style={styles.dropdownList}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search cities..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          <FlatList
+            data={displayCities}
+            renderItem={renderCityItem}
+            keyExtractor={item => item.id}
+            style={styles.cityList}
+          />
+        </View>
+      )}
+    </View>
+  );
 };
 
 const Waitlist = () => {
@@ -54,6 +160,15 @@ const Waitlist = () => {
   const [zipCode, setZipCode] = useState('');
   const [referralSource, setReferralSource] = useState('');
   const [otherReferralSource, setOtherReferralSource] = useState('');
+  const [validationModal, setValidationModal] = useState({
+    visible: false,
+    message: ''
+  });
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [otherCity, setOtherCity] = useState('');
+  const [cityError, setCityError] = useState('');
 
   // Calculate responsive widths
   const isMobile = screenWidth < 768;
@@ -87,10 +202,106 @@ const Waitlist = () => {
     'Other - Enter name of Person who referred you or other referral source for a free sticker'
   ];
 
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const formatPhoneNumber = (text) => {
+    // Remove all non-numeric characters
+    const cleaned = text.replace(/\D/g, '');
+    
+    // Format as (XXX) XXX-XXXX
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+    if (match) {
+      const [, area, prefix, line] = match;
+      let formatted = '';
+      if (area) formatted += `(${area}`;
+      if (prefix) formatted += `) ${prefix}`;
+      if (line) formatted += `-${line}`;
+      return formatted;
+    }
+    return cleaned;
+  };
+
+  const handlePhoneChange = (text) => {
+    const formatted = formatPhoneNumber(text);
+    setPhone(formatted);
+    setPhoneError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Reset validation errors
+    setEmailError('');
+    setPhoneError('');
+    setCityError('');
+
+    // Validate email
+    if (!validateEmail(email)) {
+      setEmailError('Please enter a valid email address');
+      setValidationModal({
+        visible: true,
+        message: 'Please enter a valid email address'
+      });
+      return;
+    }
+
+    // Validate phone
+    if (!phone) {
+      setPhoneError('Please enter a valid phone number');
+      setValidationModal({
+        visible: true,
+        message: 'Please enter a valid phone number'
+      });
+      return;
+    }
+
+    // Validate city
+    if (!selectedCity) {
+      setCityError('Please select your city');
+      setValidationModal({
+        visible: true,
+        message: 'Please select your city'
+      });
+      return;
+    }
+
+    // Validate other city input if "Other" is selected
+    if (selectedCity === 'Other' && !otherCity.trim()) {
+      setCityError('Please specify your city');
+      setValidationModal({
+        visible: true,
+        message: 'Please specify your city'
+      });
+      return;
+    }
+
     if (!email || !firstName || !lastName || !phone || !petInfo || selectedServices.length === 0 || !userType || !agreeToTerms || !referralSource) {
-      alert('Please fill in all required fields');
+      setValidationModal({
+        visible: true,
+        message: 'Please fill in all required fields'
+      });
+      return;
+    }
+
+    // Check if Other is selected but no input provided for services
+    if (selectedServices.includes('Other') && !otherService.trim()) {
+      setValidationModal({
+        visible: true,
+        message: 'Please specify the other service you are interested in'
+      });
+      return;
+    }
+
+    // Check if Other is selected but no input provided for referral source
+    if (referralSource === 'Other - Enter name of Person who referred you or other referral source for a free sticker' && !otherReferralSource.trim()) {
+      setValidationModal({
+        visible: true,
+        message: 'Please specify where you heard about us'
+      });
       return;
     }
 
@@ -104,24 +315,27 @@ const Waitlist = () => {
         phone,
         petInfo,
         services: selectedServices.includes('Other') 
-          ? [...selectedServices.filter(s => s !== 'Other'), `Other: ${otherService}`]
-          : selectedServices,
+          ? [...selectedServices.filter(s => s !== 'Other'), `Other - ${otherService.trim()}`].join(', ')
+          : selectedServices.join(', '),
         userType,
         hesitations,
         desiredFeatures,
-        newsletter,
-        agreeToTerms,
-        referralSource: referralSource === 'Other' ? `Other: ${otherReferralSource}` : referralSource,
-        address: streetAddress ? {
-          street: streetAddress,
-          apt_unit: aptUnit,
-          city: city,
-          state: stateRegion,
-          zip_code: zipCode
-        } : null
+        newsletter: newsletter ? 'Yes' : 'No',
+        agreeToTerms: agreeToTerms ? 'Yes' : 'No',
+        referralSource: referralSource === 'Other - Enter name of Person who referred you or other referral source for a free sticker' 
+          ? `Other - ${otherReferralSource.trim()}`
+          : referralSource,
+        // Flatten address fields
+        streetAddress: streetAddress || '',
+        aptUnit: aptUnit || '',
+        city: selectedCity === 'Other' ? `Other - ${otherCity.trim()}` : selectedCity,
+        stateRegion: stateRegion || '',
+        zipCode: zipCode || '',
       };
 
-      await handleFormspreeSubmit(formData);
+      console.log('MBA9876: Submitting form data:', formData);
+      const response = await handleFormspreeSubmit(formData);
+      console.log('MBA9876: Formspree response:', response);
 
       if (state.succeeded) {
         // Reset form
@@ -147,7 +361,12 @@ const Waitlist = () => {
         setOtherReferralSource('');
       }
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error('MBA9876: Error submitting form:', error);
+      console.error('MBA9876: Error response:', error.response?.data);
+      setValidationModal({
+        visible: true,
+        message: error.response?.data?.error || 'An error occurred while submitting the form. Please try again.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -276,22 +495,28 @@ const Waitlist = () => {
 
                 <Text style={styles.label}>Email <Text style={styles.requiredAsterisk}>*</Text></Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, emailError ? styles.inputError : null]}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setEmailError('');
+                  }}
                   placeholder="Email"
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
+                {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
                 <Text style={styles.label}>Phone Number <Text style={styles.requiredAsterisk}>*</Text></Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, phoneError ? styles.inputError : null]}
                   value={phone}
-                  onChangeText={setPhone}
-                  placeholder="Phone Number"
-                  keyboardType="phone-pad"
+                  onChangeText={handlePhoneChange}
+                  placeholder="(XXX) XXX-XXXX"
+                  keyboardType="numeric"
+                  maxLength={14}
                 />
+                {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
 
                 <Text style={styles.label}>Do you currently own pets? If yes, tell us all about them! <Text style={styles.requiredAsterisk}>*</Text></Text>
                 <TextInput
@@ -321,11 +546,12 @@ const Waitlist = () => {
                       </TouchableOpacity>
                       {service === 'Other' && selectedServices.includes('Other') && (
                         <View style={styles.otherInputContainer}>
+                          <Text style={styles.label}>Please specify other service <Text style={styles.requiredAsterisk}>*</Text></Text>
                           <TextInput
                             style={[styles.input, styles.otherInput]}
                             value={otherService}
                             onChangeText={setOtherService}
-                            placeholder="Please specify other service"
+                            placeholder="Enter other service"
                           />
                         </View>
                       )}
@@ -361,13 +587,40 @@ const Waitlist = () => {
                   ))}
                 </View>
                 {referralSource === 'Other - Enter name of Person who referred you or other referral source for a free sticker' && (
-                  <TextInput
-                    style={styles.input}
-                    value={otherReferralSource}
-                    onChangeText={setOtherReferralSource}
-                    placeholder="Please specify where you heard about us"
-                  />
+                  <View>
+                    <Text style={styles.label}>Please specify where you heard about us <Text style={styles.requiredAsterisk}>*</Text></Text>
+                    <TextInput
+                      style={styles.input}
+                      value={otherReferralSource}
+                      onChangeText={setOtherReferralSource}
+                      placeholder="Enter referral source"
+                    />
+                  </View>
                 )}
+
+                <Text style={styles.label}>Which city are you located in? <Text style={styles.requiredAsterisk}>*</Text></Text>
+                <CityDropdown
+                  selectedCity={selectedCity}
+                  onSelectCity={(city) => {
+                    setSelectedCity(city);
+                    setCityError('');
+                  }}
+                />
+                {selectedCity === 'Other' && (
+                  <View style={styles.otherInputContainer}>
+                    <Text style={styles.label}>Please specify your city <Text style={styles.requiredAsterisk}>*</Text></Text>
+                    <TextInput
+                      style={[styles.input, cityError && styles.inputError]}
+                      value={otherCity}
+                      onChangeText={(text) => {
+                        setOtherCity(text);
+                        setCityError('');
+                      }}
+                      placeholder="Enter your city"
+                    />
+                  </View>
+                )}
+                {cityError ? <Text style={styles.errorText}>{cityError}</Text> : null}
 
                 <Text style={styles.label}>What hesitations do you have about using an app to connect you to local pet care? <Text style={styles.optional}>(Optional)</Text></Text>
                 <TextInput
@@ -478,6 +731,11 @@ const Waitlist = () => {
           </View>
         </CrossPlatformContent>
       </ScrollView>
+      <ValidationModal
+        visible={validationModal.visible}
+        message={validationModal.message}
+        onClose={() => setValidationModal({ visible: false, message: '' })}
+      />
     </CrossPlatformView>
   );
 };
@@ -728,6 +986,117 @@ const styles = StyleSheet.create({
   },
   copyButton: {
     padding: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  modalText: {
+    fontSize: theme.fontSizes.medium,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  modalButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: theme.colors.surface,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  inputError: {
+    borderColor: '#FF0000',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#FF0000',
+    fontSize: theme.fontSizes.small,
+    marginTop: -10,
+    marginBottom: 15,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  dropdownContainer: {
+    marginBottom: 15,
+    zIndex: 1000,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 5,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    padding: 15,
+  },
+  dropdownButtonText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  dropdownList: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 5,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    marginTop: 5,
+    maxHeight: 300,
+    zIndex: 1000,
+  },
+  searchInput: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    fontSize: theme.fontSizes.medium,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  cityList: {
+    maxHeight: 250,
+  },
+  cityItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  cityItemText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  requiredField: {
+    borderColor: '#FF0000',
+    borderWidth: 1,
+  },
+  otherCityItem: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  otherCityText: {
+    color: theme.colors.primary,
+    fontWeight: '500',
   },
 });
 
