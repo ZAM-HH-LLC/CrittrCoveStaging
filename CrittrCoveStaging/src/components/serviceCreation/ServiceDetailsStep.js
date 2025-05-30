@@ -19,13 +19,13 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
 
   const validateInput = (text, isName = true) => {
     // Allow only letters, numbers, spaces and & symbol
-    const validRegex = /^[a-zA-Z0-9\s&\.\-\,]*$/;
+    const validRegex = /^[a-zA-Z0-9\s&\.\-\,!]*$/;
     
     if (!validRegex.test(text)) {
       if (isName) {
-        setNameError('Service name can only contain letters, numbers, spaces, and &');
+        setNameError('Service name can only contain letters, numbers, spaces, &, and !');
       } else {
-        setDescriptionError('Description can only contain letters, numbers, spaces, periods, commas, dashes,and &');
+        setDescriptionError('Description can only contain letters, numbers, spaces, periods, commas, dashes, &, and !');
       }
       return false;
     }
