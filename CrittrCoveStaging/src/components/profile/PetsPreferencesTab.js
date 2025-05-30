@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, ScrollView, Platform, Modal, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, ScrollView, Platform, Modal, Dimensions, TouchableWithoutFeedback } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { debugLog } from '../../context/AuthContext';
@@ -414,7 +414,7 @@ const PetsPreferencesTab = ({
         microchipped: editedData.microchipped,
         feeding_schedule: editedData.feedingInstructions || '',
         potty_break_schedule: editedData.pottyBreakSchedule || '',
-        energy_level: editedData.energyLevel || 'LOW',
+        energy_level: editedData.energyLevel || '',
         can_be_left_alone: editedData.canBeLeftAlone,
         medication_notes: editedData.medicalNotes || '',
         special_care_instructions: editedData.specialCareInstructions || '',
@@ -2054,6 +2054,9 @@ const PetsPreferencesTab = ({
     } else {
       setDisplayMonth(prevMonth => prevMonth - 1);
     }
+    // Close any open dropdowns when navigating
+    setShowMonthPicker(false);
+    setShowYearPicker(false);
   };
   
   const goToNextMonth = () => {
@@ -2063,10 +2066,20 @@ const PetsPreferencesTab = ({
     } else {
       setDisplayMonth(prevMonth => prevMonth + 1);
     }
+    // Close any open dropdowns when navigating
+    setShowMonthPicker(false);
+    setShowYearPicker(false);
   };
   
   const selectDate = (date) => {
-    handleDatePickerSelect(null, date);
+    // Close any open dropdowns when selecting a date
+    setShowMonthPicker(false);
+    setShowYearPicker(false);
+    // Just update the selected date without closing the modal
+    setDatePickerConfig(prev => ({
+      ...prev,
+      selectedDate: date
+    }));
   };
 
   const renderDatePickerModal = () => {
@@ -2090,25 +2103,43 @@ const PetsPreferencesTab = ({
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
-    // Generate years array (current year - 100 to current year + 10)
+    // Generate years array - only current and previous years, with current year first
     const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 111 }, (_, i) => currentYear - 100 + i);
+    const years = Array.from({ length: 101 }, (_, i) => currentYear - i);
+    
+    // Function to handle clicking outside dropdowns
+    const handleOutsideClick = () => {
+      setShowMonthPicker(false);
+      setShowYearPicker(false);
+    };
     
     return (
       <Modal
         visible={datePickerConfig.isVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setDatePickerConfig(prev => ({ ...prev, isVisible: false }))}
+        onRequestClose={() => {
+          setDatePickerConfig(prev => ({ ...prev, isVisible: false }));
+          setShowMonthPicker(false);
+          setShowYearPicker(false);
+        }}
       >
-        <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleOutsideClick}
+        >
           <View style={styles.calendarModalContent}>
             <View style={styles.calendarModalHeader}>
               <Text style={styles.calendarModalTitle}>
                 Select {datePickerConfig.currentField === 'birthday' ? 'Birthday' : 'Adoption Date'}
               </Text>
               <TouchableOpacity 
-                onPress={() => setDatePickerConfig(prev => ({ ...prev, isVisible: false }))}
+                onPress={() => {
+                  setDatePickerConfig(prev => ({ ...prev, isVisible: false }));
+                  setShowMonthPicker(false);
+                  setShowYearPicker(false);
+                }}
                 style={styles.closeButton}
               >
                 <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
@@ -2120,33 +2151,45 @@ const PetsPreferencesTab = ({
               <View style={styles.dropdownContainer}>
                 <TouchableOpacity 
                   style={styles.dropdownButton}
-                  onPress={() => {
-                    // Show month picker
-                    setShowMonthPicker(true);
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setShowMonthPicker(!showMonthPicker);
                     setShowYearPicker(false);
                   }}
                 >
                   <Text style={styles.dropdownButtonText}>{monthNames[displayMonth]}</Text>
-                  <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.text} />
+                  <MaterialCommunityIcons 
+                    name={showMonthPicker ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={theme.colors.text} 
+                  />
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
                   style={styles.dropdownButton}
-                  onPress={() => {
-                    // Show year picker
-                    setShowYearPicker(true);
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setShowYearPicker(!showYearPicker);
                     setShowMonthPicker(false);
                   }}
                 >
                   <Text style={styles.dropdownButtonText}>{displayYear}</Text>
-                  <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.text} />
+                  <MaterialCommunityIcons 
+                    name={showYearPicker ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={theme.colors.text} 
+                  />
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Month Picker Dropdown */}
             {showMonthPicker && (
-              <View style={styles.dropdownList}>
+              <TouchableOpacity 
+                style={styles.dropdownList}
+                activeOpacity={1}
+                onPress={(e) => e.stopPropagation()}
+              >
                 <ScrollView style={styles.dropdownScrollView}>
                   {monthNames.map((month, index) => (
                     <TouchableOpacity
@@ -2155,7 +2198,8 @@ const PetsPreferencesTab = ({
                         styles.dropdownItem,
                         displayMonth === index && styles.dropdownItemSelected
                       ]}
-                      onPress={() => {
+                      onPress={(e) => {
+                        e.stopPropagation();
                         setDisplayMonth(index);
                         setShowMonthPicker(false);
                       }}
@@ -2169,12 +2213,16 @@ const PetsPreferencesTab = ({
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-              </View>
+              </TouchableOpacity>
             )}
 
             {/* Year Picker Dropdown */}
             {showYearPicker && (
-              <View style={styles.dropdownList}>
+              <TouchableOpacity 
+                style={styles.dropdownList}
+                activeOpacity={1}
+                onPress={(e) => e.stopPropagation()}
+              >
                 <ScrollView style={styles.dropdownScrollView}>
                   {years.map((year) => (
                     <TouchableOpacity
@@ -2183,7 +2231,8 @@ const PetsPreferencesTab = ({
                         styles.dropdownItem,
                         displayYear === year && styles.dropdownItemSelected
                       ]}
-                      onPress={() => {
+                      onPress={(e) => {
+                        e.stopPropagation();
                         setDisplayYear(year);
                         setShowYearPicker(false);
                       }}
@@ -2197,52 +2246,68 @@ const PetsPreferencesTab = ({
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-              </View>
+              </TouchableOpacity>
             )}
             
             {/* Weekday Headers */}
-            <View style={styles.weekdayLabels}>
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
-                <Text key={index} style={styles.weekdayLabel}>{day}</Text>
-              ))}
-            </View>
+            <TouchableOpacity 
+              activeOpacity={1} 
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.weekdayLabels}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                  <Text key={index} style={styles.weekdayLabel}>{day}</Text>
+                ))}
+              </View>
+            </TouchableOpacity>
             
             {/* Calendar Grid */}
-            <View style={styles.calendarGrid}>
-              {calendarData.map((week, weekIndex) => (
-                <View key={weekIndex} style={styles.calendarRow}>
-                  {week.map((dayObj, dayIndex) => (
-                    <TouchableOpacity
-                      key={dayIndex}
-                      style={[
-                        styles.calendarDay,
-                        !dayObj.isCurrentMonth && styles.calendarDayOtherMonth,
-                        dayObj.isSelectedDate && styles.calendarDaySelected
-                      ]}
-                      onPress={() => dayObj.isCurrentMonth && selectDate(dayObj.date)}
-                      disabled={!dayObj.isCurrentMonth}
-                    >
-                      <Text style={[
-                        styles.calendarDayText,
-                        !dayObj.isCurrentMonth && styles.calendarDayTextOtherMonth,
-                        dayObj.isSelectedDate && styles.calendarDayTextSelected
-                      ]}>
-                        {dayObj.day}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ))}
-            </View>
+            <TouchableOpacity 
+              activeOpacity={1} 
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.calendarGrid}>
+                {calendarData.map((week, weekIndex) => (
+                  <View key={weekIndex} style={styles.calendarRow}>
+                    {week.map((dayObj, dayIndex) => (
+                      <TouchableOpacity
+                        key={dayIndex}
+                        style={[
+                          styles.calendarDay,
+                          !dayObj.isCurrentMonth && styles.calendarDayOtherMonth,
+                          dayObj.isSelectedDate && styles.calendarDaySelected
+                        ]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          if (dayObj.isCurrentMonth) selectDate(dayObj.date);
+                        }}
+                        disabled={!dayObj.isCurrentMonth}
+                      >
+                        <Text style={[
+                          styles.calendarDayText,
+                          !dayObj.isCurrentMonth && styles.calendarDayTextOtherMonth,
+                          dayObj.isSelectedDate && styles.calendarDayTextSelected
+                        ]}>
+                          {dayObj.day}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.confirmButton}
-              onPress={() => handleDatePickerSelect(null, datePickerConfig.selectedDate)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDatePickerSelect(null, datePickerConfig.selectedDate);
+              }}
             >
               <Text style={styles.confirmButtonText}>Confirm</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
     );
   };
@@ -3062,7 +3127,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
   },
   calendarDayTextSelected: {
-    color: theme.colors.white,
+    color: theme.colors.background,
     fontWeight: '600',
   },
   confirmButton: {
@@ -3073,7 +3138,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   confirmButtonText: {
-    color: theme.colors.white,
+    color: theme.colors.background,
     fontSize: 16,
     fontWeight: '600',
   },

@@ -172,3 +172,26 @@ Cross‑cutting invariants
    - Explain that server operations should be performed by the user
    - Provide the command the user should run themselves, but NEVER use run_terminal_cmd to execute it
    - If needed, suggest testing alternatives that don't require a running server
+
+
+Design Tips to follow when coding certain frontend components:
+### Click-Outside-to-Close Dropdown Pattern
+When implementing dropdowns that should close when clicking outside:
+
+1. **Structure**: Use Modal > TouchableOpacity (overlay) > dropdown content
+2. **Overlay**: Single TouchableOpacity with `activeOpacity={1}` and `onPress={closeDropdown}`
+3. **Event Blocking**: Add `onPress={(e) => e.stopPropagation()}` to ALL interactive elements inside the overlay
+4. **Dropdown Content**: Wrap dropdown lists in TouchableOpacity with `activeOpacity={1}` and `onPress={(e) => e.stopPropagation()}`
+5. **Never**: Use nested TouchableWithoutFeedback or multiple overlay layers
+
+Example:
+```jsx
+<Modal visible={showDropdown}>
+  <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeDropdown}>
+    <TouchableOpacity style={styles.content} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+      <TouchableOpacity onPress={(e) => e.stopPropagation()}>{/* buttons */}</TouchableOpacity>
+    </TouchableOpacity>
+  </TouchableOpacity>
+</Modal>
+```
+```
