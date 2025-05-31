@@ -569,14 +569,28 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={true}
+      bounces={false}
+      overScrollMode="never"
+    >
       <View style={styles.heroSection}>
         <Image
           source={require('../../assets/hero-image.jpg')}
           style={styles.heroImage}
           resizeMode="cover"
         />
-        <Text style={styles.heroText}>Welcome to CrittrCove</Text>
+        <View style={styles.heroContent}>
+          <Text style={styles.heroText}>Welcome to CrittrCove</Text>
+          <TouchableOpacity 
+            style={styles.heroSignupButton} 
+            onPress={() => navigateToFrom(navigation, 'SignUp', 'Home')}
+          >
+            <Text style={styles.heroSignupButtonText}>Sign Up Today</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Service Highlights Section */}
@@ -640,20 +654,6 @@ export default function HomeScreen({ navigation }) {
         ))} 
       </View> */}
 
-      {/* Waitlist Section */}
-      <View style={[styles.section, styles.waitlistSection]}>
-        <Text style={styles.sectionTitle}>Join Our Waitlist</Text>
-        <Text style={styles.waitlistDescription}>
-          Get exclusive bonus offers, promotions, and discounts when the app and website launches by signing up on our waitlist today!
-        </Text>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.waitlistButton]} 
-          onPress={() => navigateToFrom(navigation, 'Waitlist', 'Home')}
-        >
-          <Text style={styles.buttonText}>Join Waitlist</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Contact Us Section */}
       <ContactSection />
 
@@ -683,22 +683,31 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  container: {
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 80, // Add padding to the bottom of the content
+    flexGrow: 1,
   },
   heroSection: {
     height: Platform.OS === 'web' ? '70vh' : windowHeight * 0.5,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    position: 'relative',
   },
   heroImage: {
     width: '100%',
     height: '100%',
     position: 'absolute',
+  },
+  heroContent: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+    paddingHorizontal: 20,
   },
   heroText: {
     fontSize: 32,
@@ -708,7 +717,25 @@ const styles = StyleSheet.create({
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: {width: -1, height: 1},
-    textShadowRadius: 10
+    textShadowRadius: 10,
+    marginBottom: 20,
+  },
+  heroSignupButton: {
+    backgroundColor: 'white',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  heroSignupButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   section: {
     padding: 20,

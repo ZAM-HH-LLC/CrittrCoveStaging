@@ -2930,7 +2930,7 @@ const MessageHistory = ({ navigation, route }) => {
       </Text>
       <Button
         mode="contained"
-        onPress={() => navigateToFrom(navigation, userRole === 'professional' ? 'Services' : 'SearchProfessionalListing', 'MessageHistory')}
+        onPress={() => navigateToFrom(navigation, userRole === 'professional' ? 'ServiceManager' : 'SearchProfessionalsListing', 'MessageHistory')}
         style={{ borderRadius: 8 }}
       >
         {userRole === 'professional' ? 'Create Services' : 'Find Professionals'}

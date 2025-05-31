@@ -51,7 +51,7 @@ class AuthService {
     this.TOKEN_PREEMPTIVE_REFRESH = 3 * 1000; // 3 seconds for testing
     this.VALIDATION_CACHE_TIME = 30 * 1000; // 30 seconds cache
     
-    console.log('MBA1111 AuthService initialized with increased safety buffer (10s refresh threshold)');
+    // console.log('MBA1111 AuthService initialized with increased safety buffer (10s refresh threshold)');
   }
 
   // Register callback for auth state changes
@@ -324,7 +324,7 @@ class AuthService {
       });
 
       this.lastValidation = now;
-      debugLog('MBA1111 Token validation successful');
+      // debugLog('MBA1111 Token validation successful');
       return response.status === 200;
     } catch (error) {
       debugLog('MBA1111 Token validation failed:', error.response?.status);
@@ -435,11 +435,11 @@ export const getStorage = async (key) => {
   try {
     if (Platform.OS === 'web') {
       const value = sessionStorage.getItem(key);
-      debugLog('MBA1111 getStorage web:', { key, hasValue: !!value });
+      // debugLog('MBA1111 getStorage web:', { key, hasValue: !!value });
       return value;
     } else {
       const value = await AsyncStorage.getItem(key);
-      debugLog('MBA1111 getStorage mobile:', { key, hasValue: !!value });
+      // debugLog('MBA1111 getStorage mobile:', { key, hasValue: !!value });
       return value;
     }
   } catch (error) {
@@ -587,14 +587,14 @@ export const AuthProvider = ({ children }) => {
     
     const requestInterceptor = axios.interceptors.request.use(
       async (config) => {
-        debugLog(`MBA1111 Request interceptor called for: ${config.method?.toUpperCase()} ${config.url}`);
+        // debugLog(`MBA1111 Request interceptor called for: ${config.method?.toUpperCase()} ${config.url}`);
         
         if (!is_prototype) {
           try {
             const token = await authService.current.getAccessToken();
             if (token) {
               config.headers.Authorization = `Bearer ${token}`;
-              debugLog(`MBA1111 Token added to request: ${config.method?.toUpperCase()} ${config.url}`);
+              // debugLog(`MBA1111 Token added to request: ${config.method?.toUpperCase()} ${config.url}`);
             } else {
               debugLog(`MBA1111 No token available for request: ${config.method?.toUpperCase()} ${config.url}`);
             }
@@ -616,7 +616,7 @@ export const AuthProvider = ({ children }) => {
 
     const responseInterceptor = axios.interceptors.response.use(
       (response) => {
-        debugLog(`MBA1111 Response success: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
+        // debugLog(`MBA1111 Response success: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
         // Reset circuit breaker on successful response
         consecutiveAuth401Errors = 0;
         return response;
@@ -707,7 +707,7 @@ export const AuthProvider = ({ children }) => {
       
       // Debounce the focus check
       focusCheckTimeout = setTimeout(async () => {
-        debugLog('MBA1111 Window regained focus, checking token');
+        // debugLog('MBA1111 Window regained focus, checking token');
         
         if (authService.current && !authService.current.isSigningOut) {
           const token = authService.current.accessToken;
@@ -1005,12 +1005,12 @@ export const AuthProvider = ({ children }) => {
         const hasStoredTokens = !!(await getStorage('userToken')) || !!(await getStorage('refreshToken'));
         const hasMemoryTokens = !!(authService.current.accessToken) || !!(authService.current.refreshToken);
         
-        debugLog('MBA1111 State consistency check:', {
-          isSignedIn,
-          hasStoredTokens,
-          hasMemoryTokens,
-          isSigningOut: authService.current.isSigningOut
-        });
+        // debugLog('MBA1111 State consistency check:', {
+        //   isSignedIn,
+        //   hasStoredTokens,
+        //   hasMemoryTokens,
+        //   isSigningOut: authService.current.isSigningOut
+        // });
         
         // If we think user is signed in but no tokens exist anywhere
         if (isSignedIn && !hasStoredTokens && !hasMemoryTokens && !authService.current.isSigningOut) {
