@@ -111,6 +111,10 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     overflow: 'hidden',
     paddingHorizontal: 5,
     backgroundColor: theme.colors.surface, // #FDFBF5
+    // Add bottom padding on mobile web to account for fixed input
+    ...(Platform.OS === 'web' && screenWidth <= 900 ? {
+      paddingBottom: 80, // Account for fixed input height
+    } : {}),
   },
   messageHeader: {
     padding: 22,
@@ -157,6 +161,14 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
     zIndex: 1,
+    // Fix for mobile browsers - position fixed at bottom
+    ...(Platform.OS === 'web' && screenWidth <= 900 ? {
+      position: 'fixed',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 1000,
+    } : {}),
   },
   inputContainer: {
     flexDirection: 'row',
