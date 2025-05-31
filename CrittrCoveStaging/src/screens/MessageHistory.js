@@ -227,7 +227,7 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     backgroundColor: theme.colors.receivedMessage,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 20,
     lineHeight: 20,
     fontFamily: theme.fonts.regular.fontFamily,
   },
@@ -279,7 +279,7 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     border: '1px solid ' + theme.colors.border,
     borderRadius: 20,
     fontFamily: theme.fonts.regular.fontFamily,
-    fontSize: screenWidth <= 600 ? '14px' : 'inherit',
+    fontSize: '20px',
     appearance: 'none',
     touchAction: 'manipulation',
     WebkitTapHighlightColor: 'transparent',
