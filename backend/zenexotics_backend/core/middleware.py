@@ -14,12 +14,21 @@ class AuthenticationLoggingMiddleware:
     """
     Middleware to log all authentication events, token expiry, and API calls
     for debugging authentication issues.
+    
+    Only applies to API routes to avoid interfering with Django admin.
     """
     
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        # Only log API routes - skip admin, static files, and other Django routes
+        should_log = self._should_log_request(request)
+        
+        if not should_log:
+            # Pass through without logging for non-API routes
+            return self.get_response(request)
+        
         # Get timestamp and user info before processing
         start_time = now()
         request_id = f"{start_time.strftime('%Y%m%d_%H%M%S')}_{id(request)}"
@@ -39,6 +48,32 @@ class AuthenticationLoggingMiddleware:
         self._log_response(request, response, request_id, user_info, duration_ms)
         
         return response
+
+    def _should_log_request(self, request):
+        """
+        Determine if this request should be logged.
+        Only log API routes, exclude admin and static files.
+        """
+        path = request.path.lower()
+        
+        # Skip admin routes completely
+        if path.startswith('/admin/'):
+            return False
+            
+        # Skip static files
+        if path.startswith('/static/') or path.startswith('/media/'):
+            return False
+            
+        # Skip favicon and other browser requests
+        if path.startswith('/favicon.ico') or path.startswith('/.well-known/'):
+            return False
+            
+        # Only log API routes
+        if path.startswith('/api/'):
+            return True
+            
+        # Skip everything else (Django views, health checks, etc.)
+        return False
 
     def _extract_user_info(self, request):
         """Extract user information from the request"""
@@ -143,6 +178,10 @@ class AuthenticationLoggingMiddleware:
 
     def process_exception(self, request, exception):
         """Log exceptions during request processing"""
+        # Only log exceptions for API routes
+        if not self._should_log_request(request):
+            return None
+            
         user_info = getattr(request, '_auth_user_info', {})
         
         log_data = {
