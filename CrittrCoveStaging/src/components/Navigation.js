@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appbar, Menu, useTheme, Avatar } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { BackHandler } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate } from 'react-native-reanimated';
 
 let previousRoute, currentRoute;
 
@@ -111,6 +112,80 @@ export default function Navigation({ state, descriptors, navigation }) {
   const [currentRoute, setCurrentRoute] = useState('');
   const [notificationCount, setNotificationCount] = useState(3); // We can make this dynamic later
 
+  // Animation values for hamburger menu
+  const line1Rotation = useSharedValue(0);
+  const line2Opacity = useSharedValue(1);
+  const line3Rotation = useSharedValue(0);
+  const line1TranslateY = useSharedValue(0);
+  const line3TranslateY = useSharedValue(0);
+
+  // Animated hamburger menu component
+  const AnimatedHamburgerMenu = ({ size = 28, color = theme.colors.text }) => {
+    const line1Style = useAnimatedStyle(() => ({
+      width: size,
+      height: 3,
+      backgroundColor: color,
+      marginVertical: 2,
+      borderRadius: 1.5,
+      transform: [
+        { translateY: line1TranslateY.value },
+        { rotate: `${line1Rotation.value}deg` }
+      ],
+    }));
+
+    const line2Style = useAnimatedStyle(() => ({
+      width: size,
+      height: 3,
+      backgroundColor: color,
+      marginVertical: 2,
+      borderRadius: 1.5,
+      opacity: line2Opacity.value,
+    }));
+
+    const line3Style = useAnimatedStyle(() => ({
+      width: size,
+      height: 3,
+      backgroundColor: color,
+      marginVertical: 2,
+      borderRadius: 1.5,
+      transform: [
+        { translateY: line3TranslateY.value },
+        { rotate: `${line3Rotation.value}deg` }
+      ],
+    }));
+
+    return (
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <Animated.View style={line1Style} />
+        <Animated.View style={line2Style} />
+        <Animated.View style={line3Style} />
+      </View>
+    );
+  };
+
+  // Animation function for hamburger menu
+  const animateHamburgerMenu = (toX) => {
+    const duration = 300;
+    
+    debugLog('MBA4477: Animating hamburger menu', { toX, isMenuOpen });
+    
+    if (toX) {
+      // Transform to X
+      line1Rotation.value = withTiming(45, { duration });
+      line2Opacity.value = withTiming(0, { duration });
+      line3Rotation.value = withTiming(-45, { duration });
+      line1TranslateY.value = withTiming(7, { duration });
+      line3TranslateY.value = withTiming(-7, { duration });
+    } else {
+      // Transform back to hamburger
+      line1Rotation.value = withTiming(0, { duration });
+      line2Opacity.value = withTiming(1, { duration });
+      line3Rotation.value = withTiming(0, { duration });
+      line1TranslateY.value = withTiming(0, { duration });
+      line3TranslateY.value = withTiming(0, { duration });
+    }
+  };
+
   // Add effect to log state changes
   useEffect(() => {
     if (is_DEBUG) {
@@ -122,6 +197,11 @@ export default function Navigation({ state, descriptors, navigation }) {
       });
     }
   }, [isSignedIn, userRole, isApprovedProfessional, currentRoute]);
+
+  // Update animation when menu state changes
+  useEffect(() => {
+    animateHamburgerMenu(isMenuOpen);
+  }, [isMenuOpen]);
 
   const openMenu = () => setVisible(true);
   const closeMenu = () => setVisible(false);
@@ -676,14 +756,9 @@ export default function Navigation({ state, descriptors, navigation }) {
               )}
             </TouchableOpacity> */}
             <TouchableOpacity onPress={toggleMenu} style={styles.profileContainer}>
-              {isSignedIn ? (
-                <Avatar.Image 
-                  size={40} 
-                  source={require('../../assets/default-profile.png')} 
-                />
-              ) : (
-                <MaterialCommunityIcons name="menu" size={28} color={theme.colors.text} />
-              )}
+              <View style={styles.hamburgerMenuContainer}>
+                <AnimatedHamburgerMenu size={28} color={theme.colors.text} />
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -1063,10 +1138,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   profileContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   iconButton: {
     padding: 8,
@@ -1248,5 +1325,11 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 9,
     fontWeight: 'bold',
+  },
+  hamburgerMenuContainer: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
