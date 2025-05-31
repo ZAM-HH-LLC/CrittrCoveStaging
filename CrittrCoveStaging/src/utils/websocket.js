@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config/config';
 import { debugLog } from '../context/AuthContext';
+import { Platform } from 'react-native';
 
 /**
  * WebSocket manager for real-time messaging
@@ -81,7 +82,7 @@ class WebSocketManager {
     
     // Create the handler function
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (Platform.OS === 'web' && document.visibilityState === 'visible') {
         debugLog('MBA4321: Document became visible, checking WebSocket connection');
         
         // Only reconnect if we have a token and weren't explicitly disconnected
@@ -91,16 +92,18 @@ class WebSocketManager {
       }
     };
     
-    // Add the listener
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    this._hasVisibilityListener = true;
-    
-    // Set up cleanup on page unload if needed
-    window.addEventListener('beforeunload', () => {
-      // Note: we deliberately don't disconnect here, as this would prevent
-      // browser session restoration from working properly
-      debugLog('MBA4321: Page unloading, connection may persist for session restore');
-    });
+    // Add the listener only for web
+    if (Platform.OS === 'web') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      this._hasVisibilityListener = true;
+      
+      // Set up cleanup on page unload if needed
+      window.addEventListener('beforeunload', () => {
+        // Note: we deliberately don't disconnect here, as this would prevent
+        // browser session restoration from working properly
+        debugLog('MBA4321: Page unloading, connection may persist for session restore');
+      });
+    }
   }
 
   /**

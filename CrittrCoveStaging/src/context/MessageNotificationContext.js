@@ -3,6 +3,7 @@ import { AuthContext, debugLog } from './AuthContext';
 import { getUnreadMessageCount } from '../api/API';
 import websocketManager from '../utils/websocket';
 import { getStorage } from './AuthContext';
+import { Platform } from 'react-native';
 
 // Create the context
 export const MessageNotificationContext = createContext();
@@ -677,7 +678,7 @@ export const MessageNotificationProvider = ({ children }) => {
     if (!isSignedIn) return;
     
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (Platform.OS === 'web' && document.visibilityState === 'visible') {
         debugLog('MBA4321: Tab became visible, ensuring WebSocket connection');
         
         // First check if the WebSocket is already connected
@@ -744,12 +745,12 @@ export const MessageNotificationProvider = ({ children }) => {
       }
     };
     
-    if (typeof document !== 'undefined') {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
     
     return () => {
-      if (typeof document !== 'undefined') {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
       

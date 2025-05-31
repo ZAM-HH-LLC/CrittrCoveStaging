@@ -648,7 +648,6 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     outline: 'none',  // Remove outline for web
     WebkitTapHighlightColor: 'transparent', // Remove tap highlight on iOS/Safari
     WebkitAppearance: 'none', // Standardize appearance
-    outlineStyle: 'none', // Additional property for some browsers
   },
   messageHeaderContent: {
     flexDirection: 'row',

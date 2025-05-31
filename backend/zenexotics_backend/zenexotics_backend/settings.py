@@ -161,6 +161,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'zenexotics_backend.middleware_skip_ssl_redirect_for_health.SkipSSLRedirectForHealthCheckMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'core.middleware.AuthenticationLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

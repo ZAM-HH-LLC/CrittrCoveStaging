@@ -35,6 +35,9 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('api/', include([
+        # Core utilities
+        path('core/', include('core.urls')),
+        
         # User Management
         path('users/', include('users.urls')),
         path('professional-status/', include('professional_status.urls')),

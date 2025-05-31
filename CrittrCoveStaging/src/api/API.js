@@ -1,68 +1,15 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
-import { getStorage, debugLog } from '../context/AuthContext';
+import { debugLog } from '../context/AuthContext';
 import { Platform } from 'react-native';
 import { convertToUTC, formatDateForAPI, formatTimeForAPI } from '../utils/time_utils';
-
-/**
- * Handles authentication errors (401) gracefully
- * This should be called by API functions when they receive a 401 response
- * @param {Object} error - The error object from catch block
- * @returns {Error} A standardized error that can be displayed to the user
- */
-const handleAuthError = (error) => {
-  // Only process if it's a 401 error with token_not_valid code
-  if (error.response?.status === 401 && error.response?.data?.code === 'token_not_valid') {
-    debugLog('MBA54321', 'Auth error handler: Token invalid detected');
-    
-    // Clear tokens from storage
-    if (Platform.OS === 'web') {
-      sessionStorage.removeItem('userToken');
-      sessionStorage.removeItem('refreshToken');
-      sessionStorage.setItem('explicitSignOut', 'true');
-    } else {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      AsyncStorage.multiRemove(['userToken', 'refreshToken']);
-    }
-    
-    // Navigate to sign-in page after a brief delay
-    setTimeout(() => {
-      const { navigate } = require('../../App');
-      navigate('SignIn');
-    }, 0);
-    
-    // Return standardized error message
-    return new Error('Your session has expired. Please sign in again to continue.');
-  }
-  
-  // If not a token error, return the original error
-  return error;
-};
-
-// Create API client for standardized requests
-const createApiClient = async () => {
-  const token = await getStorage('userToken');
-  return axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-      Authorization: token ? `Bearer ${token}` : '',
-      'Content-Type': 'application/json'
-    }
-  });
-};
-
-// Helper function to get API client instance
-const getApiClient = async () => {
-  return await createApiClient();
-};
 
 // Get all professional services for service manager screen
 export const getProfessionalServices = async () => {
   try {
     debugLog('MBA7890: Fetching professional services');
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.get('/api/services/v1/professional/services/');
+    const response = await axios.get(`${API_BASE_URL}/api/services/v1/professional/services/`);
     
     return response.data;
   } catch (error) {
@@ -76,15 +23,8 @@ export const getProfessionalServices = async () => {
 // return the selected ones in the draft
 export const getBookingAvailableServices = async (bookingId) => {
   try {
-    const token = await getStorage('userToken');
     const response = await axios.get(
-      `${API_BASE_URL}/api/booking_drafts/v1/${bookingId}/available_services/`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      `${API_BASE_URL}/api/booking_drafts/v1/${bookingId}/available_services/`
     );
     return response.data;
   } catch (error) {
@@ -95,15 +35,8 @@ export const getBookingAvailableServices = async (bookingId) => {
 
 export const getBookingAvailablePets = async (bookingId) => {
   try {
-    const token = await getStorage('userToken');
     const response = await axios.get(
-      `${API_BASE_URL}/api/booking_drafts/v1/${bookingId}/available_pets/`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      `${API_BASE_URL}/api/booking_drafts/v1/${bookingId}/available_pets/`
     );
     return response.data;
   } catch (error) {
@@ -114,16 +47,9 @@ export const getBookingAvailablePets = async (bookingId) => {
 
 export const approveBooking = async (bookingId) => {
   try {
-    const token = await getStorage('userToken');
     const response = await axios.post(
       `${API_BASE_URL}/api/bookings/v1/${bookingId}/approve/`,
-      {},  // Empty body since we don't need to send any data
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      {}  // Empty body since we don't need to send any data
     );
     return response.data;
   } catch (error) {
@@ -139,21 +65,10 @@ export const approveBooking = async (bookingId) => {
  */
 export const getBookingDetails = async (bookingId) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     debugLog('MBA88899', 'Fetching booking details for ID:', bookingId);
 
     const response = await axios.get(
-      `${API_BASE_URL}/api/bookings/v1/${bookingId}/details/`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      `${API_BASE_URL}/api/bookings/v1/${bookingId}/details/`
     );
     
     debugLog('MBA88899', 'Booking details fetched successfully');
@@ -172,23 +87,12 @@ export const getBookingDetails = async (bookingId) => {
  */
 export const requestBookingChanges = async (bookingId, message) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    
     debugLog('MBA88899 Requesting changes for booking ID:', bookingId);
     debugLog('MBA88899 Change request message:', message);
     
     const response = await axios.post(
       `${API_BASE_URL}/api/bookings/v1/${bookingId}/request-changes/`,
-      { message },
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      { message }
     );
     
     debugLog('MBA88899 Change request submitted successfully');
@@ -201,20 +105,9 @@ export const requestBookingChanges = async (bookingId, message) => {
 
 export const updateBookingDraftPetsAndServices = async (draftId, data) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     const response = await axios.patch(
       `${API_BASE_URL}/api/booking_drafts/v1/${draftId}/update_pets_and_services/`,
-      data,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      data
     );
 
     debugLog('MBA12345 Draft update response:', response.data);
@@ -243,12 +136,6 @@ export const updateBookingDraftTimeAndDate = async (draftId, startDate, endDate,
                 end_date: endDate,
                 start_time: startTime,
                 end_time: endTime
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${await getStorage('userToken')}`,
-                    'Content-Type': 'application/json'
-                }
             }
         );
 
@@ -396,13 +283,7 @@ export const updateBookingDraftMultipleDays = async (draftId, data, timeSettings
 
         const response = await axios.post(
             `${API_BASE_URL}/api/booking_drafts/v1/update-multiple-days/${draftId}/`,
-            { dates: utcDates },
-            {
-                headers: {
-                    Authorization: `Bearer ${await getStorage('userToken')}`,
-                    'Content-Type': 'application/json'
-                }
-            }
+            { dates: utcDates }
         );
 
         debugLog('MBA8800: Booking draft multiple days update response:', response.data);
@@ -422,13 +303,7 @@ export const updateBookingDraftRecurring = async (draftId, recurringData) => {
 
         const response = await axios.post(
             `${API_BASE_URL}/api/booking_drafts/v1/update-recurring/${draftId}/`,
-            recurringData,
-            {
-                headers: {
-                    Authorization: `Bearer ${await getStorage('userToken')}`,
-                    'Content-Type': 'application/json'
-                }
-            }
+            recurringData
         );
 
         debugLog('MBA5asdt3f4321 - Booking draft recurring update response:', response.data);
@@ -445,19 +320,8 @@ export const updateBookingDraftRecurring = async (draftId, recurringData) => {
  */
 export const getTimeSettings = async () => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     const response = await axios.get(
-      `${API_BASE_URL}/api/users/v1/time-settings/`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      `${API_BASE_URL}/api/users/v1/time-settings/`
     );
     return response.data;
   } catch (error) {
@@ -473,11 +337,6 @@ export const getTimeSettings = async () => {
  */
 export const updateTimeSettings = async (settings) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     // Ensure settings is an object
     const data = typeof settings === 'object' ? settings : { timezone: settings };
     
@@ -485,13 +344,7 @@ export const updateTimeSettings = async (settings) => {
 
     const response = await axios.post(
       `${API_BASE_URL}/api/users/v1/update-time-settings/`,
-      data,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      data
     );
     return response.data;
   } catch (error) {
@@ -506,19 +359,8 @@ export const updateTimeSettings = async (settings) => {
  */
 export const getUserName = async () => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     const response = await axios.get(
-      `${API_BASE_URL}/api/users/v1/get-name/`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      `${API_BASE_URL}/api/users/v1/get-name/`
     );
     return response.data;
   } catch (error) {
@@ -532,36 +374,18 @@ export const getUserName = async () => {
  * @returns {Promise<Object>} - User profile data
  */
 export const userProfile = async () => {
-  const url = `${API_BASE_URL}/api/users/v1/profile/`;
-  
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     debugLog('MBA12345', 'Fetching user profile data');
     
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+    const response = await axios.get(`${API_BASE_URL}/api/users/v1/profile/`);
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
     debugLog('MBA12345', 'User profile data fetched successfully:', {
-      name: data.name,
-      email: data.email,
-      address: data.address
+      name: response.data.name,
+      email: response.data.email,
+      address: response.data.address
     });
     
-    return data;
+    return response.data;
   } catch (error) {
     debugLog('MBA12345', 'Error in userProfile:', error);
     throw error;
@@ -577,34 +401,26 @@ export const updateProfileInfo = async (profileData) => {
   try {
     debugLog('MBA76543', 'Updating profile info with data:', profileData);
     
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    
     // Handle FormData differently than JSON
     const isFormData = profileData instanceof FormData;
     
     debugLog('MBA76543', `Making ${isFormData ? 'FormData' : 'JSON'} request to update profile`);
     
-    const response = await fetch(`${API_BASE_URL}/api/users/v1/update-profile/`, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      },
-      body: isFormData ? profileData : JSON.stringify(profileData),
-    });
+    const config = {
+      method: 'patch',
+      url: `${API_BASE_URL}/api/users/v1/update-profile/`,
+      data: profileData
+    };
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    // Only set content-type for non-FormData
+    if (!isFormData) {
+      config.headers = { 'Content-Type': 'application/json' };
     }
     
-    const updatedProfile = await response.json();
+    const response = await axios(config);
     
-    debugLog('MBA76543', 'Profile updated successfully with response:', updatedProfile);
-    return updatedProfile;
+    debugLog('MBA76543', 'Profile updated successfully with response:', response.data);
+    return response.data;
   } catch (error) {
     debugLog('MBA76543', 'Error updating profile info:', error);
     throw error;
@@ -619,22 +435,11 @@ export const updateProfileInfo = async (profileData) => {
  */
 export const addPet = async (petData) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     debugLog('MBA789', 'Adding new pet with data:', petData);
 
     const response = await axios.post(
       `${API_BASE_URL}/api/pets/v1/add-pet/`,
-      petData,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      petData
     );
     
     debugLog('MBA789', 'Pet added successfully:', response.data);
@@ -656,22 +461,11 @@ export const addPet = async (petData) => {
  */
 export const updatePet = async (petId, petData) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     debugLog('MBA789', 'Updating pet with ID:', petId, 'and data:', petData);
 
     const response = await axios.patch(
       `${API_BASE_URL}/api/pets/v1/${petId}/`,
-      petData,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      petData
     );
     
     debugLog('MBA789', 'Pet updated successfully:', response.data);
@@ -690,22 +484,11 @@ export const updatePet = async (petId, petData) => {
  */
 export const fixPetOwner = async (petId) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     debugLog('MBA789', 'Fixing owner for pet with ID:', petId);
 
     const response = await axios.post(
       `${API_BASE_URL}/api/pets/v1/${petId}/fix-owner/`,
-      {},
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      {}
     );
     
     debugLog('MBA789', 'Pet owner fixed successfully:', response.data);
@@ -724,21 +507,10 @@ export const fixPetOwner = async (petId) => {
  */
 export const deletePet = async (petId) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     debugLog('MBA789', 'Deleting pet with ID:', petId);
 
     const response = await axios.delete(
-      `${API_BASE_URL}/api/pets/v1/${petId}/`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      `${API_BASE_URL}/api/pets/v1/${petId}/`
     );
     
     debugLog('MBA789', 'Pet deleted successfully:', response.data);
@@ -801,8 +573,7 @@ export const createService = async (serviceData) => {
     // Log we're sending the additional rates too
     debugLog('MBA54321', 'Sending additional rates to backend:', formattedData.additional_rates);
 
-    const apiClient = await getApiClient();
-    const response = await apiClient.post('/api/services/v1/create/', formattedData);
+    const response = await axios.post(`${API_BASE_URL}/api/services/v1/create/`, formattedData);
 
     debugLog('MBA54321', 'Service created successfully - backend response:', response.data);
     return response.data;
@@ -810,14 +581,7 @@ export const createService = async (serviceData) => {
     debugLog('MBA54321', 'Error creating service:', error);
     debugLog('MBA54321', 'Error response data:', error.response?.data);
     
-    // Check for authentication errors using the centralized handler
-    const authError = handleAuthError(error);
-    if (authError !== error) {
-      // If handleAuthError processed this as an auth error, throw the new error
-      throw authError;
-    }
-    
-    // Otherwise rethrow the original error
+    // Rethrow the original error - axios interceptor will handle auth errors
     throw error;
   }
 };
@@ -831,8 +595,7 @@ export const deleteService = async (serviceId) => {
   try {
     debugLog('MBA7890: Deleting service with ID:', serviceId);
 
-    const apiClient = await getApiClient();
-    const response = await apiClient.delete(`/api/services/v1/delete/${serviceId}/`);
+    const response = await axios.delete(`${API_BASE_URL}/api/services/v1/delete/${serviceId}/`);
 
     debugLog('MBA7890: Service deleted successfully - backend response:', response.data);
     return response.data;
@@ -846,10 +609,9 @@ export const deleteService = async (serviceId) => {
 // Function to update an existing service
 export const updateService = async (serviceData) => {
   try {
-    const apiClient = await getApiClient();
     debugLog('API updateService', 'Updating service with data:', serviceData);
     
-    const response = await apiClient.patch(`/api/services/v1/update/${serviceData.service_id}/`, serviceData);
+    const response = await axios.patch(`${API_BASE_URL}/api/services/v1/update/${serviceData.service_id}/`, serviceData);
     
     debugLog('API updateService Response:', response.data);
     return response.data;
@@ -868,8 +630,7 @@ export const getUserConnections = async (page = 1) => {
   try {
     debugLog('MBA4321 Fetching client connections, page:', page);
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.get('/api/bookings/v1/connections/', {
+    const response = await axios.get(`${API_BASE_URL}/api/bookings/v1/connections/`, {
       params: {
         page
       }
@@ -881,11 +642,6 @@ export const getUserConnections = async (page = 1) => {
   } catch (error) {
     debugLog('MBA4321 Error fetching connections:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -901,8 +657,7 @@ export const getConnectionProfile = async (userId, type = 'client') => {
   try {
     debugLog('MBA4321 Fetching connection profile:', { userId, type });
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.get(`/api/connections/v1/profile/${userId}/`, {
+    const response = await axios.get(`${API_BASE_URL}/api/connections/v1/profile/${userId}/`, {
       params: { type }
     });
     
@@ -912,11 +667,6 @@ export const getConnectionProfile = async (userId, type = 'client') => {
   } catch (error) {
     debugLog('MBA4321 Error fetching connection profile:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -933,8 +683,7 @@ export const inviteClient = async (type = 'email', email = null) => {
   try {
     debugLog('MBA4321 Inviting client:', { type, email });
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.post('/api/users/v1/invitations/', {
+    const response = await axios.post(`${API_BASE_URL}/api/users/v1/invitations/`, {
       type,
       email,
       is_professional_invite: true
@@ -946,11 +695,6 @@ export const inviteClient = async (type = 'email', email = null) => {
   } catch (error) {
     debugLog('MBA4321 Error inviting client:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -968,8 +712,7 @@ export const sendReferral = async (type = 'email', email = null, referralType) =
   try {
     debugLog('MBA4321 Sending referral:', { type, email, referralType });
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.post('/api/users/v1/invitations/', {
+    const response = await axios.post(`${API_BASE_URL}/api/users/v1/invitations/`, {
       type,
       email,
       is_professional_invite: false,
@@ -982,11 +725,6 @@ export const sendReferral = async (type = 'email', email = null, referralType) =
   } catch (error) {
     debugLog('MBA4321 Error sending referral:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -1002,8 +740,7 @@ export const getInvitations = async (type = 'all') => {
   try {
     debugLog('MBA4321 Getting invitations:', { type });
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.get(`/api/users/v1/invitations/?type=${type}`);
+    const response = await axios.get(`${API_BASE_URL}/api/users/v1/invitations/?type=${type}`);
     
     debugLog('MBA4321 Get invitations response:', response.data);
     
@@ -1011,11 +748,6 @@ export const getInvitations = async (type = 'all') => {
   } catch (error) {
     debugLog('MBA4321 Error getting invitations:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -1031,8 +763,7 @@ export const getInvitationDetails = async (token) => {
   try {
     debugLog('MBA4321 Getting invitation details:', { token });
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.get(`/api/users/v1/invitations/${token}/`);
+    const response = await axios.get(`${API_BASE_URL}/api/users/v1/invitations/${token}/`);
     
     debugLog('MBA4321 Get invitation details response:', response.data);
     
@@ -1040,11 +771,6 @@ export const getInvitationDetails = async (token) => {
   } catch (error) {
     debugLog('MBA4321 Error getting invitation details:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -1086,8 +812,7 @@ export const acceptInvitation = async (token) => {
   try {
     debugLog('MBA4321 Accepting invitation:', { token });
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.post(`/api/users/v1/invitations/${token}/accept/`);
+    const response = await axios.post(`${API_BASE_URL}/api/users/v1/invitations/${token}/accept/`);
     
     debugLog('MBA4321 Accept invitation response:', response.data);
     
@@ -1095,11 +820,6 @@ export const acceptInvitation = async (token) => {
   } catch (error) {
     debugLog('MBA4321 Error accepting invitation:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -1115,8 +835,7 @@ export const deleteInvitation = async (token) => {
   try {
     debugLog('MBA4321 Deleting invitation:', { token });
     
-    const apiClient = await getApiClient();
-    await apiClient.delete(`/api/users/v1/invitations/${token}/`);
+    await axios.delete(`${API_BASE_URL}/api/users/v1/invitations/${token}/`);
     
     debugLog('MBA4321 Delete invitation success');
     
@@ -1124,11 +843,6 @@ export const deleteInvitation = async (token) => {
   } catch (error) {
     debugLog('MBA4321 Error deleting invitation:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -1144,8 +858,7 @@ export const resendInvitation = async (token) => {
   try {
     debugLog('MBA4321 Resending invitation:', { token });
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.post(`/api/users/v1/invitations/${token}/resend/`);
+    const response = await axios.post(`${API_BASE_URL}/api/users/v1/invitations/${token}/resend/`);
     
     debugLog('MBA4321 Resend invitation response:', response.data);
     
@@ -1153,11 +866,6 @@ export const resendInvitation = async (token) => {
   } catch (error) {
     debugLog('MBA4321 Error resending invitation:', error);
     debugLog('MBA4321 Error details:', error.response?.data || error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
     
     throw error;
   }
@@ -1180,12 +888,6 @@ export const updateBookingDraftRates = async (draftId, occurrences) => {
             `${API_BASE_URL}/api/booking_drafts/v1/update-rates/${draftId}/`,
             {
                 occurrences
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${await getStorage('userToken')}`,
-                    'Content-Type': 'application/json'
-                }
             }
         );
 
@@ -1213,12 +915,6 @@ export const createBookingFromDraft = async (conversationId) => {
             `${API_BASE_URL}/api/bookings/v1/create-from-draft/`,
             {
                 conversation_id: conversationId
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${await getStorage('userToken')}`,
-                    'Content-Type': 'application/json'
-                }
             }
         );
 
@@ -1231,53 +927,16 @@ export const createBookingFromDraft = async (conversationId) => {
 };
 
 /**
- * Get count of unread messages for the current user
- * @returns {Promise<Object>} - Object containing unread message count
- */
-export const getUnreadMessageCount = async () => {
-  try {
-    const apiClient = await getApiClient();
-    debugLog("MBA4321: Fetching unread message count");
-    
-    const response = await apiClient.get('/api/messages/v1/unread-count/');
-    
-    debugLog("MBA4321: Unread count fetched:", response.data);
-    return response.data;
-  } catch (error) {
-    debugLog("MBA4321: Error with unread message count:", error.message);
-    
-    // Handle auth error gracefully
-    if (error.response?.status === 401) {
-      throw handleAuthError(error);
-    }
-    
-    // Return 0 as default in case of error
-    return { unread_count: 0, unread_conversations: 0 };
-  }
-};
-
-/**
  * Gets the dates and times for a booking draft
  * @param {string} draftId - The ID of the draft
  * @returns {Promise<Object>} - Draft dates and times data
  */
 export const getBookingDraftDatesAndTimes = async (draftId) => {
   try {
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    
     debugLog('MBA9876: Fetching booking draft dates and times:', draftId);
     
     const response = await axios.get(
-      `${API_BASE_URL}/api/booking_drafts/v1/${draftId}/dates_and_times/`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      `${API_BASE_URL}/api/booking_drafts/v1/${draftId}/dates_and_times/`
     );
     
     debugLog('MBA9876: Draft dates and times fetched successfully');
@@ -1297,20 +956,9 @@ export const createDraftFromBooking = async (bookingId) => {
   try {
     debugLog('MBA6428: Creating draft from booking:', { bookingId });
     
-    const token = await getStorage('userToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    
     const response = await axios.post(
       `${API_BASE_URL}/api/booking_drafts/v1/create-from-booking/${bookingId}/`,
-      {},  // No body needed for this request
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      {}  // No body needed for this request
     );
     
     debugLog('MBA6428: Draft created successfully:', response.data);
@@ -1349,17 +997,14 @@ export const searchProfessionals = async (searchParams = {}) => {
   try {
     debugLog('MBA9999', 'Searching professionals with params:', searchParams);
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.post('/api/professionals/v1/search/', searchParams);
+    const response = await axios.post(`${API_BASE_URL}/api/professionals/v1/search/`, searchParams);
     
     debugLog('MBA9999', 'Professional search completed successfully');
     return response.data;
   } catch (error) {
     debugLog('MBA9999', 'Error searching professionals:', error.response?.data || error.message);
     
-    // Handle auth errors gracefully
-    const processedError = handleAuthError(error);
-    throw processedError;
+    throw error;
   }
 };
 
@@ -1372,17 +1017,14 @@ export const getProfessionalServicesDetailed = async (professionalId) => {
   try {
     debugLog('MBA9999', 'Getting detailed services for professional:', professionalId);
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.get(`/api/professionals/v1/services/${professionalId}/`);
+    const response = await axios.get(`${API_BASE_URL}/api/professionals/v1/services/${professionalId}/`);
     
     debugLog('MBA9999', 'Professional services fetched successfully');
     return response.data;
   } catch (error) {
     debugLog('MBA9999', 'Error fetching professional services:', error.response?.data || error.message);
     
-    // Handle auth errors gracefully
-    const processedError = handleAuthError(error);
-    throw processedError;
+    throw error;
   }
 };
 
@@ -1395,8 +1037,7 @@ export const createConversation = async (professionalId) => {
   try {
     debugLog('MBA3456', 'Creating conversation with professional:', professionalId);
     
-    const apiClient = await getApiClient();
-    const response = await apiClient.post('/api/conversations/v1/create/', {
+    const response = await axios.post(`${API_BASE_URL}/api/conversations/v1/create/`, {
       professional_id: professionalId
     });
     
@@ -1405,9 +1046,26 @@ export const createConversation = async (professionalId) => {
   } catch (error) {
     debugLog('MBA3456', 'Error creating conversation:', error.response?.data || error.message);
     
-    // Handle auth errors gracefully
-    const processedError = handleAuthError(error);
-    throw processedError;
+    throw error;
+  }
+};
+
+/**
+ * Get count of unread messages for the current user
+ * @returns {Promise<Object>} - Object containing unread message count
+ */
+export const getUnreadMessageCount = async () => {
+  try {
+    debugLog("MBA4321: Fetching unread message count");
+    
+    const response = await axios.get(`${API_BASE_URL}/api/messages/v1/unread-count/`);
+    
+    debugLog("MBA4321: Unread count fetched:", response.data);
+    return response.data;
+  } catch (error) {
+    debugLog("MBA4321: Error with unread message count:", error.message);
+    
+    throw error;
   }
 };
 
