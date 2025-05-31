@@ -14,7 +14,7 @@
     "win:web:staging": "set NODE_ENV=staging&& npx expo start --web",
     "win:web:prod": "set NODE_ENV=production&& npx expo start --web",
     "win:build": "set NODE_ENV=staging&& npx expo export:web",
-    "win:deploy": "git fetch origin && if exist gh-pages rmdir /s /q gh-pages && git worktree add gh-pages origin/gh-pages && if exist gh-pages\\* del /s /q gh-pages\\* && xcopy /E /I /Y web-build\\* gh-pages\\ && echo staging.crittrcove.com > gh-pages\\CNAME && cd gh-pages && git add . && git commit -m \"Deploy to gh-pages\" && git push origin gh-pages && cd .. && git worktree remove gh-pages",
+    "win:deploy": "powershell -ExecutionPolicy Bypass -File deploy-win.ps1",
     "win:deploy:full": "npm run win:build && npm run win:deploy"
   },
   "dependencies": {
