@@ -28,8 +28,9 @@ const CrossPlatformView = ({
   // For web platform
   if (Platform.OS === 'web') {
     // Split children into header and content if fullWidthHeader is true
-    const headerContent = fullWidthHeader ? children[0] : null;
-    const mainContent = fullWidthHeader ? children.slice(1) : children;
+    const childrenArray = React.Children.toArray(children);
+    const headerContent = fullWidthHeader && childrenArray.length > 0 ? childrenArray[0] : null;
+    const mainContent = fullWidthHeader && childrenArray.length > 1 ? childrenArray.slice(1) : children;
 
     return (
       <div style={{ 
@@ -41,7 +42,7 @@ const CrossPlatformView = ({
         flexDirection: 'column',
         ...style,
       }}>
-        {fullWidthHeader && (
+        {fullWidthHeader && headerContent && (
           <div style={{ 
             width: '100%', 
             backgroundColor,

@@ -1,7 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, Dimensions } from 'react-native';
 import { theme } from '../styles/theme';
-import BackHeader from '../components/BackHeader';
 import CrossPlatformView from '../components/CrossPlatformView';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
@@ -11,7 +10,7 @@ import { useForm, ValidationError } from '@formspree/react';
 
 const ContactUs = () => {
   const navigation = useNavigation();
-  const { screenWidth } = useContext(AuthContext);
+  const { screenWidth, isCollapsed } = useContext(AuthContext);
   const [state, handleFormspreeSubmit] = useForm("mkgobpro");
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -20,7 +19,7 @@ const ContactUs = () => {
   const [successMessage, setSuccessMessage] = useState('');
 
   // Calculate responsive widths
-  const isMobile = screenWidth < 768;
+  const isMobile = screenWidth < 900;
   const contentWidth = isMobile ? '90%' : '600px';
   const maxContentWidth = isMobile ? '100%' : '800px';
 
@@ -60,8 +59,15 @@ const ContactUs = () => {
   // Show success message from either Formspree or backend
   if (state.succeeded) {
     return (
-      <CrossPlatformView fullWidthHeader={true} contentWidth={maxContentWidth}>
-        <BackHeader title="Contact Us" onBackPress={() => navigation.navigate('More')} />
+      <CrossPlatformView 
+        fullWidthHeader={false} 
+        contentWidth={maxContentWidth}
+        style={!isMobile && Platform.OS === 'web' ? {
+          marginLeft: isCollapsed ? '70px' : '250px',
+          width: `calc(100% - ${isCollapsed ? '70px' : '250px'})`,
+          transition: 'margin-left 0.3s ease, width 0.3s ease'
+        } : {}}
+      >
         <View style={styles.container}>
           <View style={[styles.contentWrapper, { width: contentWidth }]}>
             <Text style={[styles.title, { color: theme.colors.primary }]}>
@@ -78,13 +84,14 @@ const ContactUs = () => {
 
   return (
     <CrossPlatformView 
-      fullWidthHeader={true}
+      fullWidthHeader={false}
       contentWidth={maxContentWidth}
+      style={!isMobile && Platform.OS === 'web' ? {
+        marginLeft: isCollapsed ? '70px' : '250px',
+        width: `calc(100% - ${isCollapsed ? '70px' : '250px'})`,
+        transition: 'margin-left 0.3s ease, width 0.3s ease'
+      } : {}}
     >
-      <BackHeader 
-        title="Contact Us" 
-        onBackPress={() => navigation.navigate('More')} 
-      />
       <View style={styles.container}>
         <View style={[styles.contentWrapper, { width: contentWidth }]}>
           <Text style={styles.title}>Contact Us</Text>
@@ -145,8 +152,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     paddingVertical: 20,
+    minHeight: '80vh',
   },
   contentWrapper: {
     padding: 20,
@@ -158,6 +166,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    maxWidth: '100%',
   },
   title: {
     fontSize: theme.fontSizes.largeLarge,

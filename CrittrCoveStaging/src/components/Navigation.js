@@ -518,6 +518,7 @@ export default function Navigation({ state, descriptors, navigation }) {
         { title: 'Connections', icon: 'account-group', route: 'Connections' },
         // { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
+        { title: 'Contact Us', icon: 'help-circle', route: 'ContactUs' },
       ];
     } else {
       return [
@@ -526,6 +527,7 @@ export default function Navigation({ state, descriptors, navigation }) {
         { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         // { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
         { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
+        { title: 'Contact Us', icon: 'help-circle', route: 'ContactUs' },
         // ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
       ];
     }
