@@ -276,10 +276,8 @@ const ServiceCreationModal = ({
           parseFloat(serviceData.rates.base_rate) > 0;
         const hasValidAdditionalRate = !serviceData.rates?.additionalAnimalRate || 
           parseFloat(serviceData.rates.additionalAnimalRate) >= 0;
-        const hasValidHolidayRate = !serviceData.rates?.hasHolidayRate || 
-          (serviceData.rates.holidayRate && parseFloat(serviceData.rates.holidayRate) >= 0);
         
-        return hasValidBaseRate && hasValidAdditionalRate && hasValidHolidayRate;
+        return hasValidBaseRate && hasValidAdditionalRate;
       
       default:
         return false;

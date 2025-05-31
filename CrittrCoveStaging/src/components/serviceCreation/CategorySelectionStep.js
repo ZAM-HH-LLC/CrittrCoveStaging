@@ -197,8 +197,6 @@ const getCategoryIcon = (categoryName) => {
 const CategorySelectionStep = ({ serviceData, setServiceData }) => {
   const [customAnimalInput, setCustomAnimalInput] = useState('');
   const [customAnimalCategory, setCustomAnimalCategory] = useState('');
-  const [showCustomAnimalInput, setShowCustomAnimalInput] = useState(false);
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const isMobile = Platform.OS !== 'web';
 
@@ -254,15 +252,11 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     return 'Other';
   };
 
-  const handleCategoryFilterSelect = (categoryId) => {
-    setSelectedCategoryFilter(categoryId);
-  };
-
   const handleAnimalTypeSelect = (animalName, categoryId = null) => {
     debugLog('MBA456789', `Selecting animal: ${animalName}, categoryId: ${categoryId}`);
     
     if (animalName === 'Other') {
-      setShowCustomAnimalInput(true);
+      // No longer need to show custom input since it's always visible
       setCustomAnimalCategory(categoryId || (GENERAL_CATEGORIES[1] && GENERAL_CATEGORIES[1].id));
       return;
     }
@@ -364,93 +358,29 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     }
     
     setCustomAnimalInput('');
-    setShowCustomAnimalInput(false);
-  };
-
-  const handleSelectAll = () => {
-    let allAnimalTypes = [];
-    
-    if (selectedCategoryFilter && selectedCategoryFilter !== 'all') {
-      // If a category filter is selected, get all animals from that category
-      const categoryData = GENERAL_CATEGORIES.find(cat => cat.id === selectedCategoryFilter);
-      if (categoryData) {
-        allAnimalTypes = categoryData.animalTypes
-          .filter(type => type !== 'Other')
-          .map(type => ({ 
-            name: type, 
-            categoryId: selectedCategoryFilter 
-          }));
-      }
-    } else {
-      // Otherwise get animal types from all categories
-      GENERAL_CATEGORIES.forEach(category => {
-        if (category.id !== 'all') {
-          category.animalTypes
-            .filter(type => type !== 'Other')
-            .forEach(type => {
-              allAnimalTypes.push({ 
-                name: type, 
-                categoryId: category.id 
-              });
-            });
-        }
-      });
-    }
-    
-    setServiceData(prev => ({
-      ...prev,
-      animalTypes: allAnimalTypes
-    }));
-  };
-
-  const handleClearAll = () => {
-    setServiceData(prev => ({
-      ...prev,
-      animalTypes: []
-    }));
+    // Don't hide the form anymore since it's always visible
   };
 
   const getFilteredAnimalTypes = () => {
-    debugLog('MBA456789', 'Getting filtered animal types with filter:', selectedCategoryFilter);
     debugLog('MBA456789', 'Current serviceData.animalTypes:', serviceData.animalTypes);
     
-    let animalTypesToShow = [];
-    let categoriesUsed = new Set();
-    
-    if (selectedCategoryFilter && selectedCategoryFilter !== 'all') {
-      // If a specific category is selected as filter, show only animals from that category
-      const categoryData = GENERAL_CATEGORIES.find(cat => cat.id === selectedCategoryFilter);
-      if (categoryData) {
-        animalTypesToShow = categoryData.animalTypes
-          .filter(type => type !== 'Other')
-          .map(type => ({
-            name: type,
-            categoryId: selectedCategoryFilter,
-            categoryName: categoryData.name,
-            icon: getAnimalIcon(type, selectedCategoryFilter)
-          }));
-        categoriesUsed.add(categoryData.name);
+    // Only show Dogs and Cats for MVP
+    let animalTypesToShow = [
+      {
+        name: 'Dogs',
+        categoryId: 'domestic',
+        categoryName: 'Domestic',
+        icon: getAnimalIcon('Dogs', 'domestic')
+      },
+      {
+        name: 'Cats',
+        categoryId: 'domestic',
+        categoryName: 'Domestic',
+        icon: getAnimalIcon('Cats', 'domestic')
       }
-    } else {
-      // Show all animal types from all categories (except 'all' category)
-      GENERAL_CATEGORIES.forEach(category => {
-        if (category.id !== 'all') {
-          category.animalTypes
-            .filter(type => type !== 'Other')
-            .forEach(type => {
-              animalTypesToShow.push({
-                name: type,
-                categoryId: category.id,
-                categoryName: category.name,
-                icon: getAnimalIcon(type, category.id)
-              });
-              categoriesUsed.add(category.name);
-            });
-        }
-      });
-    }
+    ];
     
-    // Add custom animals that match the filter
+    // Add custom animals
     if (serviceData.animalTypes && serviceData.animalTypes.length > 0) {
       serviceData.animalTypes.forEach(animal => {
         // Skip if not an object or has no name
@@ -458,11 +388,9 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
           return;
         }
         
-        // Check if it's a custom animal or if its name doesn't match any predefined animal types
+        // Check if it's a custom animal or if its name doesn't match Dogs/Cats
         const isCustomOrUnknown = animal.isCustom || 
-          !GENERAL_CATEGORIES.some(cat => 
-            cat.animalTypes && cat.animalTypes.includes(animal.name)
-          );
+          (animal.name !== 'Dogs' && animal.name !== 'Cats');
         
         if (isCustomOrUnknown) {
           let categoryId = animal.categoryId;
@@ -484,54 +412,26 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
             }
           }
           
-          // Check if this animal should be shown based on the selected filter
-          if (selectedCategoryFilter === 'all' || categoryId === selectedCategoryFilter) {
-            // Check if this animal is already in the list
-            const existing = animalTypesToShow.find(a => a.name === animal.name);
-            if (!existing) {
-              debugLog('MBA456789', `Adding custom/unknown animal to filtered list: ${animal.name}, category: ${categoryName}`);
-              
-              animalTypesToShow.push({
-                name: animal.name,
-                categoryId: categoryId,
-                categoryName: categoryName,
-                icon: getAnimalIcon(animal.name, categoryId),
-                isCustom: true
-              });
-              categoriesUsed.add(categoryName);
-            }
+          // Check if this animal is already in the list
+          const existing = animalTypesToShow.find(a => a.name === animal.name);
+          if (!existing) {
+            debugLog('MBA456789', `Adding custom animal to filtered list: ${animal.name}, category: ${categoryName}`);
+            
+            animalTypesToShow.push({
+              name: animal.name,
+              categoryId: categoryId,
+              categoryName: categoryName,
+              icon: getAnimalIcon(animal.name, categoryId),
+              isCustom: true
+            });
           }
         }
       });
     }
     
-    // Sort with common pets first, then alphabetically
-    animalTypesToShow.sort((a, b) => {
-      const aCommonIndex = COMMON_PETS.indexOf(a.name);
-      const bCommonIndex = COMMON_PETS.indexOf(b.name);
-      
-      // If both are common pets, sort by common pet order
-      if (aCommonIndex !== -1 && bCommonIndex !== -1) {
-        return aCommonIndex - bCommonIndex;
-      }
-      
-      // If only a is a common pet, it comes first
-      if (aCommonIndex !== -1) {
-        return -1;
-      }
-      
-      // If only b is a common pet, it comes first
-      if (bCommonIndex !== -1) {
-        return 1;
-      }
-      
-      // Otherwise sort alphabetically
-      return a.name.localeCompare(b.name);
-    });
-    
     debugLog('MBA456789', 'Filtered animal types to show:', animalTypesToShow);
     
-    return { animalTypes: animalTypesToShow, categories: Array.from(categoriesUsed) };
+    return { animalTypes: animalTypesToShow, categories: [] };
   };
 
   const { animalTypes: filteredAnimalTypes } = getFilteredAnimalTypes();
@@ -560,56 +460,6 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       fontSize: 16,
       color: theme.colors.textSecondary,
       marginBottom: 16,
-      fontFamily: theme.fonts.regular.fontFamily,
-    },
-    categoryFiltersContainer: {
-      flexDirection: 'row',
-      marginBottom: 24,
-      paddingLeft: 2,
-      paddingRight: 20, // Extra padding at the end for better scrolling
-    },
-    categoryFiltersScrollView: {
-      maxHeight: 60,
-    },
-    categoryFilterButton: {
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 50,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      minHeight: 46,
-      marginRight: 10,
-    },
-    selectedCategoryFilter: {
-      backgroundColor: theme.colors.mainColors.mainLight,
-      borderColor: theme.colors.mainColors.main,
-    },
-    categoryFilterText: {
-      fontSize: 16,
-      color: theme.colors.text,
-      fontFamily: theme.fonts.regular.fontFamily,
-    },
-    selectedCategoryFilterText: {
-      color: theme.colors.mainColors.main,
-      fontWeight: '600',
-    },
-    actionsContainer: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      marginBottom: 24,
-      // gap: 16,
-    },
-    actionButton: {
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-    },
-    actionButtonText: {
-      fontSize: 16,
-      color: theme.colors.mainColors.main,
       fontFamily: theme.fonts.regular.fontFamily,
     },
     animalTypesGrid: {
@@ -652,7 +502,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       fontFamily: theme.fonts.regular.fontFamily,
     },
     customInputContainer: {
-      marginVertical: 24,
+      marginTop: 6,
       padding: 16,
       borderRadius: 12,
       borderWidth: 1,
@@ -710,6 +560,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     },
     selectedAnimalsSection: {
       marginTop: 24,
+      marginBottom: 16,
       padding: 16,
       backgroundColor: theme.colors.backgroundContrast,
       borderRadius: 12,
@@ -755,148 +606,10 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Select Animal Types for Your Service</Text>
       <Text style={styles.instructions}>
-        Choose the animal types your service will cover. You can filter by category or add custom animals.
+        Choose the animal types your service will cover. You can select Dogs, Cats, or add custom animals.
       </Text>
       
-      {/* Category filters */}
-      <ScrollView 
-        horizontal={true}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryFiltersContainer}
-        style={styles.categoryFiltersScrollView}
-      >
-        {GENERAL_CATEGORIES.map((category) => (
-          <TouchableOpacity
-            key={category.id}
-            style={[
-              styles.categoryFilterButton,
-              selectedCategoryFilter === category.id && styles.selectedCategoryFilter
-            ]}
-            onPress={() => handleCategoryFilterSelect(category.id)}
-          >
-            <MaterialCommunityIcons
-              name={category.icon}
-              size={22}
-              color={selectedCategoryFilter === category.id ? theme.colors.mainColors.main : theme.colors.text}
-            />
-            <Text style={[
-              styles.categoryFilterText,
-              selectedCategoryFilter === category.id && styles.selectedCategoryFilterText
-            ]}>
-              {category.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-      
-      {/* Actions */}
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.actionButton} onPress={handleSelectAll}>
-          <Text style={styles.actionButtonText}>Select All</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={handleClearAll}>
-          <Text style={styles.actionButtonText}>Clear All</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => setShowCustomAnimalInput(true)}
-        >
-          <Text style={styles.actionButtonText}>Add Custom Pet</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {/* Custom Animal Input */}
-      {showCustomAnimalInput && (
-        <View style={styles.customInputContainer}>
-          <Text style={styles.customInputTitle}>Add a Custom Animal Type</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Animal Type (e.g. Hamster)"
-              value={customAnimalInput}
-              onChangeText={setCustomAnimalInput}
-              placeholderTextColor={theme.colors.placeHolderText}
-            />
-            <View style={styles.pickerContainer}>
-              {Platform.OS === 'ios' || Platform.OS === 'android' ? (
-                <Picker
-                  selectedValue={customAnimalCategory}
-                  style={styles.picker}
-                  onValueChange={(itemValue) => setCustomAnimalCategory(itemValue)}
-                >
-                  {GENERAL_CATEGORIES.filter(cat => cat.id !== 'all').map(category => (
-                    <Picker.Item 
-                      key={category.id} 
-                      label={category.name} 
-                      value={category.id} 
-                    />
-                  ))}
-                </Picker>
-              ) : (
-                <select
-                  value={customAnimalCategory}
-                  onChange={(e) => setCustomAnimalCategory(e.target.value)}
-                  style={styles.picker}
-                >
-                  {GENERAL_CATEGORIES.filter(cat => cat.id !== 'all').map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </View>
-          </View>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={handleAddCustomAnimal}
-            disabled={!customAnimalInput.trim()}
-          >
-            <Text style={styles.addButtonText}>Add Animal</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      
-      {/* Animal Types Grid */}
-      {filteredAnimalTypes.length > 0 ? (
-        <View style={styles.animalTypesGrid}>
-          {filteredAnimalTypes.map((animalType) => (
-            <View key={`${animalType.categoryId}-${animalType.name}`} style={styles.animalTypeItem}>
-              <TouchableOpacity
-                style={[
-                  styles.animalTypeCard,
-                  isAnimalTypeSelected(animalType.name) && styles.selectedAnimalCard
-                ]}
-                onPress={() => handleAnimalTypeSelect(animalType.name, animalType.categoryId)}
-              >
-                <View style={styles.animalTypeRow}>
-                  <View style={styles.animalIconAndName}>
-                    <MaterialCommunityIcons
-                      name={animalType.icon}
-                      size={24}
-                      color={theme.colors.text}
-                    />
-                    <Text style={styles.animalTypeName}>{animalType.name}</Text>
-                  </View>
-                  {isAnimalTypeSelected(animalType.name) && (
-                    <MaterialCommunityIcons
-                      name="check-circle"
-                      size={24}
-                      color={theme.colors.mainColors.main}
-                    />
-                  )}
-                </View>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      ) : (
-        <Text style={styles.instructions}>
-          No animal types match your current filter. Try selecting a different category or add a custom animal.
-        </Text>
-      )}
-      
-      {/* Selected Animals Summary */}
+      {/* Selected Animals Summary - Moved above Dogs/Cats cards */}
       {serviceData.animalTypes.length > 0 && (
         <View style={styles.selectedAnimalsSection}>
           <Text style={styles.selectedAnimalsTitle}>
@@ -931,6 +644,91 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
           </View>
         </View>
       )}
+      
+      {/* Animal Types Grid - Only Dogs and Cats */}
+      {filteredAnimalTypes.length > 0 ? (
+        <View style={styles.animalTypesGrid}>
+          {filteredAnimalTypes.filter(animal => animal.name === 'Dogs' || animal.name === 'Cats').map((animalType) => (
+            <View key={`${animalType.categoryId}-${animalType.name}`} style={styles.animalTypeItem}>
+              <TouchableOpacity
+                style={[
+                  styles.animalTypeCard,
+                  isAnimalTypeSelected(animalType.name) && styles.selectedAnimalCard
+                ]}
+                onPress={() => handleAnimalTypeSelect(animalType.name, animalType.categoryId)}
+              >
+                <View style={styles.animalTypeRow}>
+                  <View style={styles.animalIconAndName}>
+                    <MaterialCommunityIcons
+                      name={animalType.icon}
+                      size={24}
+                      color={theme.colors.text}
+                    />
+                    <Text style={styles.animalTypeName}>{animalType.name}</Text>
+                  </View>
+                  {isAnimalTypeSelected(animalType.name) && (
+                    <MaterialCommunityIcons
+                      name="check-circle"
+                      size={24}
+                      color={theme.colors.mainColors.main}
+                    />
+                  )}
+                </View>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      
+      {/* Custom Animal Input - Always visible */}
+      <View style={styles.customInputContainer}>
+        <Text style={styles.customInputTitle}>Add a Custom Animal Type</Text>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Animal Type (e.g. Hamster)"
+            value={customAnimalInput}
+            onChangeText={setCustomAnimalInput}
+            placeholderTextColor={theme.colors.placeHolderText}
+          />
+          <View style={styles.pickerContainer}>
+            {Platform.OS === 'ios' || Platform.OS === 'android' ? (
+              <Picker
+                selectedValue={customAnimalCategory}
+                style={styles.picker}
+                onValueChange={(itemValue) => setCustomAnimalCategory(itemValue)}
+              >
+                {GENERAL_CATEGORIES.filter(cat => cat.id !== 'all').map(category => (
+                  <Picker.Item 
+                    key={category.id} 
+                    label={category.name} 
+                    value={category.id} 
+                  />
+                ))}
+              </Picker>
+            ) : (
+              <select
+                value={customAnimalCategory}
+                onChange={(e) => setCustomAnimalCategory(e.target.value)}
+                style={styles.picker}
+              >
+                {GENERAL_CATEGORIES.filter(cat => cat.id !== 'all').map(category => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </View>
+        </View>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={handleAddCustomAnimal}
+          disabled={!customAnimalInput.trim()}
+        >
+          <Text style={styles.addButtonText}>Add Animal</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 };

@@ -201,6 +201,11 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
       numericValue = parts[0] + '.' + parts.slice(1).join('');
     }
     
+    // Limit to 7 digits before decimal place
+    if (parts[0] && parts[0].length > 7) {
+      numericValue = parts[0].slice(0, 7) + (parts[1] ? '.' + parts[1] : '');
+    }
+    
     // Limit to 2 decimal places
     if (parts[1]?.length > 2) {
       numericValue = parts[0] + '.' + parts[1].slice(0, 2);
@@ -550,6 +555,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
           </View>
         </View>
 
+        {/* Holiday Rate Section - Commented out for MVP
         <View style={styles.holidayRateContainer}>
           <View style={styles.holidayRateHeader}>
             <Text style={styles.label}>Holiday Rate <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
@@ -615,6 +621,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
             )}
           </View>
         </View>
+        */}
 
         <View style={styles.customRatesContainer}>
           <Text style={styles.label}>Custom Charges <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
