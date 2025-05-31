@@ -634,7 +634,7 @@ const Dashboard = ({ navigation }) => {
           <TouchableOpacity
             style={styles.createServiceButton}
             onPress={() => navigateToFrom(navigation, 
-              isProfessional ? 'ServiceManager' : 'SearchProfessionals', 
+              isProfessional ? 'ServiceManager' : 'SearchProfessionalsListing', 
               'Dashboard'
             )}
           >
