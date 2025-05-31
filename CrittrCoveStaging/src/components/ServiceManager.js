@@ -1,5 +1,5 @@
 import React, { useState, useRef, useContext, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import ServiceCreationModal from './ServiceCreationModal';
@@ -9,6 +9,7 @@ import { Portal } from 'react-native-paper';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import { deleteService } from '../api/API';
 import { useToast } from './ToastProvider';
+import { supportsHover } from '../utils/deviceUtils';
 
 // Define GENERAL_CATEGORIES for mapping category names to IDs
 const GENERAL_CATEGORIES = [
@@ -58,6 +59,9 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
   const buttonRef = useRef(null);
   const collapseButtonRef = useRef(null);
   const showToast = useToast();
+
+  // Check if device supports hover
+  const deviceSupportsHover = supportsHover();
 
   // Reset local state when services change (e.g., when user changes)
   useEffect(() => {
@@ -423,24 +427,28 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         <View style={styles.headerContainer}>
           <Text style={styles.sectionTitle}>Service Manager</Text>
           <View style={styles.headerActions}>
-            {/* <TouchableOpacity 
+            {/* <TouchableOpacity
               ref={collapseButtonRef}
               onPress={toggleCollapseAll} 
               style={styles.collapseButton}
               onMouseEnter={() => {
                 try {
-                  showTooltip(
-                    collapseButtonRef, 
-                    allCollapsed ? 'Expand All' : 'Collapse All', 
-                    setCollapseTooltipPosition
-                  );
+                  if (deviceSupportsHover) {
+                    showTooltip(
+                      collapseButtonRef, 
+                      allCollapsed ? 'Expand All' : 'Collapse All', 
+                      setCollapseTooltipPosition
+                    );
+                  }
                 } catch (error) {
                   console.error('Error showing collapse tooltip:', error);
                 }
               }}
               onMouseLeave={() => {
-                setHoveredButton(null);
-                setCollapseTooltipPosition(null);
+                if (deviceSupportsHover) {
+                  setHoveredButton(null);
+                  setCollapseTooltipPosition(null);
+                }
               }}
             >
               <MaterialCommunityIcons 
@@ -455,14 +463,18 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
               style={styles.addServiceButton}
               onMouseEnter={() => {
                 try {
-                  showTooltip(buttonRef, 'Add Service', setTooltipPosition);
+                  if (deviceSupportsHover) {
+                    showTooltip(buttonRef, 'Add Service', setTooltipPosition);
+                  }
                 } catch (error) {
                   console.error('Error showing add tooltip:', error);
                 }
               }}
               onMouseLeave={() => {
-                setHoveredButton(null);
-                setTooltipPosition(null);
+                if (deviceSupportsHover) {
+                  setHoveredButton(null);
+                  setTooltipPosition(null);
+                }
               }}
               onPress={() => {
                 setEditingService(null);

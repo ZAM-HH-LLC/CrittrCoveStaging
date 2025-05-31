@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { handleBack, navigateToFrom } from '../components/Navigation';
 import { API_BASE_URL } from '../config/config';
+import { supportsHover } from '../utils/deviceUtils';
 
 const MyBookings = () => {
   const navigation = useNavigation();
@@ -26,6 +27,9 @@ const MyBookings = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [hoveredFilter, setHoveredFilter] = useState(null);
+  
+  // Check if device supports hover
+  const deviceSupportsHover = supportsHover();
 
   useEffect(() => {
     const updateLayout = () => {
@@ -320,11 +324,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.allButton,
-                              Platform.OS === 'web' && hoveredFilter === 'all' && styles.filterButtonHovered
+                              deviceSupportsHover && hoveredFilter === 'all' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('all')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('all')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('all')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -349,11 +353,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.pendingButton,
-                              Platform.OS === 'web' && hoveredFilter === 'pending' && styles.filterButtonHovered
+                              deviceSupportsHover && hoveredFilter === 'pending' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('pending')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('pending')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('pending')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -378,11 +382,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.confirmedButton,
-                              Platform.OS === 'web' && hoveredFilter === 'confirmed' && styles.filterButtonHovered
+                              deviceSupportsHover && hoveredFilter === 'confirmed' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('confirmed')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('confirmed')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('confirmed')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -407,11 +411,11 @@ const MyBookings = () => {
                             style={[
                               styles.filterButton,
                               styles.completedButton,
-                              Platform.OS === 'web' && hoveredFilter === 'completed' && styles.filterButtonHovered
+                              deviceSupportsHover && hoveredFilter === 'completed' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('completed')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('completed')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('completed')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 

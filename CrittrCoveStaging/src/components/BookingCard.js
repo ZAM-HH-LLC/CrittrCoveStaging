@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import { convertDateTimeFromUTC, formatDate } from '../utils/time_utils';
+import { supportsHover } from '../utils/deviceUtils';
 
 const getStatusInfo = (status) => {
   // Add debugging for status values
@@ -82,6 +83,9 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
   const { screenWidth, timeSettings } = useContext(AuthContext);
   const isMobile = screenWidth < 600;
   const [isHovered, setIsHovered] = useState(false);
+  
+  // Check if device supports hover
+  const deviceSupportsHover = supportsHover();
 
   // Add debugging for incoming date
   debugLog("MBA5677: Original booking date/time", { date, time });
@@ -182,8 +186,8 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
         Platform.OS === 'web' && isHovered && styles.cardHovered
       ]}
       onPress={onViewDetails}
-      onMouseEnter={() => Platform.OS === 'web' && setIsHovered(true)}
-      onMouseLeave={() => Platform.OS === 'web' && setIsHovered(false)}
+      onMouseEnter={() => deviceSupportsHover && setIsHovered(true)}
+      onMouseLeave={() => deviceSupportsHover && setIsHovered(false)}
     >
       <View style={[styles.cardContent, isMobile && styles.mobileCardContent]}>
         <View style={[styles.topContent, isMobile && styles.mobileTopContent]}>

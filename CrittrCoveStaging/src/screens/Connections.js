@@ -8,6 +8,7 @@ import { AuthContext, debugLog } from '../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigateToFrom } from '../components/Navigation';
 import { getUserConnections, inviteClient } from '../api/API';
+import { supportsHover } from '../utils/deviceUtils';
 
 const Connections = () => {
   const navigation = useNavigation();
@@ -36,6 +37,9 @@ const Connections = () => {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [isInviteButtonHovered, setIsInviteButtonHovered] = useState(false);
   const [isCreateServiceButtonHovered, setIsCreateServiceButtonHovered] = useState(false);
+
+  // Check if device supports hover
+  const deviceSupportsHover = supportsHover();
 
   // Update layout based on screen size
   useEffect(() => {
@@ -384,8 +388,8 @@ const Connections = () => {
                 debugLog('MBA4321 Create Service button clicked in footer');
                 navigateToFrom(navigation, 'ServiceManager', 'Connections');
               }}
-              onMouseEnter={() => setIsCreateServiceButtonHovered(true)}
-              onMouseLeave={() => setIsCreateServiceButtonHovered(false)}
+              onMouseEnter={() => deviceSupportsHover && setIsCreateServiceButtonHovered(true)}
+              onMouseLeave={() => deviceSupportsHover && setIsCreateServiceButtonHovered(false)}
             >
               <Text style={styles.createServiceButtonText}>Create a Service to Get More Clients</Text>
             </TouchableOpacity>
@@ -502,8 +506,8 @@ const Connections = () => {
                             isInviteButtonHovered && styles.buttonHovered
                           ]}
                           onPress={handleInviteClient}
-                          onMouseEnter={() => setIsInviteButtonHovered(true)}
-                          onMouseLeave={() => setIsInviteButtonHovered(false)}
+                          onMouseEnter={() => deviceSupportsHover && setIsInviteButtonHovered(true)}
+                          onMouseLeave={() => deviceSupportsHover && setIsInviteButtonHovered(false)}
                         >
                           <MaterialCommunityIcons name="account-plus" size={16} color={theme.colors.surface} />
                           <Text style={styles.inviteButtonSmallText}>Invite</Text>
@@ -528,8 +532,8 @@ const Connections = () => {
                               Platform.OS === 'web' && hoveredFilter === 'all' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('all')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('all')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('all')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -557,8 +561,8 @@ const Connections = () => {
                               Platform.OS === 'web' && hoveredFilter === 'active_bookings' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('active_bookings')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('active_bookings')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('active_bookings')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -586,8 +590,8 @@ const Connections = () => {
                               Platform.OS === 'web' && hoveredFilter === 'no_bookings' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('no_bookings')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('no_bookings')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('no_bookings')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 
@@ -615,8 +619,8 @@ const Connections = () => {
                               Platform.OS === 'web' && hoveredFilter === 'past_bookings' && styles.filterButtonHovered
                             ]}
                             onPress={() => setActiveFilter('past_bookings')}
-                            onMouseEnter={() => Platform.OS === 'web' && setHoveredFilter('past_bookings')}
-                            onMouseLeave={() => Platform.OS === 'web' && setHoveredFilter(null)}
+                            onMouseEnter={() => deviceSupportsHover && setHoveredFilter('past_bookings')}
+                            onMouseLeave={() => deviceSupportsHover && setHoveredFilter(null)}
                           >
                             <View style={styles.filterContent}>
                               <MaterialCommunityIcons 

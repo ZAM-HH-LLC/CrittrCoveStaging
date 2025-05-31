@@ -1,8 +1,9 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext, debugLog } from '../context/AuthContext';
+import { supportsHover } from '../utils/deviceUtils';
 
 const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) => {
   // Determine if this is a client or professional connection
@@ -15,6 +16,9 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
   // State for button hover effects
   const [isViewMessagesHovered, setIsViewMessagesHovered] = useState(false);
   const [isCreateBookingHovered, setIsCreateBookingHovered] = useState(false);
+  
+  // Check if device supports hover
+  const deviceSupportsHover = supportsHover();
   
   // Determine booking status tag
   const getBookingStatusTag = () => {
@@ -129,8 +133,8 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                   });
                   onViewProfile(connection);
                 }}
-                onMouseEnter={() => setIsViewMessagesHovered(true)}
-                onMouseLeave={() => setIsViewMessagesHovered(false)}
+                onMouseEnter={() => deviceSupportsHover && setIsViewMessagesHovered(true)}
+                onMouseLeave={() => deviceSupportsHover && setIsViewMessagesHovered(false)}
               >
                 <Text style={styles.viewProfileText}>View Messages</Text>
               </TouchableOpacity>
@@ -148,8 +152,8 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                     });
                     onCreateBooking(connection);
                   }}
-                  onMouseEnter={() => setIsCreateBookingHovered(true)}
-                  onMouseLeave={() => setIsCreateBookingHovered(false)}
+                  onMouseEnter={() => deviceSupportsHover && setIsCreateBookingHovered(true)}
+                  onMouseLeave={() => deviceSupportsHover && setIsCreateBookingHovered(false)}
                 >
                   <Text style={styles.createBookingText}>Create Booking</Text>
                 </TouchableOpacity>
@@ -192,8 +196,8 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                 });
                 onViewProfile(connection);
               }}
-              onMouseEnter={() => setIsViewMessagesHovered(true)}
-              onMouseLeave={() => setIsViewMessagesHovered(false)}
+              onMouseEnter={() => deviceSupportsHover && setIsViewMessagesHovered(true)}
+              onMouseLeave={() => deviceSupportsHover && setIsViewMessagesHovered(false)}
             >
               <Text style={styles.viewProfileText}>View Messages</Text>
             </TouchableOpacity>
@@ -211,8 +215,8 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                   });
                   onCreateBooking(connection);
                 }}
-                onMouseEnter={() => setIsCreateBookingHovered(true)}
-                onMouseLeave={() => setIsCreateBookingHovered(false)}
+                onMouseEnter={() => deviceSupportsHover && setIsCreateBookingHovered(true)}
+                onMouseLeave={() => deviceSupportsHover && setIsCreateBookingHovered(false)}
               >
                 <Text style={styles.createBookingText}>Create Booking</Text>
               </TouchableOpacity>
