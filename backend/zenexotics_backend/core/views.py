@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils.timezone import now
@@ -40,4 +40,33 @@ def log_auth_event(request):
         
     except Exception as e:
         logger.error(f"🔐 ERROR_LOGGING_AUTH_EVENT: {str(e)}")
-        return Response({'error': 'Failed to log event'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        return Response({'error': 'Failed to log event'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def debug_log(request):
+    """
+    Endpoint to receive debug logs from mobile clients
+    """
+    try:
+        message = request.data.get('message')
+        data = request.data.get('data')
+        timestamp = request.data.get('timestamp')
+        platform = request.data.get('platform')
+        user_agent = request.data.get('user_agent')
+
+        logger.info(
+            f"[MOBILE DEBUG] {message}",
+            extra={
+                'user_id': request.user.id,
+                'data': data,
+                'timestamp': timestamp,
+                'platform': platform,
+                'user_agent': user_agent
+            }
+        )
+        
+        return Response({'status': 'success'})
+    except Exception as e:
+        logger.exception("Error processing debug log")
+        return Response({'status': 'error', 'message': str(e)}, status=400) 
