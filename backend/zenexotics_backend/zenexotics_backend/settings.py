@@ -282,6 +282,13 @@ FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', FRONTEND_URL_MAP.get(ENV
 
 # CORS settings by environment
 CORS_ALLOWED_ORIGINS = [FRONTEND_BASE_URL]
+if IS_DEVELOPMENT:
+    # Add Android emulator URLs
+    CORS_ALLOWED_ORIGINS.extend([
+        'http://10.0.2.2:19006',
+        'http://localhost:19006',
+        'http://127.0.0.1:19006'
+    ])
 if IS_STAGING:
     # Always allow both the deployed staging frontend and localhost for testing
     CORS_ALLOWED_ORIGINS.append('https://staging.crittrcove.com')
@@ -296,6 +303,12 @@ if IS_PRODUCTION:
 
 # CORS/CSRF trusted origins for all environments
 CSRF_TRUSTED_ORIGINS = []
+if IS_DEVELOPMENT:
+    CSRF_TRUSTED_ORIGINS.extend([
+        'http://10.0.2.2:19006',
+        'http://localhost:19006',
+        'http://127.0.0.1:19006'
+    ])
 if IS_STAGING:
     CSRF_TRUSTED_ORIGINS = [
         'https://staging.crittrcove.com',

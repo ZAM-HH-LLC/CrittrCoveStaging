@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useContext } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useContext, useMemo } from 'react';
 import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Image, TextInput } from 'react-native';
 import { useTheme, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,7 +15,7 @@ import { formatOccurrenceFromUTC } from '../utils/time_utils';
 import DraftConfirmationModal from '../components/DraftConfirmationModal';
 import useWebSocket from '../hooks/useWebSocket';
 import MessageNotificationContext from '../context/MessageNotificationContext';
-import { getConversationMessages, createDraftFromBooking, getConversations } from '../api/API';
+import { getConversationMessages, createDraftFromBooking, getConversations, sendDebugLog, logInputEvent } from '../api/API';
 import { navigateToFrom } from '../components/Navigation';
 
 // Import our new components
@@ -82,14 +82,27 @@ const MessageHistory = ({ navigation, route }) => {
   const processedPagesRef = useRef(new Set());
   const messageIdsRef = useRef(new Set());
 
-  // Add viewport height detection for mobile browsers
-  const [actualViewportHeight, setActualViewportHeight] = useState(null);
+  // Add viewport height detection for mobile browsers - using ref instead of state
+  const actualViewportHeightRef = useRef(null);
 
   // Add a ref to track if conversations fetch is already in progress
   const isFetchingConversationsRef = useRef(false);
 
   // Add a ref to track if messages fetch is already in progress for specific conversations
   const isFetchingMessagesRef = useRef(new Set());
+
+  // Add re-render tracking - MOVED HERE after all state declarations
+  const renderCountRef = useRef(0);
+  renderCountRef.current++;
+  
+  debugLog('MBA2u3f89fbno4: [COMPONENT] MessageHistory render #' + renderCountRef.current, {
+    timestamp: Date.now(),
+    selectedConversation,
+    isSignedIn,
+    loading,
+    screenWidth,
+    routeParams: route.params
+  });
 
   // Simple cleanup on sign out
   useEffect(() => {
@@ -115,22 +128,53 @@ const MessageHistory = ({ navigation, route }) => {
   }, [isSignedIn]);
 
   useEffect(() => {
+    debugLog('MBA2u3f89fbno4: [VIEWPORT] useEffect running', {
+      timestamp: Date.now(),
+      screenWidth,
+      isWebMobile: Platform.OS === 'web' && screenWidth <= 900
+    });
+    
     if (Platform.OS === 'web' && screenWidth <= 900) {
       const updateViewportHeight = () => {
         // Get the actual viewport height (works better than 100vh on mobile)
         const vh = window.innerHeight * 0.01;
         document.documentElement.style.setProperty('--vh', `${vh}px`);
-        setActualViewportHeight(window.innerHeight);
+        const newHeight = window.innerHeight;
+        
+        debugLog('MBA2u3f89fbno4: [VIEWPORT] updateViewportHeight called', {
+          timestamp: Date.now(),
+          newHeight,
+          previousHeight: actualViewportHeightRef.current,
+          vh,
+          currentActiveElement: document.activeElement?.tagName
+        });
+        
+        actualViewportHeightRef.current = newHeight;
       };
 
       // Mobile keyboard handling
       const handleResize = () => {
+        debugLog('MBA2u3f89fbno4: [VIEWPORT] handleResize called', {
+          timestamp: Date.now(),
+          innerHeight: window.innerHeight,
+          activeElement: document.activeElement?.tagName
+        });
+        
         updateViewportHeight();
         
         // Fix for mobile Chrome keyboard issues
         if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
+          debugLog('MBA2u3f89fbno4: [VIEWPORT] Found active textarea, scheduling scroll', {
+            timestamp: Date.now()
+          });
+          
           // Small delay to allow keyboard to settle
           setTimeout(() => {
+            debugLog('MBA2u3f89fbno4: [VIEWPORT] Executing scrollIntoView', {
+              timestamp: Date.now(),
+              stillActive: document.activeElement?.tagName === 'TEXTAREA'
+            });
+            
             document.activeElement.scrollIntoView({ 
               behavior: 'smooth', 
               block: 'center' 
@@ -144,21 +188,33 @@ const MessageHistory = ({ navigation, route }) => {
       window.addEventListener('orientationchange', updateViewportHeight);
       
       // Fix for iOS Safari keyboard issues
-      window.addEventListener('focusin', () => {
+      const handleFocusIn = () => {
+        debugLog('MBA2u3f89fbno4: [VIEWPORT] handleFocusIn called', {
+          timestamp: Date.now(),
+          activeElement: document.activeElement?.tagName
+        });
+        
         setTimeout(() => {
           if (document.activeElement && document.activeElement.scrollIntoView) {
+            debugLog('MBA2u3f89fbno4: [VIEWPORT] Executing delayed scrollIntoView', {
+              timestamp: Date.now(),
+              activeElement: document.activeElement?.tagName
+            });
+            
             document.activeElement.scrollIntoView({ 
               behavior: 'smooth', 
               block: 'center' 
             });
           }
         }, 100);
-      });
+      };
+      
+      window.addEventListener('focusin', handleFocusIn);
 
       return () => {
         window.removeEventListener('resize', handleResize);
         window.removeEventListener('orientationchange', updateViewportHeight);
-        window.removeEventListener('focusin', () => {});
+        window.removeEventListener('focusin', handleFocusIn);
       };
     }
   }, [screenWidth]);
@@ -847,31 +903,55 @@ const MessageHistory = ({ navigation, route }) => {
   // Function to send a message
   const SendNormalMessage = async (messageContent) => {
     try {
-      debugLog('MBA2349f87g9qbh2nfv9cg: SendNormalMessage called', {
-        messageLength: messageContent.length,
-        conversationId: selectedConversation,
-        currentMessageCount: messages.length
+      debugLog('MBA2u3f89fbno4: [API] SendNormalMessage called', {
+        messageContentLength: messageContent?.length,
+        messageContentPreview: messageContent?.substring(0, 50),
+        selectedConversation,
+        hasSelectedConversation: !!selectedConversation,
+        selectedConversationType: typeof selectedConversation,
+        currentMessageCount: messages.length,
+        timestamp: Date.now()
       });
+
+      if (!selectedConversation) {
+        throw new Error('No conversation selected');
+      }
+
+      if (!messageContent || !messageContent.trim()) {
+        throw new Error('Message content is empty');
+      }
       
       const token = await getStorage('userToken');
-      const response = await axios.post(`${API_BASE_URL}/api/messages/v1/send_norm_message/`, {
+      
+      const requestData = {
         conversation_id: selectedConversation,
-        content: messageContent
-      }, {
+        content: messageContent.trim()
+      };
+      
+      debugLog('MBA2u3f89fbno4: [API] About to send API request', {
+        requestData,
+        apiUrl: `${API_BASE_URL}/api/messages/v1/send_norm_message/`,
+        hasToken: !!token,
+        timestamp: Date.now()
+      });
+      
+      const response = await axios.post(`${API_BASE_URL}/api/messages/v1/send_norm_message/`, requestData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      debugLog('MBA2349f87g9qbh2nfv9cg: Message sent successfully', {
+      debugLog('MBA2u3f89fbno4: [API] Message sent successfully', {
         messageId: response.data.message_id,
-        timestamp: response.data.timestamp
+        timestamp: response.data.timestamp,
+        responseStatus: response.status,
+        responseData: response.data
       });
 
       // Add new message to the beginning of the list since FlatList is inverted
       setMessages(prevMessages => {
-        debugLog('MBA2349f87g9qbh2nfv9cg: Adding sent message to list', {
+        debugLog('MBA2u3f89fbno4: [API] Adding sent message to list', {
           beforeLength: prevMessages.length,
           afterLength: prevMessages.length + 1,
           newMessageId: response.data.message_id
@@ -891,10 +971,18 @@ const MessageHistory = ({ navigation, route }) => {
           : conv
       ));
 
-      debugLog('MBA2349f87g9qbh2nfv9cg: SendNormalMessage completed successfully');
+      debugLog('MBA2u3f89fbno4: [API] SendNormalMessage completed successfully');
       return response.data;
     } catch (error) {
-      debugLog('MBA2349f87g9qbh2nfv9cg: Error in SendNormalMessage:', error);
+      debugLog('MBA2u3f89fbno4: [API] Error in SendNormalMessage', {
+        errorMessage: error.message,
+        errorResponse: error.response?.data,
+        errorStatus: error.response?.status,
+        requestedConversationId: selectedConversation,
+        requestedMessageContent: messageContent?.substring(0, 50),
+        timestamp: Date.now()
+      });
+      
       console.error('Error sending message:', error);
       throw error;
     }
@@ -1425,13 +1513,205 @@ const MessageHistory = ({ navigation, route }) => {
     );
   }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages, messages]);
 
-  const WebInput = () => {
+  const WebInput = React.memo(({ selectedConversation }) => {
     const [message, setMessage] = useState('');
     const inputRef = useRef(null);
     const isProcessingRef = useRef(false);
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+    debugLog('MBA2u3f89fbno4: [COMPONENT] WebInput render', {
+      timestamp: Date.now(),
+      messageLength: message.length,
+      isKeyboardVisible,
+      selectedConversation,
+      hasSelectedConversation: !!selectedConversation
+    });
+
+    const handleSend = async () => {
+      debugLog('MBA2u3f89fbno4: [SEND] handleSend called', {
+        messageLength: message.length,
+        messageTrimmed: message.trim().length,
+        isSending,
+        isProcessing: isProcessingRef.current,
+        selectedConversation,
+        hasSelectedConversation: !!selectedConversation,
+        timestamp: Date.now()
+      });
+
+      if (message.trim() && !isSending && !isProcessingRef.current && selectedConversation) {
+        isProcessingRef.current = true;
+        setIsSending(true);
+        
+        try {
+          const messageToSend = message.trim();
+          
+          debugLog('MBA2u3f89fbno4: [SEND] About to send message', {
+            messageToSend: messageToSend.substring(0, 50),
+            messageLength: messageToSend.length,
+            selectedConversation,
+            timestamp: Date.now()
+          });
+          
+          // Store the message before clearing the input
+          const originalMessage = message;
+          setMessage('');
+          
+          const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          
+          const optimisticMessage = {
+            message_id: tempId,
+            content: messageToSend,
+            timestamp: new Date().toISOString(),
+            status: 'sent',
+            type_of_message: 'normal_message',
+            is_clickable: false,
+            sent_by_other_user: false,
+            _isOptimistic: true
+          };
+          
+          setMessages(prevMessages => {
+            const messageExists = prevMessages.some(msg => 
+              msg._isOptimistic && msg.content === messageToSend
+            );
+            
+            if (messageExists) {
+              debugLog('MBA2u3f89fbno4: [SEND] Optimistic message already exists, skipping');
+              return prevMessages;
+            }
+            
+            debugLog('MBA2u3f89fbno4: [SEND] Adding optimistic message');
+            return [optimisticMessage, ...prevMessages];
+          });
+          
+          const sentMessage = await SendNormalMessage(messageToSend);
+          
+          debugLog('MBA2u3f89fbno4: [SEND] Message sent successfully', {
+            messageId: sentMessage.message_id,
+            timestamp: Date.now()
+          });
+          
+          setMessages(prevMessages => {
+            const filteredMessages = prevMessages.filter(msg => 
+              !(msg._isOptimistic && msg.content === messageToSend)
+            );
+            
+            const realMessageExists = filteredMessages.some(msg => 
+              msg.message_id && sentMessage.message_id && 
+              String(msg.message_id) === String(sentMessage.message_id)
+            );
+            
+            if (realMessageExists) {
+              debugLog('MBA2u3f89fbno4: [SEND] Real message already exists, keeping filtered list');
+              return filteredMessages;
+            }
+            
+            debugLog('MBA2u3f89fbno4: [SEND] Adding real message to list');
+            return [sentMessage, ...filteredMessages];
+          });
+        } catch (error) {
+          debugLog('MBA2u3f89fbno4: [SEND] Error sending message', {
+            error: error.message,
+            errorResponse: error.response?.data,
+            errorStatus: error.response?.status,
+            timestamp: Date.now()
+          });
+          
+          console.error('Failed to send message:', error);
+          
+          // Restore the original message on error
+          setMessage(originalMessage);
+          setMessages(prevMessages => 
+            prevMessages.filter(msg => !msg._isOptimistic)
+          );
+          Alert.alert('Error', 'Failed to send message. Please try again.');
+        } finally {
+          setIsSending(false);
+          setTimeout(() => {
+            isProcessingRef.current = false;
+          }, 300);
+        }
+      } else {
+        debugLog('MBA2u3f89fbno4: [SEND] Cannot send message', {
+          hasMessage: !!message.trim(),
+          isSending,
+          isProcessing: isProcessingRef.current,
+          hasSelectedConversation: !!selectedConversation,
+          selectedConversation,
+          timestamp: Date.now()
+        });
+      }
+    };
+
+    const handleFocus = () => {
+      const timestamp = Date.now();
+      debugLog('MBA2u3f89fbno4: [INPUT FOCUS] === FOCUS EVENT START ===', {
+        timestamp,
+        isFocused: document.activeElement === inputRef.current,
+        activeElementTag: document.activeElement?.tagName,
+        activeElementType: document.activeElement?.type,
+        activeElementId: document.activeElement?.id,
+        isKeyboardVisible,
+        inputRefExists: !!inputRef.current,
+        inputDisabled: inputRef.current?.disabled,
+        inputReadOnly: inputRef.current?.readOnly,
+        documentHasFocus: document.hasFocus(),
+        windowHasInnerHeight: !!window.innerHeight,
+        visualViewportHeight: window.visualViewport?.height,
+        innerHeight: window.innerHeight
+      });
+
+      // Track what happens 50ms later
+      setTimeout(() => {
+        debugLog('MBA2u3f89fbno4: [INPUT FOCUS] Focus check after 50ms', {
+          timestamp: Date.now(),
+          isFocused: document.activeElement === inputRef.current,
+          activeElementTag: document.activeElement?.tagName,
+          activeElementType: document.activeElement?.type,
+          activeElementId: document.activeElement?.id,
+          isKeyboardVisible,
+          documentHasFocus: document.hasFocus()
+        });
+      }, 50);
+
+      // Track what happens 200ms later
+      setTimeout(() => {
+        debugLog('MBA2u3f89fbno4: [INPUT FOCUS] Focus check after 200ms', {
+          timestamp: Date.now(),
+          isFocused: document.activeElement === inputRef.current,
+          activeElementTag: document.activeElement?.tagName,
+          activeElementType: document.activeElement?.type,
+          activeElementId: document.activeElement?.id,
+          isKeyboardVisible,
+          documentHasFocus: document.hasFocus()
+        });
+      }, 200);
+    };
+
+    const handleBlur = () => {
+      const timestamp = Date.now();
+      debugLog('MBA2u3f89fbno4: [INPUT BLUR] === BLUR EVENT START ===', {
+        timestamp,
+        wasFocused: document.activeElement === inputRef.current,
+        newActiveElementTag: document.activeElement?.tagName,
+        newActiveElementType: document.activeElement?.type,
+        newActiveElementId: document.activeElement?.id,
+        isKeyboardVisible,
+        inputRefExists: !!inputRef.current,
+        documentHasFocus: document.hasFocus(),
+        relatedTarget: event?.relatedTarget?.tagName,
+        blurReason: 'user_blur_event'
+      });
+    };
 
     const adjustHeight = () => {
       if (inputRef.current) {
+        debugLog('MBA2u3f89fbno4: [INPUT HEIGHT] Adjusting height', {
+          currentHeight: inputRef.current.style.height,
+          scrollHeight: inputRef.current.scrollHeight,
+          valueLength: message.length,
+          isKeyboardVisible
+        });
+
         // Store the current scroll position
         const scrollTop = inputRef.current.scrollTop;
         
@@ -1442,6 +1722,13 @@ const MessageHistory = ({ navigation, route }) => {
         const newHeight = Math.min(inputRef.current.scrollHeight, 120);
         inputRef.current.style.height = `${newHeight}px`;
         
+        debugLog('MBA2u3f89fbno4: [INPUT HEIGHT] Height adjusted', {
+          newHeight,
+          scrollTop,
+          finalHeight: inputRef.current.style.height,
+          isKeyboardVisible
+        });
+        
         // If we've hit max height, restore scroll position
         if (inputRef.current.scrollHeight > 120) {
           inputRef.current.scrollTop = scrollTop;
@@ -1450,103 +1737,149 @@ const MessageHistory = ({ navigation, route }) => {
     };
 
     const handleChange = (e) => {
+      debugLog('MBA2u3f89fbno4: [INPUT CHANGE] Change event triggered', {
+        valueLength: e.target.value.length,
+        previousLength: message.length,
+        isProcessing: isProcessingRef.current,
+        isKeyboardVisible
+      });
+
       setMessage(e.target.value);
       adjustHeight();
     };
 
-    const handleSend = async () => {
-      // Prevent duplicate sends by checking if we're already sending
-      if (message.trim() && !isSending && !isProcessingRef.current) {
-        isProcessingRef.current = true;
-        setIsSending(true);
-        
-        try {
-          // Clear input right away before API call to prevent double-sending
-          const messageToSend = message.trim(); // Save message content
-          setMessage(''); // Clear input field
-          if (inputRef.current) {
-            inputRef.current.style.height = '24px';
-            inputRef.current.scrollTop = 0;
+    // Add effect to handle keyboard visibility
+    useEffect(() => {
+      if (Platform.OS === 'web') {
+        const handleResize = () => {
+          const newHeight = window.visualViewport?.height || window.innerHeight;
+          const oldHeight = window.innerHeight;
+          const heightDiff = oldHeight - newHeight;
+          const isKeyboardOpening = heightDiff > 100; // Add threshold to avoid false positives
+          
+          debugLog('MBA2u3f89fbno4: [KEYBOARD] === VIEWPORT CHANGE ===', {
+            timestamp: Date.now(),
+            newHeight,
+            oldHeight,
+            heightDiff,
+            isKeyboardOpening,
+            wasKeyboardVisible: isKeyboardVisible,
+            willSetKeyboardVisible: isKeyboardOpening && !isKeyboardVisible,
+            willSetKeyboardHidden: !isKeyboardOpening && isKeyboardVisible,
+            visualViewportHeight: window.visualViewport?.height,
+            visualViewportWidth: window.visualViewport?.width,
+            innerHeight: window.innerHeight,
+            innerWidth: window.innerWidth,
+            screenHeight: window.screen?.height,
+            screenWidth: window.screen?.width,
+            currentActiveElement: document.activeElement?.tagName,
+            isInputActive: document.activeElement === inputRef.current
+          });
+
+          if (isKeyboardOpening && !isKeyboardVisible) {
+            debugLog('MBA2u3f89fbno4: [KEYBOARD] Setting keyboard visible to TRUE');
+            setIsKeyboardVisible(true);
+          } else if (!isKeyboardOpening && isKeyboardVisible) {
+            debugLog('MBA2u3f89fbno4: [KEYBOARD] Setting keyboard visible to FALSE');
+            setIsKeyboardVisible(false);
           }
-          
-          // Generate a unique temporary ID for optimistic update
-          const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-          
-          // Optimistically add message to UI immediately
-          const optimisticMessage = {
-            message_id: tempId,
-            content: messageToSend,
-            timestamp: new Date().toISOString(),
-            status: 'sent',
-            type_of_message: 'normal_message',
-            is_clickable: false,
-            sent_by_other_user: false,
-            _isOptimistic: true // Flag to identify this as an optimistic update
-          };
-          
-          // Add to messages state
-          setMessages(prevMessages => {
-            // First check if we already have this message (prevent doubles)
-            const messageExists = prevMessages.some(msg => 
-              msg._isOptimistic && msg.content === messageToSend
-            );
-            
-            if (messageExists) {
-              debugLog('MBA3210: Skipping duplicate optimistic message');
-              return prevMessages;
-            }
-            
-            return [optimisticMessage, ...prevMessages];
-          });
-          
-          // Actually send the message to the server
-          const sentMessage = await SendNormalMessage(messageToSend);
-          
-          // Replace optimistic message with actual one
-          setMessages(prevMessages => {
-            // Remove optimistic message and add real one, ensuring no duplicates
-            const filteredMessages = prevMessages.filter(msg => 
-              // Keep all messages that are NOT our optimistic update
-              !(msg._isOptimistic && msg.content === messageToSend)
-            );
-            
-            // Check if the real message is already in the list
-            const realMessageExists = filteredMessages.some(msg => 
-              msg.message_id && sentMessage.message_id && 
-              String(msg.message_id) === String(sentMessage.message_id)
-            );
-            
-            if (realMessageExists) {
-              debugLog('MBA3210: Real message already exists, skipping');
-              return filteredMessages;
-            }
-            
-            // Add the real message
-            return [sentMessage, ...filteredMessages];
-          });
-        } catch (error) {
-          console.error('Failed to send message:', error);
-          
-          // Restore the message in the input field on error
-          setMessage(message);
-          
-          // Remove optimistic message on error
-          setMessages(prevMessages => 
-            prevMessages.filter(msg => !msg._isOptimistic)
-          );
-          
-          // Show error
-          Alert.alert('Error', 'Failed to send message. Please try again.');
-        } finally {
-          setIsSending(false);
-          
-          // Add delay before allowing another send
-          setTimeout(() => {
-            isProcessingRef.current = false;
-          }, 300);
-        }
+        };
+
+        window.visualViewport?.addEventListener('resize', handleResize);
+        
+        return () => {
+          window.visualViewport?.removeEventListener('resize', handleResize);
+        };
       }
-    };
+    }, [isKeyboardVisible]);
+
+    // Add effect to track document-level focus changes
+    useEffect(() => {
+      if (Platform.OS === 'web') {
+        const handleDocumentFocusIn = (e) => {
+          debugLog('MBA2u3f89fbno4: [DOCUMENT FOCUS] Document focusin event', {
+            targetTag: e.target?.tagName,
+            targetType: e.target?.type,
+            targetId: e.target?.id,
+            targetClassList: e.target?.classList?.toString(),
+            isOurInput: e.target === inputRef.current,
+            currentActiveElement: document.activeElement?.tagName,
+            timestamp: Date.now()
+          });
+        };
+
+        const handleDocumentFocusOut = (e) => {
+          debugLog('MBA2u3f89fbno4: [DOCUMENT FOCUS] Document focusout event', {
+            targetTag: e.target?.tagName,
+            targetType: e.target?.type,
+            targetId: e.target?.id,
+            isOurInput: e.target === inputRef.current,
+            relatedTargetTag: e.relatedTarget?.tagName,
+            relatedTargetType: e.relatedTarget?.type,
+            relatedTargetId: e.relatedTarget?.id,
+            currentActiveElement: document.activeElement?.tagName,
+            timestamp: Date.now()
+          });
+        };
+
+        const handleDocumentClick = (e) => {
+          debugLog('MBA2u3f89fbno4: [DOCUMENT CLICK] Document click event', {
+            targetTag: e.target?.tagName,
+            targetType: e.target?.type,
+            targetId: e.target?.id,
+            targetClassList: e.target?.classList?.toString(),
+            isOurInput: e.target === inputRef.current,
+            currentActiveElement: document.activeElement?.tagName,
+            timestamp: Date.now()
+          });
+        };
+
+        document.addEventListener('focusin', handleDocumentFocusIn, true);
+        document.addEventListener('focusout', handleDocumentFocusOut, true);
+        document.addEventListener('click', handleDocumentClick, true);
+
+        return () => {
+          document.removeEventListener('focusin', handleDocumentFocusIn, true);
+          document.removeEventListener('focusout', handleDocumentFocusOut, true);
+          document.removeEventListener('click', handleDocumentClick, true);
+        };
+      }
+    }, []);
+
+    // Add effect to intercept programmatic blur calls
+    useEffect(() => {
+      if (Platform.OS === 'web' && inputRef.current) {
+        const originalBlur = inputRef.current.blur;
+        
+        inputRef.current.blur = function(...args) {
+          debugLog('MBA2u3f89fbno4: [PROGRAMMATIC BLUR] blur() was called programmatically!', {
+            timestamp: Date.now(),
+            stackTrace: new Error().stack,
+            currentActiveElement: document.activeElement?.tagName,
+            inputRefExists: !!inputRef.current,
+            isOurInputFocused: document.activeElement === inputRef.current
+          });
+          
+          // Call the original blur method
+          return originalBlur.apply(this, args);
+        };
+
+        return () => {
+          if (inputRef.current) {
+            inputRef.current.blur = originalBlur;
+          }
+        };
+      }
+    }, []);
+
+    // Add component unmount tracking
+    useEffect(() => {
+      debugLog('MBA2u3f89fbno4: [COMPONENT] WebInput component mounted');
+      
+      return () => {
+        debugLog('MBA2u3f89fbno4: [COMPONENT] WebInput component unmounting');
+      };
+    }, []);
 
     return (
       <View style={styles.inputInnerContainer}>
@@ -1558,16 +1891,89 @@ const MessageHistory = ({ navigation, route }) => {
             height: 'auto',
             minHeight: '20px',
             paddingLeft: '10px',
-            paddingRight: '10px'
+            paddingRight: '10px',
+            // Simplified styles for better Android compatibility
+            border: '1px solid #ccc',
+            borderRadius: '8px',
+            fontSize: '16px', // Important: prevents zoom on iOS
+            outline: 'none',
+            fontFamily: 'inherit'
           }}
           placeholder="Type a New Message..."
           value={message}
           onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          onTouchStart={(e) => {
+            debugLog('MBA2u3f89fbno4: [INPUT TOUCH] TouchStart event', {
+              timestamp: Date.now(),
+              targetTag: e.target?.tagName,
+              targetType: e.target?.type,
+              isOurInput: e.target === inputRef.current,
+              currentActiveElement: document.activeElement?.tagName,
+              touches: e.touches?.length,
+              clientX: e.touches?.[0]?.clientX,
+              clientY: e.touches?.[0]?.clientY
+            });
+          }}
+          onTouchEnd={(e) => {
+            debugLog('MBA2u3f89fbno4: [INPUT TOUCH] TouchEnd event', {
+              timestamp: Date.now(),
+              targetTag: e.target?.tagName,
+              targetType: e.target?.type,
+              isOurInput: e.target === inputRef.current,
+              currentActiveElement: document.activeElement?.tagName,
+              changedTouches: e.changedTouches?.length
+            });
+          }}
+          onMouseDown={(e) => {
+            debugLog('MBA2u3f89fbno4: [INPUT MOUSE] MouseDown event', {
+              timestamp: Date.now(),
+              targetTag: e.target?.tagName,
+              targetType: e.target?.type,
+              isOurInput: e.target === inputRef.current,
+              currentActiveElement: document.activeElement?.tagName,
+              button: e.button,
+              clientX: e.clientX,
+              clientY: e.clientY
+            });
+          }}
+          onMouseUp={(e) => {
+            debugLog('MBA2u3f89fbno4: [INPUT MOUSE] MouseUp event', {
+              timestamp: Date.now(),
+              targetTag: e.target?.tagName,
+              targetType: e.target?.type,
+              isOurInput: e.target === inputRef.current,
+              currentActiveElement: document.activeElement?.tagName,
+              button: e.button
+            });
+          }}
+          onClick={(e) => {
+            debugLog('MBA2u3f89fbno4: [INPUT CLICK] Click event', {
+              timestamp: Date.now(),
+              targetTag: e.target?.tagName,
+              targetType: e.target?.type,
+              isOurInput: e.target === inputRef.current,
+              currentActiveElement: document.activeElement?.tagName,
+              defaultPrevented: e.defaultPrevented
+            });
+          }}
           onKeyPress={(e) => {
+            debugLog('MBA2u3f89fbno4: [INPUT KEYPRESS] Key pressed', {
+              key: e.key,
+              shiftKey: e.shiftKey,
+              messageLength: message.length,
+              isKeyboardVisible,
+              timestamp: Date.now(),
+              currentActiveElement: document.activeElement?.tagName,
+              isOurInputFocused: document.activeElement === inputRef.current
+            });
+
             if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
+              e.preventDefault(); // Only prevent default for Enter key to send message
               handleSend();
             }
+            // Remove the blanket preventDefault() - let other keys work normally
           }}
           disabled={isSending}
           rows={1}
@@ -1596,22 +2002,41 @@ const MessageHistory = ({ navigation, route }) => {
         </Button>
       </View>
     );
-  };
+  });
 
-  const MobileInput = () => {
+  const MobileInput = ({ selectedConversation }) => {
     const [message, setMessage] = useState('');
     const inputRef = useRef(null);
     const isProcessingRef = useRef(false);
 
     const handleSend = async () => {
+      debugLog('MBA2u3f89fbno4: [MOBILE SEND] handleSend called', {
+        messageLength: message.length,
+        messageTrimmed: message.trim().length,
+        isSending,
+        isProcessing: isProcessingRef.current,
+        selectedConversation,
+        hasSelectedConversation: !!selectedConversation,
+        timestamp: Date.now()
+      });
+
       // Prevent duplicate sends by checking if we're already sending
-      if (message.trim() && !isSending && !isProcessingRef.current) {
+      if (message.trim() && !isSending && !isProcessingRef.current && selectedConversation) {
         isProcessingRef.current = true;
         setIsSending(true);
         
         try {
           // Clear input right away before API call to prevent double-sending
           const messageToSend = message.trim(); // Save message content
+          const originalMessage = message; // Store original message for error restore
+          
+          debugLog('MBA2u3f89fbno4: [MOBILE SEND] About to send message', {
+            messageToSend: messageToSend.substring(0, 50),
+            messageLength: messageToSend.length,
+            selectedConversation,
+            timestamp: Date.now()
+          });
+          
           setMessage(''); // Clear input field immediately
           
           // Generate a unique temporary ID for optimistic update
@@ -1637,15 +2062,21 @@ const MessageHistory = ({ navigation, route }) => {
             );
             
             if (messageExists) {
-              debugLog('MBA3210: Skipping duplicate optimistic message');
+              debugLog('MBA2u3f89fbno4: [MOBILE SEND] Skipping duplicate optimistic message');
               return prevMessages;
             }
             
+            debugLog('MBA2u3f89fbno4: [MOBILE SEND] Adding optimistic message');
             return [optimisticMessage, ...prevMessages];
           });
           
           // Actually send the message to the server
           const sentMessage = await SendNormalMessage(messageToSend);
+          
+          debugLog('MBA2u3f89fbno4: [MOBILE SEND] Message sent successfully', {
+            messageId: sentMessage.message_id,
+            timestamp: Date.now()
+          });
           
           // Replace optimistic message with actual one
           setMessages(prevMessages => {
@@ -1662,18 +2093,26 @@ const MessageHistory = ({ navigation, route }) => {
             );
             
             if (realMessageExists) {
-              debugLog('MBA3210: Real message already exists, skipping');
+              debugLog('MBA2u3f89fbno4: [MOBILE SEND] Real message already exists, skipping');
               return filteredMessages;
             }
             
+            debugLog('MBA2u3f89fbno4: [MOBILE SEND] Adding real message to list');
             // Add the real message
             return [sentMessage, ...filteredMessages];
           });
         } catch (error) {
+          debugLog('MBA2u3f89fbno4: [MOBILE SEND] Error sending message', {
+            error: error.message,
+            errorResponse: error.response?.data,
+            errorStatus: error.response?.status,
+            timestamp: Date.now()
+          });
+          
           console.error('Failed to send message:', error);
           
           // Restore the message in the input field on error
-          setMessage(message);
+          setMessage(originalMessage);
           
           // Remove optimistic message on error
           setMessages(prevMessages => 
@@ -1690,6 +2129,15 @@ const MessageHistory = ({ navigation, route }) => {
             isProcessingRef.current = false;
           }, 300);
         }
+      } else {
+        debugLog('MBA2u3f89fbno4: [MOBILE SEND] Cannot send message', {
+          hasMessage: !!message.trim(),
+          isSending,
+          isProcessing: isProcessingRef.current,
+          hasSelectedConversation: !!selectedConversation,
+          selectedConversation,
+          timestamp: Date.now()
+        });
       }
     };
 
@@ -1720,7 +2168,10 @@ const MessageHistory = ({ navigation, route }) => {
     );
   };
 
-  const MessageInput = Platform.OS === 'web' ? <WebInput /> : <MobileInput />;
+  // Memoized MessageInput to prevent re-creation
+  const MessageInput = useMemo(() => {
+    return Platform.OS === 'web' ? <WebInput selectedConversation={selectedConversation} /> : <MobileInput selectedConversation={selectedConversation} />;
+  }, [Platform.OS, selectedConversation]);
   
   const handleBookingRequest = async (modalData) => {
     try {
@@ -1852,9 +2303,9 @@ const MessageHistory = ({ navigation, route }) => {
     }
 
     // Calculate dynamic styles for mobile browsers
-    const mobileMessagesStyle = Platform.OS === 'web' && screenWidth <= 900 && actualViewportHeight ? {
-      height: actualViewportHeight - 128, // Account for header + input
-      maxHeight: actualViewportHeight - 128,
+    const mobileMessagesStyle = Platform.OS === 'web' && screenWidth <= 900 && actualViewportHeightRef.current ? {
+      height: actualViewportHeightRef.current - 128, // Account for header + input
+      maxHeight: actualViewportHeightRef.current - 128,
       paddingBottom: 20,
       overflowY: 'auto',
       WebkitOverflowScrolling: 'touch'
@@ -1942,7 +2393,7 @@ const MessageHistory = ({ navigation, route }) => {
                 </View>
               )}
             </View>
-            {Platform.OS === 'web' ? <WebInput /> : <MobileInput />}
+            {MessageInput}
           </View>
         </View>
       </View>
@@ -2327,6 +2778,35 @@ const MessageHistory = ({ navigation, route }) => {
       });
     }
   }, [selectedConversation]);
+
+  // Add state change tracking for debugging
+  useEffect(() => {
+    debugLog('MBA2u3f89fbno4: [STATE] selectedConversation changed', {
+      newValue: selectedConversation,
+      timestamp: Date.now()
+    });
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    debugLog('MBA2u3f89fbno4: [STATE] isSignedIn changed', {
+      newValue: isSignedIn,
+      timestamp: Date.now()
+    });
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    debugLog('MBA2u3f89fbno4: [STATE] loading changed', {
+      newValue: loading,
+      timestamp: Date.now()
+    });
+  }, [loading]);
+
+  useEffect(() => {
+    debugLog('MBA2u3f89fbno4: [STATE] screenWidth changed', {
+      newValue: screenWidth,
+      timestamp: Date.now()
+    });
+  }, [screenWidth]);
 
   // Add a loading overlay component at the bottom of the return statement, before any modals
   return (

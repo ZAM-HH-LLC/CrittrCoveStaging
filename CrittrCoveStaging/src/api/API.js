@@ -1145,3 +1145,25 @@ export const getClientDashboard = async () => {
   }
 };
 
+/**
+ * Logs input focus events to the backend for debugging mobile keyboard issues
+ * @param {string} eventType - Type of event (focus/blur)
+ * @param {Object} eventData - Additional event data
+ */
+export const logInputEvent = async (eventType, eventData = {}) => {
+  try {
+    await axios.post(`${API_BASE_URL}/api/core/v1/debug_log/`, {
+      message: `MBA92hc3h4kl: Input ${eventType} event`,
+      data: {
+        ...eventData,
+        platform: Platform.OS,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    // Silently fail - don't disrupt the app if logging fails
+    console.error('Failed to log input event:', error);
+  }
+};
+

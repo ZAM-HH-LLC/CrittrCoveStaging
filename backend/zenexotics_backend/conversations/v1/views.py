@@ -24,10 +24,14 @@ def get_conversations(request):
     """
     try:
         current_user = request.user
+        logger.info(f"MBA2314: Getting conversations for user {current_user.id}")
+        
         conversations = Conversation.objects.filter(
             models.Q(participant1=current_user) | 
             models.Q(participant2=current_user)
         ).order_by('-last_message_time')
+        
+        logger.info(f"MBA2314: Found {conversations.count()} conversations for user {current_user.id}")
 
         conversations_data = []
         for conversation in conversations:
@@ -35,9 +39,9 @@ def get_conversations(request):
             other_user = conversation.participant2 if conversation.participant1 == current_user else conversation.participant1
             
             # Determine if current user is the professional
-            # Check both user ID formats (prefixed and numeric) in the role map
-            is_professional = (conversation.role_map.get(str(current_user.user_id)) == 'professional' or 
-                             conversation.role_map.get(str(current_user.id)) == 'professional')
+            is_professional = conversation.role_map.get(str(current_user.id)) == 'professional'
+            
+            logger.info(f"MBA2314: Conversation {conversation.conversation_id} - role_map: {conversation.role_map}, is_professional: {is_professional}")
 
             # Check if the other participant is online using cache
             other_participant_online = cache.get(f"user_{other_user.id}_online", False)
@@ -56,6 +60,7 @@ def get_conversations(request):
                 'participant2_id': conversation.participant2.id
             })
 
+        logger.info(f"MBA2314: Returning {len(conversations_data)} conversations")
         return Response(conversations_data)
 
     except Exception as e:
@@ -98,74 +103,25 @@ def find_or_create_conversation(current_user, other_user, current_user_role, onl
     # Determine if the current user is the professional
     is_professional = current_user_role == 'professional'
     
-    if existing_conversations.exists():
-        # Look through all conversations for one with matching roles
+    # If only finding with role, check each conversation's role map
+    if only_find_with_role:
         for conversation in existing_conversations:
             role_map = conversation.role_map or {}
-            current_user_id_str = str(current_user.id)
-            
             logger.info(f"MBA2314: Checking conversation {conversation.conversation_id} with role_map: {role_map}")
             
-            # Check all possible formats of user ID in role map
-            # Format 1: Direct ID match ("1": "client")
-            # Format 2: Prefixed ID ("user_1": "client")
-            # Format 3: UUID format ("user_h8Udar0SJ": "client")
-            user_has_role = False
-            
-            # Check for direct ID match
+            # Check if current user has the specified role
+            current_user_id_str = str(current_user.id)
             if current_user_id_str in role_map and role_map[current_user_id_str] == current_user_role:
-                user_has_role = True
-                logger.info(f"MBA2314: Found direct ID match for user {current_user_id_str} with role {current_user_role}")
-            
-            # Check for prefixed ID matches
-            for key, role in role_map.items():
-                logger.info(f"MBA2314: Checking key={key}, role={role}")
-                # Check if key starts with "user_" and ends with the user ID
-                if (key.startswith('user_') and key.endswith(current_user_id_str)) or key == current_user_id_str:
-                    if role == current_user_role:
-                        user_has_role = True
-                        logger.info(f"MBA2314: Found match for key={key}, role={role}")
-                        break
-                # Also check for any key containing the user ID (general case for uuid formats)
-                elif key.startswith('user_') and role == current_user_role:
-                    user_has_role = True
-                    logger.info(f"MBA2314: Found UUID format match for key={key}, role={role}")
-                    break
-            
-            if user_has_role:
-                # Found a conversation where current user has the specified role
-                logger.info(f"MBA2314: Returning existing conversation {conversation.conversation_id} where user has role {current_user_role}")
+                logger.info(f"MBA2314: Found conversation {conversation.conversation_id} where user has role {current_user_role}")
                 return conversation, is_professional
         
         # No conversation found with matching roles
         logger.info(f"MBA2314: No conversation found with user {current_user.id} having role {current_user_role}")
-        
-        if only_find_with_role:
-            # If only finding (not creating), return None
-            logger.info(f"MBA2314: only_find_with_role is True, returning None")
-            return None, is_professional
-        
-        # Otherwise create a new conversation with correct roles
-        role_map = {
-            str(current_user.id): current_user_role,
-            str(other_user.id): other_user_role
-        }
-        
-        logger.info(f"MBA2314: Creating new conversation with role_map: {role_map}")
-        conversation = Conversation.objects.create(
-            participant1=current_user,
-            participant2=other_user,
-            role_map=role_map
-        )
-        return conversation, is_professional
+        logger.info(f"MBA2314: only_find_with_role is True, returning None")
+        return None, is_professional
     
     # No existing conversation
     logger.info(f"MBA2314: No existing conversations found between users")
-    
-    if only_find_with_role:
-        # If only finding (not creating), return None
-        logger.info(f"MBA2314: only_find_with_role is True, returning None")
-        return None, is_professional
     
     # Create a new conversation
     role_map = {
