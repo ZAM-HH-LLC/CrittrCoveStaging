@@ -49,24 +49,21 @@ def debug_log(request):
     Endpoint to receive debug logs from mobile clients
     """
     try:
-        message = request.data.get('message')
-        data = request.data.get('data')
-        timestamp = request.data.get('timestamp')
-        platform = request.data.get('platform')
-        user_agent = request.data.get('user_agent')
-
-        logger.info(
-            f"[MOBILE DEBUG] {message}",
-            extra={
-                'user_id': request.user.id,
-                'data': data,
-                'timestamp': timestamp,
-                'platform': platform,
-                'user_agent': user_agent
-            }
-        )
+        data = request.data
+        logger.info(f"[MOBILE DEBUG] Received debug log request: {data}")
+        
+        # Log the raw request data
+        logger.info(f"[MOBILE DEBUG] Raw request data: {request.body}")
+        
+        # Log headers that might affect input behavior
+        logger.info(f"[MOBILE DEBUG] Request headers: {dict(request.headers)}")
+        
+        # Log the specific input event data if it exists
+        if 'event_type' in data:
+            logger.info(f"[MOBILE DEBUG] Input event type: {data['event_type']}")
+            logger.info(f"[MOBILE DEBUG] Input event data: {data.get('data', {})}")
         
         return Response({'status': 'success'})
     except Exception as e:
-        logger.exception("Error processing debug log")
-        return Response({'status': 'error', 'message': str(e)}, status=400) 
+        logger.error(f"[MOBILE DEBUG] Error in debug_log: {str(e)}")
+        return Response({'error': str(e)}, status=400) 
