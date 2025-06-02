@@ -809,7 +809,6 @@ const MessageHistory = ({ navigation, route }) => {
   const [draftData, setDraftData] = useState(null);
   const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
-  const [forceRerender, setForceRerender] = useState(0); // Add this state to help with scroll issues
   const { resetNotifications, updateRoute, markConversationAsRead, getConversationUnreadCount } = useContext(MessageNotificationContext);
 
   // Add a ref to track if we're handling route params
@@ -862,29 +861,35 @@ const MessageHistory = ({ navigation, route }) => {
 
   // WebSocket message handler defined as a memoized callback
   const handleWebSocketMessage = useCallback((data) => {
-    debugLog('MBA3210: Received WebSocket message:', data);
+    debugLog('MBA2349f87g9qbh2nfv9cg: WebSocket message received:', {
+      type: data.type,
+      conversationId: data.conversation_id,
+      messageId: data.message_id,
+      selectedConversation,
+      currentMessageCount: messages.length
+    });
     
     try {
       // Validate message data
       if (!data || (!data.message_id && !data.conversation_id && !data.type)) {
-        debugLog('MBA3210: Invalid message data received');
+        debugLog('MBA2349f87g9qbh2nfv9cg: Invalid message data received');
         return;
       }
       
       // Handle user status updates
       if (data.type === 'user_status_update' && data.user_id) {
-        debugLog('MBA3210: [OTHER USER STATUS] Received online status update for user ID:', data.user_id);
+        debugLog('MBA2349f87g9qbh2nfv9cg: [OTHER USER STATUS] Received online status update for user ID:', data.user_id);
         
         // Normalize the user_id to string for comparison
         const statusUserId = String(data.user_id);
         const isOnline = !!data.is_online;
         
-        debugLog(`MBA3210: [OTHER USER STATUS] Processing status change for user ${statusUserId}, online=${isOnline}`);
+        debugLog(`MBA2349f87g9qbh2nfv9cg: [OTHER USER STATUS] Processing status change for user ${statusUserId}, online=${isOnline}`);
         
         // Update the conversations list with the new online status
         setConversations(prevConversations => {
           // Log the current conversations for debugging
-          debugLog(`MBA3210: [OTHER USER STATUS] Checking ${prevConversations.length} conversations for user ${statusUserId}`);
+          debugLog(`MBA2349f87g9qbh2nfv9cg: [OTHER USER STATUS] Checking ${prevConversations.length} conversations for user ${statusUserId}`);
           
           // Apply the update
           const updatedConversations = prevConversations.map(conv => {
@@ -896,7 +901,7 @@ const MessageHistory = ({ navigation, route }) => {
             const matchesUser = (statusUserId === participant1Id || statusUserId === participant2Id);
             
             if (matchesUser) {
-              debugLog(`MBA3210: [OTHER USER STATUS] Found match in conversation ${conv.conversation_id}, setting other_participant_online=${isOnline}`);
+              debugLog(`MBA2349f87g9qbh2nfv9cg: [OTHER USER STATUS] Found match in conversation ${conv.conversation_id}, setting other_participant_online=${isOnline}`);
               
               // Update this conversation with the new online status
               return {
@@ -912,7 +917,7 @@ const MessageHistory = ({ navigation, route }) => {
             (conv, i) => conv.other_participant_online !== prevConversations[i].other_participant_online
           ).length;
           
-          debugLog(`MBA3210: [OTHER USER STATUS] Updated ${updatedCount} conversations with new status for user ${statusUserId}`);
+          debugLog(`MBA2349f87g9qbh2nfv9cg: [OTHER USER STATUS] Updated ${updatedCount} conversations with new status for user ${statusUserId}`);
           
           return updatedConversations;
         });
@@ -929,7 +934,7 @@ const MessageHistory = ({ navigation, route }) => {
           
           // Check if selected conversation involves this user
           if (statusUserId === selectedParticipant1Id || statusUserId === selectedParticipant2Id) {
-            debugLog(`MBA3210: [OTHER USER STATUS] Updating selected conversation with online status: ${isOnline} for user ${statusUserId}`);
+            debugLog(`MBA2349f87g9qbh2nfv9cg: [OTHER USER STATUS] Updating selected conversation with online status: ${isOnline} for user ${statusUserId}`);
             
             setSelectedConversationData(prev => ({
               ...prev,
@@ -945,16 +950,22 @@ const MessageHistory = ({ navigation, route }) => {
       if (selectedConversation && data.conversation_id && 
           String(data.conversation_id) === String(selectedConversation)) {
         
-        debugLog('MBA3210: Message is for current conversation, adding to list');
+        debugLog('MBA2349f87g9qbh2nfv9cg: Message is for current conversation, adding to list');
         
         // Add the new message to the list (at the beginning since FlatList is inverted)
         setMessages(prevMessages => {
+          debugLog('MBA2349f87g9qbh2nfv9cg: Before adding WebSocket message:', {
+            currentMessageCount: prevMessages.length,
+            newMessageId: data.message_id,
+            newMessageContent: data.content?.substring(0, 50)
+          });
+          
           // Check if message already exists to avoid duplicates - be more thorough
           const messageExists = prevMessages.some(msg => {
             // Check by ID if available (most reliable)
             if (msg.message_id && data.message_id && 
                 String(msg.message_id) === String(data.message_id)) {
-              debugLog('MBA3210: Duplicate detected by ID');
+              debugLog('MBA2349f87g9qbh2nfv9cg: Duplicate detected by ID');
               return true;
             }
             
@@ -972,12 +983,12 @@ const MessageHistory = ({ navigation, route }) => {
                 
                 // 5 seconds tolerance (messages sent close to each other)
                 if (timeDiff < 5000) {
-                  debugLog('MBA3210: Duplicate detected by content+timestamp');
+                  debugLog('MBA2349f87g9qbh2nfv9cg: Duplicate detected by content+timestamp');
                   return true;
                 }
               } else {
                 // If no timestamp, just assume it's the same message
-                debugLog('MBA3210: Duplicate detected by content+sender');
+                debugLog('MBA2349f87g9qbh2nfv9cg: Duplicate detected by content+sender');
                 return true;
               }
             }
@@ -986,7 +997,7 @@ const MessageHistory = ({ navigation, route }) => {
             if (msg._isOptimistic && 
                 msg.content === data.content && 
                 !data.sent_by_other_user) {
-              debugLog('MBA3210: Found matching optimistic message, replacing');
+              debugLog('MBA2349f87g9qbh2nfv9cg: Found matching optimistic message, replacing');
               return true;
             }
             
@@ -994,11 +1005,11 @@ const MessageHistory = ({ navigation, route }) => {
           });
           
           if (messageExists) {
-            debugLog('MBA3210: Message already exists in the list, skipping');
+            debugLog('MBA2349f87g9qbh2nfv9cg: Message already exists in the list, skipping');
             
             // For optimistic messages that now have a real ID, update them
             if (data.message_id) {
-              return prevMessages.map(msg => {
+              const updatedMessages = prevMessages.map(msg => {
                 if (msg._isOptimistic && 
                     msg.content === data.content && 
                     !data.sent_by_other_user) {
@@ -1007,23 +1018,39 @@ const MessageHistory = ({ navigation, route }) => {
                 }
                 return msg;
               });
+              
+              debugLog('MBA2349f87g9qbh2nfv9cg: Updated optimistic message with real data');
+              return updatedMessages;
             }
             
             return prevMessages;
           }
           
-          debugLog('MBA3210: Adding new message to list:', data.message_id);
-          return [data, ...prevMessages];
+          debugLog('MBA2349f87g9qbh2nfv9cg: Adding new message to list:', {
+            messageId: data.message_id,
+            messageLength: prevMessages.length,
+            newMessageLength: prevMessages.length + 1
+          });
+          
+          const updatedMessages = [data, ...prevMessages];
+          
+          debugLog('MBA2349f87g9qbh2nfv9cg: Messages array updated via WebSocket:', {
+            oldLength: prevMessages.length,
+            newLength: updatedMessages.length,
+            addedMessageId: data.message_id
+          });
+          
+          return updatedMessages;
         });
         
         // Mark the message as read if we're viewing this conversation
         if (data.message_id && markMessagesAsReadRef.current && data.sent_by_other_user) {
-          debugLog('MBA3210: Marking message as read:', data.message_id);
+          debugLog('MBA2349f87g9qbh2nfv9cg: Marking message as read:', data.message_id);
           markMessagesAsReadRef.current(selectedConversation, [data.message_id]);
         }
       } else if (data.conversation_id) {
         // Update the conversation list for unread messages in other conversations
-        debugLog('MBA3210: Message is for another conversation, updating conversation list');
+        debugLog('MBA2349f87g9qbh2nfv9cg: Message is for another conversation, updating conversation list');
         setConversations(prevConversations => 
           prevConversations.map(conv => 
             String(conv.conversation_id) === String(data.conversation_id)
@@ -1038,7 +1065,7 @@ const MessageHistory = ({ navigation, route }) => {
         );
       }
     } catch (error) {
-      debugLog('MBA3210: Error handling WebSocket message:', error);
+      debugLog('MBA2349f87g9qbh2nfv9cg: Error handling WebSocket message:', error);
     }
   }, [selectedConversation]);
 
@@ -1057,7 +1084,7 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add a function to manually force reconnection
   const handleForceReconnect = useCallback(() => {
-    debugLog('MBA3210: [CONNECTION] User manually requested WebSocket reconnection');
+    debugLog('MBA2349f87g9qbh2nfv9cg: [CONNECTION] User manually requested WebSocket reconnection');
     if (typeof reconnect === 'function') {
       reconnect();
     }
@@ -1065,7 +1092,7 @@ const MessageHistory = ({ navigation, route }) => {
   
   // Add a function to simulate connection for testing
   // const handleSimulateConnection = useCallback(() => {
-  //   debugLog('MBA3210: User requested simulated connection');
+  //   debugLog('MBA2349f87g9qbh2nfv9cg: User requested simulated connection');
   //   if (typeof simulateConnection === 'function') {
   //     simulateConnection();
   //   }
@@ -1074,21 +1101,21 @@ const MessageHistory = ({ navigation, route }) => {
   // Update connection status UI and log more detailed information
   useEffect(() => {
     setWsConnectionStatus(connectionStatus);
-    // debugLog(`MBA3210: [MY CONNECTION] WebSocket connection status changed to ${connectionStatus}`);
-    // debugLog(`MBA3210: [MY CONNECTION] isConnected state: ${isConnected}`);
-    // debugLog(`MBA3210: [MY CONNECTION] isUsingFallback: ${isUsingFallback}`);
+    // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] WebSocket connection status changed to ${connectionStatus}`);
+    // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] isConnected state: ${isConnected}`);
+    // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] isUsingFallback: ${isUsingFallback}`);
     
     // Add more debug logs to check actual WebSocket readyState
     if (window && window.WebSocket) {
-      // debugLog(`MBA3210: [MY CONNECTION] WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
+      // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
     }
     
     // Only log status changes but don't trigger fetches here - that's handled in the mount effect
     if ((connectionStatus === 'connected' && isConnected) || isUsingFallback) {
-      debugLog('MBA3210: [MY CONNECTION] Connection fully verified as connected or using fallback');
+      debugLog('MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] Connection fully verified as connected or using fallback');
     } else {
-      debugLog('MBA3210: [MY CONNECTION] Connection not fully verified, status and state mismatch');
-      // debugLog(`MBA3210: [MY CONNECTION] Details - status: ${connectionStatus}, isConnected: ${isConnected}`);
+      debugLog('MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] Connection not fully verified, status and state mismatch');
+      // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] Details - status: ${connectionStatus}, isConnected: ${isConnected}`);
     }
   }, [connectionStatus, isConnected, isUsingFallback]);
   
@@ -1096,7 +1123,7 @@ const MessageHistory = ({ navigation, route }) => {
   useEffect(() => {
     // Short delay to allow other initializations to complete
     const timer = setTimeout(() => {
-      debugLog('MBA3210: [MY CONNECTION] Forcing reconnection on component mount');
+      debugLog('MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] Forcing reconnection on component mount');
       if (typeof reconnect === 'function') {
         reconnect();
       }
@@ -1109,7 +1136,7 @@ const MessageHistory = ({ navigation, route }) => {
   useEffect(() => {
     if (!initialLoadRef.current) return; // Skip if not initial load
 
-    debugLog('MBA3210: Component mounted - initializing data');
+    debugLog('MBA2349f87g9qbh2nfv9cg: Component mounted - initializing data');
     
     const initializeData = async () => {
       try {
@@ -1133,7 +1160,7 @@ const MessageHistory = ({ navigation, route }) => {
           if (currentUrl.searchParams.has('conversationId')) {
             currentUrl.searchParams.delete('conversationId');
             window.history.replaceState({}, '', currentUrl.toString());
-            debugLog('MBA3210: Cleared URL parameters on initial load');
+            debugLog('MBA2349f87g9qbh2nfv9cg: Cleared URL parameters on initial load');
           }
 
           // If we have a conversation ID in URL, we'll use that instead of auto-selecting
@@ -1151,7 +1178,7 @@ const MessageHistory = ({ navigation, route }) => {
           // Check if we should open booking creation (coming from Connections)
           if (route.params.isProfessional === true) {
             shouldOpenBookingCreationRef.current = true;
-            debugLog('MBA3210: Will open booking creation after data loads');
+            debugLog('MBA2349f87g9qbh2nfv9cg: Will open booking creation after data loads');
           }
           
           const conversationsData = await fetchConversations();
@@ -1184,7 +1211,7 @@ const MessageHistory = ({ navigation, route }) => {
     initializeData();
 
     return () => {
-      debugLog('MBA3210: Component unmounting - cleaning up');
+      debugLog('MBA2349f87g9qbh2nfv9cg: Component unmounting - cleaning up');
       
       // No longer disconnect on component unmount
       // This was causing message loss when switching tabs
@@ -1413,9 +1440,6 @@ const MessageHistory = ({ navigation, route }) => {
           debugLog(`MBA4321: Marking conversation ${selectedConversation} as read after successful message fetch`);
           markConversationAsRead(selectedConversation);
         }
-        
-        // Force a rerender to fix scrolling issues
-        setForceRerender(prev => prev + 1);
       })
       .catch(error => {
         if (!isCurrentOperation) return;
@@ -1525,27 +1549,44 @@ const MessageHistory = ({ navigation, route }) => {
   // Modify fetchMessages to handle pagination better and prevent duplicate requests
   const fetchMessages = async (conversationId, page = 1) => {
     try {
+      debugLog(`MBA2349f87g9qbh2nfv9cg: fetchMessages called`, {
+        conversationId,
+        page,
+        currentPage,
+        isLoadingMore: isLoadingMoreRef.current,
+        messagesLength: messages.length,
+        hasMore,
+        processedPagesSize: processedPagesRef.current.size
+      });
+      
       // Skip if we've already processed this page for the current conversation
       const pageKey = `${conversationId}-${page}`;
       if (processedPagesRef.current.has(pageKey) && page > 1) {
-        debugLog(`MBA4321: Skipping duplicate fetch for page ${page} of conversation ${conversationId}`);
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Skipping duplicate fetch for page ${page} of conversation ${conversationId}`);
         return;
       }
       
       if (page === 1) {
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Fetching page 1 - resetting messages list`);
         setIsLoadingMessages(true);
         // Reset messages when fetching first page
         setMessages([]);
         // Clear processed pages and message IDs when starting fresh
         processedPagesRef.current.clear();
         messageIdsRef.current.clear();
+        
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Reset state for page 1 fetch`, {
+          processedPagesCleared: processedPagesRef.current.size === 0,
+          messageIdsCleared: messageIdsRef.current.size === 0
+        });
       } else {
         // Set the loading ref first to block concurrent requests
         if (isLoadingMoreRef.current) {
-          debugLog(`MBA4321: Already loading more messages, skipping request for page ${page}`);
+          debugLog(`MBA2349f87g9qbh2nfv9cg: Already loading more messages, skipping request for page ${page}`);
           return;
         }
         
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Setting pagination loading state for page ${page}`);
         // Mark that we're loading more
         isLoadingMoreRef.current = true;
         setIsLoadingMore(true);
@@ -1553,11 +1594,12 @@ const MessageHistory = ({ navigation, route }) => {
       
       // Mark this page as being processed
       processedPagesRef.current.add(pageKey);
+      debugLog(`MBA2349f87g9qbh2nfv9cg: Added page ${pageKey} to processed pages. Total processed: ${processedPagesRef.current.size}`);
       
       const token = await getStorage('userToken');
       
       const url = `${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/?page=${page}`;
-      debugLog(`MBA4321: Fetching messages for conversation ${conversationId}, page ${page}`);
+      debugLog(`MBA2349f87g9qbh2nfv9cg: Making API request to ${url}`);
 
       const response = await axios.get(url, {
         headers: { 
@@ -1566,12 +1608,19 @@ const MessageHistory = ({ navigation, route }) => {
         }
       });
       
+      debugLog(`MBA2349f87g9qbh2nfv9cg: API response received for page ${page}`, {
+        messageCount: response.data.messages?.length || 0,
+        hasNext: response.data.has_more,
+        currentMessageCount: messages.length,
+        hasDraft: response.data.has_draft
+      });
+      
       // Process messages to remove duplicates
       const newMessages = response.data.messages || [];
       const uniqueMessages = newMessages.filter(msg => {
         // Skip messages we already have
         if (msg.message_id && messageIdsRef.current.has(msg.message_id)) {
-          debugLog(`MBA4321: Skipping duplicate message ${msg.message_id}`);
+          debugLog(`MBA2349f87g9qbh2nfv9cg: Skipping duplicate message ${msg.message_id}`);
           return false;
         }
         
@@ -1583,21 +1632,43 @@ const MessageHistory = ({ navigation, route }) => {
         return true;
       });
       
-      debugLog(`MBA4321: Received ${newMessages.length} messages, ${uniqueMessages.length} unique for page ${page}`);
+      debugLog(`MBA2349f87g9qbh2nfv9cg: Processed ${newMessages.length} messages, ${uniqueMessages.length} unique for page ${page}`);
       
       // Update the messages state based on the page
       if (page === 1) {
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Setting page 1 messages - count: ${uniqueMessages.length}`);
         setMessages(uniqueMessages);
+        setIsLoadingMessages(false);
+        setHasMore(response.data.has_more || false);
+        
         // Set draft data only on first page load
         setHasDraft(response.data.has_draft || false);
         setDraftData(response.data.draft_data || null);
         
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Page 1 state updated`, {
+          messageCount: uniqueMessages.length,
+          hasMore: response.data.has_more || false,
+          hasDraft: response.data.has_draft || false
+        });
+        
         // Force a rerender after setting messages to fix scroll issues
         setTimeout(() => {
-          setForceRerender(prev => prev + 1);
+          debugLog(`MBA2349f87g9qbh2nfv9cg: Triggering force rerender after page 1 load`);
         }, 100);
       } else {
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Appending page ${page} messages`, {
+          newCount: uniqueMessages.length,
+          existingCount: messages.length,
+          totalAfter: messages.length + uniqueMessages.length
+        });
+        
         setMessages(prev => {
+          debugLog(`MBA2349f87g9qbh2nfv9cg: Before pagination update`, {
+            existingMessagesLength: prev.length,
+            messagesToAdd: uniqueMessages.length,
+            page: page
+          });
+          
           // Create a set of existing message IDs for quick lookups
           const existingIds = new Set(prev.map(m => m.message_id).filter(Boolean));
           
@@ -1606,37 +1677,79 @@ const MessageHistory = ({ navigation, route }) => {
             !msg.message_id || !existingIds.has(msg.message_id)
           );
           
-          debugLog(`MBA4321: Adding ${messagesToAdd.length} unique messages to existing ${prev.length} messages`);
+          debugLog(`MBA2349f87g9qbh2nfv9cg: Filtered messages for pagination`, {
+            uniqueMessagesFromAPI: uniqueMessages.length,
+            afterDuplicateFilter: messagesToAdd.length,
+            existingIdsCount: existingIds.size
+          });
           
-          return [...prev, ...messagesToAdd];
+          const updatedMessages = [...prev, ...messagesToAdd];
+          
+          debugLog(`MBA2349f87g9qbh2nfv9cg: Messages array updated via pagination`, {
+            before: prev.length,
+            added: messagesToAdd.length,
+            after: updatedMessages.length,
+            pageBeingAdded: page
+          });
+          
+          return updatedMessages;
+        });
+        
+        setHasMore(response.data.has_more || false);
+        setIsLoadingMore(false);
+        isLoadingMoreRef.current = false;
+        
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Pagination state updated`, {
+          page,
+          hasMore: response.data.has_more || false,
+          isLoadingMore: false,
+          currentPageAfter: page
         });
       }
-      
-      // Update pagination state
-      setHasMore(response.data.has_more);
+
       setCurrentPage(page);
+      
+      debugLog(`MBA2349f87g9qbh2nfv9cg: fetchMessages completed successfully`, {
+        page,
+        finalMessageCount: page === 1 ? uniqueMessages.length : messages.length + uniqueMessages.length,
+        currentPage: page,
+        hasMore: response.data.has_more || false
+      });
+
+      setTimeout(() => {
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Messages state should be updated now`, {
+          page,
+          addedCount: uniqueMessages.length,
+          totalAfterUpdate: page === 1 ? uniqueMessages.length : (messages.length + uniqueMessages.length),
+          isLoadingMoreAfter: isLoadingMoreRef.current,
+          currentPageAfter: currentPage
+        });
+      }, 100);
 
     } catch (error) {
-      debugLog('MBABOSS [ERROR] Error in fetchMessages:', {
-        message: error.message,
+      debugLog(`MBA2349f87g9qbh2nfv9cg: Error in fetchMessages for page ${page}:`, {
+        error: error.message,
         response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-        method: error.config?.method
+        status: error.response?.status
       });
-    } finally {
+      console.error('Error fetching messages:', error);
       setIsLoadingMessages(false);
-      setIsLoadingMore(false);
-      // Reset the loading ref after a short delay to prevent rapid consecutive calls
-      setTimeout(() => {
+      if (page > 1) {
         isLoadingMoreRef.current = false;
-      }, 300);
+        setIsLoadingMore(false);
+      }
     }
   };
 
   // Function to send a message
   const SendNormalMessage = async (messageContent) => {
     try {
+      debugLog('MBA2349f87g9qbh2nfv9cg: SendNormalMessage called', {
+        messageLength: messageContent.length,
+        conversationId: selectedConversation,
+        currentMessageCount: messages.length
+      });
+      
       const token = await getStorage('userToken');
       const response = await axios.post(`${API_BASE_URL}/api/messages/v1/send_norm_message/`, {
         conversation_id: selectedConversation,
@@ -1648,8 +1761,21 @@ const MessageHistory = ({ navigation, route }) => {
         }
       });
 
+      debugLog('MBA2349f87g9qbh2nfv9cg: Message sent successfully', {
+        messageId: response.data.message_id,
+        timestamp: response.data.timestamp
+      });
+
       // Add new message to the beginning of the list since FlatList is inverted
-      setMessages(prevMessages => [response.data, ...prevMessages]);
+      setMessages(prevMessages => {
+        debugLog('MBA2349f87g9qbh2nfv9cg: Adding sent message to list', {
+          beforeLength: prevMessages.length,
+          afterLength: prevMessages.length + 1,
+          newMessageId: response.data.message_id
+        });
+        
+        return [response.data, ...prevMessages];
+      });
 
       // Update conversation's last message
       setConversations(prev => prev.map(conv => 
@@ -1662,8 +1788,10 @@ const MessageHistory = ({ navigation, route }) => {
           : conv
       ));
 
+      debugLog('MBA2349f87g9qbh2nfv9cg: SendNormalMessage completed successfully');
       return response.data;
     } catch (error) {
+      debugLog('MBA2349f87g9qbh2nfv9cg: Error in SendNormalMessage:', error);
       console.error('Error sending message:', error);
       throw error;
     }
@@ -1794,21 +1922,26 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Update loadMoreMessages to check current state before loading
   const loadMoreMessages = useCallback(() => {
-    if (is_DEBUG) {
-      console.log('MBA98765 loadMoreMessages called:', {
-        hasMore,
-        isLoadingMore,
-        isLoadingMoreRef: isLoadingMoreRef.current,
-        currentPage,
-        selectedConversation
-      });
-    }
+    debugLog('MBA2349f87g9qbh2nfv9cg: loadMoreMessages called', {
+      hasMore,
+      isLoadingMore,
+      isLoadingMoreRef: isLoadingMoreRef.current,
+      currentPage,
+      selectedConversation,
+      messagesLength: messages.length
+    });
     
     if (hasMore && !isLoadingMoreRef.current && selectedConversation) {
-      debugLog(`MBA4321: Loading more messages for page ${currentPage + 1}`);
+      debugLog(`MBA2349f87g9qbh2nfv9cg: Starting pagination load for page ${currentPage + 1}`);
       fetchMessages(selectedConversation, currentPage + 1);
+    } else {
+      debugLog('MBA2349f87g9qbh2nfv9cg: Not loading more messages - conditions not met', {
+        hasMore,
+        isLoadingMoreRefCurrent: isLoadingMoreRef.current,
+        selectedConversation: !!selectedConversation
+      });
     }
-  }, [hasMore, currentPage, selectedConversation]);
+  }, [hasMore, currentPage, selectedConversation, messages.length]);
 
   const renderMessage = useCallback(({ item }) => {
     // Create a map to keep track of which bookings have change requests and latest message timestamps
@@ -1979,6 +2112,7 @@ const MessageHistory = ({ navigation, route }) => {
             if (response && response.status) {
               Alert.alert('Success', 'Booking approved successfully');
               // Refresh messages to update the UI
+              debugLog(`MBA2349f87g9qbh2nfv9cg: Refreshing messages after approval success`);
               fetchMessages(selectedConversation, 1);
             }
           }}
@@ -2085,6 +2219,7 @@ const MessageHistory = ({ navigation, route }) => {
           onApproveSuccess={(response) => {
             if (response && response.status) {
               Alert.alert('Success', 'Changes handled successfully');
+              debugLog(`MBA2349f87g9qbh2nfv9cg: Refreshing messages after change approval`);
               fetchMessages(selectedConversation, 1);
             }
           }}
@@ -2471,6 +2606,11 @@ const MessageHistory = ({ navigation, route }) => {
   
   const handleBookingRequest = async (modalData) => {
     try {
+      debugLog('MBA2349f87g9qbh2nfv9cg: handleBookingRequest called', {
+        conversationId: modalData.conversation_id,
+        currentMessageCount: messages.length
+      });
+      
       const token = await getStorage('userToken');
       
       // First, create the booking request
@@ -2485,9 +2625,9 @@ const MessageHistory = ({ navigation, route }) => {
         }
       );
 
-      if (is_DEBUG) {
-        console.log('MBABOSS Created booking with ID:', bookingRequestResponse.data.booking_id);
-      }
+      debugLog('MBA2349f87g9qbh2nfv9cg: Booking request created', {
+        bookingId: bookingRequestResponse.data.booking_id
+      });
 
       // Then, send the booking request message with the booking ID
       const messageResponse = await axios.post(
@@ -2504,15 +2644,26 @@ const MessageHistory = ({ navigation, route }) => {
         }
       );
 
-      if (is_DEBUG) {
-        console.log('Sent message response:', messageResponse.data);
-      }
+      debugLog('MBA2349f87g9qbh2nfv9cg: Booking message sent', {
+        messageId: messageResponse.data.message_id,
+        bookingId: bookingRequestResponse.data.booking_id
+      });
 
       // Add the new message to the messages list
-      setMessages(prevMessages => [messageResponse.data, ...prevMessages]);
+      setMessages(prevMessages => {
+        debugLog('MBA2349f87g9qbh2nfv9cg: Adding booking request message to list', {
+          beforeLength: prevMessages.length,
+          afterLength: prevMessages.length + 1,
+          messageId: messageResponse.data.message_id
+        });
+        
+        return [messageResponse.data, ...prevMessages];
+      });
 
       setShowRequestModal(false);
+      debugLog('MBA2349f87g9qbh2nfv9cg: handleBookingRequest completed successfully');
     } catch (error) {
+      debugLog('MBA2349f87g9qbh2nfv9cg: Error in handleBookingRequest:', error);
       console.error('Error creating booking:', error);
       Alert.alert(
         'Error',
@@ -2702,11 +2853,99 @@ const MessageHistory = ({ navigation, route }) => {
     renderMessage, 
     loadMoreMessages, 
     isLoadingMore, 
-    hasMore, 
-    forceRerender 
+    hasMore 
   }) => {
+    const flatListRef = useRef(null);
+    const lastScrollYRef = useRef(0);
+    const scrollEventCountRef = useRef(0);
+    
+    const handleScroll = useCallback((event) => {
+      const currentScrollY = event.nativeEvent.contentOffset.y;
+      const contentHeight = event.nativeEvent.contentSize.height;
+      const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+      
+      scrollEventCountRef.current++;
+      
+      // Detect significant scroll jumps
+      const scrollDelta = Math.abs(currentScrollY - lastScrollYRef.current);
+      if (scrollDelta > 500) {
+        debugLog(`MBA2349f87g9qbh2nfv9cg: LARGE SCROLL JUMP DETECTED`, {
+          from: lastScrollYRef.current,
+          to: currentScrollY,
+          delta: scrollDelta,
+          messagesCount: messages.length,
+          contentHeight,
+          layoutHeight,
+          eventCount: scrollEventCountRef.current
+        });
+      }
+      
+      lastScrollYRef.current = currentScrollY;
+      
+      // Only log scroll events periodically to avoid spam
+      if (scrollEventCountRef.current % 10 === 0) {
+        debugLog(`MBA2349f87g9qbh2nfv9cg: Scroll position (every 10th event)`, {
+          scrollY: currentScrollY,
+          contentHeight,
+          layoutHeight,
+          messagesCount: messages.length,
+          eventCount: scrollEventCountRef.current,
+          lastScrollY: lastScrollYRef.current
+        });
+      }
+    }, [messages.length]);
+    
+    const handleEndReached = useCallback(() => {
+      debugLog(`MBA2349f87g9qbh2nfv9cg: onEndReached triggered`, {
+        scrollY: lastScrollYRef.current,
+        messagesCount: messages.length,
+        hasMore,
+        isLoadingMore
+      });
+      
+      loadMoreMessages();
+    }, [loadMoreMessages, messages.length, hasMore, isLoadingMore]);
+    
+    const handleMomentumScrollEnd = useCallback((event) => {
+      const scrollY = event.nativeEvent.contentOffset.y;
+      debugLog(`MBA2349f87g9qbh2nfv9cg: Scroll momentum ended`, {
+        scrollY,
+        messagesCount: messages.length,
+        lastScrollY: lastScrollYRef.current
+      });
+    }, [messages.length]);
+    
+    const handleContentSizeChange = useCallback((contentWidth, contentHeight) => {
+      debugLog(`MBA2349f87g9qbh2nfv9cg: FlatList content size changed`, {
+        contentWidth,
+        contentHeight,
+        messagesCount: messages.length,
+        currentScrollY: lastScrollYRef.current
+      });
+    }, [messages.length]);
+    
+    const handleLayoutChange = useCallback((event) => {
+      const { width, height } = event.nativeEvent.layout;
+      debugLog(`MBA2349f87g9qbh2nfv9cg: FlatList layout changed`, {
+        width,
+        height,
+        messagesCount: messages.length,
+        currentScrollY: lastScrollYRef.current
+      });
+    }, [messages.length]);
+    
+    // Log when messages prop changes
+    useEffect(() => {
+      debugLog(`MBA2349f87g9qbh2nfv9cg: MessageFlatList messages prop changed`, {
+        messageCount: messages.length,
+        firstMessageId: messages[0]?.message_id,
+        lastMessageId: messages[messages.length - 1]?.message_id
+      });
+    }, [messages]);
+    
     return (
       <FlatList
+        ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
         keyExtractor={item => {
@@ -2727,8 +2966,13 @@ const MessageHistory = ({ navigation, route }) => {
           return `message-${timestamp}-${senderHash}-${typeHash}-${contentHash}`;
         }}
         style={styles.messageList}
-        onEndReached={loadMoreMessages}
-        onEndReachedThreshold={0.3} // Reduced threshold to prevent multiple triggers
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.3}
+        onScroll={handleScroll}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        onContentSizeChange={handleContentSizeChange}
+        onLayout={handleLayoutChange}
+        scrollEventThrottle={16}
         inverted={true}
         contentContainerStyle={{
           flexGrow: 1,
@@ -2747,10 +2991,9 @@ const MessageHistory = ({ navigation, route }) => {
           />
         )}
         initialNumToRender={20}
-        maxToRenderPerBatch={10} // Lower value to improve rendering performance
-        windowSize={15} // Optimized window size
+        maxToRenderPerBatch={10}
+        windowSize={15}
         removeClippedSubviews={false}
-        extraData={forceRerender}
         getItemLayout={(data, index) => ({
           length: 100, // Estimated item height
           offset: 100 * index,
@@ -2806,8 +3049,7 @@ const MessageHistory = ({ navigation, route }) => {
                 renderMessage={renderMessage}
                 loadMoreMessages={loadMoreMessages}
                 isLoadingMore={isLoadingMore}
-                hasMore={hasMore}
-                forceRerender={forceRerender}
+                hasMore={hasMore} 
               />
             )}
           </View>
@@ -3215,10 +3457,22 @@ const MessageHistory = ({ navigation, route }) => {
   // Clear processed messages cache when switching conversations
   useEffect(() => {
     if (selectedConversation) {
+      debugLog('MBA2349f87g9qbh2nfv9cg: Clearing processed messages cache for new conversation', {
+        conversationId: selectedConversation,
+        previousCacheSize: processedPagesRef.current.size,
+        previousMessageIdsSize: messageIdsRef.current.size
+      });
+      
       // Reset our tracking refs when switching conversations
       processedPagesRef.current.clear();
       messageIdsRef.current.clear();
       isLoadingMoreRef.current = false;
+      
+      debugLog('MBA2349f87g9qbh2nfv9cg: Cache cleared for conversation switch', {
+        processedPagesSize: processedPagesRef.current.size,
+        messageIdsSize: messageIdsRef.current.size,
+        isLoadingMoreRef: isLoadingMoreRef.current
+      });
     }
   }, [selectedConversation]);
 
@@ -3305,7 +3559,7 @@ const MessageHistory = ({ navigation, route }) => {
           
           // Refresh message data when modal is closed to get latest draft status
           if (selectedConversation) {
-            debugLog('MBA6428: Refreshing message data after closing BookingStepModal');
+            debugLog('MBA2349f87g9qbh2nfv9cg: Refreshing message data after closing BookingStepModal');
             fetchMessages(selectedConversation, 1);
           }
         }}
@@ -3330,7 +3584,7 @@ const MessageHistory = ({ navigation, route }) => {
             
             // Refresh message data to get latest draft status
             if (selectedConversation) {
-              debugLog('MBA6428: Refreshing message data after booking error');
+              debugLog('MBA2349f87g9qbh2nfv9cg: Refreshing message data after booking error');
               fetchMessages(selectedConversation, 1);
             }
             
@@ -3339,7 +3593,19 @@ const MessageHistory = ({ navigation, route }) => {
           
           // Add the new booking message to the messages list
           if (bookingData.message) {
-            setMessages(prevMessages => [bookingData.message, ...prevMessages]);
+            debugLog('MBA2349f87g9qbh2nfv9cg: Adding booking completion message to list', {
+              messageId: bookingData.message.message_id,
+              currentMessageCount: messages.length
+            });
+            
+            setMessages(prevMessages => {
+              const updatedMessages = [bookingData.message, ...prevMessages];
+              debugLog('MBA2349f87g9qbh2nfv9cg: Booking message added to list', {
+                oldLength: prevMessages.length,
+                newLength: updatedMessages.length
+              });
+              return updatedMessages;
+            });
             
             // Update conversation's last message with appropriate text
             const lastMessageText = bookingData.isUpdate 
@@ -3367,7 +3633,7 @@ const MessageHistory = ({ navigation, route }) => {
           
           // Refresh message data to get latest draft status
           if (selectedConversation) {
-            debugLog('MBA6428: Refreshing message data after successful booking completion');
+            debugLog('MBA2349f87g9qbh2nfv9cg: Refreshing message data after successful booking completion');
             fetchMessages(selectedConversation, 1);
           }
 
