@@ -613,158 +613,44 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [selectedConversationData, hasLoadedMessagesRef.current, hasDraft, draftData, isSignedIn]);
 
-  // Keep the conversation selection effect but remove message fetching and add safety checks
+  // Effect to update selected conversation data when conversations are loaded
   useEffect(() => {
-    if (!selectedConversation || isInitialLoad || !isSignedIn) {
-      if (is_DEBUG) {
-        console.log('MBA98765 Skipping conversation data update - initial load, no conversation, or not signed in');
-      }
+    if (!selectedConversation || !isSignedIn) {
+      debugLog('MBA98765 Skipping conversation data update - no conversation or not signed in');
       return;
     }
 
-    // Skip redundant updates if we're already viewing this conversation
-    if (lastViewedConversationRef.current === selectedConversation) {
-      if (is_DEBUG) {
-        console.log('MBA98765 Skipping redundant conversation update - already viewing this conversation');
-      }
-      return;
-    }
-
-    // Skip if conversations list is empty (still loading)
-    if (conversations.length === 0) {
-      debugLog('MBA98765 Skipping conversation update - no conversations loaded yet');
-      return;
-    }
-
-    if (is_DEBUG) {
-      console.log('MBA98765 Selected conversation changed:', {
-        id: selectedConversation,
-        type: typeof selectedConversation,
-        isHandlingRouteParams: isHandlingRouteParamsRef.current
-      });
-    }
-
-    // Update global tracking of selected conversation
-    if (typeof window !== 'undefined') {
-      window.selectedConversationId = selectedConversation;
-      debugLog(`MBA4321: Updated global selectedConversationId to ${selectedConversation}`);
-    }
-
-    // Find the conversation in our list
-    const conversation = conversations.find(conv => String(conv.conversation_id) === String(selectedConversation));
-    
+    const conversation = conversations.find(c => c.conversation_id === selectedConversation);
     if (conversation) {
-      debugLog(`MBA3210: [OTHER USER STATUS] Setting selected conversation to ${conversation.conversation_id} with user "${conversation.other_user_name}"`);
-      debugLog(`MBA3210: [OTHER USER STATUS] Initial online status for "${conversation.other_user_name}": ${conversation.other_participant_online ? 'ONLINE' : 'OFFLINE'}`);
-      
+      debugLog('MBA98765 Updating selected conversation data:', {
+        conversation_id: conversation.conversation_id,
+        is_professional: conversation.is_professional,
+        other_user_name: conversation.other_user_name
+      });
       setSelectedConversationData(conversation);
-      
-      // Mark this conversation as read in the notification context
-      if (markConversationAsRead) {
-        debugLog(`MBA4321: Marking ONLY conversation ${selectedConversation} as read when selected`);
-        markConversationAsRead(selectedConversation);
-      }
-      
-      // Update URL on web platform
-      if (Platform.OS === 'web') {
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('conversationId', selectedConversation);
-        window.history.replaceState({}, '', newUrl.toString());
-      }
-
-      // Reset pagination state
-      setCurrentPage(1);
-      setHasMore(true);
-      
-      // IMPORTANT: Reset message loading flag for new conversation
-      // This ensures messages will be fetched for the new conversation
-      hasLoadedMessagesRef.current = false;
-      
-      // Update the last viewed conversation
-      lastViewedConversationRef.current = selectedConversation;
     } else {
-      if (is_DEBUG) {
-        console.log('MBA98765 Could not find conversation data for ID:', selectedConversation);
-      }
-      debugLog(`MBA3210: [OTHER USER STATUS] Could not find conversation data for ID: ${selectedConversation}`);
+      debugLog('MBA98765 Selected conversation not found in conversations list');
+      // If we have a selected conversation but it's not in the list,
+      // we should fetch conversations again
+      fetchConversations();
     }
-  }, [selectedConversation, isSignedIn]); // Simplified dependencies - removed conversations, isInitialLoad, markConversationAsRead
+  }, [selectedConversation, conversations, isSignedIn]);
 
-  // SAFE message fetching effect - separated and with safety checks
+  // Effect to fetch messages when conversation is selected
   useEffect(() => {
-    if (!selectedConversation || isInitialLoad || !isSignedIn) {
+    if (!selectedConversation || !isSignedIn) {
+      debugLog('MBA98765 Skipping message fetch - no conversation selected or not signed in');
       return;
     }
 
-    // Skip if conversations list is empty (still loading)
-    if (conversations.length === 0) {
-      debugLog('MBA98765 Skipping message fetch - no conversations loaded yet');
-      return;
+    // Only fetch if we haven't loaded messages for this conversation yet
+    if (!hasLoadedMessagesRef.current || lastViewedConversationRef.current !== selectedConversation) {
+      debugLog('MBA98765 Fetching messages for conversation:', selectedConversation);
+      fetchMessages(selectedConversation, 1);
+      hasLoadedMessagesRef.current = true;
+      lastViewedConversationRef.current = selectedConversation;
     }
-
-    // Skip if we've already loaded messages for this conversation and nothing has changed
-    const hasSelectedConversationChanged = lastViewedConversationRef.current !== selectedConversation;
-    
-    if (!hasSelectedConversationChanged && hasLoadedMessagesRef.current) {
-      debugLog('MBA4321: Skipping message fetch - conversation unchanged and messages already loaded');
-      return;
-    }
-
-    if (is_DEBUG) {
-      console.log('MBA98765 Fetching messages for conversation:', {
-        id: selectedConversation,
-        hasLoaded: hasLoadedMessagesRef.current,
-        hasChanged: hasSelectedConversationChanged,
-        shouldOpenBookingCreation: shouldOpenBookingCreationRef.current
-      });
-    }
-
-    // Create a flag to track if this effect's async operation is still relevant
-    let isCurrentOperation = true;
-    
-    // Set loading state but DON'T set hasLoadedMessagesRef.current = true yet
-    // That should only be set after successful completion
-    setIsLoadingMessages(true);
-    
-    // Fetch messages with safety checks
-    fetchMessages(selectedConversation, 1)
-      .then(() => {
-        // Skip updates if component unmounted or conversation changed or user signed out
-        if (!isCurrentOperation || !isSignedIn) return;
-        
-        // NOW set the loaded flag after successful completion
-        hasLoadedMessagesRef.current = true;
-        setIsLoadingMessages(false);
-        
-        // After messages are loaded, if we need to open booking creation,
-        // we now have hasDraft and draftData set properly
-        if (shouldOpenBookingCreationRef.current && selectedConversationData) {
-          if (is_DEBUG) {
-            console.log('MBA98765 Messages loaded, now draft data is available');
-          }
-        }
-        
-        // Mark this specific conversation's notifications as read 
-        // We do this here after successful message fetch to ensure it actually happened
-        if (markConversationAsRead && hasSelectedConversationChanged && isSignedIn) {
-          debugLog(`MBA4321: Marking conversation ${selectedConversation} as read after successful message fetch`);
-          markConversationAsRead(selectedConversation);
-        }
-      })
-      .catch(error => {
-        if (!isCurrentOperation) return;
-        
-        // Reset loading state on error
-        setIsLoadingMessages(false);
-        // Don't set hasLoadedMessagesRef.current = true on error, so it can be retried
-        console.error('Error fetching messages:', error);
-      });
-    
-    // Cleanup function
-    return () => {
-      isCurrentOperation = false;
-    };
-  }, [selectedConversation, isSignedIn]); // Simplified dependencies - removed isInitialLoad, markConversationAsRead
+  }, [selectedConversation, isSignedIn]);
 
   // Modify existing screen width effect to be safer
   useEffect(() => {
@@ -825,9 +711,25 @@ const MessageHistory = ({ navigation, route }) => {
       const data = await getConversations();
       
       if (data && Array.isArray(data)) {
-        debugLog('MBA98765 Conversations fetched successfully:', data.length);
+        debugLog('MBA98765 Conversations fetched successfully:', {
+          count: data.length,
+          conversations: data.map(c => ({
+            conversation_id: c.conversation_id,
+            is_professional: c.is_professional,
+            other_user_name: c.other_user_name
+          }))
+        });
+        
         setConversations(data);
         setFilteredConversations(data);
+        
+        // If we have a selected conversation, make sure it's in the list
+        if (selectedConversation) {
+          const conversation = data.find(c => c.conversation_id === selectedConversation);
+          if (conversation) {
+            setSelectedConversationData(conversation);
+          }
+        }
         
         return data;
       } else {

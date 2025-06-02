@@ -527,23 +527,29 @@ export const AuthProvider = ({ children }) => {
       debugLog(`MBA1111 AUTH REDIRECT CHECK: Current path detected as: ${currentPath}`);
       
       // List of protected paths that require authentication
+      // TODO: When adding new screens, make sure to add them to the protectedPaths array
       const protectedPaths = [
-        '/dashboard',
-        '/my-profile', 
+        '/Dashboard',
+        '/MyProfile', 
+        '/my-profile',
+        '/MessageHistory',
         '/message-history',
-        '/owner-history',
+        '/OwnerHistory',
+        '/BecomeProfessional',
         '/become-professional',
-        '/more',
-        '/owners',
-        '/availability-settings',
-        '/settings',
-        '/professional-settings',
-        '/professional-profile',
-        '/my-contracts',
-        '/change-password',
-        '/my-bookings',
+        '/More',
+        '/Owners',
+        '/AvailabilitySettings',
+        '/Settings',
+        '/ProfessionalSettings',
+        '/ProfessionalProfile',
+        '/MyContracts',
+        '/ChangePassword',
+        '/MyBookings',
+        '/ServiceManager',
         '/service-manager',
-        '/test-toast',
+        '/TestToast',
+        '/Connections',
         '/connections'
       ];
       

@@ -2,7 +2,6 @@ import React, { useContext, useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Platform, SafeAreaView, Dimensions, StatusBar, TouchableOpacity, Text } from 'react-native';
 import { Card, Title, Paragraph, List, Button, useTheme, Appbar, ActivityIndicator, Avatar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext, debugLog } from '../context/AuthContext';
@@ -11,7 +10,7 @@ import CrossPlatformView from '../components/CrossPlatformView';
 import { theme } from '../styles/theme';
 import { navigateToFrom } from '../components/Navigation';
 import ProfessionalServiceCard from '../components/ProfessionalServiceCard';
-import { getProfessionalServices } from '../api/API';
+import { getProfessionalServices, getProfessionalDashboard, getClientDashboard } from '../api/API';
 import BookingCard from '../components/BookingCard';
 import TutorialModal from '../components/TutorialModal';
 import BookingApprovalModal from '../components/BookingApprovalModal';
@@ -135,43 +134,26 @@ const Dashboard = ({ navigation }) => {
     },
   };
 
-  const refreshToken = async () => {
-    try {
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
-      const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
-        refresh: refreshToken,
-      });
-      const { access } = response.data;
-      await AsyncStorage.setItem('userToken', access);
-      return access;
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-      await signOut();
-      navigation.navigate('SignIn');
-    }
-  };
-
-  // Prototype data
-  const prototypeBookings = [
-    { id: '56782', owner: 'John Doe', pet: 'Max (Dog)', date: '2023-05-15', time: '14:00', status: 'upcoming' },
-    { id: '5678', owner: 'Jane Smith', pet: 'Whiskers (Cat)', date: '2023-05-17', time: '10:00', status: 'active' },
-  ];
-
-  const prototypeServices = [
-    {
-      service_name: "Dog Walking",
-      description: "Professional dog walking service",
-      unit_of_time: "30 minutes",
-      base_rate: 25,
-      additional_animal_rate: 10,
-      holiday_rate: 35,
-      additional_rates: []
-    },
-    // Add more prototype services as needed
-  ];
-
   const fetchDashboardData = async () => {
     if (is_prototype) {
+      // Prototype data
+      const prototypeBookings = [
+        { id: '56782', owner: 'John Doe', pet: 'Max (Dog)', date: '2023-05-15', time: '14:00', status: 'upcoming' },
+        { id: '5678', owner: 'Jane Smith', pet: 'Whiskers (Cat)', date: '2023-05-17', time: '10:00', status: 'active' },
+      ];
+
+      const prototypeServices = [
+        {
+          service_name: "Dog Walking",
+          description: "Professional dog walking service",
+          unit_of_time: "30 minutes",
+          base_rate: 25,
+          additional_animal_rate: 10,
+          holiday_rate: 35,
+          additional_rates: []
+        },
+      ];
+
       setBookings(prototypeBookings);
       setServices(prototypeServices);
       setOnboardingProgress({
@@ -186,20 +168,17 @@ const Dashboard = ({ navigation }) => {
 
     try {
       setIsLoading(true);
-      let token = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : await AsyncStorage.getItem('userToken');
       
-      // Fetch bookings based on user role
-      const endpoint = isProfessional ? 'professionals' : 'clients';
-      const response = await axios.get(
-        `${API_BASE_URL}/api/${endpoint}/v1/dashboard/`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      // Use API.js functions which will be properly intercepted by AuthContext
+      const dashboardData = isProfessional 
+        ? await getProfessionalDashboard()
+        : await getClientDashboard();
 
-      debugLog('MBA5677: Dashboard response data', response.data);
+      debugLog('MBA5677: Dashboard response data', dashboardData);
       
       // Log the structure of the first booking for debugging
-      if (response.data && response.data.upcoming_bookings && response.data.upcoming_bookings.length > 0) {
-        const firstBooking = response.data.upcoming_bookings[0];
+      if (dashboardData && dashboardData.upcoming_bookings && dashboardData.upcoming_bookings.length > 0) {
+        const firstBooking = dashboardData.upcoming_bookings[0];
         debugLog('MBA5677: First booking complete structure', firstBooking);
         
         // Log all the keys in the booking object to see available fields
@@ -214,7 +193,7 @@ const Dashboard = ({ navigation }) => {
       }
 
       // Process the incoming bookings to ensure dates are properly formatted
-      const processedBookings = (response.data.upcoming_bookings || []).map(booking => {
+      const processedBookings = (dashboardData.upcoming_bookings || []).map(booking => {
         debugLog('MBA5677: Processing booking', booking);
         
         // Make sure we have a valid booking object
@@ -241,7 +220,7 @@ const Dashboard = ({ navigation }) => {
       debugLog('MBA5677: Processed bookings', processedBookings);
       setBookings(processedBookings);
       
-      setOnboardingProgress(response.data.onboarding_progress || {
+      setOnboardingProgress(dashboardData.onboarding_progress || {
         profile_complete: 0,
         has_bank_account: false,
         has_services: false,
@@ -258,28 +237,14 @@ const Dashboard = ({ navigation }) => {
         }
       }
     } catch (error) {
-      if (error.response?.status === 401) {
-        const newToken = await refreshToken();
-        if (newToken) {
-          try {
-            // Retry fetching data with new token
-            const response = await axios.get(
-              `${API_BASE_URL}/api/${isProfessional ? 'professionals' : 'owners'}/v1/dashboard/`,
-              { headers: { Authorization: `Bearer ${newToken}` } }
-            );
-            setBookings(response.data.upcoming_bookings || []);
-            setOnboardingProgress(response.data.onboarding_progress || {
-              profile_complete: 0,
-              has_bank_account: false,
-              has_services: false,
-              subscription_plan: 0
-            });
-          } catch (retryError) {
-            console.error('Error fetching dashboard data after token refresh:', retryError);
-          }
-        }
-      } else {
-        console.error('Error fetching dashboard data:', error);
+      // AuthContext will handle 401 errors and redirect to sign-in automatically
+      // We just need to handle other types of errors here
+      console.error('Error fetching dashboard data:', error);
+      
+      // Only handle non-auth errors (AuthContext handles 401s)
+      if (error.response?.status !== 401) {
+        // Handle other errors if needed
+        debugLog('MBA5677: Non-auth error in dashboard fetch:', error);
       }
     } finally {
       setIsLoading(false);

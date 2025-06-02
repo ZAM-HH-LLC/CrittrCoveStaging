@@ -1095,24 +1095,52 @@ export const getConversations = async () => {
  */
 export const getConversationMessages = async (conversationId, page = 1) => {
   try {
-    debugLog(`MBA2349f87g9qbh2nfv9cg: Fetching messages for conversation ${conversationId}, page ${page}`);
+    debugLog('MBA4321: Fetching messages for conversation:', conversationId, 'page:', page);
     
-    const response = await axios.get(
-      `${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/`,
-      {
-        params: { page }
-      }
-    );
-    
-    debugLog(`MBA2349f87g9qbh2nfv9cg: Messages fetched successfully`, {
-      messageCount: response.data.messages?.length || 0,
-      hasNext: response.data.has_more,
-      hasDraft: response.data.has_draft
+    const response = await axios.get(`${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/`, {
+      params: { page }
     });
     
+    debugLog('MBA4321: Messages fetched successfully:', response.data);
     return response.data;
   } catch (error) {
-    debugLog(`MBA2349f87g9qbh2nfv9cg: Error fetching messages for conversation ${conversationId}:`, error);
+    debugLog('MBA4321: Error fetching messages:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get dashboard data for professionals
+ * @returns {Promise<Object>} - Dashboard data including bookings and onboarding progress
+ */
+export const getProfessionalDashboard = async () => {
+  try {
+    debugLog('MBA5677: Fetching professional dashboard data');
+    
+    const response = await axios.get(`${API_BASE_URL}/api/professionals/v1/dashboard/`);
+    
+    debugLog('MBA5677: Professional dashboard data fetched successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA5677: Error fetching professional dashboard data:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get dashboard data for clients/owners
+ * @returns {Promise<Object>} - Dashboard data including bookings and onboarding progress
+ */
+export const getClientDashboard = async () => {
+  try {
+    debugLog('MBA5677: Fetching client dashboard data');
+    
+    const response = await axios.get(`${API_BASE_URL}/api/clients/v1/dashboard/`);
+    
+    debugLog('MBA5677: Client dashboard data fetched successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA5677: Error fetching client dashboard data:', error);
     throw error;
   }
 };
