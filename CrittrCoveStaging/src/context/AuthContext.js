@@ -490,6 +490,106 @@ export const AuthProvider = ({ children }) => {
   const [is_prototype, setIsPrototype] = useState(false);
   const [is_DEBUG, setIsDebug] = useState(true);
 
+  // Protected routes that require authentication
+  const protectedRoutes = ['Dashboard', 'MyProfile', 'MessageHistory', 'OwnerHistory', 'BecomeProfessional', 'More', 'Owners', 'AvailabilitySettings', 'Settings', 'ProfessionalSettings', 'ProfessionalProfile', 'MyContracts', 'ChangePassword', 'MyBookings', 'ServiceManager', 'TestToast', 'Connections'];
+
+  // Simple redirect effect for users without tokens on protected routes
+  useEffect(() => {
+    // Don't check for redirects until auth has been initialized
+    if (!isInitializedRef.current) {
+      debugLog('MBA1111 AUTH REDIRECT: Auth not yet initialized, skipping redirect check');
+      return;
+    }
+    
+    if (!loading && !isSignedIn && typeof window !== 'undefined') {
+      // Log full URL info for debugging
+      debugLog(`MBA1111 AUTH REDIRECT: Full URL: ${window.location.href}`);
+      debugLog(`MBA1111 AUTH REDIRECT: Pathname: ${window.location.pathname}`);
+      debugLog(`MBA1111 AUTH REDIRECT: Hash: ${window.location.hash}`);
+      debugLog(`MBA1111 AUTH REDIRECT: Search: ${window.location.search}`);
+      
+      // Get the current path - prioritize pathname over hash
+      // The pathname represents where the user actually is, 
+      // while hash might be from previous navigation
+      let currentPath = window.location.pathname;
+      
+      // Only use hash if pathname is root/empty and we have a meaningful hash
+      if ((currentPath === '/' || currentPath === '') && 
+          window.location.hash && 
+          window.location.hash.startsWith('#/') && 
+          window.location.hash.length > 2) {
+        currentPath = window.location.hash.substring(1); // Remove the #
+        debugLog(`MBA1111 AUTH REDIRECT: Using hash-based path (pathname was root): ${currentPath}`);
+      } else {
+        debugLog(`MBA1111 AUTH REDIRECT: Using pathname (primary route): ${currentPath}`);
+      }
+      
+      debugLog(`MBA1111 AUTH REDIRECT CHECK: Current path detected as: ${currentPath}`);
+      
+      // List of protected paths that require authentication
+      const protectedPaths = [
+        '/dashboard',
+        '/my-profile', 
+        '/message-history',
+        '/owner-history',
+        '/become-professional',
+        '/more',
+        '/owners',
+        '/availability-settings',
+        '/settings',
+        '/professional-settings',
+        '/professional-profile',
+        '/my-contracts',
+        '/change-password',
+        '/my-bookings',
+        '/service-manager',
+        '/test-toast',
+        '/connections'
+      ];
+      
+      // Check if current path matches any protected path
+      const isOnProtectedRoute = protectedPaths.some(path => {
+        const matches = currentPath.startsWith(path) || currentPath === path;
+        if (matches) {
+          debugLog(`MBA1111 AUTH REDIRECT: Matched protected path ${path} with current path ${currentPath}`);
+        }
+        return matches;
+      });
+      
+      if (isOnProtectedRoute) {
+        debugLog(`MBA1111 AUTH REDIRECT: User not signed in on protected route ${currentPath}, redirecting to SignIn`);
+        
+        // Use navigation system instead of window.location.href
+        try {
+          navigate('SignIn');
+          debugLog('MBA1111 AUTH REDIRECT: Navigation to SignIn successful');
+        } catch (error) {
+          debugLog('MBA1111 AUTH REDIRECT: Navigation failed, using fallback redirect:', error);
+          // Fallback to direct URL manipulation
+          if (window.location.hash) {
+            window.location.hash = '#/signin';
+            debugLog('MBA1111 AUTH REDIRECT: Used hash fallback redirect');
+          } else {
+            window.location.href = '/signin';
+            debugLog('MBA1111 AUTH REDIRECT: Used href fallback redirect');
+          }
+        }
+      } else {
+        debugLog(`MBA1111 AUTH REDIRECT: Current path ${currentPath} is not protected, no redirect needed`);
+      }
+    } else {
+      if (loading) {
+        debugLog('MBA1111 AUTH REDIRECT: Still loading, skipping redirect check');
+      }
+      if (isSignedIn) {
+        debugLog('MBA1111 AUTH REDIRECT: User is signed in, no redirect needed');
+      }
+      if (typeof window === 'undefined') {
+        debugLog('MBA1111 AUTH REDIRECT: Not in browser environment, skipping redirect check');
+      }
+    }
+  }, [isSignedIn, loading]);
+
   // Sign out function with comprehensive cleanup and reason tracking
   const signOut = async (reason = 'user_action') => {
     debugLog('MBA1111 signOut called with reason:', reason);
@@ -502,6 +602,14 @@ export const AuthProvider = ({ children }) => {
       }
       
       authService.current.isSigningOut = true;
+      
+      // For token expiry or validation failures, immediately set signed out state
+      // to prevent user from seeing stale content
+      if (reason.includes('validation') || reason.includes('expired') || reason.includes('no_valid')) {
+        debugLog('MBA1111 Immediate state update for auth failure');
+        setIsSignedIn(false);
+        setLoading(false); // Ensure loading is false so redirect can happen
+      }
       
       // Clear any pending sign out
       if (signOutTimeoutRef.current) {
@@ -548,15 +656,44 @@ export const AuthProvider = ({ children }) => {
       authService.current.accessToken = null;
       authService.current.refreshToken = null;
       
-      // Navigate to sign in
-      setTimeout(() => {
-        navigate('SignIn');
-      }, 0);
+      // Navigate to sign in with more explicit handling
+      const navigateToSignIn = () => {
+        try {
+          debugLog('MBA1111 Navigating to SignIn screen due to:', reason);
+          navigate('SignIn');
+        } catch (navError) {
+          console.error('MBA1111 Navigation error during signOut:', navError);
+          // Fallback: try direct navigation
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.location.hash = '#/signin';
+          }
+        }
+      };
+      
+      // For auth failures, navigate immediately
+      if (reason.includes('validation') || reason.includes('expired') || reason.includes('no_valid') || reason.includes('server_validation')) {
+        debugLog('MBA1111 Immediate navigation for auth failure');
+        navigateToSignIn();
+      } else {
+        // For user-initiated sign outs, small delay
+        setTimeout(navigateToSignIn, 0);
+      }
       
       debugLog('MBA1111 Sign out completed successfully');
       
     } catch (error) {
       debugLog('MBA1111 Error during sign out:', error);
+      
+      // Even if there's an error, ensure we're in signed out state
+      setIsSignedIn(false);
+      setLoading(false);
+      
+      // Try to navigate anyway
+      try {
+        navigate('SignIn');
+      } catch (navError) {
+        console.error('MBA1111 Failed to navigate after signOut error:', navError);
+      }
     } finally {
       authService.current.isSigningOut = false;
     }
@@ -602,6 +739,17 @@ export const AuthProvider = ({ children }) => {
               
               // If no token and this is a protected endpoint, don't proceed
               if (config.url.includes('/api/') && !config.url.includes('/auth/') && !config.url.includes('/token/')) {
+                
+                // CRITICAL CHECK: If UI thinks user is signed in but we have no token,
+                // this indicates a serious state inconsistency that needs immediate resolution
+                if (isSignedIn) {
+                  debugLog('MBA9999 CRITICAL: UI shows signed in but no token for protected endpoint - forcing immediate sign out');
+                  // Use setTimeout to avoid interfering with the current request flow
+                  setTimeout(() => {
+                    signOut('no_token_but_ui_signed_in');
+                  }, 0);
+                }
+                
                 const error = new Error('No authentication token available');
                 error.name = 'NoTokenError';
                 throw error;
@@ -610,6 +758,20 @@ export const AuthProvider = ({ children }) => {
           } catch (error) {
             console.error('MBA1111 Error getting access token for request:', error);
             debugLog(`MBA9999 Token error for request: ${config.method?.toUpperCase()} ${config.url}`, error);
+            
+            // If the error is due to auth service issues and UI thinks user is signed in,
+            // this could indicate state inconsistency
+            if (isSignedIn && error.message && (
+              error.message.includes('No authentication token') || 
+              error.message.includes('expired') ||
+              error.message.includes('invalid')
+            )) {
+              debugLog('MBA9999 Auth service error while UI shows signed in - potential state inconsistency');
+              setTimeout(() => {
+                signOut('auth_service_error_while_signed_in');
+              }, 0);
+            }
+            
             throw error;
           }
         } else {
@@ -790,55 +952,139 @@ export const AuthProvider = ({ children }) => {
       
       try {
         debugLog('MBA1111 Initializing auth state');
+        
+        // Log current URL at start of initialization
+        if (typeof window !== 'undefined') {
+          debugLog(`MBA1111 INIT: Current URL at start: ${window.location.href}`);
+          debugLog(`MBA1111 INIT: Current pathname: ${window.location.pathname}`);
+          debugLog(`MBA1111 INIT: Current hash: ${window.location.hash}`);
+        }
+        
         const { hasAccessToken, hasRefreshToken } = await authService.current.initialize();
         
         if (hasAccessToken || hasRefreshToken) {
-          const token = await authService.current.getAccessToken();
-          if (token) {
-            const isValid = await authService.current.validateToken(token);
-            if (isValid) {
-              setIsSignedIn(true);
-              await fetchUserName();
-              const status = await getProfessionalStatus(token);
-              
-              // Check for stored user role preference first
-              let storedRole = null;
-              try {
-                storedRole = await getStorage('userRole');
-              } catch (error) {
-                console.error('MBA1111 Error getting stored role:', error);
-              }
-              
-              // Use stored role if valid, otherwise use suggested role
-              const finalRole = (storedRole && (storedRole === 'professional' || storedRole === 'petOwner')) 
-                ? storedRole 
-                : status.suggestedRole;
-              
-              debugLog('MBA1111 Role selection:', { 
-                storedRole, 
-                suggestedRole: status.suggestedRole, 
-                finalRole,
-                isApprovedProfessional: status.isApprovedProfessional 
-              });
-              
-              setUserRole(finalRole);
-              setIsApprovedProfessional(status.isApprovedProfessional);
-              await fetchTimeSettings();
+          debugLog('MBA1111 Found stored tokens, validating...');
+          
+          // First, check if we have any valid token WITHOUT attempting refresh
+          // This prevents the user from seeing content while being actually logged out
+          let storedAccessToken = await getStorage('userToken');
+          let storedRefreshToken = await getStorage('refreshToken');
+          
+          let hasValidToken = false;
+          
+          // Check if access token is valid (not expired)
+          if (storedAccessToken) {
+            const timeUntilExpiry = authService.current.getTimeUntilExpiry(storedAccessToken);
+            if (timeUntilExpiry > 0) {
+              debugLog('MBA1111 Access token is still valid');
+              hasValidToken = true;
             } else {
-              await signOut('token_validation_failed');
+              debugLog('MBA1111 Access token is expired');
+            }
+          }
+          
+          // If access token is expired, check if refresh token is valid
+          if (!hasValidToken && storedRefreshToken) {
+            const refreshTimeUntilExpiry = authService.current.getTimeUntilExpiry(storedRefreshToken);
+            if (refreshTimeUntilExpiry > 0) {
+              debugLog('MBA1111 Refresh token is valid, attempting token refresh');
+              try {
+                // Attempt to refresh the token
+                await authService.current.refreshTokens();
+                hasValidToken = true;
+                debugLog('MBA1111 Token refresh successful during initialization');
+              } catch (error) {
+                debugLog('MBA1111 Token refresh failed during initialization:', error);
+                hasValidToken = false;
+              }
+            } else {
+              debugLog('MBA1111 Refresh token is also expired');
+            }
+          }
+          
+          if (hasValidToken) {
+            // Get the current valid token (either original or refreshed)
+            const token = await authService.current.getAccessToken();
+            if (token) {
+              try {
+                // Perform server-side validation to be absolutely sure
+                const isValid = await authService.current.validateToken(token);
+                if (isValid) {
+                  debugLog('MBA1111 Token validated successfully, setting up user session');
+                  setIsSignedIn(true);
+                  
+                  // Fetch user data
+                  await fetchUserName();
+                  const status = await getProfessionalStatus(token);
+                  
+                  // Check for stored user role preference
+                  let storedRole = null;
+                  try {
+                    storedRole = await getStorage('userRole');
+                  } catch (error) {
+                    console.error('MBA1111 Error getting stored role:', error);
+                  }
+                  
+                  // Use stored role if valid, otherwise use suggested role
+                  const finalRole = (storedRole && (storedRole === 'professional' || storedRole === 'petOwner')) 
+                    ? storedRole 
+                    : status.suggestedRole;
+                  
+                  debugLog('MBA1111 Role selection:', { 
+                    storedRole, 
+                    suggestedRole: status.suggestedRole, 
+                    finalRole,
+                    isApprovedProfessional: status.isApprovedProfessional 
+                  });
+                  
+                  setUserRole(finalRole);
+                  setIsApprovedProfessional(status.isApprovedProfessional);
+                  await fetchTimeSettings();
+                  
+                  debugLog('MBA1111 User session restored successfully');
+                } else {
+                  debugLog('MBA1111 Server-side token validation failed, signing out');
+                  await signOut('server_validation_failed');
+                }
+              } catch (error) {
+                debugLog('MBA1111 Error during token validation, signing out:', error);
+                await signOut('validation_error');
+              }
+            } else {
+              debugLog('MBA1111 Could not retrieve access token, signing out');
+              await signOut('no_access_token');
             }
           } else {
-            await signOut('no_valid_token');
+            debugLog('MBA1111 No valid tokens found, signing out');
+            await signOut('no_valid_tokens');
           }
         } else {
           // No tokens available - this is normal for new users
-          debugLog('MBA1111 No tokens found during initialization');
+          debugLog('MBA1111 No tokens found during initialization - user needs to sign in');
+          // Don't call signOut here as it would trigger navigation for new users
+          // Just ensure they're in the signed out state
+          setIsSignedIn(false);
+          debugLog('MBA1111 Set isSignedIn to false due to no tokens');
+          
+          // Log URL after setting signed out state
+          if (typeof window !== 'undefined') {
+            debugLog(`MBA1111 INIT: URL after setting signed out: ${window.location.href}`);
+            debugLog(`MBA1111 INIT: Hash after setting signed out: ${window.location.hash}`);
+          }
         }
       } catch (error) {
         console.error('MBA1111 Error initializing auth state:', error);
         await signOut('initialization_error');
       } finally {
         setLoading(false);
+        debugLog('MBA1111 Auth initialization completed, loading set to false');
+        
+        // Log URL at end of initialization
+        if (typeof window !== 'undefined') {
+          debugLog(`MBA1111 INIT: Final URL at end: ${window.location.href}`);
+          debugLog(`MBA1111 INIT: Final hash at end: ${window.location.hash}`);
+        }
+        
         isInitializedRef.current = true;
       }
     };
@@ -1033,7 +1279,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // State consistency checker
+  // State consistency checker with enhanced detection
   useEffect(() => {
     if (loading || is_prototype) return;
     
@@ -1042,18 +1288,56 @@ export const AuthProvider = ({ children }) => {
         const hasStoredTokens = !!(await getStorage('userToken')) || !!(await getStorage('refreshToken'));
         const hasMemoryTokens = !!(authService.current.accessToken) || !!(authService.current.refreshToken);
         
-        // debugLog('MBA1111 State consistency check:', {
-        //   isSignedIn,
-        //   hasStoredTokens,
-        //   hasMemoryTokens,
-        //   isSigningOut: authService.current.isSigningOut
-        // });
+        debugLog('MBA1111 State consistency check:', {
+          isSignedIn,
+          hasStoredTokens,
+          hasMemoryTokens,
+          isSigningOut: authService.current.isSigningOut
+        });
         
-        // If we think user is signed in but no tokens exist anywhere
+        // CRITICAL CHECK: If UI shows signed in but no tokens exist anywhere
         if (isSignedIn && !hasStoredTokens && !hasMemoryTokens && !authService.current.isSigningOut) {
-          debugLog('MBA1111 STATE INCONSISTENCY DETECTED: UI shows signed in but no tokens exist');
+          debugLog('MBA1111 CRITICAL STATE INCONSISTENCY: UI shows signed in but no tokens exist - immediate redirect');
           await signOut('state_inconsistency_no_tokens');
           return;
+        }
+        
+        // ENHANCED CHECK: If UI shows signed in, verify tokens are actually valid
+        if (isSignedIn && (hasStoredTokens || hasMemoryTokens) && !authService.current.isSigningOut) {
+          const storedToken = await getStorage('userToken');
+          
+          // Check if stored token is expired
+          if (storedToken) {
+            const timeUntilExpiry = authService.current.getTimeUntilExpiry(storedToken);
+            if (timeUntilExpiry <= 0) {
+              debugLog('MBA1111 CRITICAL STATE INCONSISTENCY: UI shows signed in but token is expired');
+              
+              // Check if refresh token can save us
+              const refreshToken = await getStorage('refreshToken');
+              if (refreshToken) {
+                const refreshTimeUntilExpiry = authService.current.getTimeUntilExpiry(refreshToken);
+                if (refreshTimeUntilExpiry <= 0) {
+                  debugLog('MBA1111 Refresh token also expired - forcing sign out');
+                  await signOut('state_inconsistency_all_tokens_expired');
+                  return;
+                } else {
+                  debugLog('MBA1111 Attempting emergency token refresh');
+                  try {
+                    await authService.current.refreshTokens();
+                    debugLog('MBA1111 Emergency token refresh successful');
+                  } catch (error) {
+                    debugLog('MBA1111 Emergency token refresh failed, signing out');
+                    await signOut('state_inconsistency_refresh_failed');
+                    return;
+                  }
+                }
+              } else {
+                debugLog('MBA1111 No refresh token available, signing out');
+                await signOut('state_inconsistency_no_refresh_token');
+                return;
+              }
+            }
+          }
         }
         
         // If we think user is not signed in but tokens exist
@@ -1085,14 +1369,21 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         debugLog('MBA1111 Error in state consistency check:', error);
+        
+        // If there's an error in consistency checking and we think we're signed in,
+        // be safe and sign out to avoid confused state
+        if (isSignedIn) {
+          debugLog('MBA1111 Error during consistency check while signed in - signing out for safety');
+          await signOut('state_consistency_check_error');
+        }
       }
     };
     
-    // Run initial check after a delay
-    const initialCheck = setTimeout(checkStateConsistency, 2000);
+    // Run initial check after a shorter delay for faster detection
+    const initialCheck = setTimeout(checkStateConsistency, 1000);
     
-    // Run periodic checks every 30 seconds
-    const consistencyInterval = setInterval(checkStateConsistency, 30000);
+    // Run periodic checks more frequently for better responsiveness
+    const consistencyInterval = setInterval(checkStateConsistency, 15000); // Every 15 seconds
     
     return () => {
       clearTimeout(initialCheck);

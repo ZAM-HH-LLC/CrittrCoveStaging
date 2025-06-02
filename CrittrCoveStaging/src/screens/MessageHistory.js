@@ -28,7 +28,7 @@ import { createMessageStyles } from '../components/Messages/styles';
 
 const MessageHistory = ({ navigation, route }) => {
   const { colors } = useTheme();
-  const { screenWidth, isCollapsed, isSignedIn } = useContext(AuthContext);
+  const { screenWidth, isCollapsed, isSignedIn, loading } = useContext(AuthContext);
   const styles = createMessageStyles(screenWidth, isCollapsed);
   
   // Add loading states
@@ -85,6 +85,12 @@ const MessageHistory = ({ navigation, route }) => {
   // Add viewport height detection for mobile browsers
   const [actualViewportHeight, setActualViewportHeight] = useState(null);
 
+  // Add a ref to track if conversations fetch is already in progress
+  const isFetchingConversationsRef = useRef(false);
+
+  // Add a ref to track if messages fetch is already in progress for specific conversations
+  const isFetchingMessagesRef = useRef(new Set());
+
   // Simple cleanup on sign out
   useEffect(() => {
     if (!isSignedIn) {
@@ -101,6 +107,10 @@ const MessageHistory = ({ navigation, route }) => {
       messageIdsRef.current.clear();
       initialLoadRef.current = true;
       setIsInitialLoad(true);
+      
+      // Clear fetch tracking refs
+      isFetchingConversationsRef.current = false;
+      isFetchingMessagesRef.current.clear();
     }
   }, [isSignedIn]);
 
@@ -113,13 +123,42 @@ const MessageHistory = ({ navigation, route }) => {
         setActualViewportHeight(window.innerHeight);
       };
 
+      // Mobile keyboard handling
+      const handleResize = () => {
+        updateViewportHeight();
+        
+        // Fix for mobile Chrome keyboard issues
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
+          // Small delay to allow keyboard to settle
+          setTimeout(() => {
+            document.activeElement.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            });
+          }, 100);
+        }
+      };
+
       updateViewportHeight();
-      window.addEventListener('resize', updateViewportHeight);
+      window.addEventListener('resize', handleResize);
       window.addEventListener('orientationchange', updateViewportHeight);
+      
+      // Fix for iOS Safari keyboard issues
+      window.addEventListener('focusin', () => {
+        setTimeout(() => {
+          if (document.activeElement && document.activeElement.scrollIntoView) {
+            document.activeElement.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            });
+          }
+        }, 100);
+      });
 
       return () => {
-        window.removeEventListener('resize', updateViewportHeight);
+        window.removeEventListener('resize', handleResize);
         window.removeEventListener('orientationchange', updateViewportHeight);
+        window.removeEventListener('focusin', () => {});
       };
     }
   }, [screenWidth]);
@@ -425,24 +464,44 @@ const MessageHistory = ({ navigation, route }) => {
     return () => clearTimeout(timer);
   }, [reconnect]);
   
-  // Simple mount effect - only runs when user is signed in
+  // MAIN INITIALIZATION - Keep only one, safer initialization effect  
   useEffect(() => {
-    if (!initialLoadRef.current || !isSignedIn) return;
+    // Only run if not signed in (cleaning up) or first time signed in (initializing)
+    if (!isSignedIn || loading) {
+      debugLog('MBA1111 MessageHistory: User not signed in, skipping initialization');
+      return;
+    }
 
-    debugLog('MBA9999: Component mounted - initializing data');
+    // More robust check: Allow initialization only if we truly need it
+    // Either first time (initialLoadRef.current = true) OR user just signed in but has no conversations
+    const isFirstTime = initialLoadRef.current;
+    const hasNoConversationsAfterSignIn = !initialLoadRef.current && conversations.length === 0;
+    const needsInitialization = isFirstTime || hasNoConversationsAfterSignIn;
+    
+    if (!needsInitialization) {
+      debugLog('MBA1111 MessageHistory: Already initialized with conversations, skipping re-init');
+      return;
+    }
+
+    debugLog('MBA1111 MessageHistory: Starting initialization for signed in user');
     
     const initializeData = async () => {
       try {
-        // Reset states
-        setConversations([]);
-        setMessages([]);
-        setSelectedConversation(null);
-        setSelectedConversationData(null);
-        setIsLoadingConversations(true);
-        setIsLoadingMessages(false);
-        setCurrentPage(1);
-        setHasMore(true);
-        lastViewedConversationRef.current = null;
+        // Mark as initialized IMMEDIATELY to prevent race conditions
+        initialLoadRef.current = false;
+        
+        // Only reset states if we don't already have conversations loaded
+        if (conversations.length === 0) {
+          setConversations([]);
+          setMessages([]);
+          setSelectedConversation(null);
+          setSelectedConversationData(null);
+          setIsLoadingConversations(true);
+          setIsLoadingMessages(false);
+          setCurrentPage(1);
+          setHasMore(true);
+          lastViewedConversationRef.current = null;
+        }
 
         // Handle URL parameters on web
         if (Platform.OS === 'web') {
@@ -487,15 +546,17 @@ const MessageHistory = ({ navigation, route }) => {
           return;
         }
 
-        // Normal initialization - only fetch conversations once
+        // Normal initialization - fetch conversations once
+        debugLog('MBA1111 About to fetch conversations for initialization');
         const conversationsData = await fetchConversations();
         if (Platform.OS === 'web' && screenWidth > 900 && conversationsData?.length > 0) {
           setSelectedConversation(conversationsData[0].conversation_id);
         }
       } catch (error) {
         console.error('Error in initialization:', error);
+        // Reset initialization flag on error so it can be retried
+        initialLoadRef.current = true;
       } finally {
-        initialLoadRef.current = false;
         setIsInitialLoad(false);
         isHandlingRouteParamsRef.current = false;
       }
@@ -518,12 +579,16 @@ const MessageHistory = ({ navigation, route }) => {
       shouldOpenBookingCreationRef.current = false;
       lastViewedConversationRef.current = null;
       
+      // Clear fetch tracking refs
+      isFetchingConversationsRef.current = false;
+      isFetchingMessagesRef.current.clear();
+      
       // Clear the global selected conversation tracking
       if (typeof window !== 'undefined') {
         window.selectedConversationId = null;
       }
     };
-  }, [isSignedIn]); // Only depend on isSignedIn
+  }, [isSignedIn, loading]); // Keep minimal dependencies to prevent unnecessary re-runs
   
   // Effect to trigger booking creation once conversation data is loaded
   useEffect(() => {
@@ -562,6 +627,12 @@ const MessageHistory = ({ navigation, route }) => {
       if (is_DEBUG) {
         console.log('MBA98765 Skipping redundant conversation update - already viewing this conversation');
       }
+      return;
+    }
+
+    // Skip if conversations list is empty (still loading)
+    if (conversations.length === 0) {
+      debugLog('MBA98765 Skipping conversation update - no conversations loaded yet');
       return;
     }
 
@@ -605,7 +676,8 @@ const MessageHistory = ({ navigation, route }) => {
       setCurrentPage(1);
       setHasMore(true);
       
-      // Reset message loading flag for new conversation
+      // IMPORTANT: Reset message loading flag for new conversation
+      // This ensures messages will be fetched for the new conversation
       hasLoadedMessagesRef.current = false;
       
       // Update the last viewed conversation
@@ -616,11 +688,17 @@ const MessageHistory = ({ navigation, route }) => {
       }
       debugLog(`MBA3210: [OTHER USER STATUS] Could not find conversation data for ID: ${selectedConversation}`);
     }
-  }, [selectedConversation, conversations, isInitialLoad, markConversationAsRead, isSignedIn]);
+  }, [selectedConversation, isSignedIn]); // Simplified dependencies - removed conversations, isInitialLoad, markConversationAsRead
 
   // SAFE message fetching effect - separated and with safety checks
   useEffect(() => {
     if (!selectedConversation || isInitialLoad || !isSignedIn) {
+      return;
+    }
+
+    // Skip if conversations list is empty (still loading)
+    if (conversations.length === 0) {
+      debugLog('MBA98765 Skipping message fetch - no conversations loaded yet');
       return;
     }
 
@@ -644,8 +722,8 @@ const MessageHistory = ({ navigation, route }) => {
     // Create a flag to track if this effect's async operation is still relevant
     let isCurrentOperation = true;
     
-    // Set loading flags
-    hasLoadedMessagesRef.current = true;
+    // Set loading state but DON'T set hasLoadedMessagesRef.current = true yet
+    // That should only be set after successful completion
     setIsLoadingMessages(true);
     
     // Fetch messages with safety checks
@@ -654,6 +732,8 @@ const MessageHistory = ({ navigation, route }) => {
         // Skip updates if component unmounted or conversation changed or user signed out
         if (!isCurrentOperation || !isSignedIn) return;
         
+        // NOW set the loaded flag after successful completion
+        hasLoadedMessagesRef.current = true;
         setIsLoadingMessages(false);
         
         // After messages are loaded, if we need to open booking creation,
@@ -673,7 +753,10 @@ const MessageHistory = ({ navigation, route }) => {
       })
       .catch(error => {
         if (!isCurrentOperation) return;
+        
+        // Reset loading state on error
         setIsLoadingMessages(false);
+        // Don't set hasLoadedMessagesRef.current = true on error, so it can be retried
         console.error('Error fetching messages:', error);
       });
     
@@ -681,7 +764,7 @@ const MessageHistory = ({ navigation, route }) => {
     return () => {
       isCurrentOperation = false;
     };
-  }, [selectedConversation, isInitialLoad, markConversationAsRead, isSignedIn]);
+  }, [selectedConversation, isSignedIn]); // Simplified dependencies - removed isInitialLoad, markConversationAsRead
 
   // Modify existing screen width effect to be safer
   useEffect(() => {
@@ -726,225 +809,136 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [conversations, searchQuery]);
 
-  // Modify fetchConversations to update filtered conversations
+  // Fetch conversations 
   const fetchConversations = async () => {
-    try {
-      setIsLoadingConversations(true);
-      debugLog('MBA3210: [OTHER USERS STATUS] Starting to fetch conversations with online status data');
+    // Prevent duplicate fetches
+    if (isFetchingConversationsRef.current) {
+      debugLog('MBA98765 Conversations fetch already in progress, skipping duplicate call');
+      return conversations; // Return existing conversations if available
+    }
 
-      const response = await getConversations();
+    try {
+      isFetchingConversationsRef.current = true;
+      setIsLoadingConversations(true);
+      debugLog('MBA98765 Fetching conversations...');
       
-      if (response && Array.isArray(response)) {
-        // Add default false value for other_participant_online if not present
-        const conversationsWithOnlineStatus = response.map(conv => ({
-          ...conv,
-          other_participant_online: conv.other_participant_online || false
-        }));
+      const data = await getConversations();
+      
+      if (data && Array.isArray(data)) {
+        debugLog('MBA98765 Conversations fetched successfully:', data.length);
+        setConversations(data);
+        setFilteredConversations(data);
         
-        // Log each conversation's online status for debugging
-        conversationsWithOnlineStatus.forEach(conv => {
-          const otherUserName = conv.other_user_name || 'Unknown';
-          debugLog(`MBA3210: [OTHER USERS STATUS] User "${otherUserName}" (conversation ${conv.conversation_id}) online status: ${conv.other_participant_online ? 'ONLINE' : 'OFFLINE'}`);
-        });
-        
-        debugLog(`MBA3210: [OTHER USERS STATUS] Fetched ${conversationsWithOnlineStatus.length} conversations with online status data`);
-        
-        setConversations(conversationsWithOnlineStatus);
-        setFilteredConversations(conversationsWithOnlineStatus);
-        return conversationsWithOnlineStatus;
+        return data;
+      } else {
+        debugLog('MBA98765 Invalid conversations data structure:', data);
+        return [];
       }
-      return [];
     } catch (error) {
-      console.error('Error fetching conversations:', error);
-      debugLog(`MBA3210: [OTHER USERS STATUS] Error fetching conversation status data: ${error.message}`);
+      debugLog('Error fetching conversations:', error);
       return [];
     } finally {
       setIsLoadingConversations(false);
+      isFetchingConversationsRef.current = false;
     }
   };
 
-  // Modify fetchMessages to handle pagination better and prevent duplicate requests
+  // Fetch messages 
   const fetchMessages = async (conversationId, page = 1) => {
+    if (!conversationId) {
+      debugLog('MBA98765 No conversation ID provided for message fetch');
+      return;
+    }
+
+    // Create a unique key for this fetch operation
+    const fetchKey = `${conversationId}-${page}`;
+    
+    // Prevent duplicate fetches for the same conversation and page
+    if (isFetchingMessagesRef.current.has(fetchKey)) {
+      debugLog('MBA98765 Messages fetch already in progress for conversation:', conversationId, 'page:', page, '- skipping duplicate call');
+      return;
+    }
+
     try {
-      debugLog(`MBA2349f87g9qbh2nfv9cg: fetchMessages called`, {
-        conversationId,
-        page,
-        currentPage,
-        isLoadingMore: isLoadingMoreRef.current,
-        messagesLength: messages.length,
-        hasMore,
-        processedPagesSize: processedPagesRef.current.size
-      });
-      
-      // Skip if we've already processed this page for the current conversation
-      const pageKey = `${conversationId}-${page}`;
-      if (processedPagesRef.current.has(pageKey) && page > 1) {
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Skipping duplicate fetch for page ${page} of conversation ${conversationId}`);
-        return;
-      }
+      isFetchingMessagesRef.current.add(fetchKey);
+      debugLog('MBA98765 Fetching messages for conversation:', conversationId, 'page:', page);
       
       if (page === 1) {
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Fetching page 1 - resetting messages list`);
-        setIsLoadingMessages(true);
-        // Reset messages when fetching first page
         setMessages([]);
-        // Clear processed pages and message IDs when starting fresh
+        setHasDraft(false);
+        setDraftData(null);
         processedPagesRef.current.clear();
         messageIdsRef.current.clear();
-        
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Reset state for page 1 fetch`, {
-          processedPagesCleared: processedPagesRef.current.size === 0,
-          messageIdsCleared: messageIdsRef.current.size === 0
-        });
-      } else {
-        // Set the loading ref first to block concurrent requests
-        if (isLoadingMoreRef.current) {
-          debugLog(`MBA2349f87g9qbh2nfv9cg: Already loading more messages, skipping request for page ${page}`);
-          return;
-        }
-        
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Setting pagination loading state for page ${page}`);
-        // Mark that we're loading more
-        isLoadingMoreRef.current = true;
-      }
-      
-      // Mark this page as being processed
-      processedPagesRef.current.add(pageKey);
-      debugLog(`MBA2349f87g9qbh2nfv9cg: Added page ${pageKey} to processed pages. Total processed: ${processedPagesRef.current.size}`);
-      
-      // Use the new API function instead of direct axios call
-      const response = await getConversationMessages(conversationId, page);
-      
-      debugLog(`MBA2349f87g9qbh2nfv9cg: API response received for page ${page}`, {
-        messageCount: response.messages?.length || 0,
-        hasNext: response.has_more,
-        currentMessageCount: messages.length,
-        hasDraft: response.has_draft
-      });
-      
-      // Process messages to remove duplicates
-      const newMessages = response.messages || [];
-      const uniqueMessages = newMessages.filter(msg => {
-        // Skip messages we already have
-        if (msg.message_id && messageIdsRef.current.has(msg.message_id)) {
-          debugLog(`MBA2349f87g9qbh2nfv9cg: Skipping duplicate message ${msg.message_id}`);
-          return false;
-        }
-        
-        // Add to our set of seen message IDs
-        if (msg.message_id) {
-          messageIdsRef.current.add(msg.message_id);
-        }
-        
-        return true;
-      });
-      
-      debugLog(`MBA2349f87g9qbh2nfv9cg: Processed ${newMessages.length} messages, ${uniqueMessages.length} unique for page ${page}`);
-      
-      // Update the messages state based on the page
-      if (page === 1) {
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Setting page 1 messages - count: ${uniqueMessages.length}`);
-        setMessages(uniqueMessages);
-        setIsLoadingMessages(false);
-        setHasMore(response.has_more || false);
-        
-        // Set draft data only on first page load
-        setHasDraft(response.has_draft || false);
-        setDraftData(response.draft_data || null);
-        
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Page 1 state updated`, {
-          messageCount: uniqueMessages.length,
-          hasMore: response.has_more || false,
-          hasDraft: response.has_draft || false
-        });
-        
-        // Force a rerender after setting messages to fix scroll issues
-        setTimeout(() => {
-          debugLog(`MBA2349f87g9qbh2nfv9cg: Triggering force rerender after page 1 load`);
-        }, 100);
-      } else {
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Appending page ${page} messages`, {
-          newCount: uniqueMessages.length,
-          existingCount: messages.length,
-          totalAfter: messages.length + uniqueMessages.length
-        });
-        
-        setMessages(prev => {
-          debugLog(`MBA2349f87g9qbh2nfv9cg: Before pagination update`, {
-            existingMessagesLength: prev.length,
-            messagesToAdd: uniqueMessages.length,
-            page: page
-          });
-          
-          // Create a set of existing message IDs for quick lookups
-          const existingIds = new Set(prev.map(m => m.message_id).filter(Boolean));
-          
-          // Only add messages we don't already have
-          const messagesToAdd = uniqueMessages.filter(msg => 
-            !msg.message_id || !existingIds.has(msg.message_id)
-          );
-          
-          debugLog(`MBA2349f87g9qbh2nfv9cg: Filtered messages for pagination`, {
-            uniqueMessagesFromAPI: uniqueMessages.length,
-            afterDuplicateFilter: messagesToAdd.length,
-            existingIdsCount: existingIds.size
-          });
-          
-          const updatedMessages = [...prev, ...messagesToAdd];
-          
-          debugLog(`MBA2349f87g9qbh2nfv9cg: Messages array updated via pagination`, {
-            before: prev.length,
-            added: messagesToAdd.length,
-            after: updatedMessages.length,
-            pageBeingAdded: page
-          });
-          
-          return updatedMessages;
-        });
-        
-        setHasMore(response.has_more || false);
-        setIsLoadingMore(false);
-        isLoadingMoreRef.current = false;
-        
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Pagination state updated`, {
-          page,
-          hasMore: response.has_more || false,
-          isLoadingMore: false,
-          currentPageAfter: page
-        });
       }
 
-      setCurrentPage(page);
+      setIsLoadingMore(page > 1);
+      isLoadingMoreRef.current = true;
+
+      const data = await getConversationMessages(conversationId, page);
       
-      debugLog(`MBA2349f87g9qbh2nfv9cg: fetchMessages completed successfully`, {
-        page,
-        finalMessageCount: page === 1 ? uniqueMessages.length : messages.length + uniqueMessages.length,
-        currentPage: page,
-        hasMore: response.has_more || false
-      });
+      // Check for auth issues in response
+      if (!data) {
+        debugLog('MBA1111 fetchMessages: No data returned, possible auth issue');
+        return;
+      }
 
-      setTimeout(() => {
-        debugLog(`MBA2349f87g9qbh2nfv9cg: Messages state should be updated now`, {
+      if (data && Array.isArray(data.messages)) {
+        const newMessages = data.messages;
+        debugLog('MBA98765 Messages fetched successfully:', {
+          conversationId,
           page,
-          addedCount: uniqueMessages.length,
-          totalAfterUpdate: page === 1 ? uniqueMessages.length : (messages.length + uniqueMessages.length),
-          isLoadingMoreAfter: isLoadingMoreRef.current,
-          currentPageAfter: currentPage
+          count: newMessages.length,
+          hasNext: !!data.has_more
         });
-      }, 100);
 
+        // Check for draft data in the response
+        if (data.has_draft) {
+          setHasDraft(true);
+          setDraftData(data.draft_data);
+          debugLog('MBA98765 Draft data found:', data.draft_data);
+        }
+
+        if (page === 1) {
+          setMessages(newMessages);
+        } else {
+          setMessages(prevMessages => {
+            const combinedMessages = [...prevMessages, ...newMessages];
+            const uniqueMessages = combinedMessages.filter((message, index, array) => 
+              array.findIndex(m => m.message_id === message.message_id) === index
+            );
+            
+            debugLog('MBA98765 Combined messages:', {
+              previous: prevMessages.length,
+              new: newMessages.length,
+              combined: combinedMessages.length,
+              unique: uniqueMessages.length
+            });
+            
+            return uniqueMessages;
+          });
+        }
+
+        setHasMore(!!data.has_more);
+        setCurrentPage(page);
+        processedPagesRef.current.add(page);
+
+        newMessages.forEach(msg => {
+          if (msg.message_id) {
+            messageIdsRef.current.add(msg.message_id);
+          }
+        });
+
+        debugLog('MBA98765 Message fetch completed for conversation:', conversationId);
+      } else {
+        debugLog('MBA98765 Invalid message data structure:', data);
+      }
     } catch (error) {
-      debugLog(`MBA2349f87g9qbh2nfv9cg: Error in fetchMessages for page ${page}:`, {
-        error: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       console.error('Error fetching messages:', error);
-      setIsLoadingMessages(false);
-      if (page > 1) {
-        isLoadingMoreRef.current = false;
-        setIsLoadingMore(false);
-      }
+      debugLog('MBA98765 Error in fetchMessages:', error);
+    } finally {
+      setIsLoadingMore(false);
+      isLoadingMoreRef.current = false;
+      isFetchingMessagesRef.current.delete(fetchKey);
     }
   };
 
