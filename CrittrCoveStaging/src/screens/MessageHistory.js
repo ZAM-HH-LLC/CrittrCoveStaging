@@ -82,6 +82,29 @@ const MessageHistory = ({ navigation, route }) => {
   const processedPagesRef = useRef(new Set());
   const messageIdsRef = useRef(new Set());
 
+  // Add viewport height detection for mobile browsers
+  const [actualViewportHeight, setActualViewportHeight] = useState(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && screenWidth <= 900) {
+      const updateViewportHeight = () => {
+        // Get the actual viewport height (works better than 100vh on mobile)
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+        setActualViewportHeight(window.innerHeight);
+      };
+
+      updateViewportHeight();
+      window.addEventListener('resize', updateViewportHeight);
+      window.addEventListener('orientationchange', updateViewportHeight);
+
+      return () => {
+        window.removeEventListener('resize', updateViewportHeight);
+        window.removeEventListener('orientationchange', updateViewportHeight);
+      };
+    }
+  }, [screenWidth]);
+
   // Outside the renderMessage callback, add a function to group messages by booking ID
   const groupMessagesByBookingId = (messages) => {
     const bookingMessages = {};
@@ -1690,8 +1713,15 @@ const MessageHistory = ({ navigation, route }) => {
       <View style={styles.inputInnerContainer}>
         <textarea
           ref={inputRef}
-          style={styles.webInput}
-          placeholder="Type a message..."
+          style={{
+            ...styles.webInput,
+            resize: 'none',
+            height: 'auto',
+            minHeight: '20px',
+            paddingLeft: '10px',
+            paddingRight: '10px'
+          }}
+          placeholder="Type a New Message..."
           value={message}
           onChange={handleChange}
           onKeyPress={(e) => {
@@ -1712,7 +1742,15 @@ const MessageHistory = ({ navigation, route }) => {
           {isSending ? (
             <ActivityIndicator color={theme.colors.whiteText} size="small" />
           ) : screenWidth <= 600 ? (
-            <MaterialCommunityIcons name="arrow-up" size={16} color={theme.colors.whiteText} />
+            <MaterialCommunityIcons name="arrow-up" size={16} color={theme.colors.whiteText} 
+            style={{
+              marginLeft: 0,
+              marginRight: 0,
+              marginTop: 0,
+              marginBottom: 0,
+              paddingHorizontal: 0,
+            }}
+            />
           ) : (
             'Send'
           )}
@@ -1821,7 +1859,7 @@ const MessageHistory = ({ navigation, route }) => {
         <TextInput
           ref={inputRef}
           style={styles.input}
-          placeholder="Type a message..."
+          placeholder="Type a Message...."
           value={message}
           onChangeText={setMessage}
           multiline
@@ -1974,6 +2012,15 @@ const MessageHistory = ({ navigation, route }) => {
       return null;
     }
 
+    // Calculate dynamic styles for mobile browsers
+    const mobileMessagesStyle = Platform.OS === 'web' && screenWidth <= 900 && actualViewportHeight ? {
+      height: actualViewportHeight - 128, // Account for header + input
+      maxHeight: actualViewportHeight - 128,
+      paddingBottom: 20,
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch'
+    } : {};
+
     return (
       <View style={styles.mainSection}>
         {screenWidth > 900 && renderMessageHeader()}
@@ -1998,7 +2045,7 @@ const MessageHistory = ({ navigation, route }) => {
             </View>
           )}
           
-          <View style={styles.messagesContainer}>
+          <View style={[styles.messagesContainer, mobileMessagesStyle]}>
             {isLoadingMessages ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -2126,7 +2173,6 @@ const MessageHistory = ({ navigation, route }) => {
     }}>
       <MaterialCommunityIcons 
         name="message-text-outline" 
-        size={64} 
         color={theme.colors.placeholder}
         style={{ marginBottom: 16 }}
       />

@@ -330,7 +330,7 @@ const Connections = () => {
   const EmptyStateMessage = ({ type }) => {
     const messages = {
       clients: {
-        all: "You don't have any clients yet. Invite a client to get started!",
+        all: "You don't have any clients with bookings or that you have invited yet. Invite a client to get started!",
         active: "You don't have any active clients.",
         pending: "You don't have any pending client requests.",
         past: "You don't have any past clients."

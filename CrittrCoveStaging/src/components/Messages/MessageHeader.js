@@ -66,7 +66,7 @@ const MessageHeader = ({
     <View style={styles.messageHeader}>
       <View style={styles.messageHeaderContent}>
         <Image
-          source={selectedConversationData?.profile_photo || require('../../assets/default-profile.png')}
+          source={selectedConversationData?.profile_photo || require('../../../assets/default-profile.png')}
           style={styles.profilePhoto}
         />
         <Text style={styles.messageHeaderName}>

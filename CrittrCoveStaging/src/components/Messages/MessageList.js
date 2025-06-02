@@ -54,7 +54,7 @@ const MessageList = ({
       contentContainerStyle={{
         flexGrow: 1,
         justifyContent: 'flex-end',
-        paddingTop: 16,
+        paddingTop: 30,
       }}
       ListFooterComponent={isLoadingMore && (
         <ActivityIndicator 

@@ -91,7 +91,7 @@ const MessageInput = ({
                 minHeight: 40
               }
             ]}
-            placeholder="Type a message..."
+            placeholder="Type a Message..."
             placeholderTextColor={theme.colors.placeholder}
             value={messageContent}
             onChangeText={handleChange}
