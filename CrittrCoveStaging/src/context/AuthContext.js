@@ -581,9 +581,11 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     debugLog('MBA1111 Setting up consolidated axios interceptors');
     
-    // Circuit breaker for 401 errors
+    // Circuit breaker for 401 errors with enhanced tracking
     let consecutiveAuth401Errors = 0;
+    let lastErrorTime = 0;
     const MAX_401_RETRIES = 3;
+    const ERROR_RESET_TIME = 60000; // Reset error count after 1 minute
     
     const requestInterceptor = axios.interceptors.request.use(
       async (config) => {
@@ -596,11 +598,19 @@ export const AuthProvider = ({ children }) => {
               config.headers.Authorization = `Bearer ${token}`;
               // debugLog(`MBA1111 Token added to request: ${config.method?.toUpperCase()} ${config.url}`);
             } else {
-              debugLog(`MBA1111 No token available for request: ${config.method?.toUpperCase()} ${config.url}`);
+              debugLog(`MBA9999 No token available for request: ${config.method?.toUpperCase()} ${config.url}`);
+              
+              // If no token and this is a protected endpoint, don't proceed
+              if (config.url.includes('/api/') && !config.url.includes('/auth/') && !config.url.includes('/token/')) {
+                const error = new Error('No authentication token available');
+                error.name = 'NoTokenError';
+                throw error;
+              }
             }
           } catch (error) {
             console.error('MBA1111 Error getting access token for request:', error);
-            debugLog(`MBA1111 Token error for request: ${config.method?.toUpperCase()} ${config.url}`, error);
+            debugLog(`MBA9999 Token error for request: ${config.method?.toUpperCase()} ${config.url}`, error);
+            throw error;
           }
         } else {
           debugLog(`MBA1111 Prototype mode - skipping token for: ${config.method?.toUpperCase()} ${config.url}`);
@@ -617,22 +627,41 @@ export const AuthProvider = ({ children }) => {
     const responseInterceptor = axios.interceptors.response.use(
       (response) => {
         // debugLog(`MBA1111 Response success: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
+        
         // Reset circuit breaker on successful response
-        consecutiveAuth401Errors = 0;
+        const now = Date.now();
+        if (now - lastErrorTime > ERROR_RESET_TIME) {
+          consecutiveAuth401Errors = 0;
+        }
         return response;
       },
       async (error) => {
         const originalRequest = error.config;
-        debugLog(`MBA1111 Response error: ${error.response?.status} ${error.config.method?.toUpperCase()} ${error.config.url}`);
         
-        // Handle 401 errors with circuit breaker
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        debugLog(`MBA1111 Response error: ${error.response?.status} ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
+        
+        // Skip handling certain error types that should not trigger auth logic
+        if (error.name === 'NoTokenError' || error.name === 'AbortError') {
+          return Promise.reject(error);
+        }
+        
+        // Handle 401 errors with enhanced circuit breaker
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+          const now = Date.now();
+          
+          // Reset counter if enough time has passed
+          if (now - lastErrorTime > ERROR_RESET_TIME) {
+            consecutiveAuth401Errors = 0;
+          }
+          
           consecutiveAuth401Errors++;
+          lastErrorTime = now;
+          
           debugLog(`MBA1111 401 error detected (${consecutiveAuth401Errors}/${MAX_401_RETRIES}), attempting token refresh`);
           
-          // Circuit breaker: Stop trying after too many consecutive failures
+          // Enhanced circuit breaker: Stop trying after too many consecutive failures
           if (consecutiveAuth401Errors >= MAX_401_RETRIES) {
-            debugLog('MBA1111 Circuit breaker triggered: Too many consecutive 401 errors, forcing sign out');
+            debugLog('MBA9999 Circuit breaker triggered: Too many consecutive 401 errors, forcing sign out');
             authService.current.forceSignOut('too_many_auth_failures');
             return Promise.reject(error);
           }
@@ -642,6 +671,14 @@ export const AuthProvider = ({ children }) => {
           try {
             // Skip auth logging calls to prevent infinite loops
             const isAuthLoggingCall = originalRequest.url?.includes('/api/core/log-auth-event/');
+            const isMessageCall = originalRequest.url?.includes('/api/messages/');
+            const isConversationCall = originalRequest.url?.includes('/api/conversations/');
+            
+            // Be extra careful with message/conversation calls during auth issues
+            if (isMessageCall || isConversationCall) {
+              debugLog('MBA9999 Skipping token refresh for message/conversation call during auth issues to prevent loops');
+              throw new Error('Auth failed for protected call');
+            }
             
             if (!isAuthLoggingCall) {
               // Only attempt refresh for non-logging calls
@@ -675,7 +712,7 @@ export const AuthProvider = ({ children }) => {
             
             // If this was a timeout or repeated failure, force sign out
             if (refreshError.message.includes('timeout') || consecutiveAuth401Errors >= 2) {
-              debugLog('MBA1111 Token refresh timeout or repeated failure, forcing sign out');
+              debugLog('MBA9999 Token refresh timeout or repeated failure, forcing sign out');
               authService.current.forceSignOut('token_refresh_failed');
             }
             

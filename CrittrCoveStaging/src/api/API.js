@@ -1070,6 +1070,24 @@ export const getUnreadMessageCount = async () => {
 };
 
 /**
+ * Get all conversations for the current user with online status data
+ * @returns {Promise<Array>} - Array of conversation objects with participant online status
+ */
+export const getConversations = async () => {
+  try {
+    debugLog('MBA3210: Fetching conversations with online status data');
+    
+    const response = await axios.get(`${API_BASE_URL}/api/conversations/v1/`);
+    
+    debugLog(`MBA3210: Fetched ${response.data?.length || 0} conversations with online status data`);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA3210: Error fetching conversations:', error);
+    throw error;
+  }
+};
+
+/**
  * Get messages for a conversation with pagination
  * @param {string|number} conversationId - The ID of the conversation
  * @param {number} page - Page number for pagination (default 1)

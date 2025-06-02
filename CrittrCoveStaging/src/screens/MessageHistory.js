@@ -15,7 +15,7 @@ import { formatOccurrenceFromUTC } from '../utils/time_utils';
 import DraftConfirmationModal from '../components/DraftConfirmationModal';
 import useWebSocket from '../hooks/useWebSocket';
 import MessageNotificationContext from '../context/MessageNotificationContext';
-import { getConversationMessages, createDraftFromBooking } from '../api/API';
+import { getConversationMessages, createDraftFromBooking, getConversations } from '../api/API';
 import { navigateToFrom } from '../components/Navigation';
 
 // Import our new components
@@ -28,14 +28,14 @@ import { createMessageStyles } from '../components/Messages/styles';
 
 const MessageHistory = ({ navigation, route }) => {
   const { colors } = useTheme();
-  const { screenWidth, isCollapsed } = useContext(AuthContext);
+  const { screenWidth, isCollapsed, isSignedIn } = useContext(AuthContext);
   const styles = createMessageStyles(screenWidth, isCollapsed);
   
   // Add loading states
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Add isLoading state for edit draft
-  const [isSearchFocused, setIsSearchFocused] = useState(false); // Add state for search input focus
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [selectedConversationData, setSelectedConversationData] = useState(null);
@@ -45,7 +45,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const { is_DEBUG, is_prototype, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
   const [conversations, setConversations] = useState([]);
-  const [filteredConversations, setFilteredConversations] = useState([]); // Add filtered conversations state
+  const [filteredConversations, setFilteredConversations] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -84,6 +84,25 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add viewport height detection for mobile browsers
   const [actualViewportHeight, setActualViewportHeight] = useState(null);
+
+  // Simple cleanup on sign out
+  useEffect(() => {
+    if (!isSignedIn) {
+      debugLog('MBA9999: User signed out, resetting MessageHistory state');
+      setConversations([]);
+      setMessages([]);
+      setSelectedConversation(null);
+      setSelectedConversationData(null);
+      setHasDraft(false);
+      setDraftData(null);
+      hasLoadedMessagesRef.current = false;
+      lastViewedConversationRef.current = null;
+      processedPagesRef.current.clear();
+      messageIdsRef.current.clear();
+      initialLoadRef.current = true;
+      setIsInitialLoad(true);
+    }
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (Platform.OS === 'web' && screenWidth <= 900) {
@@ -406,11 +425,11 @@ const MessageHistory = ({ navigation, route }) => {
     return () => clearTimeout(timer);
   }, [reconnect]);
   
-  // Remove the problematic effect and instead add a proper mount effect to load initial data
+  // Simple mount effect - only runs when user is signed in
   useEffect(() => {
-    if (!initialLoadRef.current) return; // Skip if not initial load
+    if (!initialLoadRef.current || !isSignedIn) return;
 
-    debugLog('MBA2349f87g9qbh2nfv9cg: Component mounted - initializing data');
+    debugLog('MBA9999: Component mounted - initializing data');
     
     const initializeData = async () => {
       try {
@@ -434,7 +453,7 @@ const MessageHistory = ({ navigation, route }) => {
           if (currentUrl.searchParams.has('conversationId')) {
             currentUrl.searchParams.delete('conversationId');
             window.history.replaceState({}, '', currentUrl.toString());
-            debugLog('MBA2349f87g9qbh2nfv9cg: Cleared URL parameters on initial load');
+            debugLog('MBA9999: Cleared URL parameters on initial load');
           }
 
           // If we have a conversation ID in URL, we'll use that instead of auto-selecting
@@ -452,7 +471,7 @@ const MessageHistory = ({ navigation, route }) => {
           // Check if we should open booking creation (coming from Connections)
           if (route.params.isProfessional === true) {
             shouldOpenBookingCreationRef.current = true;
-            debugLog('MBA2349f87g9qbh2nfv9cg: Will open booking creation after data loads');
+            debugLog('MBA9999: Will open booking creation after data loads');
           }
           
           const conversationsData = await fetchConversations();
@@ -485,10 +504,7 @@ const MessageHistory = ({ navigation, route }) => {
     initializeData();
 
     return () => {
-      debugLog('MBA2349f87g9qbh2nfv9cg: Component unmounting - cleaning up');
-      
-      // No longer disconnect on component unmount
-      // This was causing message loss when switching tabs
+      debugLog('MBA9999: Component unmounting - cleaning up');
       
       // Reset everything for future component mount
       setConversations([]);
@@ -507,61 +523,12 @@ const MessageHistory = ({ navigation, route }) => {
         window.selectedConversationId = null;
       }
     };
-  }, []); // Empty dependency array means this runs once on mount
+  }, [isSignedIn]); // Only depend on isSignedIn
   
-  // Modify route params effect to only handle non-reload cases
-  useEffect(() => {
-    // Skip if this is the initial load/reload or if we're already handling route params
-    if (initialLoadRef.current || isHandlingRouteParamsRef.current || !route.params?.conversationId) {
-      return;
-    }
-
-    if (is_DEBUG) {
-      console.log('MBA98765 Route params detected (non-reload):', {
-        messageId: route.params.messageId,
-        conversationId: route.params.conversationId,
-        otherUserName: route.params.otherUserName,
-        isProfessional: route.params.isProfessional,
-        clientId: route.params.clientId
-      });
-    }
-    
-    isHandlingRouteParamsRef.current = true;
-    
-    // Check if we should open booking creation (coming from Connections)
-    if (route.params.isProfessional === true) {
-      shouldOpenBookingCreationRef.current = true;
-      if (is_DEBUG) {
-        console.log('MBA98765 Will open booking creation after data loads');
-      }
-    }
-    
-    // Set the selected conversation and fetch data
-    setSelectedConversation(route.params.conversationId);
-    
-    // Reset pagination state
-    setCurrentPage(1);
-    setHasMore(true);
-    
-    // Fetch fresh conversations and messages
-    fetchConversations().then(() => {
-      isHandlingRouteParamsRef.current = false;
-    });
-    
-    // Clear the params to prevent re-fetching
-    navigation.setParams({ 
-      messageId: null, 
-      conversationId: null,
-      otherUserName: null,
-      isProfessional: null,
-      clientId: null
-    });
-  }, [route.params]);
-
   // Effect to trigger booking creation once conversation data is loaded
   useEffect(() => {
     // Only run if we should open booking creation, have conversation data, and messages are loaded
-    if (shouldOpenBookingCreationRef.current && selectedConversationData && hasLoadedMessagesRef.current) {
+    if (shouldOpenBookingCreationRef.current && selectedConversationData && hasLoadedMessagesRef.current && isSignedIn) {
       if (is_DEBUG) {
         console.log('MBA98765 Conversation data and messages loaded, triggering booking creation', {
           conversationId: selectedConversationData.conversation_id,
@@ -579,13 +546,13 @@ const MessageHistory = ({ navigation, route }) => {
         handleCreateBooking();
       }, 300);
     }
-  }, [selectedConversationData, hasLoadedMessagesRef.current, hasDraft, draftData]);
+  }, [selectedConversationData, hasLoadedMessagesRef.current, hasDraft, draftData, isSignedIn]);
 
-  // Keep the conversation selection effect but remove message fetching
+  // Keep the conversation selection effect but remove message fetching and add safety checks
   useEffect(() => {
-    if (!selectedConversation || isInitialLoad) {
+    if (!selectedConversation || isInitialLoad || !isSignedIn) {
       if (is_DEBUG) {
-        console.log('MBA98765 Skipping conversation data update - initial load or no conversation');
+        console.log('MBA98765 Skipping conversation data update - initial load, no conversation, or not signed in');
       }
       return;
     }
@@ -649,22 +616,11 @@ const MessageHistory = ({ navigation, route }) => {
       }
       debugLog(`MBA3210: [OTHER USER STATUS] Could not find conversation data for ID: ${selectedConversation}`);
     }
-  }, [selectedConversation, conversations, isInitialLoad, markConversationAsRead]);
+  }, [selectedConversation, conversations, isInitialLoad, markConversationAsRead, isSignedIn]);
 
-  // Add cleanup when unmounting the component
+  // SAFE message fetching effect - separated and with safety checks
   useEffect(() => {
-    return () => {
-      // Clear the selected conversation tracking when unmounting
-      if (typeof window !== 'undefined') {
-        window.selectedConversationId = null;
-        debugLog('MBA4321: Cleared global selectedConversationId on unmount');
-      }
-    };
-  }, []);
-
-  // Add dedicated effect for message fetching with optimizations
-  useEffect(() => {
-    if (!selectedConversation || isInitialLoad) {
+    if (!selectedConversation || isInitialLoad || !isSignedIn) {
       return;
     }
 
@@ -692,11 +648,11 @@ const MessageHistory = ({ navigation, route }) => {
     hasLoadedMessagesRef.current = true;
     setIsLoadingMessages(true);
     
-    // Fetch messages
+    // Fetch messages with safety checks
     fetchMessages(selectedConversation, 1)
       .then(() => {
-        // Skip updates if component unmounted or conversation changed
-        if (!isCurrentOperation) return;
+        // Skip updates if component unmounted or conversation changed or user signed out
+        if (!isCurrentOperation || !isSignedIn) return;
         
         setIsLoadingMessages(false);
         
@@ -710,7 +666,7 @@ const MessageHistory = ({ navigation, route }) => {
         
         // Mark this specific conversation's notifications as read 
         // We do this here after successful message fetch to ensure it actually happened
-        if (markConversationAsRead && hasSelectedConversationChanged) {
+        if (markConversationAsRead && hasSelectedConversationChanged && isSignedIn) {
           debugLog(`MBA4321: Marking conversation ${selectedConversation} as read after successful message fetch`);
           markConversationAsRead(selectedConversation);
         }
@@ -725,10 +681,12 @@ const MessageHistory = ({ navigation, route }) => {
     return () => {
       isCurrentOperation = false;
     };
-  }, [selectedConversation, isInitialLoad, markConversationAsRead]);
+  }, [selectedConversation, isInitialLoad, markConversationAsRead, isSignedIn]);
 
-  // Modify existing screen width effect
+  // Modify existing screen width effect to be safer
   useEffect(() => {
+    if (!isSignedIn) return; // Don't do anything if not signed in
+    
     const prevWidth = prevScreenWidthRef.current;
     const hasWidthCrossedThreshold = 
       (prevWidth <= 900 && screenWidth > 900) || 
@@ -753,7 +711,7 @@ const MessageHistory = ({ navigation, route }) => {
         setSelectedConversation(conversations[0].conversation_id);
       }
     }
-  }, [screenWidth]);
+  }, [screenWidth, isSignedIn]);
 
   // Update conversations list when main conversation list or search query changes
   useEffect(() => {
@@ -771,29 +729,14 @@ const MessageHistory = ({ navigation, route }) => {
   // Modify fetchConversations to update filtered conversations
   const fetchConversations = async () => {
     try {
-      // Don't reload if already loading or if conversations are already loaded and this isn't initialization
-      if (isLoadingConversations && conversations.length > 0 && !initialLoadRef.current) {
-        debugLog('MBA3210: [OTHER USERS STATUS] Skipping duplicate conversation fetch - already loading');
-        return conversations;
-      }
-      
       setIsLoadingConversations(true);
       debugLog('MBA3210: [OTHER USERS STATUS] Starting to fetch conversations with online status data');
 
-      const token = await getStorage('userToken');
-      const requestUrl = `${API_BASE_URL}/api/conversations/v1/`;
+      const response = await getConversations();
       
-      debugLog('MBA3210: [OTHER USERS STATUS] Making API request to get conversations with online statuses');
-      const response = await axios.get(requestUrl, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.data && Array.isArray(response.data)) {
+      if (response && Array.isArray(response)) {
         // Add default false value for other_participant_online if not present
-        const conversationsWithOnlineStatus = response.data.map(conv => ({
+        const conversationsWithOnlineStatus = response.map(conv => ({
           ...conv,
           other_participant_online: conv.other_participant_online || false
         }));
@@ -807,7 +750,7 @@ const MessageHistory = ({ navigation, route }) => {
         debugLog(`MBA3210: [OTHER USERS STATUS] Fetched ${conversationsWithOnlineStatus.length} conversations with online status data`);
         
         setConversations(conversationsWithOnlineStatus);
-        setFilteredConversations(conversationsWithOnlineStatus); // Update filtered conversations too
+        setFilteredConversations(conversationsWithOnlineStatus);
         return conversationsWithOnlineStatus;
       }
       return [];
