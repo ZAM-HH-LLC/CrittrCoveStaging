@@ -1069,3 +1069,33 @@ export const getUnreadMessageCount = async () => {
   }
 };
 
+/**
+ * Get messages for a conversation with pagination
+ * @param {string|number} conversationId - The ID of the conversation
+ * @param {number} page - Page number for pagination (default 1)
+ * @returns {Promise<Object>} - Object containing messages array, pagination info, and draft data
+ */
+export const getConversationMessages = async (conversationId, page = 1) => {
+  try {
+    debugLog(`MBA2349f87g9qbh2nfv9cg: Fetching messages for conversation ${conversationId}, page ${page}`);
+    
+    const response = await axios.get(
+      `${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/`,
+      {
+        params: { page }
+      }
+    );
+    
+    debugLog(`MBA2349f87g9qbh2nfv9cg: Messages fetched successfully`, {
+      messageCount: response.data.messages?.length || 0,
+      hasNext: response.data.has_more,
+      hasDraft: response.data.has_draft
+    });
+    
+    return response.data;
+  } catch (error) {
+    debugLog(`MBA2349f87g9qbh2nfv9cg: Error fetching messages for conversation ${conversationId}:`, error);
+    throw error;
+  }
+};
+

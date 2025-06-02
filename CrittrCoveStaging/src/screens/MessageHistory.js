@@ -24,6 +24,7 @@ import {
   approveBooking,
   requestBookingChanges,
   createDraftFromBooking,
+  getConversationMessages,
   // ... other imports from API.js
 } from '../api/API';
 
@@ -1589,34 +1590,24 @@ const MessageHistory = ({ navigation, route }) => {
         debugLog(`MBA2349f87g9qbh2nfv9cg: Setting pagination loading state for page ${page}`);
         // Mark that we're loading more
         isLoadingMoreRef.current = true;
-        setIsLoadingMore(true);
       }
       
       // Mark this page as being processed
       processedPagesRef.current.add(pageKey);
       debugLog(`MBA2349f87g9qbh2nfv9cg: Added page ${pageKey} to processed pages. Total processed: ${processedPagesRef.current.size}`);
       
-      const token = await getStorage('userToken');
-      
-      const url = `${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/?page=${page}`;
-      debugLog(`MBA2349f87g9qbh2nfv9cg: Making API request to ${url}`);
-
-      const response = await axios.get(url, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Use the new API function instead of direct axios call
+      const response = await getConversationMessages(conversationId, page);
       
       debugLog(`MBA2349f87g9qbh2nfv9cg: API response received for page ${page}`, {
-        messageCount: response.data.messages?.length || 0,
-        hasNext: response.data.has_more,
+        messageCount: response.messages?.length || 0,
+        hasNext: response.has_more,
         currentMessageCount: messages.length,
-        hasDraft: response.data.has_draft
+        hasDraft: response.has_draft
       });
       
       // Process messages to remove duplicates
-      const newMessages = response.data.messages || [];
+      const newMessages = response.messages || [];
       const uniqueMessages = newMessages.filter(msg => {
         // Skip messages we already have
         if (msg.message_id && messageIdsRef.current.has(msg.message_id)) {
@@ -1639,16 +1630,16 @@ const MessageHistory = ({ navigation, route }) => {
         debugLog(`MBA2349f87g9qbh2nfv9cg: Setting page 1 messages - count: ${uniqueMessages.length}`);
         setMessages(uniqueMessages);
         setIsLoadingMessages(false);
-        setHasMore(response.data.has_more || false);
+        setHasMore(response.has_more || false);
         
         // Set draft data only on first page load
-        setHasDraft(response.data.has_draft || false);
-        setDraftData(response.data.draft_data || null);
+        setHasDraft(response.has_draft || false);
+        setDraftData(response.draft_data || null);
         
         debugLog(`MBA2349f87g9qbh2nfv9cg: Page 1 state updated`, {
           messageCount: uniqueMessages.length,
-          hasMore: response.data.has_more || false,
-          hasDraft: response.data.has_draft || false
+          hasMore: response.has_more || false,
+          hasDraft: response.has_draft || false
         });
         
         // Force a rerender after setting messages to fix scroll issues
@@ -1695,13 +1686,13 @@ const MessageHistory = ({ navigation, route }) => {
           return updatedMessages;
         });
         
-        setHasMore(response.data.has_more || false);
+        setHasMore(response.has_more || false);
         setIsLoadingMore(false);
         isLoadingMoreRef.current = false;
         
         debugLog(`MBA2349f87g9qbh2nfv9cg: Pagination state updated`, {
           page,
-          hasMore: response.data.has_more || false,
+          hasMore: response.has_more || false,
           isLoadingMore: false,
           currentPageAfter: page
         });
@@ -1713,7 +1704,7 @@ const MessageHistory = ({ navigation, route }) => {
         page,
         finalMessageCount: page === 1 ? uniqueMessages.length : messages.length + uniqueMessages.length,
         currentPage: page,
-        hasMore: response.data.has_more || false
+        hasMore: response.has_more || false
       });
 
       setTimeout(() => {
@@ -2852,7 +2843,6 @@ const MessageHistory = ({ navigation, route }) => {
     messages, 
     renderMessage, 
     loadMoreMessages, 
-    isLoadingMore, 
     hasMore 
   }) => {
     const flatListRef = useRef(null);
@@ -3048,7 +3038,6 @@ const MessageHistory = ({ navigation, route }) => {
                 messages={messages}
                 renderMessage={renderMessage}
                 loadMoreMessages={loadMoreMessages}
-                isLoadingMore={isLoadingMore}
                 hasMore={hasMore} 
               />
             )}
