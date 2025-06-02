@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status, serializers
 from django.utils import timezone
@@ -165,7 +165,7 @@ def get_professional_dashboard(request):
         )
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def search_professionals(request):
     """
     Search for professionals based on various criteria
@@ -184,18 +184,16 @@ def search_professionals(request):
         page_size = data.get('page_size', 20)
         
         logger.debug(f"Search parameters: {data}")
-        logger.debug(f"Current user: {request.user.id} ({request.user.name})")
+        logger.debug(f"Current user: {request.user if request.user.is_authenticated else 'Anonymous'}")
         
-        # Start with all professionals who have approved services, excluding current user
+        # Start with all professionals who have approved services
         professionals_query = Professional.objects.filter(
             service__moderation_status='APPROVED',
             service__is_active=True,
             service__searchable=True
-        ).exclude(
-            user=request.user  # Exclude the current user from search results
         ).distinct()
         
-        logger.debug(f"Found {professionals_query.count()} professionals after excluding current user")
+        logger.debug(f"Found {professionals_query.count()} professionals with approved services")
         
         # Get user coordinates if location is provided
         user_coords = None
@@ -418,10 +416,8 @@ def search_professionals(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-
-
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_professional_services(request, professional_id):
     """
     Get detailed services for a specific professional (for client view).

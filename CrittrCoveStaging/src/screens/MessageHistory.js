@@ -2675,7 +2675,7 @@ const MessageHistory = ({ navigation, route }) => {
           {selectedConversationData?.other_user_name}
         </Text>
         
-        {hasDraft && draftData?.draft_id && (
+        {hasDraft && draftData?.draft_id && selectedConversationData?.is_professional && (
           <TouchableOpacity 
             style={styles.editDraftButton}
             onPress={() => {
@@ -2878,7 +2878,7 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
         
         {/* Add Edit Draft button positioned at the right */}
-        {hasDraft && draftData?.draft_id && (
+        {hasDraft && draftData?.draft_id && selectedConversationData?.is_professional && (
           <TouchableOpacity 
             style={[styles.editDraftButton, styles.mobileEditDraftButton, { 
               position: 'absolute', 

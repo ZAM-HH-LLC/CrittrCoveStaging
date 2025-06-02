@@ -13,7 +13,7 @@ import { searchProfessionals } from '../api/API';
 
 const SearchProfessionalsListing = ({ navigation, route }) => {
   const { width: windowWidth } = useWindowDimensions();
-  const { screenWidth, isCollapsed } = useContext(AuthContext);
+  const { screenWidth, isCollapsed, isSignedIn } = useContext(AuthContext);
   const [isSingleView, setIsSingleView] = useState(screenWidth <= 1200);
   const [isMobile, setIsMobile] = useState(screenWidth <= 900);
   const [activeView, setActiveView] = useState(isSingleView ? 'filters' : 'all');
@@ -152,7 +152,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     }
   };
 
-  const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
+  const createStyles = (screenWidth, isCollapsed, isSignedIn, isMobile) => StyleSheet.create({
     mainContainer: {
       flex: 1,
       backgroundColor: theme.colors.background,
@@ -161,14 +161,17 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       left: 0,
       right: 0,
       bottom: 0,
-      marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
+      // Only apply sidebar margin when signed in and on desktop
+      marginLeft: (screenWidth > 900 && isSignedIn) ? (isCollapsed ? 70 : 250) : 0,
+      // Add top padding when not signed in (mobile header) or on mobile when signed in
+      paddingTop: (!isSignedIn || isMobile) ? 60 : 0,
       transition: 'margin-left 0.3s ease',
     },
     container: {
       flex: 1,
       display: 'flex',
       flexDirection: 'column',
-      height: '100vh',
+      height: (!isSignedIn || isMobile) ? 'calc(100vh - 60px)' : '100vh',
       overflow: 'hidden',
     },
     content: {
@@ -297,7 +300,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     },
   });
 
-  const styles = createStyles(screenWidth, isCollapsed);
+  const styles = createStyles(screenWidth, isCollapsed, isSignedIn, isMobile);
 
   const renderContent = () => {
     if (!isSingleView) {

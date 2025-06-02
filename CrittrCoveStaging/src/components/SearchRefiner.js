@@ -86,187 +86,6 @@ const generalCategoriesData = GENERAL_CATEGORIES.map(category => ({
   value: category.toLowerCase().replace(/\s+/g, '-')
 }));
 
-const LocationInput = ({ value, onChange, suggestions, onSuggestionSelect }) => {
-  const locationInputRef = useRef(null);
-
-  const debouncedSearch = useCallback(
-    debounce((text) => {
-      if (text.length < 1) {
-        onSuggestionSelect([]);
-        return;
-      }
-      
-      // Search through supported locations
-      const filteredLocations = ALL_SEARCHABLE_LOCATIONS.filter(location =>
-        location.searchText.toLowerCase().includes(text.toLowerCase()) ||
-        location.display.toLowerCase().includes(text.toLowerCase())
-      ).slice(0, 5); // Limit to 5 results
-      
-      // If no matches found, show "not supported" message
-      if (filteredLocations.length === 0) {
-        onSuggestionSelect([{
-          display: `We're not available in "${text}" yet - coming soon!`,
-          searchText: text,
-          type: 'not_supported'
-        }]);
-      } else {
-        onSuggestionSelect(filteredLocations);
-      }
-    }, 100), // Reduced from 300ms to 100ms for faster response
-    [onSuggestionSelect]
-  );
-
-  return (
-    <View style={[styles.locationInputWrapper, { zIndex: 2 }]}>
-      <TextInput
-        ref={locationInputRef}
-        style={styles.locationInput}
-        placeholder="Enter city or zip in Colorado"
-        value={value}
-        onChangeText={(text) => {
-          onChange(text);
-          if (text.length < 1) {
-            onSuggestionSelect([]);
-          } else {
-            debouncedSearch(text);
-          }
-        }}
-        onFocus={() => {
-          // Re-show suggestions if there's text and we have suggestions
-          if (value.length > 0) {
-            debouncedSearch(value);
-          }
-        }}
-        onBlur={() => {
-          // Delay hiding suggestions to allow for suggestion selection
-          setTimeout(() => {
-            onSuggestionSelect([]);
-          }, 150);
-        }}
-      />
-      {suggestions.length > 0 && (
-        <View style={styles.suggestionsWrapper}>
-          <ScrollView 
-            style={styles.suggestionsContainer}
-            keyboardShouldPersistTaps="always"
-            nestedScrollEnabled={true}
-          >
-            {suggestions.map((suggestion, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.suggestionItem,
-                  suggestion.type === 'not_supported' && styles.suggestionItemNotSupported
-                ]}
-                onPress={() => {
-                  if (suggestion.type !== 'not_supported') {
-                    onChange(suggestion.display);
-                    onSuggestionSelect([]);
-                  }
-                }}
-                disabled={suggestion.type === 'not_supported'}
-              >
-                <Text style={[
-                  styles.suggestionText,
-                  suggestion.type === 'not_supported' && styles.suggestionTextNotSupported
-                ]}>
-                  {suggestion.display}
-                </Text>
-                {suggestion.type === 'zip' && (
-                  <Text style={styles.suggestionType}>ZIP Code</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
-};
-
-const OtherAnimalInput = ({ value, onChange, suggestions, onSuggestionSelect, isVisible, onClose, onAnimalSelect }) => {
-  const animalInputRef = useRef(null);
-
-  const debouncedSearch = useCallback(
-    debounce((text) => {
-      if (text.length < 1) {
-        onSuggestionSelect([]);
-        return;
-      }
-      
-      const filteredAnimals = ALL_ANIMAL_TYPES.filter(animal =>
-        animal.toLowerCase().includes(text.toLowerCase())
-      );
-      onSuggestionSelect(filteredAnimals);
-    }, 300),
-    [onSuggestionSelect]
-  );
-
-  if (!isVisible) return null;
-
-  return (
-    <View style={styles.otherAnimalInputWrapper}>
-      <View style={styles.otherAnimalHeader}>
-        <Text style={styles.otherAnimalTitle}>Search for animal type</Text>
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
-        </TouchableOpacity>
-      </View>
-      <TextInput
-        ref={animalInputRef}
-        style={styles.animalInput}
-        placeholder="Type animal name (e.g., Snake, Turtle, Horse)"
-        value={value}
-        onChangeText={(text) => {
-          onChange(text);
-          debouncedSearch(text);
-        }}
-        autoFocus={true}
-      />
-      {suggestions.length > 0 && (
-        <View style={styles.animalSuggestionsWrapper}>
-          <ScrollView 
-            style={styles.animalSuggestionsContainer}
-            keyboardShouldPersistTaps="always"
-            nestedScrollEnabled={true}
-          >
-            {suggestions.map((animal, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.animalSuggestionItem}
-                onPress={() => {
-                  onAnimalSelect(animal);
-                  onChange('');
-                  onSuggestionSelect([]);
-                  onClose();
-                }}
-              >
-                <Text style={styles.animalSuggestionText}>{animal}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
-};
-
-const AnimalTypeButton = ({ icon, label, selected, onPress }) => (
-  <TouchableOpacity 
-    style={[styles.animalTypeButton, selected && styles.animalTypeButtonSelected]} 
-    onPress={onPress}
-  >
-    <MaterialCommunityIcons 
-      name={icon} 
-      size={24} 
-      color={selected ? theme.colors.whiteText : theme.colors.text} 
-    />
-    <Text style={[styles.animalTypeLabel, selected && styles.animalTypeLabelSelected]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
 const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearchResults, initialFilters }) => {
   const [location, setLocation] = useState(initialFilters?.location || '');
   const [locationSuggestions, setLocationSuggestions] = useState([]);
@@ -282,7 +101,7 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
   const [otherAnimalSearch, setOtherAnimalSearch] = useState('');
   const [otherAnimalSuggestions, setOtherAnimalSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const { screenWidth } = useContext(AuthContext);
+  const { screenWidth, isSignedIn } = useContext(AuthContext);
 
   // Update state when initialFilters change
   React.useEffect(() => {
@@ -294,6 +113,621 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       setPriceRange(initialFilters.price_max || 200);
     }
   }, [initialFilters]);
+
+  // Create styles function that takes context variables as parameters
+  const createStyles = (isSignedIn, screenWidth) => StyleSheet.create({
+    container: {
+      padding: theme.spacing.medium,
+      backgroundColor: theme.colors.surface,
+      height: '100%',
+      width: '100%',
+      overflow: 'visible',
+      // Add top padding when not signed in or on mobile (screenWidth <= 1200)
+      paddingTop: (!isSignedIn || screenWidth <= 1200) ? theme.spacing.medium : theme.spacing.medium,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: theme.spacing.xlarge,
+      gap: theme.spacing.small,
+    },
+    title: {
+      fontSize: theme.fontSizes.xlarge,
+      fontWeight: '600',
+      color: theme.colors.text,
+      fontFamily: theme.fonts.header.fontFamily,
+    },
+    section: {
+      marginBottom: theme.spacing.xlarge,
+      position: 'relative',
+    },
+    label: {
+      fontSize: theme.fontSizes.medium,
+      fontWeight: '500',
+      color: theme.colors.text,
+      marginVertical: theme.spacing.small,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    dropdown: {
+      height: 48,
+      backgroundColor: theme.colors.background,
+      borderRadius: 8,
+      padding: theme.spacing.medium,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    locationInputWrapper: {
+      position: 'relative',
+      marginBottom: theme.spacing.small,
+      zIndex: 1100,
+    },
+    locationInput: {
+      height: 48,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      paddingHorizontal: theme.spacing.medium,
+      backgroundColor: theme.colors.background,
+      fontSize: theme.fontSizes.medium,
+    },
+    suggestionsWrapper: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      maxHeight: 200,
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      zIndex: 1100,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    suggestionsContainer: {
+      flex: 1,
+    },
+    suggestionItem: {
+      padding: theme.spacing.medium,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    suggestionItemNotSupported: {
+      backgroundColor: theme.colors.background,
+    },
+    suggestionText: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    suggestionTextNotSupported: {
+      color: theme.colors.placeholderText,
+      fontStyle: 'italic',
+    },
+    suggestionType: {
+      fontSize: theme.fontSizes.small,
+      color: theme.colors.placeholderText,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    datePickersContainer: {
+      flexDirection: 'column',
+      gap: theme.spacing.medium,
+      marginRight: 16,
+      zIndex: 500,
+    },
+    datePickerWrapper: {
+      width: '100%',
+    },
+    dateLabel: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+      marginBottom: 8,
+      fontFamily: theme.fonts.regular.fontFamily,
+      fontWeight: '500',
+    },
+    dateInput: {
+      height: 48,
+      backgroundColor: theme.colors.background,
+      borderRadius: 8,
+      padding: theme.spacing.medium,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      fontSize: theme.fontSizes.medium,
+    },
+    priceRangeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.medium,
+      marginTop: theme.spacing.small,
+    },
+    slider: {
+      flex: 1,
+      height: 48,
+      marginHorizontal: theme.spacing.medium,
+    },
+    priceText: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+      fontFamily: theme.fonts.regular.fontFamily,
+      minWidth: 50,
+    },
+    selectedText: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+      fontWeight: '500',
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    placeholderText: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.placeholderText,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    dropdownContainer: {
+      backgroundColor: theme.colors.background,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      overflow: 'hidden',
+    },
+    dropdownItem: {
+      padding: theme.spacing.medium,
+    },
+    dropdownItemSelected: {
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+      borderRadius: 8,
+      margin: 4,
+    },
+    dropdownItemText: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    dropdownItemTextSelected: {
+      color: theme.colors.primary,
+      fontWeight: '500',
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    personButton: {
+      padding: theme.spacing.small,
+      borderRadius: 8,
+      marginLeft: 'auto',
+    },
+    showProfessionalsButton: {
+      backgroundColor: theme.colors.primary,
+      padding: theme.spacing.medium,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: theme.spacing.large,
+    },
+    showProfessionalsText: {
+      color: theme.colors.whiteText,
+      fontSize: theme.fontSizes.medium,
+      fontWeight: '600',
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    locationContainer: {
+      flexDirection: 'column',
+      width: '100%',
+      gap: theme.spacing.small,
+      zIndex: 1100,
+      position: 'relative',
+    },
+    useLocationButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: theme.spacing.small,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      gap: 4,
+      alignSelf: 'flex-start',
+    },
+    useLocationText: {
+      color: theme.colors.text,
+      fontSize: theme.fontSizes.small,
+    },
+    input: {
+      height: 48,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      paddingHorizontal: theme.spacing.medium,
+      backgroundColor: theme.colors.surface,
+    },
+    animalTypesContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: theme.spacing.small,
+      marginTop: theme.spacing.small,
+      marginBottom: theme.spacing.medium,
+      zIndex: 800,
+    },
+    animalTypeButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: theme.spacing.small,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      gap: 4,
+    },
+    animalTypeButtonSelected: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    animalTypeLabel: {
+      color: theme.colors.text,
+      fontSize: theme.fontSizes.small,
+    },
+    animalTypeLabelSelected: {
+      color: theme.colors.whiteText,
+    },
+    switchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: Platform.OS === 'web' ? 'space-between' : 'flex-start',
+      marginVertical: theme.spacing.small,
+      gap: theme.spacing.medium,
+      zIndex: 700,
+    },
+    priceContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.small,
+      zIndex: 600,
+    },
+    priceLabel: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+      minWidth: 50,
+    },
+    checkboxContainer: {
+      marginTop: theme.spacing.medium,
+      gap: theme.spacing.small,
+      zIndex: 400,
+    },
+    checkboxRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.small,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.surface,
+    },
+    checkboxLabel: {
+      flex: 1,
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      gap: theme.spacing.small,
+    },
+    iconButton: {
+      padding: theme.spacing.small,
+      borderRadius: 8,
+    },
+    checkboxLabelContainer: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingRight: theme.spacing.small,
+    },
+    searchButton: {
+      backgroundColor: theme.colors.primary,
+      padding: theme.spacing.medium,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: theme.spacing.large,
+      marginBottom: theme.spacing.large,
+    },
+    searchButtonText: {
+      color: theme.colors.whiteText,
+      fontSize: theme.fontSizes.medium,
+      fontWeight: '600',
+    },
+    searchButtonDisabled: {
+      backgroundColor: theme.colors.border,
+      opacity: 0.6,
+    },
+    otherAnimalInputWrapper: {
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      marginTop: theme.spacing.small,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    otherAnimalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: theme.spacing.medium,
+    },
+    otherAnimalTitle: {
+      fontSize: theme.fontSizes.medium,
+      fontWeight: '600',
+      color: theme.colors.text,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    closeButton: {
+      padding: theme.spacing.small,
+      borderRadius: 8,
+    },
+    animalInput: {
+      height: 48,
+      borderWidth: 0,
+      borderRadius: 8,
+      paddingHorizontal: theme.spacing.medium,
+      backgroundColor: theme.colors.background,
+      fontSize: theme.fontSizes.medium,
+      marginHorizontal: theme.spacing.medium,
+      marginBottom: theme.spacing.small,
+    },
+    animalSuggestionsWrapper: {
+      flex: 1,
+    },
+    animalSuggestionsContainer: {
+      flex: 1,
+    },
+    animalSuggestionItem: {
+      padding: theme.spacing.medium,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    animalSuggestionText: {
+      fontSize: theme.fontSizes.medium,
+      color: theme.colors.text,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    animalSelectionWrapper: {
+      flexDirection: 'column',
+      gap: theme.spacing.small,
+    },
+    selectedAnimalsContainer: {
+      marginTop: theme.spacing.medium,
+      padding: theme.spacing.medium,
+      backgroundColor: theme.colors.background,
+      borderRadius: 8,
+    },
+    selectedAnimalsLabel: {
+      fontSize: theme.fontSizes.medium,
+      fontWeight: '500',
+      color: theme.colors.text,
+      marginBottom: theme.spacing.small,
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+    selectedAnimalsList: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: theme.spacing.small,
+    },
+    selectedAnimalTag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: theme.spacing.small,
+      backgroundColor: theme.colors.primary,
+      borderRadius: 8,
+      gap: theme.spacing.small,
+    },
+    selectedAnimalText: {
+      color: theme.colors.whiteText,
+      fontSize: theme.fontSizes.medium,
+      fontWeight: '500',
+      fontFamily: theme.fonts.regular.fontFamily,
+    },
+  });
+
+  // Create styles using current context values
+  const styles = createStyles(isSignedIn, screenWidth);
+
+  // Helper components defined inside main component so they have access to styles
+  const LocationInput = ({ value, onChange, suggestions, onSuggestionSelect }) => {
+    const locationInputRef = useRef(null);
+
+    const debouncedSearch = useCallback(
+      debounce((text) => {
+        if (text.length < 1) {
+          onSuggestionSelect([]);
+          return;
+        }
+        
+        // Search through supported locations
+        const filteredLocations = ALL_SEARCHABLE_LOCATIONS.filter(location =>
+          location.searchText.toLowerCase().includes(text.toLowerCase()) ||
+          location.display.toLowerCase().includes(text.toLowerCase())
+        ).slice(0, 5); // Limit to 5 results
+        
+        // If no matches found, show "not supported" message
+        if (filteredLocations.length === 0) {
+          onSuggestionSelect([{
+            display: `We're not available in "${text}" yet - coming soon!`,
+            searchText: text,
+            type: 'not_supported'
+          }]);
+        } else {
+          onSuggestionSelect(filteredLocations);
+        }
+      }, 100), // Reduced from 300ms to 100ms for faster response
+      [onSuggestionSelect]
+    );
+
+    return (
+      <View style={[styles.locationInputWrapper, { zIndex: 2 }]}>
+        <TextInput
+          ref={locationInputRef}
+          style={styles.locationInput}
+          placeholder="Enter city or zip in Colorado"
+          value={value}
+          onChangeText={(text) => {
+            onChange(text);
+            if (text.length < 1) {
+              onSuggestionSelect([]);
+            } else {
+              debouncedSearch(text);
+            }
+          }}
+          onFocus={() => {
+            // Re-show suggestions if there's text and we have suggestions
+            if (value.length > 0) {
+              debouncedSearch(value);
+            }
+          }}
+          onBlur={() => {
+            // Delay hiding suggestions to allow for suggestion selection
+            setTimeout(() => {
+              onSuggestionSelect([]);
+            }, 150);
+          }}
+        />
+        {suggestions.length > 0 && (
+          <View style={styles.suggestionsWrapper}>
+            <ScrollView 
+              style={styles.suggestionsContainer}
+              keyboardShouldPersistTaps="always"
+              nestedScrollEnabled={true}
+            >
+              {suggestions.map((suggestion, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.suggestionItem,
+                    suggestion.type === 'not_supported' && styles.suggestionItemNotSupported
+                  ]}
+                  onPress={() => {
+                    if (suggestion.type !== 'not_supported') {
+                      onChange(suggestion.display);
+                      onSuggestionSelect([]);
+                    }
+                  }}
+                  disabled={suggestion.type === 'not_supported'}
+                >
+                  <Text style={[
+                    styles.suggestionText,
+                    suggestion.type === 'not_supported' && styles.suggestionTextNotSupported
+                  ]}>
+                    {suggestion.display}
+                  </Text>
+                  {suggestion.type === 'zip' && (
+                    <Text style={styles.suggestionType}>ZIP Code</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const OtherAnimalInput = ({ value, onChange, suggestions, onSuggestionSelect, isVisible, onClose, onAnimalSelect }) => {
+    const animalInputRef = useRef(null);
+
+    const debouncedSearch = useCallback(
+      debounce((text) => {
+        if (text.length < 1) {
+          onSuggestionSelect([]);
+          return;
+        }
+        
+        const filteredAnimals = ALL_ANIMAL_TYPES.filter(animal =>
+          animal.toLowerCase().includes(text.toLowerCase())
+        );
+        onSuggestionSelect(filteredAnimals);
+      }, 300),
+      [onSuggestionSelect]
+    );
+
+    if (!isVisible) return null;
+
+    return (
+      <View style={styles.otherAnimalInputWrapper}>
+        <View style={styles.otherAnimalHeader}>
+          <Text style={styles.otherAnimalTitle}>Search for animal type</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          ref={animalInputRef}
+          style={styles.animalInput}
+          placeholder="Type animal name (e.g., Snake, Turtle, Horse)"
+          value={value}
+          onChangeText={(text) => {
+            onChange(text);
+            debouncedSearch(text);
+          }}
+          autoFocus={true}
+        />
+        {suggestions.length > 0 && (
+          <View style={styles.animalSuggestionsWrapper}>
+            <ScrollView 
+              style={styles.animalSuggestionsContainer}
+              keyboardShouldPersistTaps="always"
+              nestedScrollEnabled={true}
+            >
+              {suggestions.map((animal, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.animalSuggestionItem}
+                  onPress={() => {
+                    onAnimalSelect(animal);
+                    onChange('');
+                    onSuggestionSelect([]);
+                    onClose();
+                  }}
+                >
+                  <Text style={styles.animalSuggestionText}>{animal}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const AnimalTypeButton = ({ icon, label, selected, onPress }) => (
+    <TouchableOpacity 
+      style={[styles.animalTypeButton, selected && styles.animalTypeButtonSelected]} 
+      onPress={onPress}
+    >
+      <MaterialCommunityIcons 
+        name={icon} 
+        size={24} 
+        color={selected ? theme.colors.whiteText : theme.colors.text} 
+      />
+      <Text style={[styles.animalTypeLabel, selected && styles.animalTypeLabelSelected]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 
   const handleAnimalSelect = (animal) => {
     if (selectedAnimals.includes(animal)) {
@@ -563,432 +997,5 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    padding: theme.spacing.medium,
-    backgroundColor: theme.colors.surface,
-    height: '100%',
-    width: '100%',
-    overflow: 'visible',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing.xlarge,
-    gap: theme.spacing.small,
-  },
-  title: {
-    fontSize: theme.fontSizes.xlarge,
-    fontWeight: '600',
-    color: theme.colors.text,
-    fontFamily: theme.fonts.header.fontFamily,
-  },
-  section: {
-    marginBottom: theme.spacing.xlarge,
-    position: 'relative',
-  },
-  label: {
-    fontSize: theme.fontSizes.medium,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginVertical: theme.spacing.small,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  dropdown: {
-    height: 48,
-    backgroundColor: theme.colors.background,
-    borderRadius: 8,
-    padding: theme.spacing.medium,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  locationInputWrapper: {
-    position: 'relative',
-    marginBottom: theme.spacing.small,
-    zIndex: 1100,
-  },
-  locationInput: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    paddingHorizontal: theme.spacing.medium,
-    backgroundColor: theme.colors.background,
-    fontSize: theme.fontSizes.medium,
-  },
-  suggestionsWrapper: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    maxHeight: 200,
-    backgroundColor: theme.colors.background,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    zIndex: 1100,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  suggestionsContainer: {
-    flex: 1,
-  },
-  suggestionItem: {
-    padding: theme.spacing.medium,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  suggestionItemNotSupported: {
-    backgroundColor: theme.colors.background,
-  },
-  suggestionText: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  suggestionTextNotSupported: {
-    color: theme.colors.placeholderText,
-    fontStyle: 'italic',
-  },
-  suggestionType: {
-    fontSize: theme.fontSizes.small,
-    color: theme.colors.placeholderText,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  datePickersContainer: {
-    flexDirection: 'column',
-    gap: theme.spacing.medium,
-    marginRight: 16,
-    zIndex: 500,
-  },
-  datePickerWrapper: {
-    width: '100%',
-  },
-  dateLabel: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    marginBottom: 8,
-    fontFamily: theme.fonts.regular.fontFamily,
-    fontWeight: '500',
-  },
-  dateInput: {
-    height: 48,
-    backgroundColor: theme.colors.background,
-    borderRadius: 8,
-    padding: theme.spacing.medium,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    fontSize: theme.fontSizes.medium,
-  },
-  priceRangeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.medium,
-    marginTop: theme.spacing.small,
-  },
-  slider: {
-    flex: 1,
-    height: 48,
-    marginHorizontal: theme.spacing.medium,
-  },
-  priceText: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-    minWidth: 50,
-  },
-  selectedText: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    fontWeight: '500',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  placeholderText: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.placeholderText,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  dropdownContainer: {
-    backgroundColor: theme.colors.background,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    padding: theme.spacing.medium,
-  },
-  dropdownItemSelected: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: 8,
-    margin: 4,
-  },
-  dropdownItemText: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  dropdownItemTextSelected: {
-    color: theme.colors.primary,
-    fontWeight: '500',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  personButton: {
-    padding: theme.spacing.small,
-    borderRadius: 8,
-    marginLeft: 'auto',
-  },
-  showProfessionalsButton: {
-    backgroundColor: theme.colors.primary,
-    padding: theme.spacing.medium,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: theme.spacing.large,
-  },
-  showProfessionalsText: {
-    color: theme.colors.whiteText,
-    fontSize: theme.fontSizes.medium,
-    fontWeight: '600',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  locationContainer: {
-    flexDirection: 'column',
-    width: '100%',
-    gap: theme.spacing.small,
-    zIndex: 1100,
-    position: 'relative',
-  },
-  useLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: theme.spacing.small,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 4,
-    alignSelf: 'flex-start',
-  },
-  useLocationText: {
-    color: theme.colors.text,
-    fontSize: theme.fontSizes.small,
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    paddingHorizontal: theme.spacing.medium,
-    backgroundColor: theme.colors.surface,
-  },
-  animalTypesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.small,
-    marginTop: theme.spacing.small,
-    marginBottom: theme.spacing.medium,
-    zIndex: 800,
-  },
-  animalTypeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: theme.spacing.small,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 4,
-  },
-  animalTypeButtonSelected: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  animalTypeLabel: {
-    color: theme.colors.text,
-    fontSize: theme.fontSizes.small,
-  },
-  animalTypeLabelSelected: {
-    color: theme.colors.whiteText,
-  },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: Platform.OS === 'web' ? 'space-between' : 'flex-start',
-    marginVertical: theme.spacing.small,
-    gap: theme.spacing.medium,
-    zIndex: 700,
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.small,
-    zIndex: 600,
-  },
-  priceLabel: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    minWidth: 50,
-  },
-  checkboxContainer: {
-    marginTop: theme.spacing.medium,
-    gap: theme.spacing.small,
-    zIndex: 400,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.small,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surface,
-  },
-  checkboxLabel: {
-    flex: 1,
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: theme.spacing.small,
-  },
-  iconButton: {
-    padding: theme.spacing.small,
-    borderRadius: 8,
-  },
-  checkboxLabelContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: theme.spacing.small,
-  },
-  searchButton: {
-    backgroundColor: theme.colors.primary,
-    padding: theme.spacing.medium,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: theme.spacing.large,
-    marginBottom: theme.spacing.large,
-  },
-  searchButtonText: {
-    color: theme.colors.whiteText,
-    fontSize: theme.fontSizes.medium,
-    fontWeight: '600',
-  },
-  searchButtonDisabled: {
-    backgroundColor: theme.colors.border,
-    opacity: 0.6,
-  },
-  otherAnimalInputWrapper: {
-    backgroundColor: theme.colors.background,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    marginTop: theme.spacing.small,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  otherAnimalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: theme.spacing.medium,
-  },
-  otherAnimalTitle: {
-    fontSize: theme.fontSizes.medium,
-    fontWeight: '600',
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  closeButton: {
-    padding: theme.spacing.small,
-    borderRadius: 8,
-  },
-  animalInput: {
-    height: 48,
-    borderWidth: 0,
-    borderRadius: 8,
-    paddingHorizontal: theme.spacing.medium,
-    backgroundColor: theme.colors.background,
-    fontSize: theme.fontSizes.medium,
-    marginHorizontal: theme.spacing.medium,
-    marginBottom: theme.spacing.small,
-  },
-  animalSuggestionsWrapper: {
-    flex: 1,
-  },
-  animalSuggestionsContainer: {
-    flex: 1,
-  },
-  animalSuggestionItem: {
-    padding: theme.spacing.medium,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  animalSuggestionText: {
-    fontSize: theme.fontSizes.medium,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  animalSelectionWrapper: {
-    flexDirection: 'column',
-    gap: theme.spacing.small,
-  },
-  selectedAnimalsContainer: {
-    marginTop: theme.spacing.medium,
-    padding: theme.spacing.medium,
-    backgroundColor: theme.colors.background,
-    borderRadius: 8,
-  },
-  selectedAnimalsLabel: {
-    fontSize: theme.fontSizes.medium,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.small,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  selectedAnimalsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.small,
-  },
-  selectedAnimalTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: theme.spacing.small,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 8,
-    gap: theme.spacing.small,
-  },
-  selectedAnimalText: {
-    color: theme.colors.whiteText,
-    fontSize: theme.fontSizes.medium,
-    fontWeight: '500',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-});
 
 export default SearchRefiner; 

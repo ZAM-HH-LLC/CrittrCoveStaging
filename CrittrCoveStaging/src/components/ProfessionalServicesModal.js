@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Dimensions, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { getProfessionalServicesDetailed, createConversation } from '../api/API';
-import { debugLog } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 
 const ProfessionalServicesModal = ({ visible, onClose, professional, primaryService }) => {
   const navigation = useNavigation();
+  const { isSignedIn } = useContext(AuthContext);
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -15,6 +16,8 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
   const [showTooltip, setShowTooltip] = useState(null);
   const [mobileView, setMobileView] = useState('services'); // 'services' or 'details'
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   
   const { width: screenWidth } = Dimensions.get('window');
   const isMobile = screenWidth <= 768;
@@ -62,6 +65,8 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
     setError(null);
     setShowTooltip(null);
     setMobileView('services');
+    setShowErrorModal(false);
+    setErrorMessage('');
     onClose();
   };
 
@@ -170,6 +175,18 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
       return;
     }
 
+    // Check if user is signed in before making API call
+    if (!isSignedIn) {
+      debugLog('MBA3456', 'User not signed in, redirecting to login');
+      
+      // Close the modal first
+      onClose();
+      
+      // Navigate to sign in screen
+      navigation.navigate('SignIn');
+      return;
+    }
+
     setIsCreatingConversation(true);
     try {
       debugLog('MBA3456', 'Creating conversation with professional:', professional.professional_id);
@@ -187,7 +204,16 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
       });
     } catch (err) {
       debugLog('MBA3456', 'Error creating conversation:', err);
-      Alert.alert('Error', 'Failed to create conversation. Please try again.');
+      
+      // Check if this is the "cannot contact yourself" error
+      if (err.response?.status === 400 && 
+          err.response?.data?.error === 'Cannot create conversation with yourself') {
+        setErrorMessage('You cannot contact yourself.');
+        setShowErrorModal(true);
+      } else {
+        setErrorMessage('Failed to create conversation. Please try again.');
+        setShowErrorModal(true);
+      }
     } finally {
       setIsCreatingConversation(false);
     }
@@ -384,6 +410,49 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
               {services.find(s => s.additional_rates?.find(r => r.rate_id === showTooltip))?.additional_rates?.find(r => r.rate_id === showTooltip)?.description || ''}
             </Text>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Error Modal */}
+      <Modal
+        visible={showErrorModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowErrorModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.tooltipModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowErrorModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.errorModalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.errorModalHeader}>
+              <Text style={styles.errorModalTitle}>Error</Text>
+              <TouchableOpacity 
+                style={styles.errorModalCloseButton}
+                onPress={() => setShowErrorModal(false)}
+              >
+                <MaterialCommunityIcons 
+                  name="close" 
+                  size={20} 
+                  color={theme.colors.text} 
+                />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.errorModalText}>
+              {errorMessage}
+            </Text>
+            <TouchableOpacity 
+              style={styles.errorModalOkButton}
+              onPress={() => setShowErrorModal(false)}
+            >
+              <Text style={styles.errorModalOkText}>OK</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </Modal>
@@ -711,6 +780,56 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contactButtonText: {
+    color: theme.colors.whiteText,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorModalContent: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    padding: 16,
+    margin: 20,
+    maxWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  errorModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  errorModalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    flex: 1,
+  },
+  errorModalCloseButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  errorModalText: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  errorModalOkButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  errorModalOkText: {
     color: theme.colors.whiteText,
     fontSize: 16,
     fontWeight: '600',

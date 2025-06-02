@@ -508,6 +508,7 @@ export default function Navigation({ state, descriptors, navigation }) {
       return [
         { title: 'Sign In', icon: 'login', route: 'SignIn' },
         { title: 'Sign Up', icon: 'account-plus', route: 'SignUp' },
+        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
         // { title: 'More', icon: 'dots-horizontal', route: 'More' },
       ];
     } else if (userRole === 'professional') {

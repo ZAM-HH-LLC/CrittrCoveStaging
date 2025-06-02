@@ -311,20 +311,44 @@ def create_conversation(request):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Use the helper function with client role for current user
+        # Check if current user is actually the professional (edge case)
+        if current_user == professional_user:
+            return Response(
+                {'error': 'Cannot create conversation with yourself'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # First, try to find existing conversations with proper roles
+        existing_conversation, is_professional = find_or_create_conversation(
+            current_user, 
+            professional_user, 
+            'client',  # Current user is the client
+            only_find_with_role=True  # Only find, don't create yet
+        )
+
+        if existing_conversation:
+            logger.info(f"MBA3456: Found existing conversation {existing_conversation.conversation_id}")
+            return Response({
+                'conversation_id': existing_conversation.conversation_id,
+                'is_professional': is_professional,
+                'other_user_name': professional_user.name,
+                'status': 'existing'
+            })
+
+        # If no existing conversation found, create a new one
         conversation, is_professional = find_or_create_conversation(
             current_user, 
             professional_user, 
             'client'  # Current user is the client
         )
 
-        logger.info(f"MBA3456: Successfully created/found conversation {conversation.conversation_id}")
+        logger.info(f"MBA3456: Successfully created new conversation {conversation.conversation_id}")
 
         return Response({
             'conversation_id': conversation.conversation_id,
             'is_professional': is_professional,
             'other_user_name': professional_user.name,
-            'status': 'success'
+            'status': 'created'
         })
 
     except Exception as e:
