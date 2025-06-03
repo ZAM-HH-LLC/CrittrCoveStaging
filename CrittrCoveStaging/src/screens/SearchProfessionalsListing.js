@@ -32,11 +32,85 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     longitudeDelta: 0.0421,
   });
   const [activeFilters, setActiveFilters] = useState({
-    categories: ['Dogs', 'Within 5 miles'],
-    // Add other filter categories as needed
+    categories: [],
   });
   const [servicesModalVisible, setServicesModalVisible] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState(null);
+
+  // Helper function to extract city from location string
+  const extractCity = (location) => {
+    if (!location) return '';
+    
+    // Try to extract city from "City, State" format
+    const cityMatch = location.match(/^([^,]+)/);
+    if (cityMatch && cityMatch[1]) {
+      return cityMatch[1].trim();
+    }
+    
+    // If no match, return the whole location or truncate if too long
+    return truncateLocation(location);
+  };
+  
+  // Helper function to truncate long location strings
+  const truncateLocation = (location, maxLength = 20) => {
+    if (!location) return '';
+    if (location.length <= maxLength) return location;
+    
+    return location.substring(0, maxLength) + '...';
+  };
+  
+  // Helper function to generate filter categories from search params
+  const generateFilterCategories = (searchParams) => {
+    if (!searchParams) return [];
+    
+    debugLog('MBA9999', 'Generating filter categories from search params:', searchParams);
+    
+    const categories = [];
+    
+    // Add animal types (limit to 2 to avoid overcrowding)
+    if (searchParams.animal_types && searchParams.animal_types.length > 0) {
+      if (searchParams.animal_types.length === 1) {
+        categories.push(searchParams.animal_types[0]);
+      } else if (searchParams.animal_types.length === 2) {
+        categories.push(searchParams.animal_types[0]);
+        categories.push(searchParams.animal_types[1]);
+      } else {
+        categories.push(searchParams.animal_types[0]);
+        categories.push(`+${searchParams.animal_types.length - 1} more`);
+      }
+    }
+    
+    // Add location if available (extract city only)
+    if (searchParams.location) {
+      const extractedCity = extractCity(searchParams.location);
+      categories.push(extractedCity);
+      debugLog('MBA9999', `Extracted city "${extractedCity}" from location "${searchParams.location}"`);
+    }
+    
+    // Add service query if available (truncate if too long)
+    if (searchParams.service_query) {
+      const service = truncateLocation(searchParams.service_query, 15);
+      categories.push(service);
+    }
+    
+    // Add overnight service if true
+    if (searchParams.overnight_service) {
+      categories.push('Overnight');
+    }
+    
+    // Add price range if available and not the default max
+    if (searchParams.price_max && searchParams.price_max < 250) {
+      categories.push(`Under $${searchParams.price_max}`);
+    }
+    
+    // Limit to 4 filters max to avoid overflow
+    const finalCategories = categories.length > 4 
+      ? [...categories.slice(0, 3), `+${categories.length - 3} more`]
+      : categories;
+    
+    debugLog('MBA9999', 'Generated filter categories:', finalCategories);
+    return finalCategories;
+  };
 
   useEffect(() => {
     const updateLayout = () => {
@@ -87,6 +161,12 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       setProfessionals(results.professionals || []);
       setCurrentSearchParams(searchParams);
       
+      // Set initial active filters
+      const filterCategories = generateFilterCategories(searchParams);
+      setActiveFilters({
+        categories: filterCategories
+      });
+      
     } catch (error) {
       debugLog('MBA9999', 'Error loading initial professionals:', error);
       console.error('Error loading initial professionals:', error);
@@ -99,8 +179,18 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     debugLog('MBA9999', 'Received search results:', results);
     setSearchResults(results);
     setProfessionals(results.professionals || []);
+    
     if (searchParams) {
       setCurrentSearchParams(searchParams);
+      
+      // Update active filters based on search parameters
+      const filterCategories = generateFilterCategories(searchParams);
+      setActiveFilters({
+        categories: filterCategories
+      });
+      
+      debugLog('MBA9999', 'Updated active filters:', filterCategories);
+      debugLog('MBA9999', 'Search complete: Found ' + (results.professionals?.length || 0) + ' professionals with active filters: ' + filterCategories.join(', '));
     }
   };
 

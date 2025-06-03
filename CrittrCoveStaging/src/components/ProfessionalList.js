@@ -340,6 +340,7 @@ const styles = StyleSheet.create({
   perNight: {
     fontSize: theme.fontSizes.small,
     color: theme.colors.textSecondary,
+    maxWidth: 50,
   },
   reviewSection: {
     paddingHorizontal: theme.spacing.medium,
