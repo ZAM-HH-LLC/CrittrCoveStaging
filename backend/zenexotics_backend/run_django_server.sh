@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# Script to activate virtual environment and run Django with auto-reloading
+# Script to activate virtual environment and run Django development server
+# This script uses Django's built-in runserver instead of Daphne
+# Use this when you need to access the admin interface reliably but don't need websockets
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -39,20 +41,16 @@ fi
 
 echo "Virtual environment activated successfully!"
 
-# Ensure asgiref and channels are installed
-pip install asgiref daphne channels watchdog[watchmedo]
+# Make sure migrations are up to date
+echo "Checking for and applying any pending migrations..."
+$PYTHON_CMD manage.py migrate
 
-# Verify ASGI configuration
-echo "Verifying ASGI configuration..."
-$PYTHON_CMD -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zenexotics_backend.settings'); from channels.routing import get_default_application; app = get_default_application(); print('ASGI application loaded successfully!')"
-
-echo "Starting Daphne server with watchdog auto-reloading..."
-echo "The server will automatically restart when Python files change."
-echo "Press Ctrl+C to stop the server."
+echo "Starting Django development server..."
 echo "Admin URL: http://127.0.0.1:8000/admin/"
+echo "Press Ctrl+C to stop the server."
 
-# Run the server with auto-reloading using watchdog (without the problematic -v flag)
-watchmedo auto-restart --directory=./ --pattern="*.py" --recursive -- daphne -b 0.0.0.0 -p 8000 zenexotics_backend.asgi:application
+# Run the standard Django development server
+$PYTHON_CMD manage.py runserver 0.0.0.0:8000
 
 # Note: The venv activation only affects this script's environment,
 # not the parent shell that called this script 
