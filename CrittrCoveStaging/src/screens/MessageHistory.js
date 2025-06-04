@@ -209,12 +209,27 @@ const MessageHistory = ({ navigation, route }) => {
         }, 100);
       };
       
+      // Android Chrome gray space fix
+      const handleFocusOut = () => {
+        debugLog('MBA2u3f89fbno4: [VIEWPORT] handleFocusOut called - fixing gray space', {
+          timestamp: Date.now()
+        });
+        
+        // Fix gray space on Android Chrome when keyboard closes
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          debugLog('MBA2u3f89fbno4: [VIEWPORT] Gray space fix - scrolled to top');
+        }, 150);
+      };
+      
       window.addEventListener('focusin', handleFocusIn);
+      window.addEventListener('focusout', handleFocusOut);
 
       return () => {
         window.removeEventListener('resize', handleResize);
         window.removeEventListener('orientationchange', updateViewportHeight);
         window.removeEventListener('focusin', handleFocusIn);
+        window.removeEventListener('focusout', handleFocusOut);
       };
     }
   }, [screenWidth]);
@@ -605,8 +620,32 @@ const MessageHistory = ({ navigation, route }) => {
         // Normal initialization - fetch conversations once
         debugLog('MBA1111 About to fetch conversations for initialization');
         const conversationsData = await fetchConversations();
-        if (Platform.OS === 'web' && screenWidth > 900 && conversationsData?.length > 0) {
-          setSelectedConversation(conversationsData[0].conversation_id);
+        
+        // Filter conversations by role
+        const filteredByRole = conversationsData.filter(conv => {
+          if (userRole === 'professional') {
+            return conv.is_professional === true;
+          } else if (userRole === 'petOwner') {
+            return conv.is_professional === false;
+          }
+          return true;
+        });
+        
+        if (Platform.OS === 'web' && screenWidth > 900 && filteredByRole.length > 0) {
+          // Sort conversations by last message time to find the most recent
+          const sortedConversations = [...filteredByRole].sort((a, b) => {
+            const timeA = a.last_message_time ? new Date(a.last_message_time).getTime() : 0;
+            const timeB = b.last_message_time ? new Date(b.last_message_time).getTime() : 0;
+            return timeB - timeA; // Sort descending (newest first)
+          });
+          
+          debugLog('MBA3456: Auto-selecting most recent conversation on initialization', {
+            conversation_id: sortedConversations[0].conversation_id,
+            role: userRole
+          });
+          
+          setSelectedConversation(sortedConversations[0].conversation_id);
+          setSelectedConversationData(sortedConversations[0]);
         }
       } catch (error) {
         console.error('Error in initialization:', error);
@@ -644,7 +683,7 @@ const MessageHistory = ({ navigation, route }) => {
         window.selectedConversationId = null;
       }
     };
-  }, [isSignedIn, loading]); // Keep minimal dependencies to prevent unnecessary re-runs
+  }, [isSignedIn, loading, userRole, screenWidth]); // Added userRole, screenWidth to dependencies
   
   // Effect to trigger booking creation once conversation data is loaded
   useEffect(() => {
@@ -738,18 +777,98 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [screenWidth, isSignedIn]);
 
-  // Update conversations list when main conversation list or search query changes
+  // Add effect to filter conversations based on user role
+  useEffect(() => {
+    if (!conversations || conversations.length === 0) return;
+    
+    debugLog('MBA3456: Filtering conversations by role', {
+      currentRole: userRole,
+      totalConversations: conversations.length
+    });
+    
+    // Filter conversations based on the role from context
+    const filteredByRole = conversations.filter(conv => {
+      // For professional role, show only conversations where is_professional is true
+      if (userRole === 'professional') {
+        return conv.is_professional === true;
+      }
+      // For pet owner role, show only conversations where is_professional is false
+      else if (userRole === 'petOwner') {
+        return conv.is_professional === false;
+      }
+      // If no role specified, show all conversations (fallback)
+      return true;
+    });
+    
+    debugLog('MBA3456: Filtered conversations result', {
+      originalCount: conversations.length,
+      filteredCount: filteredByRole.length,
+      currentRole: userRole
+    });
+    
+    // Update the filteredConversations state
+    setFilteredConversations(filteredByRole);
+    
+    // Auto-select logic for desktop view
+    if (Platform.OS === 'web' && screenWidth > 900) {
+      // If we have filtered conversations, ensure one is selected
+      if (filteredByRole.length > 0) {
+        // Check if the currently selected conversation is in the filtered list
+        const isSelectedConversationInFiltered = selectedConversation && 
+          filteredByRole.some(conv => conv.conversation_id === selectedConversation);
+        
+        if (!isSelectedConversationInFiltered) {
+          // Sort conversations by last message time to find the most recent
+          const sortedConversations = [...filteredByRole].sort((a, b) => {
+            const timeA = a.last_message_time ? new Date(a.last_message_time).getTime() : 0;
+            const timeB = b.last_message_time ? new Date(b.last_message_time).getTime() : 0;
+            return timeB - timeA; // Sort descending (newest first)
+          });
+          
+          // Select the most recent conversation
+          if (sortedConversations.length > 0) {
+            debugLog('MBA3456: Auto-selecting most recent conversation after role filter', {
+              conversation_id: sortedConversations[0].conversation_id,
+              last_message_time: sortedConversations[0].last_message_time,
+              other_user_name: sortedConversations[0].other_user_name
+            });
+            setSelectedConversation(sortedConversations[0].conversation_id);
+            setSelectedConversationData(sortedConversations[0]);
+          }
+        }
+      } else {
+        // No conversations for this role, clear selection
+        setSelectedConversation(null);
+        setSelectedConversationData(null);
+      }
+    }
+  }, [conversations, userRole, screenWidth, selectedConversation]);
+
+  // Update the existing useEffect for search query to work with the filtered conversations
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      setFilteredConversations(conversations);
+      // No need to modify filteredConversations here - it's handled by the role filter
     } else {
       const lowercaseQuery = searchQuery.trim().toLowerCase();
-      const filtered = conversations.filter(conv => 
-        conv.other_user_name && conv.other_user_name.toLowerCase().includes(lowercaseQuery)
-      );
-      setFilteredConversations(filtered);
+      // Start with the role-filtered conversations and apply search filter
+      const currentFiltered = conversations.filter(conv => {
+        // First apply role filter
+        const matchesRole = userRole === 'professional' ? 
+          conv.is_professional === true : 
+          userRole === 'petOwner' ? 
+            conv.is_professional === false : 
+            true;
+            
+        // Then apply search filter
+        const matchesSearch = conv.other_user_name && 
+          conv.other_user_name.toLowerCase().includes(lowercaseQuery);
+          
+        return matchesRole && matchesSearch;
+      });
+      
+      setFilteredConversations(currentFiltered);
     }
-  }, [conversations, searchQuery]);
+  }, [searchQuery, conversations, userRole]);
 
   // Fetch conversations 
   const fetchConversations = async () => {
@@ -2248,10 +2367,10 @@ const MessageHistory = ({ navigation, route }) => {
     // Filtering is now handled by the useEffect defined above
   };
 
-  // Update conversation list to include search
+  // Conversation list component
   const renderConversationList = () => (
     <ConversationList
-      conversations={conversations}
+      conversations={filteredConversations}
       selectedConversation={selectedConversation}
       onSelectConversation={setSelectedConversation}
       searchQuery={searchQuery}
@@ -2820,7 +2939,7 @@ const MessageHistory = ({ navigation, route }) => {
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading conversations...</Text>
         </View>
-      ) : conversations.length > 0 ? (
+      ) : filteredConversations.length > 0 ? (
         <>
           <View style={styles.contentContainer}>
             {screenWidth <= 900 ? (
