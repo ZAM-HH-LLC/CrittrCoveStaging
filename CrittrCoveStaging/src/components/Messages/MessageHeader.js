@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Image, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 
@@ -10,8 +10,42 @@ const MessageHeader = ({
   onEditDraft,
   onBackPress,
   styles,
-  isMobile = false
+  isMobile = false,
+  onCreateBooking,
+  onViewPets
 }) => {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+  const buttonRef = useRef(null);
+  
+  // Only show dropdown button for professionals
+  const showDropdownButton = selectedConversationData?.is_professional;
+  
+  // Handle outside clicks to close dropdown
+  useEffect(() => {
+    if (Platform.OS === 'web' && showDropdown) {
+      const handleClickOutside = (event) => {
+        // Check if click is outside both the dropdown and the button that opens it
+        if (
+          dropdownRef.current && 
+          !dropdownRef.current.contains(event.target) &&
+          buttonRef.current &&
+          !buttonRef.current.contains(event.target)
+        ) {
+          setShowDropdown(false);
+        }
+      };
+      
+      // Add event listener
+      document.addEventListener('mousedown', handleClickOutside);
+      
+      // Clean up
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showDropdown]);
+  
   if (isMobile) {
     return (
       <View style={[
@@ -36,26 +70,81 @@ const MessageHeader = ({
             </Text>
           </View>
           
-          {hasDraft && draftData?.draft_id && selectedConversationData?.is_professional && (
+          {/* Add dropdown button for mobile */}
+          {showDropdownButton && (
             <TouchableOpacity 
-              style={[styles.editDraftButton, styles.mobileEditDraftButton, { 
-                position: 'absolute', 
-                right: 10,
-                top: '50%',
-                transform: [{ translateY: -20 }]
-              }]}
-              onPress={() => onEditDraft(draftData.draft_id)}
+              ref={buttonRef}
+              style={[styles.backArrow, { right: 16, left: 'auto' }]}
+              onPress={() => setShowDropdown(!showDropdown)}
             >
               <MaterialCommunityIcons 
-                name="pencil" 
-                size={16} 
+                name={showDropdown ? "chevron-up" : "chevron-down"} 
+                size={24} 
                 color={theme.colors.primary} 
               />
-              <View style={{ alignItems: 'center' }}>
-                <Text style={[styles.editDraftText, { fontSize: 12, lineHeight: 14 }]}>Edit</Text>
-                <Text style={[styles.editDraftText, { fontSize: 12, lineHeight: 14 }]}>Draft</Text>
-              </View>
             </TouchableOpacity>
+          )}
+          
+          {/* Add dropdown menu for mobile */}
+          {showDropdown && showDropdownButton && (
+            <View 
+              ref={dropdownRef}
+              style={[styles.headerDropdownMenu, { top: '100%', width: '90%', alignSelf: 'center', right: 16 }]}
+            >
+              <TouchableOpacity 
+                style={styles.headerDropdownItem}
+                onPress={() => {
+                  setShowDropdown(false);
+                  onCreateBooking && onCreateBooking();
+                }}
+              >
+                <MaterialCommunityIcons 
+                  name="calendar-plus" 
+                  size={20} 
+                  color={theme.colors.primary} 
+                />
+                <Text style={styles.headerDropdownText}>
+                  Create Booking
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.headerDropdownItem}
+                onPress={() => {
+                  setShowDropdown(false);
+                  onViewPets && onViewPets();
+                }}
+              >
+                <MaterialCommunityIcons 
+                  name="paw" 
+                  size={20} 
+                  color={theme.colors.primary} 
+                />
+                <Text style={styles.headerDropdownText}>
+                  View Pets
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Add Edit Draft to dropdown */}
+              {hasDraft && draftData?.draft_id && (
+                <TouchableOpacity 
+                  style={styles.headerDropdownItem}
+                  onPress={() => {
+                    setShowDropdown(false);
+                    onEditDraft && onEditDraft(draftData.draft_id);
+                  }}
+                >
+                  <MaterialCommunityIcons 
+                    name="pencil" 
+                    size={20} 
+                    color={theme.colors.primary} 
+                  />
+                  <Text style={styles.headerDropdownText}>
+                    Edit Draft
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
       </View>
@@ -73,18 +162,82 @@ const MessageHeader = ({
           {selectedConversationData?.other_user_name}
         </Text>
         
-        {hasDraft && draftData?.draft_id && selectedConversationData?.is_professional && (
+        {/* Add dropdown button for desktop */}
+        {showDropdownButton && (
           <TouchableOpacity 
-            style={styles.editDraftButton}
-            onPress={() => onEditDraft(draftData.draft_id)}
+            ref={buttonRef}
+            style={{ marginLeft: 'auto' }}
+            onPress={() => setShowDropdown(!showDropdown)}
           >
+            {/* <Text style={styles.headerDropdownButtonText}>Options</Text> */}
             <MaterialCommunityIcons 
-              name="pencil" 
+              name={showDropdown ? "chevron-up" : "chevron-down"} 
               size={20} 
               color={theme.colors.primary} 
             />
-            <Text style={styles.editDraftText}>Edit Draft</Text>
           </TouchableOpacity>
+        )}
+        
+        {/* Add dropdown menu for desktop */}
+        {showDropdown && showDropdownButton && (
+          <View 
+            ref={dropdownRef}
+            style={styles.headerDropdownMenu}
+          >
+            <TouchableOpacity 
+              style={styles.headerDropdownItem}
+              onPress={() => {
+                setShowDropdown(false);
+                onCreateBooking && onCreateBooking();
+              }}
+            >
+              <MaterialCommunityIcons 
+                name="calendar-plus" 
+                size={20} 
+                color={theme.colors.primary} 
+              />
+              <Text style={styles.headerDropdownText}>
+                Create Booking
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.headerDropdownItem}
+              onPress={() => {
+                setShowDropdown(false);
+                onViewPets && onViewPets();
+              }}
+            >
+              <MaterialCommunityIcons 
+                name="paw" 
+                size={20} 
+                color={theme.colors.primary} 
+              />
+              <Text style={styles.headerDropdownText}>
+                View Pets
+              </Text>
+            </TouchableOpacity>
+            
+            {/* Add Edit Draft to dropdown */}
+            {hasDraft && draftData?.draft_id && (
+              <TouchableOpacity 
+                style={styles.headerDropdownItem}
+                onPress={() => {
+                  setShowDropdown(false);
+                  onEditDraft && onEditDraft(draftData.draft_id);
+                }}
+              >
+                <MaterialCommunityIcons 
+                  name="pencil" 
+                  size={20} 
+                  color={theme.colors.primary} 
+                />
+                <Text style={styles.headerDropdownText}>
+                  Edit Draft
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
     </View>

@@ -2385,33 +2385,22 @@ const MessageHistory = ({ navigation, route }) => {
   // Update message header to include profile photo and edit draft button
   const renderMessageHeader = () => (
     <View style={styles.messageHeader}>
-      <View style={styles.messageHeaderContent}>
-        <Image
-          source={selectedConversationData?.profile_photo || require('../../assets/default-profile.png')}
-          style={styles.profilePhoto}
-        />
-        <Text style={styles.messageHeaderName}>
-          {selectedConversationData?.other_user_name}
-        </Text>
-        
-        {hasDraft && draftData?.draft_id && selectedConversationData?.is_professional && (
-          <TouchableOpacity 
-            style={styles.editDraftButton}
-            onPress={() => {
-              if (draftData?.draft_id) {
-                handleOpenExistingDraft(draftData.draft_id);
-              }
-            }}
-          >
-            <MaterialCommunityIcons 
-              name="pencil" 
-              size={20} 
-              color={theme.colors.primary} 
-            />
-            <Text style={styles.editDraftText}>Edit Draft</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <MessageHeader
+        selectedConversationData={selectedConversationData}
+        hasDraft={hasDraft}
+        draftData={draftData}
+        onEditDraft={(draftId) => {
+          if (draftId) {
+            handleOpenExistingDraft(draftId);
+          }
+        }}
+        styles={styles}
+        onCreateBooking={handleCreateBooking}
+        onViewPets={() => {
+          debugLog('MBA6428: View Pets button clicked - functionality to be implemented');
+          // This functionality will be implemented in the future
+        }}
+      />
     </View>
   );
 
@@ -2435,25 +2424,6 @@ const MessageHistory = ({ navigation, route }) => {
         {screenWidth > 900 && renderMessageHeader()}
         {/* Messages */}
         <View style={styles.messageSection}>
-          {/* Create Booking Button overlay */}
-          {selectedConversationData?.is_professional && (
-            <View style={styles.createBookingContainer}>
-              <TouchableOpacity 
-                style={styles.createBookingHangingButton}
-                onPress={handleCreateBooking}
-              >
-                <MaterialCommunityIcons 
-                  name="calendar-plus" 
-                  size={20} 
-                  color={theme.colors.primary} 
-                />
-                <Text style={styles.createBookingHangingText}>
-                  Create Booking
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
           <View style={[styles.messagesContainer, mobileMessagesStyle]}>
             {isLoadingMessages ? (
               <View style={styles.loadingContainer}>
@@ -2524,51 +2494,24 @@ const MessageHistory = ({ navigation, route }) => {
       styles.mobileHeader,
       { backgroundColor: theme.colors.surfaceContrast }  // Updated to use surfaceContrast
     ]}>
-      <View style={styles.mobileHeaderContent}>
-        <TouchableOpacity 
-          style={styles.backArrow}
-          onPress={() => setSelectedConversation(null)}
-        >
-          <MaterialCommunityIcons 
-            name="arrow-left" 
-            size={24} 
-            color={theme.colors.primary} 
-          />
-        </TouchableOpacity>
-        
-        <View style={styles.mobileHeaderNameContainer}>
-          <Text style={styles.mobileHeaderName}>
-            {selectedConversationData?.name || selectedConversationData?.other_user_name}
-          </Text>
-        </View>
-        
-        {/* Add Edit Draft button positioned at the right */}
-        {hasDraft && draftData?.draft_id && selectedConversationData?.is_professional && (
-          <TouchableOpacity 
-            style={[styles.editDraftButton, styles.mobileEditDraftButton, { 
-              position: 'absolute', 
-              right: 10,
-              top: '50%',
-              transform: [{ translateY: -20 }]  // Adjusted to perfectly align with text
-            }]}
-            onPress={() => {
-              if (draftData?.draft_id) {
-                handleOpenExistingDraft(draftData.draft_id);
-              }
-            }}
-          >
-            <MaterialCommunityIcons 
-              name="pencil" 
-              size={16} 
-              color={theme.colors.primary} 
-            />
-            <View style={{ alignItems: 'center' }}>
-              <Text style={[styles.editDraftText, { fontSize: 12, lineHeight: 14 }]}>Edit</Text>
-              <Text style={[styles.editDraftText, { fontSize: 12, lineHeight: 14 }]}>Draft</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
+      <MessageHeader
+        selectedConversationData={selectedConversationData}
+        hasDraft={hasDraft}
+        draftData={draftData}
+        onEditDraft={(draftId) => {
+          if (draftId) {
+            handleOpenExistingDraft(draftId);
+          }
+        }}
+        onBackPress={() => setSelectedConversation(null)}
+        styles={styles}
+        isMobile={true}
+        onCreateBooking={handleCreateBooking}
+        onViewPets={() => {
+          debugLog('MBA6428: View Pets button clicked - functionality to be implemented');
+          // This functionality will be implemented in the future
+        }}
+      />
     </View>
   );
 
