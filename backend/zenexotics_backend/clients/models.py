@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+import logging
 
 def default_list():
     return []
@@ -49,20 +50,30 @@ class Client(models.Model):
         return f"Client: {self.user.name}"
 
     def calculate_profile_completion(self):
-        """Calculate the profile completion percentage based on required fields."""
-        required_fields = {
-            'about_me': bool(self.about_me and self.about_me.strip()),
-            'emergency_contact': bool(self.emergency_contact and 
-                                   self.emergency_contact.get('name') and 
-                                   self.emergency_contact.get('phone')),
-            'authorized_household_members': bool(self.authorized_household_members and 
-                                              len(self.authorized_household_members) > 0),
-            'home_environment': bool(self.home_environment and 
-                                   len(self.home_environment) > 0)
-        }
+        """Calculate the profile completion percentage based on address."""
+        logger = logging.getLogger(__name__)
         
-        completed_fields = sum(1 for completed in required_fields.values() if completed)
-        return completed_fields / len(required_fields)
+        try:
+            # Check if user has address with non-empty address_line_1
+            # We're being extra careful here to check for valid addresses
+            addresses = self.user.addresses.all()
+            valid_addresses = [addr for addr in addresses if addr.address_line_1 and addr.address_line_1.strip()]
+            
+            # Log the information
+            logger.info(f"Client {self.user.email} has {len(addresses)} addresses, {len(valid_addresses)} valid")
+            for i, addr in enumerate(addresses):
+                logger.info(f"Address {i+1}: address_line_1='{addr.address_line_1}'")
+            
+            # For clients, profile is complete (100%) when they have a valid address
+            # Otherwise, it's 0%
+            if valid_addresses:
+                return 1.0
+            else:
+                return 0.0
+            
+        except Exception as e:
+            logger.error(f"Error checking client profile completion: {e}")
+            return 0.0
 
     class Meta:
         ordering = ['-created_at']

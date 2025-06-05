@@ -1,7 +1,8 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, Platform, SafeAreaView, Dimensions, StatusBar, TouchableOpacity, Text } from 'react-native';
 import { Card, Title, Paragraph, List, Button, useTheme, Appbar, ActivityIndicator, Avatar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext, debugLog } from '../context/AuthContext';
@@ -255,6 +256,17 @@ const Dashboard = ({ navigation }) => {
     fetchDashboardData();
   }, [userRole, is_prototype]);
 
+  // Use useFocusEffect to reload data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      debugLog('MBA5677: Dashboard screen focused, refreshing data');
+      fetchDashboardData();
+      return () => {
+        // Cleanup function when screen loses focus (if needed)
+      };
+    }, [userRole, is_prototype])
+  );
+
   // Add useEffect to check for active bookings and select the active tab if there are any
   useEffect(() => {
     if (!isLoading && bookings.length > 0) {
@@ -355,21 +367,24 @@ const Dashboard = ({ navigation }) => {
         {isProfessional ? (
           // Professional onboarding cards
           <>
-            <TouchableOpacity 
-              style={styles.statCard}
-              onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'profile_info' })}
-            >
-              <View style={styles.statHeader}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#F0F9E5' }]}>
-                  <MaterialCommunityIcons name="account-check" size={24} color={theme.colors.primary} />
+            {/* Only show profile card if profile is not complete */}
+            {onboardingProgress.profile_complete < 1.0 && (
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'profile_info' })}
+              >
+                <View style={styles.statHeader}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#F0F9E5' }]}>
+                    <MaterialCommunityIcons name="account-check" size={24} color={theme.colors.primary} />
+                  </View>
+                  <Text style={[dynamicStyles.statChange, { color: onboardingProgress.profile_complete === 1 ? theme.colors.success : theme.colors.warning }]}>
+                    {Math.round(onboardingProgress.profile_complete * 100)}% Complete
+                  </Text>
                 </View>
-                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.profile_complete === 1 ? theme.colors.success : theme.colors.warning }]}>
-                  {Math.round(onboardingProgress.profile_complete * 100)}% Complete
-                </Text>
-              </View>
-              <Text style={dynamicStyles.statValue}>Profile</Text>
-              <Text style={dynamicStyles.statLabel}>Complete your profile to get started</Text>
-            </TouchableOpacity>
+                <Text style={dynamicStyles.statValue}>Profile</Text>
+                <Text style={dynamicStyles.statLabel}>Add an address to get clients</Text>
+              </TouchableOpacity>
+            )}
 
             {/* TODO: Add back after MVP 
             <TouchableOpacity 
@@ -388,21 +403,24 @@ const Dashboard = ({ navigation }) => {
               <Text style={dynamicStyles.statLabel}>Connect your bank to receive payments</Text>
             </TouchableOpacity> */}
 
-            <TouchableOpacity 
-              style={styles.statCard}
-              onPress={() => navigateToFrom(navigation, 'ServiceManager', 'Dashboard')}
-            >
-              <View style={styles.statHeader}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
-                  <MaterialCommunityIcons name="briefcase" size={24} color={theme.colors.primary} />
+            {/* Only show services card if no services yet */}
+            {!onboardingProgress.has_services && (
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => navigateToFrom(navigation, 'ServiceManager', 'Dashboard')}
+              >
+                <View style={styles.statHeader}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
+                    <MaterialCommunityIcons name="briefcase" size={24} color={theme.colors.primary} />
+                  </View>
+                  <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_services ? theme.colors.success : theme.colors.warning }]}>
+                    {onboardingProgress.has_services ? 'Active' : 'No Services'}
+                  </Text>
                 </View>
-                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_services ? theme.colors.success : theme.colors.warning }]}>
-                  {onboardingProgress.has_services ? 'Active' : 'No Services'}
-                </Text>
-              </View>
-              <Text style={dynamicStyles.statValue}>Services</Text>
-              <Text style={dynamicStyles.statLabel}>Add services to start accepting bookings</Text>
-            </TouchableOpacity>
+                <Text style={dynamicStyles.statValue}>Services</Text>
+                <Text style={dynamicStyles.statLabel}>Add services to start accepting bookings</Text>
+              </TouchableOpacity>
+            )}
 
             {/* TODO: Add back after MVP 
             <TouchableOpacity 
@@ -424,21 +442,24 @@ const Dashboard = ({ navigation }) => {
         ) : (
           // Owner onboarding cards
           <>
-            <TouchableOpacity 
-              style={styles.statCard}
-              onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'profile_info' })}
-            >
-              <View style={styles.statHeader}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#F0F9E5' }]}>
-                  <MaterialCommunityIcons name="account-check" size={24} color={theme.colors.primary} />
+            {/* Only show profile card if profile is not complete */}
+            {onboardingProgress.profile_complete < 1.0 && (
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'profile_info' })}
+              >
+                <View style={styles.statHeader}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#F0F9E5' }]}>
+                    <MaterialCommunityIcons name="account-check" size={24} color={theme.colors.primary} />
+                  </View>
+                  <Text style={[dynamicStyles.statChange, { color: onboardingProgress.profile_complete === 1 ? theme.colors.success : theme.colors.warning }]}>
+                    {Math.round(onboardingProgress.profile_complete * 100)}% Complete
+                  </Text>
                 </View>
-                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.profile_complete === 1 ? theme.colors.success : theme.colors.warning }]}>
-                  {Math.round(onboardingProgress.profile_complete * 100)}% Complete
-                </Text>
-              </View>
-              <Text style={dynamicStyles.statValue}>Profile</Text>
-              <Text style={dynamicStyles.statLabel}>Complete your profile to get started</Text>
-            </TouchableOpacity>
+                <Text style={dynamicStyles.statValue}>Profile</Text>
+                <Text style={dynamicStyles.statLabel}>Add an address to find professionals</Text>
+              </TouchableOpacity>
+            )}
 
             {/* TODO: Add back after MVP 
             <TouchableOpacity 
@@ -457,21 +478,24 @@ const Dashboard = ({ navigation }) => {
               <Text style={dynamicStyles.statLabel}>Add a payment method to book services</Text>
             </TouchableOpacity> */}
 
-            <TouchableOpacity 
-              style={styles.statCard}
-              onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'pets_preferences' })}
-            >
-              <View style={styles.statHeader}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
-                  <MaterialCommunityIcons name="paw" size={24} color={theme.colors.primary} />
+            {/* Only show pets card if no pets yet */}
+            {!onboardingProgress.has_pets && (
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard', { initialTab: 'pets_preferences' })}
+              >
+                <View style={styles.statHeader}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
+                    <MaterialCommunityIcons name="paw" size={24} color={theme.colors.primary} />
+                  </View>
+                  <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_pets ? theme.colors.success : theme.colors.warning }]}>
+                    {onboardingProgress.has_pets ? 'Added' : 'No Pets'}
+                  </Text>
                 </View>
-                <Text style={[dynamicStyles.statChange, { color: onboardingProgress.has_pets ? theme.colors.success : theme.colors.warning }]}>
-                  {onboardingProgress.has_pets ? 'Added' : 'No Pets'}
-                </Text>
-              </View>
-              <Text style={dynamicStyles.statValue}>Pets</Text>
-              <Text style={dynamicStyles.statLabel}>Add your pets to book services</Text>
-            </TouchableOpacity>
+                <Text style={dynamicStyles.statValue}>Pets</Text>
+                <Text style={dynamicStyles.statLabel}>Add your pets to book services</Text>
+              </TouchableOpacity>
+            )}
 
             {/* TODO: Add back after MVP 
             <TouchableOpacity 

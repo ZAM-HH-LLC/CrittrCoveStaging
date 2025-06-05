@@ -142,8 +142,15 @@ def get_professional_dashboard(request):
         has_services = Service.objects.filter(professional=professional).exists()
 
         # Calculate onboarding progress
+        profile_complete = professional.calculate_profile_completion()
+        
+        # Log the values for debugging
+        logger.info(f"Professional {professional.user.email} - profile_complete: {profile_complete}")
+        logger.info(f"Professional {professional.user.email} - has_services: {has_services}")
+        
+        # Calculate onboarding progress
         onboarding_progress = {
-            'profile_complete': professional.calculate_profile_completion(),
+            'profile_complete': profile_complete,
             'has_bank_account': has_bank_account,
             'has_services': has_services,
             'subscription_plan': request.user.subscription_plan

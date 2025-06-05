@@ -95,9 +95,16 @@ def get_client_dashboard(request):
                 serialized_bookings.append(booking_data)
 
         # Calculate onboarding progress
+        profile_complete = client.calculate_profile_completion()
+        has_pets = Pet.objects.filter(owner=client.user).exists()
+        
+        # Log the values for debugging
+        logger.info(f"Client {client.user.email} - profile_complete: {profile_complete}")
+        logger.info(f"Client {client.user.email} - has_pets: {has_pets}")
+        
         onboarding_progress = {
-            'profile_complete': client.calculate_profile_completion(),
-            'has_pets': Pet.objects.filter(owner=client.user).exists(),
+            'profile_complete': profile_complete,
+            'has_pets': has_pets,
             'has_payment_method': PaymentMethod.objects.filter(user=client.user, is_primary=True).exists(),
             'subscription_plan': getattr(client.user, 'current_subscription_plan', 0)  # Default to 0 if not set
         }
