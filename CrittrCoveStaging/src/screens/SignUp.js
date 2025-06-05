@@ -241,15 +241,25 @@ export default function SignUp() {
         invitation_token: inviteToken
       };
       
-      // First register the user
-      const registerResponse = await axios.post(`${API_BASE_URL}/api/users/v1/register/`, registrationData);
+      debugLog('MBA12345 Registration data:', registrationData);
+      
+      // Create a direct axios instance without interceptors for registration
+      const directAxios = axios.create({
+        baseURL: API_BASE_URL,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // First register the user with the direct axios instance
+      const registerResponse = await directAxios.post('/api/users/v1/register/', registrationData);
       
       debugLog('MBA12345 User registration successful', registerResponse.data);
       
       // After successful registration, log the user in to get authentication tokens
       debugLog('MBA12345 Attempting to log in with new credentials');
       
-      const loginResponse = await axios.post(`${API_BASE_URL}/api/token/`, {
+      const loginResponse = await directAxios.post('/api/token/', {
         email: email.toLowerCase(),
         password: password,
       });
@@ -300,10 +310,16 @@ export default function SignUp() {
         const errorData = error.response.data;
         // Handle specific field errors
         if (errorData) {
-          const firstError = Object.entries(errorData)[0];
-          if (firstError) {
-            const [field, messages] = firstError;
-            errorMessage = `${field}: ${Array.isArray(messages) ? messages[0] : messages}`;
+          if (typeof errorData === 'object') {
+            // Handle field-specific errors
+            const firstError = Object.entries(errorData)[0];
+            if (firstError) {
+              const [field, messages] = firstError;
+              errorMessage = `${field}: ${Array.isArray(messages) ? messages[0] : messages}`;
+            }
+          } else if (typeof errorData === 'string') {
+            // Handle string error responses
+            errorMessage = errorData;
           }
         }
       }
