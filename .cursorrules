@@ -146,6 +146,49 @@ Frontend (React Native)
   everywhere (components + API wrapper) – no inline `any`.
 • `tsc --noEmit --strict` must compile cleanly after Cursor’s changes.
 
+### API Token Management in CrittrCove
+
+1. **Never manually handle authentication tokens in API calls** - Token management is handled through the AuthContext component.
+
+2. **All API calls should be made using the axios instance** which is automatically configured with interceptors in AuthContext.js that:
+   - Add the authentication token to every request automatically
+   - Handle token refresh when tokens expire
+   - Implement a circuit breaker pattern for auth failures
+   - Provide error handling for authentication issues
+
+3. **Do NOT:**
+   - Use `getStorage('userToken')` to retrieve tokens manually
+   - Set Authorization headers manually in API calls
+   - Add token handling logic in individual API functions
+
+4. **Example of correct API function implementation:**
+   ```javascript
+   export const someApiFunction = async (params) => {
+     try {
+       // No manual token handling
+       const response = await axios.get(`${API_BASE_URL}/api/endpoint/`, {
+         params: params
+       });
+       
+       return response.data;
+     } catch (error) {
+       // Error handling
+       throw error;
+     }
+   };
+   ```
+
+5. **How token management works in AuthContext:**
+   - Interceptors automatically attach tokens to all requests
+   - Tokens are refreshed preemptively before they expire
+   - Invalid tokens trigger automatic sign-out
+   - All token storage and retrieval is centralized in the AuthContext
+
+6. **Testing API calls:**
+   - Use the debugLog function to track API requests and responses
+   - Always use consistent log codes (e.g., 'MBA1234') for related functionality
+   - Include appropriate error handling that captures detailed error information 
+
 Backend (Django + DRF)
 • Serializers MUST declare explicit fields – never use `fields = "__all__"`.
 • New or modified models must specify field types with Django field classes.

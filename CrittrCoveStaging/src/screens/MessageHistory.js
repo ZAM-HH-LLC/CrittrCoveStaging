@@ -25,6 +25,7 @@ import MessageInput from '../components/Messages/MessageInput';
 import MessageHeader from '../components/Messages/MessageHeader';
 import { useMessageLogic } from '../components/Messages/useMessageLogic';
 import { createMessageStyles } from '../components/Messages/styles';
+import ClientPetsModal from '../components/ClientPetsModal';
 
 const MessageHistory = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -61,6 +62,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [showDraftConfirmModal, setShowDraftConfirmModal] = useState(false);
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
   const { resetNotifications, updateRoute, markConversationAsRead, getConversationUnreadCount } = useContext(MessageNotificationContext);
+  const [showClientPetsModal, setShowClientPetsModal] = useState(false);
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -2396,10 +2398,7 @@ const MessageHistory = ({ navigation, route }) => {
         }}
         styles={styles}
         onCreateBooking={handleCreateBooking}
-        onViewPets={() => {
-          debugLog('MBA6428: View Pets button clicked - functionality to be implemented');
-          // This functionality will be implemented in the future
-        }}
+        onViewPets={handleViewPets}
       />
     </View>
   );
@@ -2507,10 +2506,7 @@ const MessageHistory = ({ navigation, route }) => {
         styles={styles}
         isMobile={true}
         onCreateBooking={handleCreateBooking}
-        onViewPets={() => {
-          debugLog('MBA6428: View Pets button clicked - functionality to be implemented');
-          // This functionality will be implemented in the future
-        }}
+        onViewPets={handleViewPets}
       />
     </View>
   );
@@ -2870,6 +2866,23 @@ const MessageHistory = ({ navigation, route }) => {
     });
   }, [screenWidth]);
 
+  // Add a function to handle View Pets button click
+  const handleViewPets = () => {
+    const clientId = selectedConversationData?.is_professional ? 
+      selectedConversationData?.participant2_id : 
+      selectedConversationData?.participant1_id;
+      
+    debugLog('MBA3456', 'View Pets button clicked', {
+      is_professional: selectedConversationData?.is_professional,
+      participant1_id: selectedConversationData?.participant1_id,
+      participant2_id: selectedConversationData?.participant2_id,
+      determined_client_id: clientId,
+      other_user_name: selectedConversationData?.other_user_name
+    });
+    
+    setShowClientPetsModal(true);
+  };
+
   // Add a loading overlay component at the bottom of the return statement, before any modals
   return (
     <SafeAreaView style={[
@@ -3038,6 +3051,19 @@ const MessageHistory = ({ navigation, route }) => {
           
           Alert.alert("Success", successMessage);
         }}
+      />
+
+      <ClientPetsModal
+        visible={showClientPetsModal}
+        onClose={() => setShowClientPetsModal(false)}
+        client={{
+          client_id: selectedConversationData?.is_professional ? 
+            selectedConversationData?.participant2_id : // If current user is professional, participant2 is client
+            selectedConversationData?.participant1_id,  // If current user is not professional, participant1 is client
+          name: selectedConversationData?.other_user_name,
+          other_user_name: selectedConversationData?.other_user_name
+        }}
+        onCreateBooking={handleCreateBooking}
       />
 
       <DraftConfirmationModal

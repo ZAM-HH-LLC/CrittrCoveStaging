@@ -1167,3 +1167,35 @@ export const logInputEvent = async (eventType, eventData = {}) => {
   }
 };
 
+/**
+ * Get client pets
+ * 
+ * Retrieves all pets for a specific client
+ * 
+ * @param {number} clientId - The ID of the client whose pets to retrieve
+ * @returns {Promise<Array>} - Array of pet objects for the client
+ */
+export const getClientPets = async (clientId) => {
+  try {
+    debugLog('MBA3456', 'Fetching client pets - clientId:', clientId);
+    
+    // Make sure clientId is a valid number
+    if (!clientId) {
+      debugLog('MBA3456', 'Error: No client_id provided to getClientPets');
+      throw new Error('No client_id provided');
+    }
+    
+    const response = await axios.get(`${API_BASE_URL}/api/clients/v1/get-pets/`, {
+      params: {
+        client_id: clientId
+      }
+    });
+    
+    debugLog('MBA3456', 'Client pets fetched successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA3456', 'Error fetching client pets:', error.response?.data || error.message);
+    throw error;
+  }
+};
+

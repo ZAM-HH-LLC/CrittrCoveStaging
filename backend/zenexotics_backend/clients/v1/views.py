@@ -211,4 +211,69 @@ class ClientPetsView(APIView):
             return Response(
                 {"error": "An error occurred while fetching client pets"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class GetClientPetsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        logger.info(f"GetClientPetsView: Getting pets for client")
+        
+        try:
+            # Get client_id from request parameters
+            client_id = request.query_params.get('client_id')
+            
+            if not client_id:
+                return Response(
+                    {"error": "client_id is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"GetClientPetsView: Looking up client {client_id}")
+            
+            # Check if the requesting user has permission to view this client's pets
+            if not request.user.is_staff:  # If not admin
+                try:
+                    # Check if user is the client
+                    if hasattr(request.user, 'client_profile') and str(request.user.client_profile.id) != client_id:
+                        # Check if user is an approved professional
+                        try:
+                            professional_status = ProfessionalStatus.objects.get(user=request.user)
+                            if not professional_status.is_approved:
+                                return Response(
+                                    {"error": "Not authorized to view client pets"},
+                                    status=status.HTTP_403_FORBIDDEN
+                                )
+                        except ProfessionalStatus.DoesNotExist:
+                            return Response(
+                                {"error": "Not authorized to view client pets"},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                except Client.DoesNotExist:
+                    pass  # Will be handled below
+            
+            # Get all pets for the client
+            try:
+                client = Client.objects.get(id=client_id)
+            except Client.DoesNotExist:
+                logger.warning(f"GetClientPetsView: Client {client_id} not found")
+                return Response(
+                    {"error": "Client not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get the client's pets, not the current user's pets
+            pets = Pet.objects.filter(owner=client.user)
+            
+            # Serialize the pets
+            serializer = PetSerializer(pets, many=True)
+            
+            logger.info(f"GetClientPetsView: Found {len(serializer.data)} pets for client {client_id}")
+            return Response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"GetClientPetsView: Error getting client pets: {str(e)}")
+            return Response(
+                {"error": "An error occurred while fetching client pets"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             ) 

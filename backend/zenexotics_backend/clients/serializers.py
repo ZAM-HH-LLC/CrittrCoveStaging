@@ -64,9 +64,82 @@ class HouseholdMemberSerializer(serializers.Serializer):
         return super().to_representation(instance)
 
 class PetSerializer(serializers.ModelSerializer):
+    age = serializers.SerializerMethodField()
+    is_dog = serializers.SerializerMethodField()
+    formatted_medications = serializers.SerializerMethodField()
+    
     class Meta:
         model = Pet
-        fields = ['pet_id', 'name', 'species', 'breed']
+        fields = [
+            # Basic Information
+            'pet_id', 'name', 'species', 'breed', 'pet_type', 
+            'age', 'age_years', 'age_months', 'weight', 'birthday', 'sex',
+            'profile_photo', 'photo_gallery', 'adoption_date', 'created_at',
+            'pet_description', 'is_dog',
+            
+            # Care Information
+            'feeding_schedule', 'potty_break_schedule', 'energy_level',
+            'can_be_left_alone', 'special_care_instructions',
+            
+            # Behavioral Information (Dog/Cat specific)
+            'friendly_with_children', 'friendly_with_cats', 'friendly_with_dogs',
+            
+            # Medical Information
+            'spayed_neutered', 'house_trained', 'microchipped',
+            'medications', 'formatted_medications', 'medication_notes',
+            
+            # Veterinary Information
+            'vet_name', 'vet_address', 'vet_phone', 'insurance_provider',
+            'vet_documents'
+        ]
+    
+    def get_age(self, obj):
+        """Format the age in a human-readable format"""
+        if obj.age_years is not None:
+            years_text = f"{obj.age_years} year{'s' if obj.age_years != 1 else ''}"
+            
+            if obj.age_months:
+                months_text = f"{obj.age_months} month{'s' if obj.age_months != 1 else ''}"
+                return f"{years_text}, {months_text}"
+            return years_text
+        
+        if obj.age_months:
+            return f"{obj.age_months} month{'s' if obj.age_months != 1 else ''}"
+            
+        if obj.birthday:
+            today = timezone.now().date()
+            years = today.year - obj.birthday.year - ((today.month, today.day) < (obj.birthday.month, obj.birthday.day))
+            
+            if years == 0:
+                # Calculate months
+                months = (today.month - obj.birthday.month) % 12
+                if today.day < obj.birthday.day:
+                    months -= 1
+                return f"{months} month{'s' if months != 1 else ''}"
+            
+            return f"{years} year{'s' if years != 1 else ''}"
+            
+        return None
+    
+    def get_is_dog(self, obj):
+        """Helper field to identify dogs for the frontend"""
+        return obj.species and obj.species.upper() == 'DOG'
+    
+    def get_formatted_medications(self, obj):
+        """Format medications as a list for easier frontend handling"""
+        if not obj.medications or not isinstance(obj.medications, dict):
+            return []
+        
+        formatted = []
+        for name, details in obj.medications.items():
+            formatted.append({
+                'name': name,
+                'dosage': details.get('dosage', ''),
+                'schedule': details.get('schedule', ''),
+                'notes': details.get('notes', '')
+            })
+        
+        return formatted
 
 class ClientBookingOccurrenceSerializer(serializers.ModelSerializer):
     professional_name = serializers.CharField(source='booking.professional.user.name')
