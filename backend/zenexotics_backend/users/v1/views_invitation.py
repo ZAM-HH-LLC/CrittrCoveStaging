@@ -442,8 +442,6 @@ def _handle_professional_invitation(invitation, user):
     """Process a professional invitation acceptance"""
     from clients.models import Client
     from professionals.models import Professional
-    from conversations.models import Conversation
-    from django.db.models import Q
     
     try:
         # Get or create client profile
@@ -456,30 +454,6 @@ def _handle_professional_invitation(invitation, user):
             client.save()
             logger.info(f"Set invited_by for client {client.id} to professional {professional.id}")
             
-            # Create a conversation between the professional and client
-            # First check if a conversation already exists
-            existing_conversation = Conversation.objects.filter(
-                (Q(participant1=user) & Q(participant2=invitation.inviter)) |
-                (Q(participant1=invitation.inviter) & Q(participant2=user))
-            ).first()
-            
-            if not existing_conversation:
-                # Create new conversation with correct role mapping
-                role_map = {
-                    str(invitation.inviter.id): "professional",
-                    str(user.id): "client"
-                }
-
-                logger.info(f"MBA78vebt393 Creating new conversation with role map: {role_map}")
-                conversation = Conversation.objects.create(
-                    participant1=invitation.inviter,
-                    participant2=user,
-                    role_map=role_map
-                )
-                logger.info(f"Created new conversation {conversation.conversation_id} between professional {professional.id} and client {client.id}")
-            else:
-                logger.info(f"Conversation already exists between professional {professional.id} and client {client.id}")
-                
         except Professional.DoesNotExist:
             logger.warning(f"Could not set invited_by: Professional profile not found for user {invitation.inviter.id}")
         
