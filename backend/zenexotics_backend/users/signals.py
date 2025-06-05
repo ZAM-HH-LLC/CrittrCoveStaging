@@ -60,35 +60,6 @@ def create_user_related_entries(sender, instance, created, **kwargs):
             )
             logger.info(f"Created default address for user: {instance.email}")
 
-            # Check if this user was invited by a professional
-            if hasattr(client, 'invited_by') and client.invited_by:
-                from conversations.models import Conversation
-                from django.db.models import Q
-                
-                professional = client.invited_by
-                logger.info(f"User {instance.email} was invited by professional user {professional.user.id}")
-                
-                # Check if a conversation already exists
-                existing_conversation = Conversation.objects.filter(
-                    (Q(participant1=instance) & Q(participant2=professional.user)) |
-                    (Q(participant1=professional.user) & Q(participant2=instance))
-                ).first()
-                
-                if not existing_conversation:
-                    # Create new conversation with correct role mapping
-                    role_map = {
-                        str(professional.user.id): "professional",
-                        str(instance.id): "client"
-                    }
-                    
-                    conversation = Conversation.objects.create(
-                        participant1=professional.user,
-                        participant2=instance,
-                        role_map=role_map
-                    )
-                    logger.info(f"Created new conversation {conversation.conversation_id} between professional user {professional.user.id} and client {client.id}")
-                else:
-                    logger.info(f"Conversation already exists between professional user {professional.user.id} and client {client.id}")
 
         except Exception as e:
             logger.error(f"Error creating related entries for user {instance.email}: {str(e)}")
