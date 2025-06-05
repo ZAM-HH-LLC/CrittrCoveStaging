@@ -735,28 +735,34 @@ export const AuthProvider = ({ children }) => {
         // debugLog(`MBA1111 Request interceptor called for: ${config.method?.toUpperCase()} ${config.url}`);
         
         if (!is_prototype) {
+          // Check if this is an invitation verification endpoint - ONLY verification should be public
+          // NOTE: Invitation acceptance requires authentication and is handled during registration
+          const isInviteVerification = config.url.includes('/api/users/v1/invitations/') && 
+                                      config.url.includes('/verify/');
+          
+          if (isInviteVerification) {
+            debugLog(`MBAnb23ou4bf954 Skipping auth for invite verification endpoint: ${config.url}`);
+            return config;
+          }
+          
           try {
             const token = await authService.current.getAccessToken();
             if (token) {
               config.headers.Authorization = `Bearer ${token}`;
-              // debugLog(`MBA1111 Token added to request: ${config.method?.toUpperCase()} ${config.url}`);
-            } else {
-              debugLog(`MBA9999 No token available for request: ${config.method?.toUpperCase()} ${config.url}`);
               
-              // If no token and this is a protected endpoint, don't proceed
-              if (config.url.includes('/api/') && !config.url.includes('/auth/') && !config.url.includes('/token/')) {
+              // Log for invitation acceptance requests
+              if (config.url.includes('/api/users/v1/invitations/') && config.url.includes('/accept/')) {
+                debugLog(`MBAnb23ou4bf954 Added auth token for invitation acceptance: ${config.url}`);
+              }
+            } else {
+              debugLog(`MBAnb23ou4bf954 No token available for request: ${config.method?.toUpperCase()} ${config.url}`);
+              
+              // If this is an invitation acceptance endpoint which requires authentication but we have no token
+              if (config.url.includes('/api/users/v1/invitations/') && config.url.includes('/accept/')) {
+                debugLog(`MBAnb23ou4bf954 ERROR: Invitation acceptance requires authentication but no token available: ${config.url}`);
                 
-                // CRITICAL CHECK: If UI thinks user is signed in but we have no token,
-                // this indicates a serious state inconsistency that needs immediate resolution
-                if (isSignedIn) {
-                  debugLog('MBA9999 CRITICAL: UI shows signed in but no token for protected endpoint - forcing immediate sign out');
-                  // Use setTimeout to avoid interfering with the current request flow
-                  setTimeout(() => {
-                    signOut('no_token_but_ui_signed_in');
-                  }, 0);
-                }
-                
-                const error = new Error('No authentication token available');
+                // For acceptance endpoints, we MUST have a token
+                const error = new Error('Authentication required for invitation acceptance');
                 error.name = 'NoTokenError';
                 throw error;
               }

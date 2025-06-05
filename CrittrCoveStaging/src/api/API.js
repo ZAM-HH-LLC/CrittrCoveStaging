@@ -804,22 +804,58 @@ export const verifyInvitation = async (token) => {
 
 /**
  * Accept an invitation and create a connection between client and professional
+ * Requires authentication - the user must be logged in
+ * 
+ * Note: If the user registered with an invitation token, the backend
+ * automatically accepts the invitation during registration.
  * 
  * @param {string} token - The invitation token
  * @returns {Promise<Object>} Result of accepting the invitation
  */
 export const acceptInvitation = async (token) => {
   try {
-    debugLog('MBA4321 Accepting invitation:', { token });
+    debugLog('MBAnb23ou4bf954 Accepting invitation with token:', token);
     
-    const response = await axios.post(`${API_BASE_URL}/api/users/v1/invitations/${token}/accept/`);
+    // Backend requires authentication - make a simple authenticated request
+    const response = await axios.post(
+      `${API_BASE_URL}/api/users/v1/invitations/${token}/accept/`,
+      {}, // Empty body - backend just needs the auth token
+      {
+        headers: {
+          'Content-Type': 'application/json'
+          // Auth header will be added automatically by the interceptor
+        }
+      }
+    );
     
-    debugLog('MBA4321 Accept invitation response:', response.data);
-    
+    debugLog('MBAnb23ou4bf954 Invitation accepted successfully:', response.data);
     return response.data;
   } catch (error) {
-    debugLog('MBA4321 Error accepting invitation:', error);
-    debugLog('MBA4321 Error details:', error.response?.data || error.message);
+    debugLog('MBAnb23ou4bf954 Error accepting invitation:', error.message);
+    
+    // Log detailed error information
+    if (error.response) {
+      debugLog('MBAnb23ou4bf954 Error status:', error.response.status);
+      debugLog('MBAnb23ou4bf954 Error data:', error.response.data);
+      
+      // Special case: "already used" isn't really an error for our purposes
+      // Since invitations are accepted automatically during registration
+      if (error.response.status === 400 && error.response.data?.error === 'Invitation has already been used') {
+        debugLog('MBAnb23ou4bf954 Invitation was already accepted (likely during registration), treating as success');
+        return { 
+          success: true, 
+          already_accepted: true,
+          message: 'Invitation was already accepted'
+        };
+      }
+    }
+    
+    // Add context about requirements to the error
+    if (error.response?.status === 401) {
+      error.message = 'You must be logged in to accept this invitation';
+    } else if (error.response?.data?.error) {
+      error.message = error.response.data.error;
+    }
     
     throw error;
   }

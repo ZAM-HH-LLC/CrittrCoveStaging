@@ -301,7 +301,7 @@ const Connections = () => {
       debugLog('MBA4321 Invitation created successfully:', response);
       
       if (invitationType === 'email') {
-        setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+        setInviteSuccess(`Invitation sent to ${inviteEmail} - please have your client check spam if you don't see it in your inbox.`);
         setInviteEmail('');
       } else {
         setGeneratedLink(response.invitation_link);

@@ -238,7 +238,7 @@ export default function SignUp() {
         ...userData,
         timezone: userTimezone,
         use_military_time: useMilitaryTime,
-        invitation_token: inviteToken
+        invitation_token: inviteToken // Add invitation token here for backend to handle
       };
       
       debugLog('MBA12345 Registration data:', registrationData);
@@ -255,6 +255,9 @@ export default function SignUp() {
       const registerResponse = await directAxios.post('/api/users/v1/register/', registrationData);
       
       debugLog('MBA12345 User registration successful', registerResponse.data);
+      
+      // The backend already handles invitation acceptance during registration
+      // No need to manually accept it again
       
       // After successful registration, log the user in to get authentication tokens
       debugLog('MBA12345 Attempting to log in with new credentials');
@@ -275,25 +278,7 @@ export default function SignUp() {
       
       debugLog('MBA12345 Authentication setup complete');
       
-      // If the user came from an invitation, accept the invitation
-      if (inviteToken && inviteVerified) {
-        try {
-          await axios.post(
-            `${API_BASE_URL}/api/users/v1/invitations/${inviteToken}/accept/`,
-            {},
-            {
-              headers: {
-                Authorization: `Bearer ${access}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          );
-          debugLog('MBA12345 Invitation accepted successfully');
-        } catch (error) {
-          debugLog('MBA12345 Error accepting invitation:', error);
-          // Continue even if this fails
-        }
-      }
+      // NOTE: We don't need to manually accept the invitation since the backend handles it during registration
       
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         Alert.alert('Success', 'Account created successfully!', [

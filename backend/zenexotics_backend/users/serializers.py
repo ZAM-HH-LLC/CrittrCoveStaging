@@ -11,6 +11,7 @@ from services.models import Service
 from professionals.models import Professional
 from django.utils import timezone as django_timezone
 from datetime import date
+import logging
 
 User = get_user_model()
 
@@ -109,6 +110,9 @@ class RegisterSerializer(serializers.ModelSerializer):
                 from clients.models import Client
                 from professionals.models import Professional
                 
+                logger = logging.getLogger(__name__)
+                logger.info(f"MBAnb23ou4bf954: Processing invitation acceptance during registration for user {user.id}")
+                
                 # Create client profile if it doesn't exist
                 client, created = Client.objects.get_or_create(user=user)
                 
@@ -117,12 +121,29 @@ class RegisterSerializer(serializers.ModelSerializer):
                     professional = Professional.objects.get(user=invitation.inviter)
                     client.invited_by = professional
                     client.save()
-                    print(f"Set invited_by for client {client.id} to professional {professional.user.id}")
+                    logger.info(f"MBAnb23ou4bf954: Set invited_by for client {client.id} to professional {professional.professional_id}")
+                    
+                    # Create a conversation between the professional and client
+                    try:
+                        # Import the function here to avoid circular imports
+                        from conversations.v1.views import find_or_create_conversation
+                        
+                        # Use the find_or_create_conversation helper function
+                        # The invitee is always the client, and the inviter is the professional
+                        conversation, is_professional = find_or_create_conversation(
+                            current_user=user,  # The newly registered user (client)
+                            other_user=invitation.inviter,  # The professional who sent the invitation
+                            current_user_role='client'  # The role of the newly registered user
+                        )
+                        
+                        logger.info(f"MBAnb23ou4bf954: Created conversation {conversation.conversation_id} between professional {professional.professional_id} and client {client.id}")
+                    except ImportError as import_error:
+                        logger.error(f"MBAnb23ou4bf954: Error importing find_or_create_conversation: {str(import_error)}")
+                    except Exception as conv_error:
+                        logger.error(f"MBAnb23ou4bf954: Error creating conversation: {str(conv_error)}")
+                    
                 except Professional.DoesNotExist:
-                    print(f"Could not set invited_by: Professional profile not found for user {invitation.inviter.id}")
-                
-                # TODO: Create connection between client and professional
-                # This depends on how connections are implemented in your app
+                    logger.warning(f"MBAnb23ou4bf954: Could not set invited_by: Professional profile not found for user {invitation.inviter.id}")
         
         # Log the created settings for debugging
         print(f"Created user settings for {user.email}: timezone={timezone}, use_military_time={use_military_time}")
