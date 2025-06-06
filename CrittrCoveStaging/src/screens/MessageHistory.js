@@ -3,7 +3,7 @@ import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpa
 import { useTheme, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { AuthContext, getStorage, debugLog } from '../context/AuthContext';
+import { AuthContext, getStorage, setStorage, debugLog } from '../context/AuthContext';
 import RequestBookingModal from '../components/RequestBookingModal';
 import BookingStepModal from '../components/BookingStepModal';
 import { CURRENT_USER_ID } from '../data/mockData';
@@ -224,6 +224,22 @@ const MessageHistory = ({ navigation, route }) => {
         setTimeout(() => {
           isIntentionallyDeselecting.current = false;
         }, 500);
+      } else if (Platform.OS === 'web') {
+        // If no selected conversation, this means we're likely navigating away from MessageHistory
+        // Update the currentRoute in localStorage to match the URL
+        const currentPath = window.location.pathname;
+        debugLog('MBAo3hi4g4v: Browser back detected, updating navigation state', { currentPath });
+        
+        // Extract the route from the path
+        const pathSegments = currentPath.split('/').filter(Boolean);
+        const route = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
+        
+        // Update localStorage to reflect the new route
+        setStorage('currentRoute', route).then(() => {
+          debugLog('MBAo3hi4g4v: Updated currentRoute in localStorage', { route });
+        }).catch(error => {
+          debugLog('MBAo3hi4g4v: Error updating currentRoute', { error: error.message });
+        });
       }
     };
 
@@ -247,6 +263,60 @@ const MessageHistory = ({ navigation, route }) => {
       }
     };
   }, [selectedConversation]);
+  
+  // Add a URL monitoring effect to handle browser navigation
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    
+    let checkURLInterval;
+    
+    const checkAndUpdateRoute = () => {
+      const currentPath = window.location.pathname;
+      const pathSegments = currentPath.split('/').filter(Boolean);
+      const currentPathRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
+      
+      // Only log if debug is enabled to reduce console spam
+      debugLog('MBAo3hi4g4v: Checking URL route', { 
+        currentPathRoute, 
+        isMessageHistory: currentPathRoute === 'MessageHistory'
+      });
+      
+      // If we're not on MessageHistory route
+      if (currentPathRoute !== 'MessageHistory') {
+        getStorage('currentRoute').then(storedRoute => {
+          // If localStorage still thinks we're in MessageHistory, update it
+          if (storedRoute === 'MessageHistory') {
+            debugLog('MBAo3hi4g4v: URL changed but navigation state not updated, fixing', {
+              currentURL: currentPathRoute,
+              storedRoute
+            });
+            
+            setStorage('currentRoute', currentPathRoute).then(() => {
+              debugLog('MBAo3hi4g4v: Updated currentRoute to match URL', { 
+                newRoute: currentPathRoute 
+              });
+            }).catch(error => {
+              debugLog('MBAo3hi4g4v: Error updating currentRoute from URL check', { 
+                error: error.message 
+              });
+            });
+          }
+        }).catch(error => {
+          debugLog('MBAo3hi4g4v: Error getting stored route', { error: error.message });
+        });
+      }
+    };
+    
+    // Run initial check
+    checkAndUpdateRoute();
+    
+    // Set up interval to periodically check and update
+    checkURLInterval = setInterval(checkAndUpdateRoute, 1000);
+    
+    return () => {
+      clearInterval(checkURLInterval);
+    };
+  }, []);
   
   // All other state declarations
   const [hasMore, setHasMore] = useState(true);

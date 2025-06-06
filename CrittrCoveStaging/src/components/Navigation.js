@@ -34,41 +34,64 @@ let previousRoute, currentRoute;
 
 export const handleBack = async (navigation) => {
   try {
-    // Get previous and current routes from storage
     const previousRoute = await getStorage('previousRoute');
     const currentRoute = await getStorage('currentRoute');
     
-    debugLog('MBAuieo2o34nf handleBack - routes from storage', { previousRoute, currentRoute });
-    
-    if (previousRoute) {
-      // Get the active tab from the previous route if it exists
-      const activeTab = await getStorage('MyProfileActiveTab');
-      debugLog('MBAuieo2o34nf handleBack - active tab from storage', { activeTab });
+    // If we have a valid previous route, navigate to it
+    if (previousRoute && previousRoute !== currentRoute) {
+      debugLog('MBA6789: handleBack - navigating to previous route', { 
+        from: currentRoute, 
+        to: previousRoute 
+      });
       
-      // Navigate to the previous route
-      if (previousRoute === 'MyProfile' && activeTab) {
-        navigation.navigate(previousRoute, { initialTab: activeTab });
+      // If on web platform, try to use the browser history if possible
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // First try using browser history
+        window.history.back();
+        
+        // After a short delay, check if URL has changed
+        setTimeout(async () => {
+          const currentPath = window.location.pathname;
+          const pathSegments = currentPath.split('/').filter(Boolean);
+          const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
+          
+          // If we're still on the same page after trying window.history.back(),
+          // fall back to React Navigation
+          if (urlRoute === currentRoute) {
+            debugLog('MBA6789: Browser history.back() didn\'t change URL, using React Navigation');
+            navigation.navigate(previousRoute);
+            await setStorage('currentRoute', previousRoute);
+          } else if (urlRoute !== previousRoute) {
+            // Browser history worked but took us to a different route than expected,
+            // still update our state
+            debugLog('MBA6789: Browser history.back() worked, updating state to:', urlRoute);
+            await setStorage('currentRoute', urlRoute);
+          }
+          // If urlRoute === previousRoute, the browser back worked as expected, no need to log
+        }, 100);
       } else {
+        // For non-web platforms, just use React Navigation
         navigation.navigate(previousRoute);
+        await setStorage('currentRoute', previousRoute);
       }
       
-      // Update storage with new current and previous routes
-      await setStorage('currentRoute', previousRoute);
-      await setStorage('previousRoute', currentRoute);
-      
-      debugLog('MBAuieo2o34nf handleBack - navigation complete', { 
-        newCurrentRoute: previousRoute,
-        newPreviousRoute: currentRoute
-      });
+      return true;
     } else {
-      // If no previous route, go to More screen
-      navigation.navigate('Dashboard');
-      debugLog('MBAuieo2o34nf handleBack - no previous route, going to More');
+      // If no previous route, go to Dashboard as fallback
+      if (currentRoute !== 'Dashboard') {
+        debugLog('MBA6789: handleBack - no previous route, going to Dashboard', { 
+          from: currentRoute 
+        });
+        navigation.navigate('Dashboard');
+        await setStorage('currentRoute', 'Dashboard');
+        return true;
+      }
     }
+    
+    return false;
   } catch (error) {
-    debugLog('MBAuieo2o34nf handleBack - error', error);
-    // If there's an error, go to More screen
-    navigation.navigate('Dashboard');
+    debugLog('MBA6789: handleBack - error', error);
+    return false;
   }
 };
 
@@ -86,19 +109,50 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
       }
     }
     
+    // Get the current browser URL path if on web
+    let currentPath = '';
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      currentPath = window.location.pathname;
+      const pathSegments = currentPath.split('/').filter(Boolean);
+      const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
+      
+      // Only log if we're not already at the route to reduce spam
+      if (urlRoute !== toLocation || currentRoute !== toLocation) {
+        debugLog('MBAuieo2o34nf navigateToFrom - current URL check', {
+          urlRoute,
+          currentPath,
+          navigatingTo: toLocation
+        });
+      }
+      
+      // If we're already on this route according to the URL but not our state, just update state
+      if (urlRoute === toLocation && currentRoute !== toLocation) {
+        await setStorage('currentRoute', toLocation);
+        debugLog('MBAuieo2o34nf navigateToFrom - only updating state, already at URL', {
+          toLocation,
+          urlRoute
+        });
+        return;
+      }
+    }
+    
     // Navigate to the new screen
     navigation.navigate(toLocation, params);
     
     // Update current route in storage
     await setStorage('currentRoute', toLocation);
     
-    debugLog('MBAuieo2o34nf navigateToFrom - navigation complete', {
-      from: fromLocation,
-      to: toLocation,
-      params,
-      previousRoute: currentRoute,
-      newCurrentRoute: toLocation
-    });
+    // Only log if we're actually changing routes
+    if (currentRoute !== toLocation) {
+      debugLog('MBAuieo2o34nf navigateToFrom - navigation complete', {
+        from: fromLocation,
+        to: toLocation,
+        params,
+        previousRoute: currentRoute,
+        newCurrentRoute: toLocation,
+        currentPath
+      });
+    }
   } catch (error) {
     debugLog('MBAuieo2o34nf navigateToFrom - error', error);
   }
@@ -230,9 +284,45 @@ const NavigationContent = ({
   useEffect(() => {
     const updateCurrentRoute = async () => {
       try {
-        let route;
+        // When running on web, get the current route from URL path
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const currentPath = window.location.pathname;
+          const pathSegments = currentPath.split('/').filter(Boolean);
+          const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
+          
+          // Only log if the route is different from current route to reduce spam
+          if (urlRoute !== currentRoute) {
+            debugLog('MBA4477: URL route check', { 
+              urlRoute, 
+              currentRoute,
+              pathname: window.location.pathname
+            });
+          }
+          
+          // If URL path is different from current route, prefer the URL path
+          if (urlRoute && urlRoute !== currentRoute) {
+            setCurrentRoute(urlRoute);
+            await setStorage('currentRoute', urlRoute);
+            
+            // Update message notification context with new route
+            updateRoute && updateRoute(urlRoute);
+            
+            // Only reset notifications when navigating to MessageHistory
+            if (urlRoute === 'MessageHistory' && hasUnreadMessages) {
+              resetNotifications && resetNotifications(urlRoute);
+            }
+            
+            debugLog('MBA4477: Updated current route from URL', { 
+              urlRoute, 
+              oldRoute: currentRoute 
+            });
+            
+            return; // Skip checking localStorage if we've already updated from URL
+          }
+        }
         
-        route = await getStorage('currentRoute');
+        // Fall back to localStorage if URL didn't provide a route
+        const route = await getStorage('currentRoute');
         
         // Only log in debug mode, not every time
         if (is_DEBUG && route !== currentRoute) {
@@ -257,11 +347,63 @@ const NavigationContent = ({
       }
     };
 
+    // Initial update
     updateCurrentRoute();
+    
     // Add navigation state listener
     const unsubscribe = navigation.addListener('state', updateCurrentRoute);
-    return unsubscribe;
-  }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, is_DEBUG, currentRoute]);
+    
+    // Add browser history listener for web to handle back/forward navigation
+    let popStateListener;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      popStateListener = () => {
+        debugLog('MBA4477: Detected browser history change, updating route', {
+          pathname: window.location.pathname
+        });
+        
+        // Force immediate update on popstate
+        updateCurrentRoute();
+      };
+      
+      window.addEventListener('popstate', popStateListener);
+    }
+    
+    // Also set up an interval to periodically check and sync route with URL
+    // but much less frequently to avoid log spam
+    let routeCheckInterval;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // Store previous URL check to avoid unnecessary updates
+      let lastCheckedPath = window.location.pathname;
+      let lastCheckedRoute = currentRoute;
+      
+      routeCheckInterval = setInterval(() => {
+        // Only run check if the URL has changed since last check
+        // or if our route doesn't match the current URL
+        const currentPath = window.location.pathname;
+        const pathSegments = currentPath.split('/').filter(Boolean);
+        const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
+        
+        // Only update if something has changed
+        if (currentPath !== lastCheckedPath || (urlRoute !== lastCheckedRoute && urlRoute !== currentRoute)) {
+          lastCheckedPath = currentPath;
+          lastCheckedRoute = urlRoute;
+          updateCurrentRoute();
+        }
+      }, 5000); // Check every 5 seconds to reduce overhead even further
+    }
+    
+    return () => {
+      unsubscribe();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        if (popStateListener) {
+          window.removeEventListener('popstate', popStateListener);
+        }
+        if (routeCheckInterval) {
+          clearInterval(routeCheckInterval);
+        }
+      }
+    };
+  }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, currentRoute]);
 
   // Animated hamburger menu component
   const AnimatedHamburgerMenu = ({ size = 28, color = theme.colors.text }) => {
