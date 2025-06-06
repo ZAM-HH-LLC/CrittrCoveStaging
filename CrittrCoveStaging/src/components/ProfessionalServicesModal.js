@@ -200,7 +200,9 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
       // Navigate to MessageHistory with the conversation ID
       navigation.navigate('MessageHistory', { 
         conversationId: response.conversation_id,
-        otherUserName: professional.name
+        otherUserName: professional.name,
+        // Add a timestamp to ensure the route params change triggers the effect
+        _timestamp: Date.now()
       });
     } catch (err) {
       debugLog('MBA3456', 'Error creating conversation:', err);

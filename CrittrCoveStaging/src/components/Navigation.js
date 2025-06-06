@@ -505,7 +505,14 @@ const NavigationContent = ({
   const renderMenuItems = () => {
     let items = [];
     
-    if (userRole === 'professional') {
+    if (!isSignedIn) {
+      // Signed-out menu items
+      items = [
+        { icon: 'login', label: 'Sign In', route: 'SignIn' },
+        { icon: 'account-plus-outline', label: 'Sign Up', route: 'SignUp' },
+        { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' }
+      ];
+    } else if (userRole === 'professional') {
       // Professional menu items in the specified order
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
@@ -513,7 +520,8 @@ const NavigationContent = ({
         { icon: 'briefcase-outline', label: 'Services', route: 'ServiceManager' },
         { icon: 'account-group-outline', label: 'Connections', route: 'Connections' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
-        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
+        { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
       ];
     } else {
       // Pet Owner menu items in the specified order
@@ -522,7 +530,8 @@ const NavigationContent = ({
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
-        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
+        { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
       ];
     }
     
@@ -531,20 +540,21 @@ const NavigationContent = ({
         key={index}
         style={[
           styles.sidebarItem,
-          currentRoute === item.route && styles.activeItem
+          currentRoute === item.route && styles.activeItem,
+          item.route === 'logout' && styles.logoutItem
         ]}
-        onPress={() => handleNavigation(item.route)}
+        onPress={() => item.action ? item.action() : handleNavigation(item.route)}
       >
         <MaterialCommunityIcons
           name={item.icon}
           size={24}
-          color={currentRoute === item.route ? theme.colors.primary : theme.colors.text}
+          color={item.route === 'logout' ? '#F26969' : (currentRoute === item.route ? theme.colors.primary : theme.colors.text)}
         />
         <Text
           style={[
             styles.sidebarItemText,
             {
-              color: currentRoute === item.route ? theme.colors.primary : theme.colors.text,
+              color: item.route === 'logout' ? '#F26969' : (currentRoute === item.route ? theme.colors.primary : theme.colors.text),
               marginLeft: isCollapsed ? 0 : 12,
               display: isCollapsed ? 'none' : 'flex',
             }
@@ -567,7 +577,14 @@ const NavigationContent = ({
   const renderMobileMenuItems = () => {
     let items = [];
     
-    if (userRole === 'professional') {
+    if (!isSignedIn) {
+      // Signed-out menu items
+      items = [
+        { icon: 'login', label: 'Sign In', route: 'SignIn' },
+        { icon: 'account-plus-outline', label: 'Sign Up', route: 'SignUp' },
+        { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' }
+      ];
+    } else if (userRole === 'professional') {
       // Professional menu items in the specified order
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
@@ -575,7 +592,8 @@ const NavigationContent = ({
         { icon: 'briefcase-outline', label: 'Services', route: 'ServiceManager' },
         { icon: 'account-group-outline', label: 'Connections', route: 'Connections' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
-        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
+        { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
       ];
     } else {
       // Pet Owner menu items in the specified order
@@ -584,14 +602,15 @@ const NavigationContent = ({
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
-        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
+        { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
       ];
     }
     
     return (
       <>
-        {/* Role Toggle for Mobile */}
-        {isApprovedProfessional && (
+        {/* Role Toggle for Mobile - Only show when signed in and approved professional */}
+        {isSignedIn && isApprovedProfessional && (
           <View style={styles.mobileRoleToggleContainer}>
             <Text style={styles.mobileRoleToggleTitle}>Your Role</Text>
             <View style={styles.mobileRoleButtonsContainer}>
@@ -635,18 +654,26 @@ const NavigationContent = ({
         {items.map((item, index) => (
           <TouchableOpacity
             key={index}
-            style={styles.mobileMenuItem}
+            style={[
+              styles.mobileMenuItem,
+              item.route === 'logout' && styles.mobileLogoutItem
+            ]}
             onPress={() => {
               setIsMenuOpen(false);
-              handleNavigation(item.route);
+              item.action ? item.action() : handleNavigation(item.route);
             }}
           >
             <MaterialCommunityIcons
               name={item.icon}
               size={24}
-              color={theme.colors.text}
+              color={item.route === 'logout' ? '#F26969' : theme.colors.text}
             />
-            <Text style={styles.mobileMenuItemText}>{item.label}</Text>
+            <Text style={[
+              styles.mobileMenuItemText,
+              item.route === 'logout' && styles.mobileLogoutText
+            ]}>
+              {item.label}
+            </Text>
             {item.notification && (
               <View style={styles.mobileMessageNotificationDot} />
             )}
@@ -657,21 +684,6 @@ const NavigationContent = ({
             )}
           </TouchableOpacity>
         ))}
-        
-        {/* Logout Button */}
-        <TouchableOpacity
-          style={[styles.mobileMenuItem, styles.mobileLogoutItem]}
-          onPress={handleLogout}
-        >
-          <MaterialCommunityIcons
-            name="logout"
-            size={24}
-            color="#F26969"
-          />
-          <Text style={[styles.mobileMenuItemText, styles.mobileLogoutText]}>
-            Logout
-          </Text>
-        </TouchableOpacity>
       </>
     );
   };
@@ -700,32 +712,36 @@ const NavigationContent = ({
           style={styles.collapseButton}
           onPress={() => setIsCollapsed(!isCollapsed)}
         >
-          <MaterialIcons
+          <MaterialCommunityIcons
             name={isCollapsed ? 'chevron-right' : 'chevron-left'}
             size={24}
             color={theme.colors.text}
           />
         </TouchableOpacity>
         
-        <View style={styles.menuItems}>
-          {isApprovedProfessional && !isCollapsed && (
+        <View style={styles.menuItemsContainer}>
+          {/* Role Toggle - Only show when signed in and approved professional */}
+          {isSignedIn && isApprovedProfessional && (
             <View style={styles.roleToggleContainer}>
-              <Text style={styles.roleToggleTitle}>Your Role</Text>
+              {!isCollapsed && (
+                <Text style={styles.roleToggleTitle}>Your Role</Text>
+              )}
               <View style={styles.roleButtonsContainer}>
                 <TouchableOpacity
                   style={[
                     styles.roleButton,
-                    userRole === 'owner' && styles.roleButtonActive
+                    userRole === 'petOwner' && styles.roleButtonActive
                   ]}
-                  onPress={() => userRole !== 'owner' && handleRoleSwitch('owner')}
+                  onPress={() => handleRoleSwitch('petOwner')}
                 >
                   <Text
                     style={[
                       styles.roleButtonText,
-                      userRole === 'owner' && styles.roleButtonTextActive
+                      userRole === 'petOwner' && styles.roleButtonTextActive,
+                      isCollapsed && styles.roleButtonTextCollapsed
                     ]}
                   >
-                    Pet Owner
+                    {isCollapsed ? 'O' : 'Owner'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -733,15 +749,16 @@ const NavigationContent = ({
                     styles.roleButton,
                     userRole === 'professional' && styles.roleButtonActive
                   ]}
-                  onPress={() => userRole !== 'professional' && handleRoleSwitch('professional')}
+                  onPress={() => handleRoleSwitch('professional')}
                 >
                   <Text
                     style={[
                       styles.roleButtonText,
-                      userRole === 'professional' && styles.roleButtonTextActive
+                      userRole === 'professional' && styles.roleButtonTextActive,
+                      isCollapsed && styles.roleButtonTextCollapsed
                     ]}
                   >
-                    Professional
+                    {isCollapsed ? 'P' : 'Professional'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -750,20 +767,6 @@ const NavigationContent = ({
           
           {renderMenuItems()}
         </View>
-        
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-        >
-          <MaterialCommunityIcons
-            name="logout"
-            size={24}
-            color="#F26969"
-          />
-          {!isCollapsed && (
-            <Text style={styles.logoutText}>Logout</Text>
-          )}
-        </TouchableOpacity>
       </View>
     );
   };
@@ -772,7 +775,7 @@ const NavigationContent = ({
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.mobileHeaderContent}>
-          <TouchableOpacity onPress={() => handleNavigation('Dashboard')}>
+          <TouchableOpacity onPress={() => handleNavigation(isSignedIn ? 'Dashboard' : 'SearchProfessionalsListing')}>
             <Image
               source={require('../../assets/logo.png')}
               style={[styles.mobileLogo, { width: 120, height: 40, tintColor: theme.colors.primary }]}
@@ -799,51 +802,109 @@ const NavigationContent = ({
   };
   
   const renderMobileNavBar = () => {
+    // For mobile nav bar when signed out
+    if (!isSignedIn) {
+      return (
+        <SafeAreaView style={styles.customNavBar}>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => handleNavigation('SignIn')}
+          >
+            <MaterialCommunityIcons
+              name="login"
+              size={24}
+              color={currentRoute === 'SignIn' ? theme.colors.secondary : theme.colors.whiteText}
+            />
+            <Text style={[
+              styles.navText,
+              { color: currentRoute === 'SignIn' ? theme.colors.secondary : theme.colors.whiteText }
+            ]}>
+              Sign In
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => handleNavigation('SignUp')}
+          >
+            <MaterialCommunityIcons
+              name="account-plus-outline"
+              size={24}
+              color={currentRoute === 'SignUp' ? theme.colors.secondary : theme.colors.whiteText}
+            />
+            <Text style={[
+              styles.navText,
+              { color: currentRoute === 'SignUp' ? theme.colors.secondary : theme.colors.whiteText }
+            ]}>
+              Sign Up
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => handleNavigation('SearchProfessionalsListing')}
+          >
+            <MaterialCommunityIcons
+              name="magnify"
+              size={24}
+              color={currentRoute === 'SearchProfessionalsListing' ? theme.colors.secondary : theme.colors.whiteText}
+            />
+            <Text style={[
+              styles.navText,
+              { color: currentRoute === 'SearchProfessionalsListing' ? theme.colors.secondary : theme.colors.whiteText }
+            ]}>
+              Search
+            </Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      );
+    }
+    
     return (
       <SafeAreaView style={styles.customNavBar}>
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => handleNavigation('Dashboard')}
+          onPress={() => handleNavigation(isSignedIn ? 'Dashboard' : 'SearchProfessionalsListing')}
         >
           <MaterialCommunityIcons
-            name="view-dashboard-outline"
+            name={isSignedIn ? 'view-dashboard-outline' : 'magnify'}
             size={24}
-            color={currentRoute === 'Dashboard' ? theme.colors.secondary : theme.colors.whiteText}
+            color={currentRoute === (isSignedIn ? 'Dashboard' : 'SearchProfessionalsListing') ? theme.colors.secondary : theme.colors.whiteText}
           />
           <Text style={[
             styles.navText,
-            { color: currentRoute === 'Dashboard' ? theme.colors.secondary : theme.colors.whiteText }
+            { color: currentRoute === (isSignedIn ? 'Dashboard' : 'SearchProfessionalsListing') ? theme.colors.secondary : theme.colors.whiteText }
           ]}>
-            Home
+            {isSignedIn ? 'Home' : 'Search'}
           </Text>
         </TouchableOpacity>
         
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => handleNavigation('SearchProfessionalsListing')}
+          onPress={() => handleNavigation(isSignedIn ? 'SearchProfessionalsListing' : 'SignUp')}
         >
           <MaterialCommunityIcons
-            name="magnify"
+            name={isSignedIn ? 'magnify' : 'account-plus-outline'}
             size={24}
-            color={currentRoute === 'SearchProfessionalsListing' ? theme.colors.secondary : theme.colors.whiteText}
+            color={currentRoute === (isSignedIn ? 'SearchProfessionalsListing' : 'SignUp') ? theme.colors.secondary : theme.colors.whiteText}
           />
           <Text style={[
             styles.navText,
-            { color: currentRoute === 'SearchProfessionalsListing' ? theme.colors.secondary : theme.colors.whiteText }
+            { color: currentRoute === (isSignedIn ? 'SearchProfessionalsListing' : 'SignUp') ? theme.colors.secondary : theme.colors.whiteText }
           ]}>
-            Search
+            {isSignedIn ? 'Search' : 'Sign Up'}
           </Text>
         </TouchableOpacity>
         
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => handleNavigation(userRole === 'professional' ? 'ServiceManager' : 'PetManager')}
+          onPress={() => handleNavigation(isSignedIn ? (userRole === 'professional' ? 'ServiceManager' : 'PetManager') : 'SignIn')}
         >
           <MaterialCommunityIcons
-            name="paw"
+            name={isSignedIn ? 'paw' : 'login'}
             size={24}
             color={
-              currentRoute === (userRole === 'professional' ? 'ServiceManager' : 'PetManager')
+              currentRoute === (isSignedIn ? (userRole === 'professional' ? 'ServiceManager' : 'PetManager') : 'SignIn')
                 ? theme.colors.secondary
                 : theme.colors.whiteText
             }
@@ -851,58 +912,62 @@ const NavigationContent = ({
           <Text style={[
             styles.navText,
             {
-              color: currentRoute === (userRole === 'professional' ? 'ServiceManager' : 'PetManager')
+              color: currentRoute === (isSignedIn ? (userRole === 'professional' ? 'ServiceManager' : 'PetManager') : 'SignIn')
                 ? theme.colors.secondary
                 : theme.colors.whiteText
             }
           ]}>
-            {userRole === 'professional' ? 'Services' : 'Pets'}
+            {isSignedIn ? (userRole === 'professional' ? 'Services' : 'Pets') : 'Sign In'}
           </Text>
         </TouchableOpacity>
         
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => handleNavigation('MessageHistory')}
-        >
-          <View style={{ position: 'relative' }}>
-            <MaterialCommunityIcons
-              name="message-text-outline"
-              size={24}
-              color={currentRoute === 'MessageHistory' ? theme.colors.secondary : theme.colors.whiteText}
-            />
-            {hasUnreadMessages && (
-              <View style={styles.mobileMessageNotificationDot} />
-            )}
-            {unreadCount > 0 && (
-              <View style={styles.mobileMessageNotificationBadge}>
-                <Text style={styles.mobileMessageNotificationText}>{unreadCount}</Text>
+        {isSignedIn && (
+          <>
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => handleNavigation('MessageHistory')}
+            >
+              <View style={{ position: 'relative' }}>
+                <MaterialCommunityIcons
+                  name="message-text-outline"
+                  size={24}
+                  color={currentRoute === 'MessageHistory' ? theme.colors.secondary : theme.colors.whiteText}
+                />
+                {hasUnreadMessages && (
+                  <View style={styles.mobileMessageNotificationDot} />
+                )}
+                {unreadCount > 0 && (
+                  <View style={styles.mobileMessageNotificationBadge}>
+                    <Text style={styles.mobileMessageNotificationText}>{unreadCount}</Text>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
-          <Text style={[
-            styles.navText,
-            { color: currentRoute === 'MessageHistory' ? theme.colors.secondary : theme.colors.whiteText }
-          ]}>
-            Messages
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => handleNavigation('MyProfile')}
-        >
-          <MaterialCommunityIcons
-            name="account-outline"
-            size={24}
-            color={currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText}
-          />
-          <Text style={[
-            styles.navText,
-            { color: currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText }
-          ]}>
-            Profile
-          </Text>
-        </TouchableOpacity>
+              <Text style={[
+                styles.navText,
+                { color: currentRoute === 'MessageHistory' ? theme.colors.secondary : theme.colors.whiteText }
+              ]}>
+                Messages
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => handleNavigation('MyProfile')}
+            >
+              <MaterialCommunityIcons
+                name="account-outline"
+                size={24}
+                color={currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText}
+              />
+              <Text style={[
+                styles.navText,
+                { color: currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText }
+              ]}>
+                Profile
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
       </SafeAreaView>
     );
   };
@@ -924,7 +989,31 @@ const NavigationContent = ({
               {renderDesktopSidebar()}
             </View>
           )}
-          {(isMobile || !isSignedIn) && renderMobileHeader()}
+          {!isMobile && !isSignedIn && (
+            <View style={styles.signedOutHeaderWeb}>
+              <TouchableOpacity onPress={() => handleNavigation('SearchProfessionalsListing')}>
+                <Image
+                  source={require('../../assets/logo.png')}
+                  style={[styles.webLogo, { tintColor: theme.colors.primary }]}
+                />
+              </TouchableOpacity>
+              <View style={styles.mobileRightContent}>
+                <TouchableOpacity
+                  style={styles.hamburgerMenuContainer}
+                  onPress={toggleMenu}
+                >
+                  <AnimatedHamburgerMenu size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          {isMobile && renderMobileHeader()}
+          
+          {isMenuOpen && !isMobile && !isSignedIn && (
+            <View style={[styles.mobileMenu, styles.webDesktopMenu]}>
+              {renderMobileMenuItems()}
+            </View>
+          )}
         </>
       ) : (
         <View style={styles.container}>
@@ -1140,7 +1229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1001,
   },
-  menuItems: {
+  menuItemsContainer: {
     flex: 1,
     padding: 16,
     backgroundColor: theme.colors.surfaceContrast,
@@ -1288,6 +1377,12 @@ const styles = StyleSheet.create({
   },
   activeItem: {
     backgroundColor: '#F0F9E5',
+  },
+  logoutItem: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    paddingTop: 16,
   },
   roleToggleContainer: {
     padding: 12,
@@ -1453,5 +1548,59 @@ const styles = StyleSheet.create({
     height: 28,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  signedOutOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  signedOutButton: {
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  signedOutButtonText: {
+    fontSize: theme.fontSizes.small,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.primary,
+  },
+  signInButton: {
+    backgroundColor: theme.colors.primary,
+  },
+  signedOutHeaderWeb: {
+    height: 70,
+    width: '100%',
+    backgroundColor: theme.colors.surfaceContrast,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  webLogo: {
+    height: 40,
+    width: 120,
+    resizeMode: 'contain',
+  },
+  signedOutNavButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  webSignInButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  webSignInText: {
+    color: theme.colors.surface,
+  },
+  webDesktopMenu: {
+    position: 'absolute',
+    right: 0,
+    top: 70,
+    width: 250,
   },
 });

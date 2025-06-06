@@ -57,6 +57,65 @@ const MessageHistory = ({ navigation, route }) => {
   // Track whether we're intentionally deselecting
   const isIntentionallyDeselecting = useRef(false);
   
+  // New effect to handle navigation with conversationId parameter from ProfessionalServicesModal
+  useEffect(() => {
+    // Check if we have a conversationId in route params
+    if (route.params?.conversationId && isSignedIn) {
+      const newConversationId = route.params.conversationId;
+      
+      debugLog('MBA3456: Navigation detected with conversationId parameter', {
+        conversationId: newConversationId,
+        hasExistingConversations: conversations.length > 0,
+        isSignedIn
+      });
+      
+      // Immediately set loading state
+      setIsLoadingConversations(true);
+      
+      // Fetch conversations to make sure we have the latest data
+      fetchConversations().then((newConversationsData) => {
+        // Short delay to ensure state updates
+        setTimeout(() => {
+          // After fetching, find the new conversation in our data
+          const foundConversation = newConversationsData.find(
+            conv => conv.conversation_id === newConversationId
+          );
+          
+          debugLog('MBA3456: Looking for new conversation in fetched data', {
+            conversationId: newConversationId,
+            found: !!foundConversation,
+            totalConversations: newConversationsData.length,
+            foundConversation: foundConversation ? {
+              id: foundConversation.conversation_id,
+              is_professional: foundConversation.is_professional,
+              name: foundConversation.other_user_name
+            } : 'not found'
+          });
+          
+          // Set the conversation data directly to ensure it's available immediately
+          if (foundConversation) {
+            setSelectedConversationData(foundConversation);
+          }
+          
+          // Set the selected conversation
+          setSelectedConversation(newConversationId);
+          
+          // Clear the params to avoid selecting again on future navigations
+          navigation.setParams({
+            conversationId: undefined,
+            otherUserName: undefined,
+            _timestamp: undefined
+          });
+          
+          // Immediately try to fetch messages for this conversation
+          setTimeout(() => {
+            fetchMessages(newConversationId, 1);
+          }, 100);
+        }, 100);
+      });
+    }
+  }, [route.params?.conversationId, route.params?._timestamp, isSignedIn]);
+
   // Effect to handle URL parameters for direct conversation navigation
   useEffect(() => {
     // Skip if we don't have any conversations loaded yet or there's no selectedConversation in URL
@@ -71,7 +130,7 @@ const MessageHistory = ({ navigation, route }) => {
     
     // Skip if we're intentionally deselecting (from handleBack)
     if (isIntentionallyDeselecting.current) {
-      debugLog('MBAo3hi4g4v: Skipping URL initialization because we intentionally deselected', {
+      debugLog('MBA3456: Skipping URL initialization because we intentionally deselected', {
         isIntentionallyDeselecting: isIntentionallyDeselecting.current
       });
       // Reset the flag after using it
@@ -85,7 +144,7 @@ const MessageHistory = ({ navigation, route }) => {
         if (Platform.OS === 'web') {
           const conversationIdFromURL = parseInt(route.params.selectedConversation, 10);
           if (!isNaN(conversationIdFromURL)) {
-            debugLog('MBAo3hi4g4v: Found conversation ID in URL, initializing', {
+            debugLog('MBA3456: Found conversation ID in URL, initializing', {
               conversationIdFromURL,
               conversationsLoaded: conversations.length,
               currentSelected: selectedConversation
@@ -100,14 +159,14 @@ const MessageHistory = ({ navigation, route }) => {
               // Delay setting the selected conversation to ensure component is fully mounted
               // Use a setTimeout to avoid immediate state changes during render
               setTimeout(() => {
-                debugLog('MBAo3hi4g4v: Setting conversation from URL', {
+                debugLog('MBA3456: Setting conversation from URL', {
                   conversationId: conversationIdFromURL
                 });
                 setSelectedConversation(conversationIdFromURL);
               }, 300);
             } else {
               // If conversation doesn't exist, clear the parameter from the URL
-              debugLog('MBAo3hi4g4v: Conversation from URL not found in list', {
+              debugLog('MBA3456: Conversation from URL not found in list', {
                 conversationIdFromURL,
                 availableConversations: conversations.map(c => c.conversation_id)
               });
@@ -118,7 +177,7 @@ const MessageHistory = ({ navigation, route }) => {
           }
         }
       } catch (error) {
-        debugLog('MBAo3hi4g4v: Error initializing from URL', { error: error.message });
+        debugLog('MBA3456: Error initializing from URL', { error: error.message });
       }
     };
     
@@ -127,16 +186,13 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Effect to handle navigation params for visibility control
   useEffect(() => {
-    // Log regardless of platform/width to see if this effect is running
-    debugLog('MBAo3hi4g4v: Conversation effect triggered', {
-      selectedConversation,
-      screenWidth,
-      platform: Platform.OS,
-      isWebAndMobile: Platform.OS === 'web' && screenWidth <= 900,
-      routeParams: JSON.stringify(route.params),
-      routeName: route.name,
-      timestamp: new Date().toISOString()
-    });
+    // Only log when something important changes
+    if (selectedConversation || route.params?.selectedConversation) {
+      debugLog('MBA3456: Conversation selection changed', {
+        selectedConversation,
+        paramsConversation: route.params?.selectedConversation
+      });
+    }
     
     if (Platform.OS === 'web' && screenWidth <= 900) {
       // Check if we need to update params - only update if selectedConversation has changed from route params
@@ -269,40 +325,38 @@ const MessageHistory = ({ navigation, route }) => {
     if (Platform.OS !== 'web') return;
     
     let checkURLInterval;
+    let lastCheckedPath = null;
     
     const checkAndUpdateRoute = () => {
       const currentPath = window.location.pathname;
+      
+      // Skip if the path hasn't changed since last check
+      if (lastCheckedPath === currentPath) {
+        return;
+      }
+      
+      // Update last checked path
+      lastCheckedPath = currentPath;
+      
       const pathSegments = currentPath.split('/').filter(Boolean);
       const currentPathRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
-      
-      // Only log if debug is enabled to reduce console spam
-      debugLog('MBAo3hi4g4v: Checking URL route', { 
-        currentPathRoute, 
-        isMessageHistory: currentPathRoute === 'MessageHistory'
-      });
       
       // If we're not on MessageHistory route
       if (currentPathRoute !== 'MessageHistory') {
         getStorage('currentRoute').then(storedRoute => {
           // If localStorage still thinks we're in MessageHistory, update it
           if (storedRoute === 'MessageHistory') {
-            debugLog('MBAo3hi4g4v: URL changed but navigation state not updated, fixing', {
+            debugLog('MBA3456: URL changed to non-MessageHistory route, updating state', {
               currentURL: currentPathRoute,
               storedRoute
             });
             
-            setStorage('currentRoute', currentPathRoute).then(() => {
-              debugLog('MBAo3hi4g4v: Updated currentRoute to match URL', { 
-                newRoute: currentPathRoute 
-              });
-            }).catch(error => {
-              debugLog('MBAo3hi4g4v: Error updating currentRoute from URL check', { 
-                error: error.message 
-              });
+            setStorage('currentRoute', currentPathRoute).catch(error => {
+              debugLog('MBA3456: Error updating currentRoute', { error: error.message });
             });
           }
         }).catch(error => {
-          debugLog('MBAo3hi4g4v: Error getting stored route', { error: error.message });
+          debugLog('MBA3456: Error getting stored route', { error: error.message });
         });
       }
     };
@@ -310,11 +364,20 @@ const MessageHistory = ({ navigation, route }) => {
     // Run initial check
     checkAndUpdateRoute();
     
-    // Set up interval to periodically check and update
-    checkURLInterval = setInterval(checkAndUpdateRoute, 1000);
+    // Set up interval to periodically check and update, but use a much longer interval
+    // 5 seconds is plenty often for URL monitoring
+    checkURLInterval = setInterval(checkAndUpdateRoute, 5000);
+    
+    // Also check when window gains focus, which is a more likely time for URL changes
+    const handleWindowFocus = () => {
+      checkAndUpdateRoute();
+    };
+    
+    window.addEventListener('focus', handleWindowFocus);
     
     return () => {
       clearInterval(checkURLInterval);
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, []);
   
@@ -449,6 +512,23 @@ const MessageHistory = ({ navigation, route }) => {
       isFetchingMessagesRef.current.clear();
     }
   }, [isSignedIn]);
+  
+  // Handle role changes by refreshing conversations and clearing selection
+  useEffect(() => {
+    if (isSignedIn) {
+      debugLog('MBA9999: User role changed, refreshing conversations', { userRole });
+      
+      // Clear the current selection
+      setSelectedConversation(null);
+      setSelectedConversationData(null);
+      setMessages([]);
+      hasLoadedMessagesRef.current = false;
+      lastViewedConversationRef.current = null;
+      
+      // Refetch conversations for the new role
+      fetchConversations();
+    }
+  }, [userRole, isSignedIn]);
 
   useEffect(() => {
     debugLog('MBA9876: [VIEWPORT] useEffect running', {
@@ -1024,23 +1104,30 @@ const MessageHistory = ({ navigation, route }) => {
   // Update connection status UI and log more detailed information
   useEffect(() => {
     setWsConnectionStatus(connectionStatus);
-    // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] WebSocket connection status changed to ${connectionStatus}`);
-    // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] isConnected state: ${isConnected}`);
-    // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] isUsingFallback: ${isUsingFallback}`);
     
     // Add more debug logs to check actual WebSocket readyState
     if (window && window.WebSocket) {
-      // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] WebSocket readyState constants: CONNECTING=${WebSocket.CONNECTING}, OPEN=${WebSocket.OPEN}, CLOSING=${WebSocket.CLOSING}, CLOSED=${WebSocket.CLOSED}`);
+      debugLog(`MBA3456: [MY CONNECTION] WebSocket connection status changed to ${connectionStatus}`, {
+        isConnected,
+        isUsingFallback,
+        userRole
+      });
     }
     
     // Only log status changes but don't trigger fetches here - that's handled in the mount effect
     if ((connectionStatus === 'connected' && isConnected) || isUsingFallback) {
-      debugLog('MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] Connection fully verified as connected or using fallback');
+      debugLog('MBA3456: [MY CONNECTION] Connection fully verified as connected or using fallback', {
+        userRole,
+        selectedConversation: selectedConversation ? `ID: ${selectedConversation}` : 'none'
+      });
     } else {
-      debugLog('MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] Connection not fully verified, status and state mismatch');
-      // debugLog(`MBA2349f87g9qbh2nfv9cg: [MY CONNECTION] Details - status: ${connectionStatus}, isConnected: ${isConnected}`);
+      debugLog('MBA3456: [MY CONNECTION] Connection not fully verified, status and state mismatch', {
+        connectionStatus,
+        isConnected,
+        userRole
+      });
     }
-  }, [connectionStatus, isConnected, isUsingFallback]);
+  }, [connectionStatus, isConnected, isUsingFallback, userRole]);
   
   // Force reconnection on component mount to ensure connection
   useEffect(() => {
@@ -1303,17 +1390,32 @@ const MessageHistory = ({ navigation, route }) => {
     
     debugLog('MBA3456: Filtering conversations by role', {
       currentRole: userRole,
-      totalConversations: conversations.length
+      totalConversations: conversations.length,
+      conversationDetails: conversations.map(c => ({
+        id: c.conversation_id,
+        is_professional: c.is_professional,
+        other_user_name: c.other_user_name
+      }))
     });
     
     // Filter conversations based on the role from context
     const filteredByRole = conversations.filter(conv => {
       // For professional role, show only conversations where is_professional is true
       if (userRole === 'professional') {
+        debugLog('MBA3456: Filtering for professional role', {
+          conversation_id: conv.conversation_id,
+          is_professional: conv.is_professional,
+          should_include: conv.is_professional === true
+        });
         return conv.is_professional === true;
       }
       // For pet owner role, show only conversations where is_professional is false
-      else if (userRole === 'petOwner') {
+      else if (userRole === 'petOwner' || userRole === 'owner') {
+        debugLog('MBA3456: Filtering for pet owner role', {
+          conversation_id: conv.conversation_id,
+          is_professional: conv.is_professional,
+          should_include: conv.is_professional === false
+        });
         return conv.is_professional === false;
       }
       // If no role specified, show all conversations (fallback)
@@ -1323,7 +1425,11 @@ const MessageHistory = ({ navigation, route }) => {
     debugLog('MBA3456: Filtered conversations result', {
       originalCount: conversations.length,
       filteredCount: filteredByRole.length,
-      currentRole: userRole
+      currentRole: userRole,
+      filteredConversations: filteredByRole.map(c => ({
+        id: c.conversation_id,
+        is_professional: c.is_professional
+      }))
     });
     
     // Update the filteredConversations state
@@ -1366,48 +1472,72 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Update the existing useEffect for search query to work with the filtered conversations
   useEffect(() => {
+    if (!conversations || conversations.length === 0) {
+      return;
+    }
+    
+    // First filter by role regardless of search query
+    const roleFiltered = conversations.filter(conv => {
+      if (userRole === 'professional') {
+        return conv.is_professional === true;
+      } else if (userRole === 'petOwner') {
+        return conv.is_professional === false;
+      }
+      return true; // fallback
+    });
+    
+    // Then apply search filter if needed
     if (searchQuery.trim() === '') {
-      // No need to modify filteredConversations here - it's handled by the role filter
+      // No search query, just use the role-filtered list
+      setFilteredConversations(roleFiltered);
     } else {
+      // Apply search filter on top of role filter
       const lowercaseQuery = searchQuery.trim().toLowerCase();
-      // Start with the role-filtered conversations and apply search filter
-      const currentFiltered = conversations.filter(conv => {
-        // First apply role filter
-        const matchesRole = userRole === 'professional' ? 
-          conv.is_professional === true : 
-          userRole === 'petOwner' ? 
-            conv.is_professional === false : 
-            true;
-            
-        // Then apply search filter
+      const searchFiltered = roleFiltered.filter(conv => {
         const matchesSearch = conv.other_user_name && 
           conv.other_user_name.toLowerCase().includes(lowercaseQuery);
-          
-        return matchesRole && matchesSearch;
+        return matchesSearch;
       });
       
-      setFilteredConversations(currentFiltered);
+      setFilteredConversations(searchFiltered);
+      
+      debugLog('MBA3456: Search filtered conversations', {
+        roleFilteredCount: roleFiltered.length,
+        searchFilteredCount: searchFiltered.length,
+        searchQuery: searchQuery.trim()
+      });
     }
   }, [searchQuery, conversations, userRole]);
 
   // Fetch conversations 
   const fetchConversations = async () => {
+    // Get stack trace to see where this is being called from
+    const stackTrace = new Error().stack;
+    
     // Prevent duplicate fetches
     if (isFetchingConversationsRef.current) {
-      debugLog('MBA98765 Conversations fetch already in progress, skipping duplicate call');
+      debugLog('MBA3456: Conversations fetch already in progress, skipping duplicate call', {
+        caller: stackTrace.split('\n')[2]
+      });
       return conversations; // Return existing conversations if available
     }
 
     try {
       isFetchingConversationsRef.current = true;
       setIsLoadingConversations(true);
-      debugLog('MBA98765 Fetching conversations...');
+      debugLog('MBA3456: Fetching conversations...', {
+        userRole,
+        isSignedIn,
+        caller: stackTrace.split('\n')[2],
+        routeParams: route.params ? JSON.stringify(route.params) : 'none'
+      });
       
       const data = await getConversations();
       
       if (data && Array.isArray(data)) {
-        debugLog('MBA98765 Conversations fetched successfully:', {
+        debugLog('MBA3456: Conversations fetched successfully:', {
           count: data.length,
+          userRole,
           conversations: data.map(c => ({
             conversation_id: c.conversation_id,
             is_professional: c.is_professional,
@@ -1415,24 +1545,58 @@ const MessageHistory = ({ navigation, route }) => {
           }))
         });
         
+        // Store the full list of conversations
         setConversations(data);
-        setFilteredConversations(data);
         
-        // If we have a selected conversation, make sure it's in the list
+        // Filter conversations by user role immediately
+        const filteredByRole = data.filter(conv => {
+          if (userRole === 'professional') {
+            return conv.is_professional === true;
+          } else if (userRole === 'petOwner' || userRole === 'owner') {
+            return conv.is_professional === false;
+          }
+          return true; // fallback
+        });
+        
+        debugLog('MBA3456: Filtered conversations by role:', {
+          originalCount: data.length,
+          filteredCount: filteredByRole.length,
+          userRole,
+          filteredConversations: filteredByRole.map(c => ({
+            id: c.conversation_id,
+            is_professional: c.is_professional,
+            name: c.other_user_name
+          }))
+        });
+        
+                  // Update filtered conversations with role-filtered data
+        setFilteredConversations(filteredByRole);
+        
+        // If we have a selected conversation, make sure it's still valid for the current role
         if (selectedConversation) {
-          const conversation = data.find(c => c.conversation_id === selectedConversation);
+          const conversation = filteredByRole.find(c => c.conversation_id === selectedConversation);
           if (conversation) {
+            // Conversation is valid for current role, update data
             setSelectedConversationData(conversation);
+          } else {
+            // Conversation is not valid for current role, clear selection
+            setSelectedConversation(null);
+            setSelectedConversationData(null);
+            debugLog('MBA3456: Clearing selected conversation - not valid for current role', {
+              selectedConversation,
+              userRole
+            });
           }
         }
         
+        // Return the data for chaining
         return data;
       } else {
-        debugLog('MBA98765 Invalid conversations data structure:', data);
+        debugLog('MBA3456: Invalid conversations data structure:', data);
         return [];
       }
     } catch (error) {
-      debugLog('Error fetching conversations:', error);
+      debugLog('MBA3456: Error fetching conversations:', error);
       return [];
     } finally {
       setIsLoadingConversations(false);
@@ -1445,6 +1609,59 @@ const MessageHistory = ({ navigation, route }) => {
     if (!conversationId) {
       debugLog('MBA98765 No conversation ID provided for message fetch');
       return;
+    }
+
+    // First check if this conversation is valid for the current role
+    // Skip validation if we don't have any conversations yet - this could be a brand new conversation
+    if (conversations.length > 0) {
+      const isValidForRole = conversations.some(conv => {
+        const matchesId = conv.conversation_id === conversationId;
+        
+        let matchesRole = false;
+        if (userRole === 'professional') {
+          matchesRole = conv.is_professional === true;
+        } else if (userRole === 'petOwner' || userRole === 'owner') {
+          matchesRole = conv.is_professional === false;
+        }
+        
+        debugLog('MBA3456: Validating conversation for role', {
+          conversationId,
+          userRole,
+          conversation_is_professional: conv.is_professional,
+          matchesId,
+          matchesRole,
+          valid: matchesId && matchesRole
+        });
+        
+        return matchesId && matchesRole;
+      });
+      
+      if (!isValidForRole) {
+        debugLog('MBA3456: Attempted to fetch messages for conversation not valid for current role', {
+          conversationId,
+          userRole,
+          // This might be a new conversation, so we'll check if it's in route params
+          fromRouteParams: route.params?.conversationId === conversationId,
+          allConversations: conversations.map(c => ({
+            id: c.conversation_id,
+            is_professional: c.is_professional
+          }))
+        });
+        
+        // If this is coming from route params, it might be a new conversation
+        // We'll try to fetch messages anyway
+        if (route.params?.conversationId === conversationId) {
+          debugLog('MBA3456: Conversation from route params, attempting to fetch messages anyway');
+        } else {
+          // Clear messages and selection for invalid conversations
+          setMessages([]);
+          setSelectedConversation(null);
+          setSelectedConversationData(null);
+          return;
+        }
+      }
+    } else {
+      debugLog('MBA3456: No conversations in state yet, skipping role validation');
     }
 
     // Create a unique key for this fetch operation
@@ -3063,26 +3280,50 @@ const MessageHistory = ({ navigation, route }) => {
   }, [searchQuery, conversations]);
 
   // Conversation list component
-  const renderConversationList = () => (
-    <ConversationList
-      conversations={filteredConversations}
-      selectedConversation={selectedConversation}
-      onSelectConversation={(convId) => {
-        debugLog('MBAo3hi4g4v: Conversation selected from list', {
-          conversationId: convId,
-          screenWidth,
-          platform: Platform.OS
-        });
+  const renderConversationList = () => {
+    // Final double check at render time
+    const renderedConversations = userRole === 'professional'
+      ? filteredConversations.filter(c => c.is_professional === true)
+      : userRole === 'petOwner' || userRole === 'owner'
+        ? filteredConversations.filter(c => c.is_professional === false) 
+        : filteredConversations;
+    
+    // Add debug logging right at render time
+    debugLog('MBA3456: Rendering conversation list', {
+      filteredConversationsCount: filteredConversations.length,
+      safeConversationsCount: renderedConversations.length,
+      conversationsCount: conversations.length,
+      currentRole: userRole,
+      filteredConversations: renderedConversations.map(c => ({
+        id: c.conversation_id,
+        is_professional: c.is_professional,
+        name: c.other_user_name
+      }))
+    });
+    
+    return (
+      <ConversationList
+        conversations={renderedConversations}
+        selectedConversation={selectedConversation}
+              onSelectConversation={(convId) => {
+        // Only log on initial selection, not re-selections
+        if (convId !== selectedConversation) {
+          debugLog('MBA3456: Conversation selected from list', {
+            conversationId: convId,
+            previousConversation: selectedConversation
+          });
+        }
         setSelectedConversation(convId);
       }}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-      styles={styles}
-      CURRENT_USER_ID={CURRENT_USER_ID}
-      getConversationUnreadCount={getConversationUnreadCount}
-      markConversationAsRead={markConversationAsRead}
-    />
-  );
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        styles={styles}
+        CURRENT_USER_ID={CURRENT_USER_ID}
+        getConversationUnreadCount={getConversationUnreadCount}
+        markConversationAsRead={markConversationAsRead}
+      />
+    );
+  };
 
   // Update message header to include profile photo and edit draft button
   const renderMessageHeader = () => (
@@ -3206,7 +3447,10 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Update the back button handler to better clear URL parameters
   const handleBack = () => {
-    debugLog('MBAo3hi4g4v: Back button pressed, clearing selected conversation');
+    // Only log if there's actually a conversation selected
+    if (selectedConversation) {
+      debugLog('MBA3456: Back button pressed, clearing selected conversation');
+    }
     
     // Set flag to indicate we're intentionally deselecting (to prevent URL param reloading)
     isIntentionallyDeselecting.current = true;
@@ -3227,16 +3471,8 @@ const MessageHistory = ({ navigation, route }) => {
   
   // Use static counter to reduce logging frequency
   const renderMobileHeader = () => {
-    renderMobileHeader.renderCount = (renderMobileHeader.renderCount || 0) + 1;
-    
-    // Only log every 5th render to reduce console spam
-    if (renderMobileHeader.renderCount % 5 === 1) {
-      debugLog('MBAo3hi4g4v: Rendering mobile header', {
-        selectedConversation,
-        screenWidth,
-        platform: Platform.OS
-      });
-    }
+    // We don't need to log mobile header rendering at all
+    // This function is called very frequently and doesn't need logging
     
     return (
       <View style={[
@@ -4080,6 +4316,28 @@ const MessageHistory = ({ navigation, route }) => {
   }, [selectedConversation]);
 
   // Add a loading overlay component at the bottom of the return statement, before any modals
+  // Final sanity check right before rendering
+  debugLog('MBA3456: FINAL CHECK before rendering UI', {
+    conversationsTotal: conversations.length,
+    filteredTotal: filteredConversations.length,
+    role: userRole,
+    originalConversations: conversations.map(c => ({
+      id: c.conversation_id,
+      is_professional: c.is_professional
+    })),
+    filteredConversations: filteredConversations.map(c => ({
+      id: c.conversation_id,
+      is_professional: c.is_professional
+    }))
+  });
+  
+  // Ensure no inappropriate conversations are showing - redundant safety check
+  const safeFilteredConversations = userRole === 'professional'
+    ? filteredConversations.filter(c => c.is_professional === true)
+    : userRole === 'petOwner' || userRole === 'owner'
+      ? filteredConversations.filter(c => c.is_professional === false) 
+      : filteredConversations;
+  
   return (
     <SafeAreaView style={[
       styles.container,
@@ -4091,7 +4349,7 @@ const MessageHistory = ({ navigation, route }) => {
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading conversations...</Text>
         </View>
-      ) : filteredConversations.length > 0 ? (
+      ) : safeFilteredConversations.length > 0 ? (
         <>
           <View style={styles.contentContainer}>
             {screenWidth <= 900 ? (
