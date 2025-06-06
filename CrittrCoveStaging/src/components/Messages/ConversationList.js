@@ -15,17 +15,6 @@ const ConversationList = ({
   getConversationUnreadCount,
   markConversationAsRead
 }) => {
-  const filteredConversations = conversations.filter(conv => {
-    if (!searchQuery) return true;
-    
-    const otherParticipantName = conv.participant1_id === CURRENT_USER_ID ? 
-      conv.participant2_name : conv.participant1_name;
-    const searchName = otherParticipantName || conv.name || conv.other_user_name || '';
-    
-    return searchName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           (conv.last_message && conv.last_message.toLowerCase().includes(searchQuery.toLowerCase()));
-  });
-
   return (
     <View style={styles.conversationListContainer}>
       <View style={styles.searchContainer}>
@@ -58,7 +47,7 @@ const ConversationList = ({
         </View>
       </View>
 
-      {filteredConversations.map((conv) => {
+      {conversations.map((conv) => {
         const otherParticipantName = conv.participant1_id === CURRENT_USER_ID ? 
           conv.participant2_name : conv.participant1_name;
         

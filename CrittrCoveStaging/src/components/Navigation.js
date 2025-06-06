@@ -6,9 +6,29 @@ import { AuthContext, debugLog, getStorage, setStorage } from '../context/AuthCo
 import MessageNotificationContext from '../context/MessageNotificationContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appbar, Menu, useTheme, Avatar } from 'react-native-paper';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation as useReactNavigation, useRoute } from '@react-navigation/native';
 import { BackHandler } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate } from 'react-native-reanimated';
+
+/*
+ * IMPORTANT ARCHITECTURE NOTE:
+ * 
+ * This Navigation component uses a specific architecture to prevent React hooks errors:
+ * 
+ * 1. The main Navigation component is a thin wrapper that:
+ *    - Handles the conditional visibility logic (shouldHideNavigation)
+ *    - Renders the NavigationContent with a shouldRender prop
+ * 
+ * 2. The NavigationContent component contains all the hooks and UI rendering:
+ *    - ALL hooks are called unconditionally at the top of the component
+ *    - We check shouldRender AFTER all hooks have been called
+ *    - This ensures React's rules of hooks are followed (same hooks in same order every render)
+ * 
+ * If you modify this file, ensure that:
+ * - You don't add any conditional hooks (hooks inside if statements or early returns)
+ * - All hooks are called at the top of the component, before any conditional returns
+ * - You maintain the parent/child structure to prevent hooks errors
+ */
 
 let previousRoute, currentRoute;
 
@@ -84,10 +104,33 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
   }
 };
 
-export default function Navigation({ state, descriptors, navigation }) {
+const useReactRoute = () => {
+  try {
+    // Try to get the current route, but return a safe fallback if it fails
+    const route = useRoute();
+    return route || { name: '', params: {}, key: '' };
+  } catch (e) {
+    // If we're in a context where useRoute doesn't work, return a safe object
+    return { name: '', params: {}, key: '' };
+  }
+};
+
+// Create a separate component for NavigationContent to prevent conditional hooks
+const NavigationContent = ({ 
+  propState, 
+  descriptors, 
+  propNavigation, 
+  shouldRender = true
+}) => {
+  // All hooks are used here unconditionally
+  const reactNavigation = useReactNavigation();
+  const reactRoute = useReactRoute();
+  const navigation = propNavigation || reactNavigation;
   const [visible, setVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [currentRoute, setCurrentRoute] = useState('');
+  const [notificationCount, setNotificationCount] = useState(3);
   const { colors } = useTheme();
   const { 
     isSignedIn, 
@@ -109,25 +152,33 @@ export default function Navigation({ state, descriptors, navigation }) {
     updateRoute
   } = useContext(MessageNotificationContext);
   
-  const [currentRoute, setCurrentRoute] = useState('');
-  const [notificationCount, setNotificationCount] = useState(3); // We can make this dynamic later
+  // Animation values for hamburger menu
+  const line1Rotation = useSharedValue(0);
+  const line2Opacity = useSharedValue(1);
+  const line3Rotation = useSharedValue(0);
+  const line1TranslateY = useSharedValue(0);
+  const line3TranslateY = useSharedValue(0);
   
-  // Check if we're in a conversation view
-  const route = state?.routes?.[state?.index];
-  const routeName = route?.name;
+  // Create a synthetic state object
+  const routeFromProps = propState?.routes?.[propState?.index];
+  const routeFromHook = reactRoute;
+  
+  const routeName = routeFromProps?.name || routeFromHook?.name || '';
+  const selectedConversation = 
+    routeFromProps?.params?.selectedConversation || 
+    routeFromHook?.params?.selectedConversation;
+    
+  const effectiveState = propState || {
+    routes: routeFromHook ? [routeFromHook] : [],
+    index: routeFromHook ? 0 : -1
+  };
+  
   const isInMessageHistory = routeName === 'MessageHistory';
-  const selectedConversation = route?.params?.selectedConversation;
-
-  debugLog('MBAo3hi4g4v: Navigation render conditions', { 
-    routeName,
-    isInMessageHistory,
-    selectedConversation,
-    screenWidth,
-    platform: Platform.OS,
-    route: JSON.stringify(route?.params),
-    stateIndex: state?.index,
-    stateRoutes: state?.routes?.length
-  });
+  
+  // Update animation when menu state changes
+  useEffect(() => {
+    animateHamburgerMenu(isMenuOpen);
+  }, [isMenuOpen]);
   
   // Only log on the first render or when these values change to reduce console spam
   const renderLogRef = useRef({ routeName, isInMessageHistory, selectedConversation, screenWidth });
@@ -137,107 +188,21 @@ export default function Navigation({ state, descriptors, navigation }) {
     renderLogRef.current.selectedConversation !== selectedConversation ||
     renderLogRef.current.screenWidth !== screenWidth;
     
-  // if (shouldLog) {
-  //   renderLogRef.current = { routeName, isInMessageHistory, selectedConversation, screenWidth };
-  //   // Debug log all relevant conditions for visibility
-  //   debugLog('MBAo3hi4g4v: Navigation render conditions', { 
-  //     routeName,
-  //     isInMessageHistory,
-  //     selectedConversation,
-  //     screenWidth,
-  //     platform: Platform.OS,
-  //     route: JSON.stringify(route?.params),
-  //     stateIndex: state?.index,
-  //     stateRoutes: state?.routes?.length
-  //   });
-  // }
-  
-  // Hide navigation completely when in a conversation on mobile
-  if (isInMessageHistory && selectedConversation && screenWidth <= 600) {
-    if (shouldLog) {
-      debugLog('MBAo3hi4g4v: Hiding navigation for conversation view', { 
-        routeName, 
-        selectedConversation, 
-        screenWidth
-      });
-    }
-    return null;  // Don't render the navigation component at all
+  if (shouldLog) {
+    renderLogRef.current = { routeName, isInMessageHistory, selectedConversation, screenWidth };
+    // Debug log all relevant conditions for visibility
+    debugLog('MBAo3hi4g4v: Navigation render conditions', { 
+      routeName,
+      isInMessageHistory,
+      selectedConversation,
+      screenWidth,
+      platform: Platform.OS,
+      route: JSON.stringify(reactRoute?.params || propState?.routes?.[propState?.index]?.params),
+      stateSource: propState ? 'props' : 'hook',
+      navSource: propNavigation ? 'props' : 'hook'
+    });
   }
-
-  // Animation values for hamburger menu
-  const line1Rotation = useSharedValue(0);
-  const line2Opacity = useSharedValue(1);
-  const line3Rotation = useSharedValue(0);
-  const line1TranslateY = useSharedValue(0);
-  const line3TranslateY = useSharedValue(0);
-
-  // Animated hamburger menu component
-  const AnimatedHamburgerMenu = ({ size = 28, color = theme.colors.text }) => {
-    const line1Style = useAnimatedStyle(() => ({
-      width: size,
-      height: 3,
-      backgroundColor: color,
-      marginVertical: 2,
-      borderRadius: 1.5,
-      transform: [
-        { translateY: line1TranslateY.value },
-        { rotate: `${line1Rotation.value}deg` }
-      ],
-    }));
-
-    const line2Style = useAnimatedStyle(() => ({
-      width: size,
-      height: 3,
-      backgroundColor: color,
-      marginVertical: 2,
-      borderRadius: 1.5,
-      opacity: line2Opacity.value,
-    }));
-
-    const line3Style = useAnimatedStyle(() => ({
-      width: size,
-      height: 3,
-      backgroundColor: color,
-      marginVertical: 2,
-      borderRadius: 1.5,
-      transform: [
-        { translateY: line3TranslateY.value },
-        { rotate: `${line3Rotation.value}deg` }
-      ],
-    }));
-
-    return (
-      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <Animated.View style={line1Style} />
-        <Animated.View style={line2Style} />
-        <Animated.View style={line3Style} />
-      </View>
-    );
-  };
-
-  // Animation function for hamburger menu
-  const animateHamburgerMenu = (toX) => {
-    const duration = 300;
-    
-    debugLog('MBA4477: Animating hamburger menu', { toX, isMenuOpen });
-    
-    if (toX) {
-      // Transform to X
-      line1Rotation.value = withTiming(45, { duration });
-      line2Opacity.value = withTiming(0, { duration });
-      line3Rotation.value = withTiming(-45, { duration });
-      line1TranslateY.value = withTiming(7, { duration });
-      line3TranslateY.value = withTiming(-7, { duration });
-    } else {
-      // Transform back to hamburger
-      line1Rotation.value = withTiming(0, { duration });
-      line2Opacity.value = withTiming(1, { duration });
-      line3Rotation.value = withTiming(0, { duration });
-      line1TranslateY.value = withTiming(0, { duration });
-      line3TranslateY.value = withTiming(0, { duration });
-    }
-  };
-
+  
   // Add effect to log state changes
   useEffect(() => {
     if (is_DEBUG) {
@@ -248,17 +213,8 @@ export default function Navigation({ state, descriptors, navigation }) {
         currentRoute
       });
     }
-  }, [isSignedIn, userRole, isApprovedProfessional, currentRoute]);
-
-  // Update animation when menu state changes
-  useEffect(() => {
-    animateHamburgerMenu(isMenuOpen);
-  }, [isMenuOpen]);
-
-  const openMenu = () => setVisible(true);
-  const closeMenu = () => setVisible(false);
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-
+  }, [isSignedIn, userRole, isApprovedProfessional, currentRoute, is_DEBUG]);
+  
   useEffect(() => {
     const updateLayout = () => {
       setIsMobile(Dimensions.get('window').width < 900);
@@ -305,458 +261,361 @@ export default function Navigation({ state, descriptors, navigation }) {
     // Add navigation state listener
     const unsubscribe = navigation.addListener('state', updateCurrentRoute);
     return unsubscribe;
-  }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, is_DEBUG]);
+  }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, is_DEBUG, currentRoute]);
 
-  // Listen for browser back/forward navigation and update currentRoute
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const handlePopState = async () => {
-        const route = await getStorage('currentRoute');
-        debugLog('MBAuieo2o34nf popstate detected, updating currentRoute from storage', { route });
-        if (route && route !== currentRoute) {
-          setCurrentRoute(route);
-          updateRoute && updateRoute(route);
-        }
-      };
-      window.addEventListener('popstate', handlePopState);
-      return () => window.removeEventListener('popstate', handlePopState);
-    }
-  }, [currentRoute, updateRoute]);
+  // Animated hamburger menu component
+  const AnimatedHamburgerMenu = ({ size = 28, color = theme.colors.text }) => {
+    const line1Style = useAnimatedStyle(() => ({
+      width: size,
+      height: 3,
+      backgroundColor: color,
+      marginVertical: 2,
+      borderRadius: 1.5,
+      transform: [
+        { translateY: line1TranslateY.value },
+        { rotate: `${line1Rotation.value}deg` }
+      ],
+    }));
 
-  // Sync currentRoute in storage with navigation state changes
-  useEffect(() => {
-    const updateCurrentRouteInStorage = async () => {
-      try {
-        const navState = navigation.getState && navigation.getState();
-        let routeName = '';
-        if (navState) {
-          const route = navState.routes[navState.index];
-          routeName = route?.name || '';
-        }
-        if (routeName) {
-          await setStorage('currentRoute', routeName);
-          debugLog('MBAuieo2o34nf navigation state change - set currentRoute in storage', { routeName });
-          setCurrentRoute(routeName);
-          updateRoute && updateRoute(routeName);
-        }
-      } catch (error) {
-        debugLog('MBAuieo2o34nf error updating currentRoute in storage', error);
-      }
-    };
-    const unsubscribe = navigation.addListener('state', updateCurrentRouteInStorage);
-    return unsubscribe;
-  }, [navigation, updateRoute]);
+    const line2Style = useAnimatedStyle(() => ({
+      width: size,
+      height: 3,
+      backgroundColor: color,
+      marginVertical: 2,
+      borderRadius: 1.5,
+      opacity: line2Opacity.value,
+    }));
 
-  const handleNavigation = async (screenName, tabName = null) => {
-    closeMenu();
-    
-    // Only log in debug mode to reduce console spam
-    if (is_DEBUG) {
-      console.log('MBA98386196v Navigating to:', screenName, tabName ? `with tab: ${tabName}` : '');
-      console.log('MBA98386196v Current route before:', currentRoute);
-    }
-    
-    try {
-      // Don't do anything if we're already on this screen
-      if (screenName === currentRoute) {
-        // Special case: if we're on MessageHistory and have unread messages, reset notifications
-        if (screenName === 'MessageHistory' && hasUnreadMessages) {
-          resetNotifications && resetNotifications();
-        }
-        
-        return;
-      }
-      
-      setStorage('previousRoute', currentRoute);
-      setStorage('currentRoute', screenName);
-      
-      // Update local state
-      setCurrentRoute(screenName);
-      
-      // Update the MessageNotificationContext with the new route
-      updateRoute && updateRoute(screenName);
-      
-      // Reset message notifications when navigating to MessageHistory
-      if (screenName === 'MessageHistory' && hasUnreadMessages) {
-        resetNotifications && resetNotifications();
-      }
-      
-      // If we have a tab parameter, pass it in the params
-      if (tabName) {
-        navigateToFrom(navigation, screenName, currentRoute, { screen: tabName });
-      } else {
-        navigateToFrom(navigation, screenName, currentRoute);
-      }
-      
-      if (is_DEBUG) {
-        console.log('MBA98386196v Current route after:', screenName);
-      }
-    } catch (error) {
-      console.error('Error handling navigation:', error);
-      navigateToFrom(navigation, screenName, currentRoute);
-    }
-  };
+    const line3Style = useAnimatedStyle(() => ({
+      width: size,
+      height: 3,
+      backgroundColor: color,
+      marginVertical: 2,
+      borderRadius: 1.5,
+      transform: [
+        { translateY: line3TranslateY.value },
+        { rotate: `${line3Rotation.value}deg` }
+      ],
+    }));
 
-  // Initialize route tracking on component mount
-  useEffect(() => {
-    const initializeRouteTracking = async () => {
-      try {
-        const currentRoute = await getStorage('currentRoute');
-        if (!currentRoute) {
-          const initialRoute = isSignedIn 
-            ? 'Dashboard'
-            : 'Home';
-          await setStorage('currentRoute', initialRoute);
-        }
-      } catch (error) {
-        console.error('Error initializing route tracking:', error);
-      }
-    };
-
-    initializeRouteTracking();
-  }, [isSignedIn, userRole]);
-
-  const handleRoleSwitch = async (newRole) => {
-    try {
-      // Get current screen before switching
-      const currentScreen = currentRoute;
-      
-      if (is_DEBUG) {
-        console.log('MBA98386196v Role switch initiated:', {
-          from: userRole,
-          to: newRole,
-          currentScreen
-        });
-      }
-      
-      await switchRole(newRole);
-      await setStorage('userRole', newRole);
-      
-      // Handle different screens according to requirements
-      switch (currentScreen) {
-        case 'MyProfile':
-          // For MyProfile, preserve the tab if it's common between roles
-          const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-          const currentTab = params?.screen || params?.initialTab || 'profile_info';
-          
-          if (is_DEBUG) {
-            console.log('MBA98386196v MyProfile tab preservation:', {
-              currentTab,
-              newRole
-            });
-          }
-          
-          // Check if we need to change the tab
-          let newTab = currentTab;
-          
-          // If switching to owner and current tab is professional-only, switch to profile_info
-          if (newRole === 'petOwner' && currentTab === 'services_availability') {
-            newTab = 'profile_info';
-          }
-          
-          // Navigate back to MyProfile with the appropriate tab
-          navigateToFrom(navigation, 'MyProfile', currentScreen, { screen: newTab });
-          break;
-          
-        case 'MessageHistory':
-          // For MessageHistory, just stay on the same screen without reload
-          navigateToFrom(navigation, 'MessageHistory', currentScreen);
-          break;
-          
-        case 'MyBookings':
-          // For MyBookings, stay on the same screen but switch tabs based on the new role
-          const activeTab = newRole === 'professional' ? 'professional' : 'owner';
-          if (is_DEBUG) {
-            console.log('MBA98386196v MyBookings tab switch:', {
-              newRole,
-              activeTab
-            });
-          }
-          // Pass the appropriate tab parameter
-          navigateToFrom(navigation, 'MyBookings', currentScreen, { screen: activeTab });
-          break;
-          
-        case 'Connections':
-          // For Connections, stay on the same screen but switch tabs based on the new role
-          const connectionsTab = newRole === 'professional' ? 'clients' : 'professionals';
-          if (is_DEBUG) {
-            console.log('MBA98386196v Connections tab switch:', {
-              newRole,
-              connectionsTab
-            });
-          }
-          // Pass the appropriate tab parameter
-          navigateToFrom(navigation, 'Connections', currentScreen, { screen: connectionsTab });
-          break;
-          
-        case 'Dashboard':
-          // For Dashboard, stay on the same screen
-          navigateToFrom(navigation, 'Dashboard', currentScreen);
-          break;
-          
-        case 'SearchProfessionalsListing':
-          // When client is on search pros and switches to pro, go to pro dashboard
-          if (newRole === 'professional') {
-            navigateToFrom(navigation, 'Dashboard', currentScreen);
-          } else {
-            // If somehow a pro is on this screen and switches to client, stay here
-            navigateToFrom(navigation, currentScreen, currentScreen);
-          }
-          break;
-          
-        case 'ServiceManager':
-          // When professional is on services and switches to client, go to client dashboard
-          if (newRole === 'petOwner') {
-            navigateToFrom(navigation, 'Dashboard', currentScreen);
-          } else {
-            // Should never happen, but if somehow client is on this screen and switches to pro, stay here
-            navigateToFrom(navigation, currentScreen, currentScreen);
-          }
-          break;
-          
-        default:
-          // For any other screen, navigate to the same screen
-          // This maintains the current behavior for unspecified screens
-          navigateToFrom(navigation, currentScreen, currentScreen);
-      }
-    } catch (error) {
-      console.error('Error switching role:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      if (is_DEBUG) {
-        console.log('MBA98386196v Logging out user');
-      }
-      await signOut();
-      if (Platform.OS === 'web') {
-        sessionStorage.removeItem('currentRoute');
-        sessionStorage.removeItem('previousRoute');
-        sessionStorage.removeItem('userRole');
-      } else {
-        await AsyncStorage.removeItem('currentRoute');
-        await AsyncStorage.removeItem('previousRoute');
-        await AsyncStorage.removeItem('userRole');
-      }
-      setCurrentRoute('');
-      navigation.navigate('SignIn');
-    } catch (error) {
-      console.error('Error during logout:', error);
-    }
-  };
-
-  const renderMenuItems = () => {
-    if (!isSignedIn) {
-      if (isMobile) {
-        return [
-          { title: 'Sign In', icon: 'login', route: 'SignIn' },
-          { title: 'Sign Up', icon: 'account-plus', route: 'SignUp' },
-          // { title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' },
-          { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
-          // { title: 'More', icon: 'dots-horizontal', route: 'More' },
-        ];
-      }
-      return [
-        { title: 'Sign In', icon: 'login', route: 'SignIn' },
-        { title: 'Sign Up', icon: 'account-plus', route: 'SignUp' },
-        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
-        // { title: 'More', icon: 'dots-horizontal', route: 'More' },
-      ];
-    } else if (userRole === 'professional') {
-      return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
-        { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
-        { title: 'Services', icon: 'briefcase', route: 'ServiceManager' },
-        { title: 'Connections', icon: 'account-group', route: 'Connections' },
-        // { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
-        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
-        { title: 'Contact Us', icon: 'help-circle', route: 'ContactUs' },
-      ];
-    } else {
-      return [
-        { title: 'Dashboard', icon: 'view-dashboard', route: 'Dashboard' },
-        { title: 'Messages', icon: 'message-text', route: 'MessageHistory' },
-        { title: 'Search Pros', icon: 'magnify', route: 'SearchProfessionalsListing' },
-        // { title: 'Bookings', icon: 'calendar', route: 'MyBookings' },
-        { title: 'Profile', icon: 'account', route: 'MyProfile', tab: 'profile_info' },
-        { title: 'Contact Us', icon: 'help-circle', route: 'ContactUs' },
-        // ...(!isApprovedProfessional ? [{ title: 'Become a Pro', icon: 'account-heart', route: 'BecomeProfessional' }] : []),
-      ];
-    }
-  };
-
-  const renderMobileNavBar = () => {
-    const menuItems = renderMenuItems();
-    const itemWidth = Dimensions.get('window').width / menuItems.length;
     return (
-      <View style={[styles.customNavBar, { backgroundColor: theme.colors.surfaceContrast }]}>
-        {menuItems.map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[styles.navButton, { width: itemWidth }]}
-            onPress={() => handleNavigation(item.route, item.tab)}
-          >
-            <MaterialCommunityIcons 
-              name={item.icon} 
-              size={24} 
-              color={theme.colors.text} 
-            />
-            <Text style={[styles.navText, { color: theme.colors.text }]} numberOfLines={2} ellipsizeMode="tail">
-              {item.title}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <Animated.View style={line1Style} />
+        <Animated.View style={line2Style} />
+        <Animated.View style={line3Style} />
       </View>
     );
   };
-
-  const renderDesktopSidebar = () => {
-    const menuItems = renderMenuItems();
-    const sidebarWidth = isCollapsed ? 70 : 250;
-    const isProfessionalRole = userRole === 'professional';
-    const isOwnerRole = userRole === 'petOwner';
-
-    if (is_DEBUG) {
-      console.log('MBA98386196v Rendering Sidebar:', {
-        userRole,
-        isApprovedProfessional,
-        currentRoute,
-        isProfessionalRole,
-        isOwnerRole
-      });
+  
+  // Include all the other helper functions from the original component
+  const animateHamburgerMenu = (toX) => {
+    const duration = 300;
+    
+    debugLog('MBA4477: Animating hamburger menu', { toX, isMenuOpen });
+    
+    if (toX) {
+      // Transform to X
+      line1Rotation.value = withTiming(45, { duration });
+      line2Opacity.value = withTiming(0, { duration });
+      line3Rotation.value = withTiming(-45, { duration });
+      line1TranslateY.value = withTiming(7, { duration });
+      line3TranslateY.value = withTiming(-7, { duration });
+    } else {
+      // Transform back to hamburger
+      line1Rotation.value = withTiming(0, { duration });
+      line2Opacity.value = withTiming(1, { duration });
+      line3Rotation.value = withTiming(0, { duration });
+      line1TranslateY.value = withTiming(0, { duration });
+      line3TranslateY.value = withTiming(0, { duration });
     }
+  };
 
+  const openMenu = () => setVisible(true);
+  const closeMenu = () => setVisible(false);
+  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+
+  const handleNavigation = (route) => {
+    debugLog('MBA4477: Navigation handling', { route, currentRoute });
+    if (route === currentRoute) {
+      return;
+    }
+    
+    // Close the menu when navigating
+    setIsMenuOpen(false);
+    closeMenu();
+    
+    // Use the navigation helpers
+    navigateToFrom(navigation, route, currentRoute);
+  };
+  
+  const handleRoleSwitch = async (role) => {
+    if (role !== userRole) {
+      await switchRole(role);
+    }
+  };
+  
+  const handleLogout = async () => {
+    setIsMenuOpen(false);
+    closeMenu();
+    await signOut();
+  };
+  
+  const renderMenuItems = () => {
+    let items = [];
+    
+    if (userRole === 'professional') {
+      // Professional menu items in the specified order
+      items = [
+        { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'briefcase-outline', label: 'Services', route: 'ServiceManager' },
+        { icon: 'account-group-outline', label: 'Connections', route: 'Connections' },
+        { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+      ];
+    } else {
+      // Pet Owner menu items in the specified order
+      items = [
+        { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
+        { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+      ];
+    }
+    
+    return items.map((item, index) => (
+      <TouchableOpacity
+        key={index}
+        style={[
+          styles.sidebarItem,
+          currentRoute === item.route && styles.activeItem
+        ]}
+        onPress={() => handleNavigation(item.route)}
+      >
+        <MaterialCommunityIcons
+          name={item.icon}
+          size={24}
+          color={currentRoute === item.route ? theme.colors.primary : theme.colors.text}
+        />
+        <Text
+          style={[
+            styles.sidebarItemText,
+            {
+              color: currentRoute === item.route ? theme.colors.primary : theme.colors.text,
+              marginLeft: isCollapsed ? 0 : 12,
+              display: isCollapsed ? 'none' : 'flex',
+            }
+          ]}
+        >
+          {item.label}
+        </Text>
+        {item.notification && (
+          <View style={styles.messageNotificationDot} />
+        )}
+        {item.count > 0 && (
+          <View style={styles.messageNotificationBadge}>
+            <Text style={styles.messageNotificationText}>{item.count}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    ));
+  };
+  
+  const renderMobileMenuItems = () => {
+    let items = [];
+    
+    if (userRole === 'professional') {
+      // Professional menu items in the specified order
+      items = [
+        { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'briefcase-outline', label: 'Services', route: 'ServiceManager' },
+        { icon: 'account-group-outline', label: 'Connections', route: 'Connections' },
+        { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+      ];
+    } else {
+      // Pet Owner menu items in the specified order
+      items = [
+        { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
+        { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
+      ];
+    }
+    
+    return (
+      <>
+        {/* Role Toggle for Mobile */}
+        {isApprovedProfessional && (
+          <View style={styles.mobileRoleToggleContainer}>
+            <Text style={styles.mobileRoleToggleTitle}>Your Role</Text>
+            <View style={styles.mobileRoleButtonsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.mobileRoleButton,
+                  userRole === 'petOwner' && styles.mobileRoleButtonActive
+                ]}
+                onPress={() => userRole !== 'owner' && handleRoleSwitch('owner')}
+              >
+                <Text
+                  style={[
+                    styles.mobileRoleButtonText,
+                    userRole === 'petOwner' && styles.mobileRoleButtonTextActive
+                  ]}
+                >
+                  Owner
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.mobileRoleButton,
+                  userRole === 'professional' && styles.mobileRoleButtonActive
+                ]}
+                onPress={() => userRole !== 'professional' && handleRoleSwitch('professional')}
+              >
+                <Text
+                  style={[
+                    styles.mobileRoleButtonText,
+                    userRole === 'professional' && styles.mobileRoleButtonTextActive
+                  ]}
+                >
+                  Professional
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+        
+        {/* Menu Items */}
+        {items.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.mobileMenuItem}
+            onPress={() => {
+              setIsMenuOpen(false);
+              handleNavigation(item.route);
+            }}
+          >
+            <MaterialCommunityIcons
+              name={item.icon}
+              size={24}
+              color={theme.colors.text}
+            />
+            <Text style={styles.mobileMenuItemText}>{item.label}</Text>
+            {item.notification && (
+              <View style={styles.mobileMessageNotificationDot} />
+            )}
+            {item.count > 0 && (
+              <View style={styles.mobileMessageNotificationBadge}>
+                <Text style={styles.mobileMessageNotificationText}>{item.count}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+        
+        {/* Logout Button */}
+        <TouchableOpacity
+          style={[styles.mobileMenuItem, styles.mobileLogoutItem]}
+          onPress={handleLogout}
+        >
+          <MaterialCommunityIcons
+            name="logout"
+            size={24}
+            color="#F26969"
+          />
+          <Text style={[styles.mobileMenuItemText, styles.mobileLogoutText]}>
+            Logout
+          </Text>
+        </TouchableOpacity>
+      </>
+    );
+  };
+  
+  const renderDesktopSidebar = () => {
+    const sidebarWidth = isCollapsed ? 72 : 250;
+    
     return (
       <View style={[styles.sidebarContainer, { width: sidebarWidth }]}>
         <View style={styles.sidebarLogoContainer}>
-          <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.logoButton}>
-            <Image 
-              source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')}
-              style={[styles.sidebarLogo, { width: isCollapsed ? 40 : 150, tintColor: theme.colors.primary }]}
-              resizeMode="contain"
+          <TouchableOpacity
+            style={styles.logoButton}
+            onPress={() => handleNavigation('Dashboard')}
+          >
+            <Image
+              source={require('../../assets/logo.png')}
+              style={[
+                styles.sidebarLogo,
+                { width: isCollapsed ? 40 : 120, tintColor: theme.colors.primary }
+              ]}
             />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity 
+        
+        <TouchableOpacity
           style={styles.collapseButton}
           onPress={() => setIsCollapsed(!isCollapsed)}
         >
-          <MaterialCommunityIcons 
-            name={isCollapsed ? 'chevron-right' : 'chevron-left'} 
-            size={24} 
-            color={theme.colors.primary}
+          <MaterialIcons
+            name={isCollapsed ? 'chevron-right' : 'chevron-left'}
+            size={24}
+            color={theme.colors.text}
           />
         </TouchableOpacity>
+        
         <View style={styles.menuItems}>
-          {!isCollapsed && (
+          {isApprovedProfessional && !isCollapsed && (
             <View style={styles.roleToggleContainer}>
-              <Text style={styles.roleToggleTitle}>Switch Role:</Text>
+              <Text style={styles.roleToggleTitle}>Your Role</Text>
               <View style={styles.roleButtonsContainer}>
                 <TouchableOpacity
                   style={[
                     styles.roleButton,
-                    isOwnerRole && styles.roleButtonActive
+                    userRole === 'owner' && styles.roleButtonActive
                   ]}
-                  onPress={() => {
-                    if (is_DEBUG) {
-                      console.log('MBA98386196v Owner Role Button Press:', {
-                        currentRole: userRole,
-                        isApprovedProfessional
-                      });
-                    }
-                    if (isProfessionalRole) {
-                      handleRoleSwitch('petOwner');
-                    }
-                  }}
-                  activeOpacity={0.7}
+                  onPress={() => userRole !== 'owner' && handleRoleSwitch('owner')}
                 >
-                  <Text style={[
-                    styles.roleButtonText,
-                    isOwnerRole && styles.roleButtonTextActive
-                  ]}>Owner</Text>
+                  <Text
+                    style={[
+                      styles.roleButtonText,
+                      userRole === 'owner' && styles.roleButtonTextActive
+                    ]}
+                  >
+                    Pet Owner
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
                     styles.roleButton,
-                    isProfessionalRole && styles.roleButtonActive,
-                    !isApprovedProfessional && styles.roleButtonDisabled
+                    userRole === 'professional' && styles.roleButtonActive
                   ]}
-                  onPress={() => {
-                    if (is_DEBUG) {
-                      console.log('MBA98386196v Professional Role Button Press:', {
-                        currentRole: userRole,
-                        isApprovedProfessional
-                      });
-                    }
-                    if (isOwnerRole && isApprovedProfessional) {
-                      handleRoleSwitch('professional');
-                    }
-                  }}
-                  disabled={!isApprovedProfessional}
-                  activeOpacity={isApprovedProfessional ? 0.7 : 1}
+                  onPress={() => userRole !== 'professional' && handleRoleSwitch('professional')}
                 >
-                  <Text style={[
-                    styles.roleButtonText,
-                    isProfessionalRole && styles.roleButtonTextActive,
-                    !isApprovedProfessional && styles.roleButtonTextDisabled
-                  ]}>Professional</Text>
+                  <Text
+                    style={[
+                      styles.roleButtonText,
+                      userRole === 'professional' && styles.roleButtonTextActive
+                    ]}
+                  >
+                    Professional
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-          {menuItems.map((item, index) => {
-            const isActive = currentRoute === item.route || 
-                           (item.route === 'More' && item.title === 'Settings' && currentRoute === 'More');
-            
-            // Check if this is the Messages tab and we have unread messages
-            const showNotification = item.title === 'Messages' && hasUnreadMessages;
-
-            return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.sidebarItem,
-                  isActive && styles.activeItem
-                ]}
-                onPress={() => handleNavigation(item.route, item.tab)}
-              >
-                <View style={{ position: 'relative' }}>
-                  <MaterialCommunityIcons 
-                    name={item.icon} 
-                    size={24} 
-                    color={isActive ? theme.colors.primary : "#4B5563"}
-                  />
-                  {showNotification && (
-                    <View style={styles.messageNotificationBadge}>
-                      {unreadCount > 0 && (
-                        <Text style={styles.messageNotificationText}>{unreadCount}</Text>
-                      )}
-                    </View>
-                  )}
-                </View>
-                {!isCollapsed && (
-                  <Text style={[
-                    styles.sidebarItemText, 
-                    { color: isActive ? theme.colors.primary : "#4B5563" }
-                  ]}>
-                    {item.title}
-                    {item.title === 'Messages' && hasUnreadMessages && unreadCount > 0 && (
-                      <Text style={{ color: theme.colors.error }}>{` (${unreadCount})`}</Text>
-                    )}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+          
+          {renderMenuItems()}
         </View>
+        
         <TouchableOpacity
-          style={[styles.logoutButton, { width: sidebarWidth }]}
+          style={styles.logoutButton}
           onPress={handleLogout}
         >
-          <MaterialCommunityIcons 
-            name="logout" 
-            size={24} 
+          <MaterialCommunityIcons
+            name="logout"
+            size={24}
             color="#F26969"
           />
           {!isCollapsed && (
@@ -766,166 +625,154 @@ export default function Navigation({ state, descriptors, navigation }) {
       </View>
     );
   };
-
-  const renderWebNavItems = () => {
-    const menuItems = renderMenuItems();
-    return menuItems.map((item, index) => (
-      <TouchableOpacity
-        key={index}
-        style={styles.webNavItem}
-        onPress={() => handleNavigation(item.route)}
-      >
-        <Text style={styles.webNavText}>{item.title}</Text>
-      </TouchableOpacity>
-    ));
-  };
-
+  
   const renderMobileHeader = () => {
-    const logoSize = screenWidth <= 470 ? { width: 100, height: 30 } : { width: 150, height: 40 };
-    const isProfessionalRole = userRole === 'professional';
-    const isOwnerRole = userRole === 'petOwner';
-    
-    // Update notification count to include message notifications
-    const totalNotifications = hasUnreadMessages ? (notificationCount + unreadCount) : notificationCount;
-    
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.mobileHeaderContent}>
-          <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.logoButton}>
-            <Image 
-              source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')} 
-              style={[
-                styles.mobileLogo,
-                { tintColor: theme.colors.primary },
-                logoSize
-              ]} 
+          <TouchableOpacity onPress={() => handleNavigation('Dashboard')}>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={[styles.mobileLogo, { width: 120, height: 40, tintColor: theme.colors.primary }]}
             />
           </TouchableOpacity>
+          
           <View style={styles.mobileRightContent}>
-            {/* <TouchableOpacity onPress={() => handleNavigation('Notifications', 'Overview')} style={styles.iconButton}>
-              <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
-              {totalNotifications > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationText}>{totalNotifications}</Text>
-                </View>
-              )}
-            </TouchableOpacity> */}
-            <TouchableOpacity onPress={toggleMenu} style={styles.profileContainer}>
-              <View style={styles.hamburgerMenuContainer}>
-                <AnimatedHamburgerMenu size={28} color={theme.colors.text} />
-              </View>
+            <TouchableOpacity
+              style={styles.hamburgerMenuContainer}
+              onPress={toggleMenu}
+            >
+              <AnimatedHamburgerMenu size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
         </View>
+        
         {isMenuOpen && (
-          <View style={[styles.mobileMenu, { backgroundColor: theme.colors.surfaceContrast }]}>
-            {isSignedIn && (
-              <View style={styles.mobileRoleToggleContainer}>
-                <Text style={styles.mobileRoleToggleTitle}>Switch Role:</Text>
-                <View style={styles.mobileRoleButtonsContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.mobileRoleButton,
-                      isOwnerRole && styles.mobileRoleButtonActive
-                    ]}
-                    onPress={() => {
-                      if (is_DEBUG) {
-                        console.log('MBA98386196v Mobile Owner Role Button Press:', {
-                          currentRole: userRole,
-                          isApprovedProfessional
-                        });
-                      }
-                      if (isProfessionalRole) {
-                        handleRoleSwitch('petOwner');
-                        setIsMenuOpen(false);
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.mobileRoleButtonText,
-                      isOwnerRole && styles.mobileRoleButtonTextActive
-                    ]}>Owner</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.mobileRoleButton,
-                      isProfessionalRole && styles.mobileRoleButtonActive,
-                      !isApprovedProfessional && styles.mobileRoleButtonDisabled
-                    ]}
-                    onPress={() => {
-                      if (is_DEBUG) {
-                        console.log('MBA98386196v Mobile Professional Role Button Press:', {
-                          currentRole: userRole,
-                          isApprovedProfessional
-                        });
-                      }
-                      if (isOwnerRole && isApprovedProfessional) {
-                        handleRoleSwitch('professional');
-                        setIsMenuOpen(false);
-                      }
-                    }}
-                    disabled={!isApprovedProfessional}
-                    activeOpacity={isApprovedProfessional ? 0.7 : 1}
-                  >
-                    <Text style={[
-                      styles.mobileRoleButtonText,
-                      isProfessionalRole && styles.mobileRoleButtonTextActive,
-                      !isApprovedProfessional && styles.mobileRoleButtonTextDisabled
-                    ]}>Professional</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-            {renderMenuItems().map((item, index) => {
-              const showNotification = item.title === 'Messages' && hasUnreadMessages;
-              
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.mobileMenuItem}
-                  onPress={() => {
-                    handleNavigation(item.route, item.tab);
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
-                    <MaterialCommunityIcons name={item.icon} size={24} color={theme.colors.text} />
-                    {showNotification && (
-                      <View style={styles.mobileMessageNotificationBadge}>
-                        {unreadCount > 0 && (
-                          <Text style={styles.mobileMessageNotificationText}>{unreadCount}</Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.mobileMenuItemText}>
-                    {item.title}
-                    {item.title === 'Messages' && hasUnreadMessages && unreadCount > 0 && (
-                      <Text style={{ color: theme.colors.error }}>{` (${unreadCount})`}</Text>
-                    )}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-            {isSignedIn && (
-              <TouchableOpacity
-                style={[styles.mobileMenuItem, styles.mobileLogoutItem]}
-                onPress={() => {
-                  handleLogout();
-                  setIsMenuOpen(false);
-                }}
-              >
-                <MaterialCommunityIcons name="logout" size={24} color="#F26969" />
-                <Text style={[styles.mobileMenuItemText, styles.mobileLogoutText]}>Logout</Text>
-              </TouchableOpacity>
-            )}
+          <View style={styles.mobileMenu}>
+            {renderMobileMenuItems()}
           </View>
         )}
       </View>
     );
   };
-
+  
+  const renderMobileNavBar = () => {
+    return (
+      <SafeAreaView style={styles.customNavBar}>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => handleNavigation('Dashboard')}
+        >
+          <MaterialCommunityIcons
+            name="view-dashboard-outline"
+            size={24}
+            color={currentRoute === 'Dashboard' ? theme.colors.secondary : theme.colors.whiteText}
+          />
+          <Text style={[
+            styles.navText,
+            { color: currentRoute === 'Dashboard' ? theme.colors.secondary : theme.colors.whiteText }
+          ]}>
+            Home
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => handleNavigation('SearchProfessionalsListing')}
+        >
+          <MaterialCommunityIcons
+            name="magnify"
+            size={24}
+            color={currentRoute === 'SearchProfessionalsListing' ? theme.colors.secondary : theme.colors.whiteText}
+          />
+          <Text style={[
+            styles.navText,
+            { color: currentRoute === 'SearchProfessionalsListing' ? theme.colors.secondary : theme.colors.whiteText }
+          ]}>
+            Search
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => handleNavigation(userRole === 'professional' ? 'ServiceManager' : 'PetManager')}
+        >
+          <MaterialCommunityIcons
+            name="paw"
+            size={24}
+            color={
+              currentRoute === (userRole === 'professional' ? 'ServiceManager' : 'PetManager')
+                ? theme.colors.secondary
+                : theme.colors.whiteText
+            }
+          />
+          <Text style={[
+            styles.navText,
+            {
+              color: currentRoute === (userRole === 'professional' ? 'ServiceManager' : 'PetManager')
+                ? theme.colors.secondary
+                : theme.colors.whiteText
+            }
+          ]}>
+            {userRole === 'professional' ? 'Services' : 'Pets'}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => handleNavigation('MessageHistory')}
+        >
+          <View style={{ position: 'relative' }}>
+            <MaterialCommunityIcons
+              name="message-text-outline"
+              size={24}
+              color={currentRoute === 'MessageHistory' ? theme.colors.secondary : theme.colors.whiteText}
+            />
+            {hasUnreadMessages && (
+              <View style={styles.mobileMessageNotificationDot} />
+            )}
+            {unreadCount > 0 && (
+              <View style={styles.mobileMessageNotificationBadge}>
+                <Text style={styles.mobileMessageNotificationText}>{unreadCount}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={[
+            styles.navText,
+            { color: currentRoute === 'MessageHistory' ? theme.colors.secondary : theme.colors.whiteText }
+          ]}>
+            Messages
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => handleNavigation('MyProfile')}
+        >
+          <MaterialCommunityIcons
+            name="account-outline"
+            size={24}
+            color={currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText}
+          />
+          <Text style={[
+            styles.navText,
+            { color: currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText }
+          ]}>
+            Profile
+          </Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  };
+  
+  // If we shouldn't render (for example when navigation should be hidden),
+  // we still need to return something to avoid React errors
+  // IMPORTANT: All hooks must be called BEFORE this check to ensure consistent hook order
+  if (!shouldRender) {
+    return null;
+  }
+  
+  // The return statement should be similar to the original component
   return (
     <>
       {Platform.OS === 'web' ? (
@@ -943,6 +790,83 @@ export default function Navigation({ state, descriptors, navigation }) {
         </View>
       )}
     </>
+  );
+};
+
+// Main Navigation component - this is the one that gets exported
+export default function Navigation(props) {
+  const { state: propState, descriptors, navigation: propNavigation } = props;
+  
+  // IMPORTANT: All hooks must be called here unconditionally
+  const reactRoute = useReactRoute();
+  const [shouldCheckMessageState, setShouldCheckMessageState] = useState(true);
+  const { screenWidth } = useContext(AuthContext);
+  
+  // Determine routeName and selectedConversation
+  const routeFromProps = propState?.routes?.[propState?.index];
+  const routeName = routeFromProps?.name || reactRoute?.name || '';
+  const selectedConversation = 
+    routeFromProps?.params?.selectedConversation || 
+    reactRoute?.params?.selectedConversation;
+  
+  const isInMessageHistory = routeName === 'MessageHistory';
+  
+  // IMPORTANT: React hooks rules require that hooks are called in the same order
+  // on every render. Never put hooks inside conditional blocks or early returns.
+  // For safety, we've moved all hooks to the top of the component.
+  
+  // On first render, we check if this is a page reload with URL params
+  // ALWAYS call hooks unconditionally to avoid React hooks errors
+  useEffect(() => {
+    // Only execute the effect logic if the conditions are met
+    if (Platform.OS === 'web' && isInMessageHistory && selectedConversation && screenWidth <= 900) {
+      // If URL has conversation params, wait for MessageHistory to set its state
+      const isPageReload = typeof performance !== 'undefined' && 
+                         performance.navigation && 
+                         performance.navigation.type === performance.navigation.TYPE_RELOAD;
+      
+      debugLog('MBAo3hi4g4v: Page load check', {
+        isPageReload: isPageReload || 'API not available',
+        hasURLParams: !!selectedConversation,
+        shouldCheckMessageState
+      });
+      
+      if (shouldCheckMessageState) {
+        // First render with URL params - don't hide navigation yet
+        setShouldCheckMessageState(false);
+      }
+    }
+  }, [isInMessageHistory, selectedConversation, screenWidth, shouldCheckMessageState]);
+  
+  // Check if we should hide navigation
+  // More robust check for selectedConversation to prevent falsy values from causing issues
+  const hasSelectedConversation = selectedConversation !== null && 
+                                selectedConversation !== undefined && 
+                                selectedConversation !== '';
+  
+  const shouldHideNavigation = isInMessageHistory && 
+                              hasSelectedConversation && 
+                              screenWidth <= 900 && 
+                              !shouldCheckMessageState;
+  
+  // Log visibility state
+  debugLog('MBAo3hi4g4v: Navigation visibility check', { 
+    routeName, 
+    selectedConversation, 
+    screenWidth,
+    shouldCheckMessageState,
+    shouldHideNavigation
+  });
+  
+  // We ALWAYS render the NavigationContent component but control visibility
+  // via the shouldRender prop. This ensures hooks are always called in the same order.
+  return (
+    <NavigationContent 
+      propState={propState}
+      descriptors={descriptors}
+      propNavigation={propNavigation}
+      shouldRender={!shouldHideNavigation}
+    />
   );
 }
 
@@ -1168,7 +1092,7 @@ const styles = StyleSheet.create({
   mobileMenu: {
     position: 'absolute',
     top: '100%',
-    right: 20,
+    right: 0,
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
     padding: 8,
@@ -1178,7 +1102,8 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     zIndex: 1000,
-    minWidth: 200,
+    marginRight: 20, 
+    minWidth: 250,
   },
   mobileMenuItem: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useContext, useMemo, useLayoutEffect } from 'react';
-import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Image, TextInput } from 'react-native';
+import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Image, TextInput, BackHandler } from 'react-native';
 import { useTheme, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -28,6 +28,10 @@ import { createMessageStyles } from '../components/Messages/styles';
 import ClientPetsModal from '../components/ClientPetsModal';
 
 const MessageHistory = ({ navigation, route }) => {
+  // IMPORTANT: React hooks rules require that hooks are called in the same order
+  // on every render. Never put hooks inside conditional blocks or early returns.
+  // Always declare all hooks at the top level of the component.
+  
   const { colors } = useTheme();
   const { screenWidth, isCollapsed, isSignedIn, loading } = useContext(AuthContext);
   const styles = createMessageStyles(screenWidth, isCollapsed);
@@ -41,39 +45,133 @@ const MessageHistory = ({ navigation, route }) => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [selectedConversationData, setSelectedConversationData] = useState(null);
   
-  // Debug effect to monitor when a conversation is selected/deselected on mobile
-  // and update navigation params to control navigation visibility
+  // Move these state declarations before the useEffect that uses them
+  const [messages, setMessages] = useState([]);
+  const [isSending, setIsSending] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const { is_DEBUG, is_prototype, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
+  const [conversations, setConversations] = useState([]);
+  const [filteredConversations, setFilteredConversations] = useState([]);
+  
+  // Track whether we're intentionally deselecting
+  const isIntentionallyDeselecting = useRef(false);
+  
+  // Effect to handle URL parameters for direct conversation navigation
+  useEffect(() => {
+    // Skip if we don't have any conversations loaded yet or there's no selectedConversation in URL
+    if (!conversations || conversations.length === 0 || !route.params?.selectedConversation) {
+      return;
+    }
+    
+    // Skip if we've already selected a conversation
+    if (selectedConversation) {
+      return;
+    }
+    
+    // Skip if we're intentionally deselecting (from handleBack)
+    if (isIntentionallyDeselecting.current) {
+      debugLog('MBAo3hi4g4v: Skipping URL initialization because we intentionally deselected', {
+        isIntentionallyDeselecting: isIntentionallyDeselecting.current
+      });
+      // Reset the flag after using it
+      isIntentionallyDeselecting.current = false;
+      return;
+    }
+    
+    // Initialize from URL parameters
+    const initializeFromURL = async () => {
+      try {
+        if (Platform.OS === 'web') {
+          const conversationIdFromURL = parseInt(route.params.selectedConversation, 10);
+          if (!isNaN(conversationIdFromURL)) {
+            debugLog('MBAo3hi4g4v: Found conversation ID in URL, initializing', {
+              conversationIdFromURL,
+              conversationsLoaded: conversations.length,
+              currentSelected: selectedConversation
+            });
+            
+            // Check if this conversation exists in our list before selecting it
+            const conversationExists = conversations.some(
+              conv => conv.conversation_id === conversationIdFromURL
+            );
+            
+            if (conversationExists) {
+              // Delay setting the selected conversation to ensure component is fully mounted
+              // Use a setTimeout to avoid immediate state changes during render
+              setTimeout(() => {
+                debugLog('MBAo3hi4g4v: Setting conversation from URL', {
+                  conversationId: conversationIdFromURL
+                });
+                setSelectedConversation(conversationIdFromURL);
+              }, 300);
+            } else {
+              // If conversation doesn't exist, clear the parameter from the URL
+              debugLog('MBAo3hi4g4v: Conversation from URL not found in list', {
+                conversationIdFromURL,
+                availableConversations: conversations.map(c => c.conversation_id)
+              });
+              
+              // Clear the parameter to avoid issues
+              navigation.setParams({ selectedConversation: undefined });
+            }
+          }
+        }
+      } catch (error) {
+        debugLog('MBAo3hi4g4v: Error initializing from URL', { error: error.message });
+      }
+    };
+    
+    initializeFromURL();
+  }, [conversations, route.params?.selectedConversation, selectedConversation, navigation]);
+
+  // Effect to handle navigation params for visibility control
   useEffect(() => {
     // Log regardless of platform/width to see if this effect is running
     debugLog('MBAo3hi4g4v: Conversation effect triggered', {
       selectedConversation,
       screenWidth,
       platform: Platform.OS,
-      isWebAndMobile: Platform.OS === 'web' && screenWidth <= 600,
+      isWebAndMobile: Platform.OS === 'web' && screenWidth <= 900,
       routeParams: JSON.stringify(route.params),
-      route: JSON.stringify(route),
+      routeName: route.name,
       timestamp: new Date().toISOString()
     });
     
-    if (Platform.OS === 'web' && screenWidth <= 600) {
+    if (Platform.OS === 'web' && screenWidth <= 900) {
       // Check if we need to update params - only update if selectedConversation has changed from route params
       const currentSelectedInParams = route.params?.selectedConversation;
-      if (currentSelectedInParams !== selectedConversation) {
+      const needsUpdate = 
+        // If we're selecting a conversation
+        (selectedConversation && currentSelectedInParams !== selectedConversation) ||
+        // Or if we're deselecting a conversation (going back to list)
+        (selectedConversation === null && currentSelectedInParams);
+      
+      if (needsUpdate) {
         // Update navigation params to control navigation visibility
         debugLog('MBAo3hi4g4v: Setting navigation params', {
           selectedConversation,
           screenWidth,
-          beforeParams: JSON.stringify(route.params)
+          beforeParams: JSON.stringify(route.params),
+          needsUpdate,
+          action: selectedConversation ? 'selecting' : 'deselecting'
         });
         
-        // Don't include any screen or initialTab parameters - and prevent route.params.screen from persisting
-        navigation.setParams({ selectedConversation, screen: route.name });
+        // Only set the selectedConversation param - don't include screen or other params
+        // This ensures we don't have unneeded params in the URL that could cause issues
+        if (selectedConversation) {
+          navigation.setParams({ selectedConversation });
+        } else {
+          // When deselecting, we need to explicitly clear the parameter
+          navigation.setParams({ selectedConversation: undefined });
+        }
         
         // Debug log after setting params
         setTimeout(() => {
           debugLog('MBAo3hi4g4v: After setting navigation params', {
             selectedConversation,
-            routeParams: JSON.stringify(route.params)
+            routeParams: JSON.stringify(route.params),
+            action: selectedConversation ? 'selected' : 'deselected'
           });
         }, 100);
         
@@ -95,13 +193,62 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [selectedConversation, screenWidth, navigation, route.params]);
   
-  const [messages, setMessages] = useState([]);
-  const [isSending, setIsSending] = useState(false);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const { is_DEBUG, is_prototype, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
-  const [conversations, setConversations] = useState([]);
-  const [filteredConversations, setFilteredConversations] = useState([]);
+  // Add a handler for the back button to ensure we properly clear the selected conversation
+  useEffect(() => {
+    // Handle hardware back button on Android
+    const handleBackButton = () => {
+      if (selectedConversation && Platform.OS === 'android') {
+        debugLog('MBAo3hi4g4v: Android back button pressed, clearing selected conversation');
+        setSelectedConversation(null);
+        return true;  // Prevent default behavior
+      }
+      return false;
+    };
+
+    // Handle browser back button on web
+    const handleBrowserBack = () => {
+      // Check if we need to clear the selected conversation
+      if (selectedConversation && Platform.OS === 'web') {
+        debugLog('MBAo3hi4g4v: Browser back detected, clearing selected conversation');
+        
+        // Set flag to indicate we're intentionally deselecting
+        isIntentionallyDeselecting.current = true;
+        
+        // Clear the URL parameter
+        navigation.setParams({ selectedConversation: undefined });
+        
+        // Clear the selected conversation
+        setSelectedConversation(null);
+        
+        // Reset the flag after a delay
+        setTimeout(() => {
+          isIntentionallyDeselecting.current = false;
+        }, 500);
+      }
+    };
+
+    // Add Android back handler
+    if (Platform.OS === 'android') {
+      BackHandler.addEventListener('hardwareBackPress', handleBackButton);
+    }
+
+    // Add browser history listener for web
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('popstate', handleBrowserBack);
+    }
+
+    // Cleanup
+    return () => {
+      if (Platform.OS === 'android') {
+        BackHandler.removeEventListener('hardwareBackPress', handleBackButton);
+      }
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.removeEventListener('popstate', handleBrowserBack);
+      }
+    };
+  }, [selectedConversation]);
+  
+  // All other state declarations
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -2555,11 +2702,11 @@ const MessageHistory = ({ navigation, route }) => {
           mode="contained" 
           onPress={handleSend} 
           disabled={isSending}
-          style={[styles.sendButton, screenWidth <= 600 && styles.sendButtonMobile]}
+          style={[styles.sendButton, screenWidth <= 900 && styles.sendButtonMobile]}
         >
           {isSending ? (
             <ActivityIndicator color={theme.colors.whiteText} size="small" />
-          ) : screenWidth <= 600 ? (
+          ) : screenWidth <= 900 ? (
             <MaterialCommunityIcons name="arrow-up" size={16} color={theme.colors.whiteText} 
             style={{
               marginLeft: 0,
@@ -2818,8 +2965,32 @@ const MessageHistory = ({ navigation, route }) => {
   // Add search functionality
   const handleSearch = (text) => {
     setSearchQuery(text);
-    // Filtering is now handled by the useEffect defined above
   };
+
+  // Add a useEffect to filter conversations when searchQuery changes
+  useEffect(() => {
+    if (!searchQuery) {
+      // When search is empty, show all conversations
+      setFilteredConversations(conversations);
+    } else {
+      // Filter conversations based on search text
+      const filtered = conversations.filter(conv => {
+        const otherParticipantName = conv.participant1_id === CURRENT_USER_ID ? 
+          conv.participant2_name : conv.participant1_name;
+        const searchName = otherParticipantName || conv.name || conv.other_user_name || '';
+        
+        return searchName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              (conv.last_message && conv.last_message.toLowerCase().includes(searchQuery.toLowerCase()));
+      });
+      setFilteredConversations(filtered);
+    }
+    
+    debugLog('MBA5557: Filtering conversations based on search', { 
+      searchQuery, 
+      totalConversations: conversations.length,
+      filteredCount: filteredConversations.length 
+    });
+  }, [searchQuery, conversations]);
 
   // Conversation list component
   const renderConversationList = () => (
@@ -2963,8 +3134,29 @@ const MessageHistory = ({ navigation, route }) => {
     );
   };
 
+  // Update the back button handler to better clear URL parameters
+  const handleBack = () => {
+    debugLog('MBAo3hi4g4v: Back button pressed, clearing selected conversation');
+    
+    // Set flag to indicate we're intentionally deselecting (to prevent URL param reloading)
+    isIntentionallyDeselecting.current = true;
+    
+    // First clear the URL parameter to prevent it from being re-read
+    navigation.setParams({ selectedConversation: undefined });
+    
+    // Clear the selected conversation state immediately
+    setSelectedConversation(null);
+    
+    // Add a timeout to reset the flag as a safety mechanism
+    setTimeout(() => {
+      if (isIntentionallyDeselecting.current) {
+        isIntentionallyDeselecting.current = false;
+      }
+    }, 500);
+  };
+  
+  // Use static counter to reduce logging frequency
   const renderMobileHeader = () => {
-    // Use static counter to reduce logging frequency
     renderMobileHeader.renderCount = (renderMobileHeader.renderCount || 0) + 1;
     
     // Only log every 5th render to reduce console spam
@@ -2979,7 +3171,10 @@ const MessageHistory = ({ navigation, route }) => {
     return (
       <View style={[
         styles.mobileHeader,
-        { backgroundColor: theme.colors.surfaceContrast }  // Updated to use surfaceContrast
+        { 
+          backgroundColor: theme.colors.surfaceContrast,  // Updated to use surfaceContrast
+          marginTop: selectedConversation && screenWidth <= 900 ? 0 : undefined
+        }
       ]}>
         <MessageHeader
           selectedConversationData={selectedConversationData}
@@ -2990,7 +3185,7 @@ const MessageHistory = ({ navigation, route }) => {
               handleOpenExistingDraft(draftId);
             }
           }}
-          onBackPress={() => setSelectedConversation(null)}
+          onBackPress={handleBack} // Use our new handleBack function
           styles={styles}
           isMobile={true}
           onCreateBooking={handleCreateBooking}
@@ -3475,11 +3670,14 @@ const MessageHistory = ({ navigation, route }) => {
           }
         }
         
-        // If we couldn't find any suitable container, log it
+        // If we couldn't find any suitable container, try a more direct approach but don't log warning
+        // This reduces console spam while still trying to fix the issue
         if (!targetFound) {
-          debugLog('MBA9876: Could not find suitable container for padding', {
-            selectors
-          });
+          // Try applying padding to the message container directly
+          const messageContainer = document.querySelector('.messagesContainer');
+          if (messageContainer) {
+            messageContainer.style.cssText += '; padding-bottom: 300px !important;';
+          }
         }
         
         // Also try to force scroll to top of inverted list to show latest message

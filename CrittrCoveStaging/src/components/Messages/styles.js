@@ -561,19 +561,15 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
   },
   mobileMessageView: {
     flex: 1,
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-    backgroundColor: theme.colors.background,
     display: 'flex',
     flexDirection: 'column',
-    ...(Platform.OS === 'web' && {
-      minHeight: '100vh',
-    }),
+    height: '100%',
+    marginTop: 0,
   },
   mobileContainer: {
-    paddingTop: 0,
-    paddingLeft: 0,
-    paddingRight: 0,
+    top: 0,
+    height: '100vh',
+    minHeight: '100vh',
+    maxHeight: '100vh',
   },
 }); 
