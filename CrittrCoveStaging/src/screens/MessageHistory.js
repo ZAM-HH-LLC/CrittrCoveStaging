@@ -40,6 +40,27 @@ const MessageHistory = ({ navigation, route }) => {
   
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [selectedConversationData, setSelectedConversationData] = useState(null);
+  
+  // Debug effect to monitor when a conversation is selected/deselected on mobile
+  useEffect(() => {
+    if (Platform.OS === 'web' && screenWidth <= 600) {
+      if (selectedConversation) {
+        debugLog('MBAo3hi4g4v: Conversation selected on mobile view', {
+          conversationId: selectedConversation,
+          screenWidth,
+          timestamp: new Date().toISOString(),
+          action: 'selected'
+        });
+      } else {
+        debugLog('MBAo3hi4g4v: Conversation deselected on mobile view', {
+          screenWidth,
+          timestamp: new Date().toISOString(),
+          action: 'deselected'
+        });
+      }
+    }
+  }, [selectedConversation, screenWidth]);
+  
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -2417,7 +2438,7 @@ const MessageHistory = ({ navigation, route }) => {
             // Prevent scrolling when typing
             overflow: 'hidden'
           }}
-          placeholder="Type a New Message..."
+          placeholder="Type a Message..."
           value={message}
           onChange={handleChange}
           onFocus={handleFocus}

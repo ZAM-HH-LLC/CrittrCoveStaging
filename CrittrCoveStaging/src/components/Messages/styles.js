@@ -430,7 +430,6 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     textAlign: 'center',
     fontFamily: theme.fonts.header.fontFamily,
     flexWrap: 'wrap',
-    maxWidth: '70%',
   },
   mobileHeaderNameContainer: {
     flexDirection: 'row',

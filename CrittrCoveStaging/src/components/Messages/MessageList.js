@@ -259,7 +259,10 @@ const MessageList = forwardRef(({
   }, []);
   
   // Calculate extra padding for mobile - much more for web to ensure message visibility
-  const extraPadding = Platform.OS === 'web' ? 160 : 50;
+  // Reduce padding on iOS to avoid grey space issues
+  const extraPadding = Platform.OS === 'web' ? 
+    (Platform.isPad || (Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent))) ? 60 : 160 
+    : 50;
   
   // Scroll to the top of the inverted list when messages change
   React.useEffect(() => {
@@ -332,6 +335,137 @@ const MessageList = forwardRef(({
       isUserScrollingRef.current = false;
     }
   }, [messages.length]);
+  
+  // iOS keyboard-specific fix for gray space
+  React.useEffect(() => {
+    if (Platform.OS === 'web') {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      
+      if (isIOS) {
+        debugLog('MBA9876: Setting up iOS-specific keyboard fixes');
+        
+        // Create iOS-specific styles
+        const styleTag = document.createElement('style');
+        styleTag.id = 'ios-keyboard-fixes';
+        styleTag.innerHTML = `
+          /* iOS keyboard fixes */
+          body.ios-keyboard-open {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+          }
+          
+          .message-input-container.ios-keyboard-open {
+            position: absolute !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background-color: white !important;
+            z-index: 100 !important;
+          }
+          
+          .message-container.ios-keyboard-open {
+            height: calc(100% - 60px) !important;
+            margin-bottom: 60px !important;
+            overflow-y: auto !important;
+          }
+          
+          .messagesContainer {
+            -webkit-overflow-scrolling: touch !important;
+          }
+        `;
+        document.head.appendChild(styleTag);
+        
+        // Function to handle keyboard showing
+        const handleFocusIn = (e) => {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+            debugLog('MBA9876: iOS input focused');
+            
+            // Add classes for keyboard open state
+            document.body.classList.add('ios-keyboard-open');
+            
+            const inputContainer = document.querySelector('.message-input-container');
+            if (inputContainer) {
+              inputContainer.classList.add('ios-keyboard-open');
+            }
+            
+            const messageContainer = document.querySelector('.message-container');
+            if (messageContainer) {
+              messageContainer.classList.add('ios-keyboard-open');
+            }
+            
+            // Scroll the input into view
+            setTimeout(() => {
+              if (e.target) {
+                e.target.scrollIntoView(false);
+              }
+            }, 300);
+          }
+        };
+        
+        // Function to handle keyboard hiding
+        const handleFocusOut = (e) => {
+          // Only handle if we're not focusing on another input element
+          if (!e.relatedTarget || (e.relatedTarget.tagName !== 'INPUT' && e.relatedTarget.tagName !== 'TEXTAREA')) {
+            debugLog('MBA9876: iOS input blurred');
+            
+            // Remove classes for keyboard open state
+            document.body.classList.remove('ios-keyboard-open');
+            
+            const inputContainer = document.querySelector('.message-input-container');
+            if (inputContainer) {
+              inputContainer.classList.remove('ios-keyboard-open');
+            }
+            
+            const messageContainer = document.querySelector('.message-container');
+            if (messageContainer) {
+              messageContainer.classList.remove('ios-keyboard-open');
+            }
+            
+            // Fix scroll position
+            window.scrollTo(0, 0);
+          }
+        };
+        
+        // Add event listeners
+        document.addEventListener('focusin', handleFocusIn);
+        document.addEventListener('focusout', handleFocusOut);
+        
+        // Handle page visibility changes (helps with background/foreground transitions)
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            // When page becomes visible again, reset any keyboard-related classes
+            document.body.classList.remove('ios-keyboard-open');
+            
+            const inputContainer = document.querySelector('.message-input-container');
+            if (inputContainer) {
+              inputContainer.classList.remove('ios-keyboard-open');
+            }
+            
+            const messageContainer = document.querySelector('.message-container');
+            if (messageContainer) {
+              messageContainer.classList.remove('ios-keyboard-open');
+            }
+            
+            // Force scroll to top
+            window.scrollTo(0, 0);
+          }
+        });
+        
+        return () => {
+          // Clean up
+          document.removeEventListener('focusin', handleFocusIn);
+          document.removeEventListener('focusout', handleFocusOut);
+          
+          const styleElement = document.getElementById('ios-keyboard-fixes');
+          if (styleElement) {
+            styleElement.remove();
+          }
+        };
+      }
+    }
+  }, []);
   
   // Expose the scrollToTop method to parent components if needed
   React.useImperativeHandle(ref, () => ({
