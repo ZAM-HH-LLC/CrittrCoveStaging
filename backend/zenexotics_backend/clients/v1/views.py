@@ -21,6 +21,7 @@ from pets.models import Pet
 from booking_pets.models import BookingPets
 from ..serializers import PetSerializer
 from payment_methods.models import PaymentMethod
+from conversations.models import Conversation
 
 logger = logging.getLogger(__name__)
 
@@ -220,55 +221,72 @@ class GetClientPetsView(APIView):
         logger.info(f"GetClientPetsView: Getting pets for client")
         
         try:
-            # Get client_id from request parameters
-            client_id = request.query_params.get('client_id')
+            # Get conversation_id from request parameters
+            conversation_id = request.query_params.get('conversation_id')
             
-            if not client_id:
+            if not conversation_id:
                 return Response(
-                    {"error": "client_id is required"},
+                    {"error": "conversation_id is required"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            logger.info(f"GetClientPetsView: Looking up client {client_id}")
+            # Determine the client from the conversation
+            logger.info(f"GetClientPetsView: Looking up conversation {conversation_id}")
             
-            # Check if the requesting user has permission to view this client's pets
-            if not request.user.is_staff:  # If not admin
-                try:
-                    # Check if user is the client
-                    if hasattr(request.user, 'client_profile') and str(request.user.client_profile.id) != client_id:
-                        # Check if user is an approved professional
-                        try:
-                            professional_status = ProfessionalStatus.objects.get(user=request.user)
-                            if not professional_status.is_approved:
-                                return Response(
-                                    {"error": "Not authorized to view client pets"},
-                                    status=status.HTTP_403_FORBIDDEN
-                                )
-                        except ProfessionalStatus.DoesNotExist:
-                            return Response(
-                                {"error": "Not authorized to view client pets"},
-                                status=status.HTTP_403_FORBIDDEN
-                            )
-                except Client.DoesNotExist:
-                    pass  # Will be handled below
-            
-            # Get all pets for the client
             try:
-                client = Client.objects.get(id=client_id)
-            except Client.DoesNotExist:
-                logger.warning(f"GetClientPetsView: Client {client_id} not found")
+                conversation = Conversation.objects.get(conversation_id=conversation_id)
+                
+                # Verify that the current user is a participant in this conversation
+                current_user_id = str(request.user.id)
+                if current_user_id not in conversation.role_map:
+                    logger.warning(f"GetClientPetsView: User {current_user_id} attempted to access conversation {conversation_id} but is not a participant")
+                    return Response(
+                        {"error": "You are not authorized to access this conversation"},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                
+                # Get the role map from the conversation
+                role_map = conversation.role_map
+                
+                # Find the client user ID in the role map
+                client_user_id = None
+                for user_id, role in role_map.items():
+                    if role == 'client':
+                        client_user_id = user_id
+                        break
+                
+                if not client_user_id:
+                    return Response(
+                        {"error": "No client found in this conversation"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                # Get the client profile for this user
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                client_user = User.objects.get(id=client_user_id)
+                client = Client.objects.get(user=client_user)
+                
+                logger.info(f"GetClientPetsView: Determined client_id {client.id} from conversation")
+                
+            except Conversation.DoesNotExist:
                 return Response(
-                    {"error": "Client not found"},
+                    {"error": "Conversation not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except Client.DoesNotExist:
+                return Response(
+                    {"error": "Client profile not found for user in conversation"},
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Get the client's pets, not the current user's pets
+            # Get the client's pets
             pets = Pet.objects.filter(owner=client.user)
             
             # Serialize the pets
             serializer = PetSerializer(pets, many=True)
             
-            logger.info(f"GetClientPetsView: Found {len(serializer.data)} pets for client {client_id}")
+            logger.info(f"GetClientPetsView: Found {len(serializer.data)} pets for client {client.id}")
             return Response(serializer.data)
             
         except Exception as e:

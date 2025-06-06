@@ -1206,24 +1206,25 @@ export const logInputEvent = async (eventType, eventData = {}) => {
 /**
  * Get client pets
  * 
- * Retrieves all pets for a specific client
+ * Retrieves all pets for a specific client based on conversation ID
+ * The backend will determine the client ID from the conversation and user roles
  * 
- * @param {number} clientId - The ID of the client whose pets to retrieve
+ * @param {string|number} conversationId - The ID of the conversation 
  * @returns {Promise<Array>} - Array of pet objects for the client
  */
-export const getClientPets = async (clientId) => {
+export const getClientPets = async (conversationId) => {
   try {
-    debugLog('MBA3456', 'Fetching client pets - clientId:', clientId);
+    debugLog('MBA3456', 'Fetching client pets for conversation:', conversationId);
     
-    // Make sure clientId is a valid number
-    if (!clientId) {
-      debugLog('MBA3456', 'Error: No client_id provided to getClientPets');
-      throw new Error('No client_id provided');
+    // Make sure conversationId is provided
+    if (!conversationId) {
+      debugLog('MBA3456', 'Error: No conversation_id provided to getClientPets');
+      throw new Error('No conversation_id provided');
     }
     
     const response = await axios.get(`${API_BASE_URL}/api/clients/v1/get-pets/`, {
       params: {
-        client_id: clientId
+        conversation_id: conversationId
       }
     });
     

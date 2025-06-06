@@ -2868,15 +2868,8 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add a function to handle View Pets button click
   const handleViewPets = () => {
-    const clientId = selectedConversationData?.is_professional ? 
-      selectedConversationData?.participant2_id : 
-      selectedConversationData?.participant1_id;
-      
     debugLog('MBA3456', 'View Pets button clicked', {
-      is_professional: selectedConversationData?.is_professional,
-      participant1_id: selectedConversationData?.participant1_id,
-      participant2_id: selectedConversationData?.participant2_id,
-      determined_client_id: clientId,
+      conversation_id: selectedConversationData?.conversation_id,
       other_user_name: selectedConversationData?.other_user_name
     });
     
@@ -3056,13 +3049,10 @@ const MessageHistory = ({ navigation, route }) => {
       <ClientPetsModal
         visible={showClientPetsModal}
         onClose={() => setShowClientPetsModal(false)}
-        client={{
-          client_id: selectedConversationData?.is_professional ? 
-            selectedConversationData?.participant2_id : // If current user is professional, participant2 is client
-            selectedConversationData?.participant1_id,  // If current user is not professional, participant1 is client
-          name: selectedConversationData?.other_user_name,
-          other_user_name: selectedConversationData?.other_user_name
+        conversation={{
+          id: selectedConversationData?.conversation_id
         }}
+        otherUserName={selectedConversationData?.other_user_name}
         onCreateBooking={handleCreateBooking}
       />
 

@@ -5,7 +5,7 @@ import { theme } from '../styles/theme';
 import { getClientPets } from '../api/API';
 import { AuthContext, debugLog } from '../context/AuthContext';
 
-const ClientPetsModal = ({ visible, onClose, client, onCreateBooking }) => {
+const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCreateBooking }) => {
   const [pets, setPets] = useState([]);
   const [selectedPet, setSelectedPet] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -17,18 +17,18 @@ const ClientPetsModal = ({ visible, onClose, client, onCreateBooking }) => {
   const isSmallMobile = screenWidth <= 600;
 
   useEffect(() => {
-    if (visible && client?.client_id) {
-      debugLog('MBA3456', 'ClientPetsModal became visible with client_id:', client.client_id);
+    if (visible && conversation?.id) {
+      debugLog('MBA3456', 'ClientPetsModal became visible with conversation ID:', conversation.id);
       fetchPets();
     }
-  }, [visible, client?.client_id]);
+  }, [visible, conversation?.id]);
 
   const fetchPets = async () => {
     setLoading(true);
     setError(null);
     try {
-      debugLog('MBA3456', 'Fetching pets for client:', client.client_id);
-      const petsData = await getClientPets(client.client_id);
+      debugLog('MBA3456', 'Fetching pets for conversation:', conversation.id);
+      const petsData = await getClientPets(conversation.id);
       debugLog('MBA3456', 'Successfully fetched pets:', petsData.length);
       setPets(petsData);
       if (petsData.length > 0) {
@@ -80,231 +80,189 @@ const ClientPetsModal = ({ visible, onClose, client, onCreateBooking }) => {
         )}
       </View>
       
-      {/* Basic Information */}
+      {/* Basic Information - Always show this section */}
       <View style={styles.detailsSection}>
         <Text style={styles.sectionHeader}>Basic Information</Text>
         
         <View style={styles.detailSection}>
           <Text style={styles.detailLabel}>Type</Text>
-          <Text style={styles.detailText}>{pet.species}</Text>
+          <Text style={styles.detailText}>{pet.species || 'Not specified'}</Text>
         </View>
 
-        {pet.breed && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Breed</Text>
-            <Text style={styles.detailText}>{pet.breed}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Breed</Text>
+          <Text style={styles.detailText}>{pet.breed || 'Not specified'}</Text>
+        </View>
 
-        {pet.pet_type && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Specific Type</Text>
-            <Text style={styles.detailText}>{pet.pet_type}</Text>
-          </View>
-        )}
+        
 
-        {pet.age && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Age</Text>
-            <Text style={styles.detailText}>{pet.age}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Age</Text>
+          <Text style={styles.detailText}>{pet.age || 'Not specified'}</Text>
+        </View>
 
-        {pet.weight && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Weight</Text>
-            <Text style={styles.detailText}>{pet.weight} lbs</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Weight</Text>
+          <Text style={styles.detailText}>{pet.weight ? `${pet.weight} lbs` : 'Not specified'}</Text>
+        </View>
 
-        {pet.sex && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Sex</Text>
-            <Text style={styles.detailText}>{pet.sex}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Sex</Text>
+          <Text style={styles.detailText}>{pet.sex || 'Not specified'}</Text>
+        </View>
 
-        {pet.birthday && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Birthday</Text>
-            <Text style={styles.detailText}>{new Date(pet.birthday).toLocaleDateString()}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Birthday</Text>
+          <Text style={styles.detailText}>
+            {pet.birthday ? new Date(pet.birthday).toLocaleDateString() : 'Not specified'}
+          </Text>
+        </View>
 
-        {pet.adoption_date && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Adoption Date</Text>
-            <Text style={styles.detailText}>{new Date(pet.adoption_date).toLocaleDateString()}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Adoption Date</Text>
+          <Text style={styles.detailText}>
+            {pet.adoption_date ? new Date(pet.adoption_date).toLocaleDateString() : 'Not specified'}
+          </Text>
+        </View>
 
-        {pet.pet_description && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Description</Text>
-            <Text style={styles.detailText}>{pet.pet_description}</Text>
-          </View>
-        )}
       </View>
 
-      {/* Behavioral Information - For all pets but with special dog-specific content */}
+      {/* Care Information - Always show this section */}
+      <View style={styles.detailsSection}>
+        <Text style={styles.sectionHeader}>Care Instructions</Text>
+        
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Feeding Schedule</Text>
+          <Text style={styles.detailText}>{pet.feeding_schedule || 'Not provided'}</Text>
+        </View>
+
+        {/* Show potty break schedule for all pets, with "Not applicable" for non-dogs */}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Potty Break Schedule</Text>
+          <Text style={styles.detailText}>
+            {pet.is_dog 
+              ? (pet.potty_break_schedule || 'Not provided') 
+              : 'Not applicable for this pet type'}
+          </Text>
+        </View>
+
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Special Care Instructions</Text>
+          <Text style={styles.detailText}>{pet.special_care_instructions || 'None provided'}</Text>
+        </View>
+      </View>
+
+      {/* Behavioral Information - Always show this section */}
       <View style={styles.detailsSection}>
         <Text style={styles.sectionHeader}>Behavioral Information</Text>
         
-        {pet.energy_level && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Energy Level</Text>
-            <Text style={styles.detailText}>{pet.energy_level}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Energy Level</Text>
+          <Text style={styles.detailText}>{pet.energy_level || 'Not specified'}</Text>
+        </View>
 
-        {pet.can_be_left_alone !== null && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Can be Left Alone</Text>
-            <Text style={styles.detailText}>{pet.can_be_left_alone ? 'Yes' : 'No'}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Can be Left Alone</Text>
+          <Text style={styles.detailText}>
+            {pet.can_be_left_alone === true ? 'Yes' : 
+             pet.can_be_left_alone === false ? 'No' : 'Not specified'}
+          </Text>
+        </View>
 
-        {/* Dog/cat specific fields */}
-        {pet.friendly_with_children !== null && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Friendly with Children</Text>
-            <Text style={styles.detailText}>{pet.friendly_with_children ? 'Yes' : 'No'}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Friendly with Children</Text>
+          <Text style={styles.detailText}>
+            {pet.friendly_with_children === true ? 'Yes' : 
+             pet.friendly_with_children === false ? 'No' : 'Not specified'}
+          </Text>
+        </View>
 
-        {pet.friendly_with_cats !== null && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Friendly with Cats</Text>
-            <Text style={styles.detailText}>{pet.friendly_with_cats ? 'Yes' : 'No'}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Friendly with Cats</Text>
+          <Text style={styles.detailText}>
+            {pet.friendly_with_cats === true ? 'Yes' : 
+             pet.friendly_with_cats === false ? 'No' : 'Not specified'}
+          </Text>
+        </View>
 
-        {pet.friendly_with_dogs !== null && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Friendly with Dogs</Text>
-            <Text style={styles.detailText}>{pet.friendly_with_dogs ? 'Yes' : 'No'}</Text>
-          </View>
-        )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Friendly with Dogs</Text>
+          <Text style={styles.detailText}>
+            {pet.friendly_with_dogs === true ? 'Yes' : 
+             pet.friendly_with_dogs === false ? 'No' : 'Not specified'}
+          </Text>
+        </View>
       </View>
 
-      {/* Care Information */}
-      {(pet.feeding_schedule || 
-        pet.potty_break_schedule || 
-        pet.special_care_instructions) && (
-        <View style={styles.detailsSection}>
-          <Text style={styles.sectionHeader}>Care Instructions</Text>
-          
-          {pet.feeding_schedule && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Feeding Schedule</Text>
-              <Text style={styles.detailText}>{pet.feeding_schedule}</Text>
-            </View>
-          )}
-
-          {/* Only show potty break schedule for dogs */}
-          {pet.is_dog && pet.potty_break_schedule && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Potty Break Schedule</Text>
-              <Text style={styles.detailText}>{pet.potty_break_schedule}</Text>
-            </View>
-          )}
-
-          {pet.special_care_instructions && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Special Care Instructions</Text>
-              <Text style={styles.detailText}>{pet.special_care_instructions}</Text>
-            </View>
-          )}
+      {/* Medical Information - Always show this section */}
+      <View style={styles.detailsSection}>
+        <Text style={styles.sectionHeader}>Medical Information</Text>
+        
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Spayed/Neutered</Text>
+          <Text style={styles.detailText}>
+            {pet.spayed_neutered === true ? 'Yes' : 
+             pet.spayed_neutered === false ? 'No' : 'Not specified'}
+          </Text>
         </View>
-      )}
 
-      {/* Medical Information */}
-      {(pet.spayed_neutered !== null || 
-        pet.house_trained !== null || 
-        pet.microchipped !== null || 
-        (pet.formatted_medications && pet.formatted_medications.length > 0) || 
-        pet.medication_notes) && (
-        <View style={styles.detailsSection}>
-          <Text style={styles.sectionHeader}>Medical Information</Text>
-          
-          {pet.spayed_neutered !== null && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Spayed/Neutered</Text>
-              <Text style={styles.detailText}>{pet.spayed_neutered ? 'Yes' : 'No'}</Text>
-            </View>
-          )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>House Trained</Text>
+          <Text style={styles.detailText}>
+            {pet.house_trained === true ? 'Yes' : 
+             pet.house_trained === false ? 'No' : 'Not specified'}
+          </Text>
+        </View>
 
-          {pet.house_trained !== null && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>House Trained</Text>
-              <Text style={styles.detailText}>{pet.house_trained ? 'Yes' : 'No'}</Text>
-            </View>
-          )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Microchipped</Text>
+          <Text style={styles.detailText}>
+            {pet.microchipped === true ? 'Yes' : 
+             pet.microchipped === false ? 'No' : 'Not specified'}
+          </Text>
+        </View>
 
-          {pet.microchipped !== null && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Microchipped</Text>
-              <Text style={styles.detailText}>{pet.microchipped ? 'Yes' : 'No'}</Text>
-            </View>
-          )}
-
-          {pet.formatted_medications && pet.formatted_medications.length > 0 && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Medications</Text>
-              <Text style={styles.detailText}>
-                {pet.formatted_medications.map(med => 
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Medications</Text>
+          <Text style={styles.detailText}>
+            {pet.formatted_medications && pet.formatted_medications.length > 0 
+              ? pet.formatted_medications.map(med => 
                   `${med.name}: ${med.dosage || 'No dosage specified'} ${med.schedule || 'No schedule specified'}`
-                ).join('\n')}
-              </Text>
-            </View>
-          )}
-
-          {pet.medication_notes && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Medication Notes</Text>
-              <Text style={styles.detailText}>{pet.medication_notes}</Text>
-            </View>
-          )}
+                ).join('\n')
+              : 'No medications listed'}
+          </Text>
         </View>
-      )}
 
-      {/* Veterinary Information */}
-      {(pet.vet_name || 
-        pet.vet_address || 
-        pet.vet_phone || 
-        pet.insurance_provider) && (
-        <View style={styles.detailsSection}>
-          <Text style={styles.sectionHeader}>Veterinary Information</Text>
-          
-          {pet.vet_name && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Veterinarian</Text>
-              <Text style={styles.detailText}>{pet.vet_name}</Text>
-            </View>
-          )}
-
-          {pet.vet_phone && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Vet Phone</Text>
-              <Text style={styles.detailText}>{pet.vet_phone}</Text>
-            </View>
-          )}
-
-          {pet.vet_address && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Vet Address</Text>
-              <Text style={styles.detailText}>{pet.vet_address}</Text>
-            </View>
-          )}
-
-          {pet.insurance_provider && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Insurance Provider</Text>
-              <Text style={styles.detailText}>{pet.insurance_provider}</Text>
-            </View>
-          )}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Medication Notes</Text>
+          <Text style={styles.detailText}>{pet.medication_notes || 'None provided'}</Text>
         </View>
-      )}
+      </View>
+
+      {/* Veterinary Information - Always show this section */}
+      <View style={styles.detailsSection}>
+        <Text style={styles.sectionHeader}>Veterinary Information</Text>
+        
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Veterinarian</Text>
+          <Text style={styles.detailText}>{pet.vet_name || 'Not provided'}</Text>
+        </View>
+
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Vet Phone</Text>
+          <Text style={styles.detailText}>{pet.vet_phone || 'Not provided'}</Text>
+        </View>
+
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Vet Address</Text>
+          <Text style={styles.detailText}>{pet.vet_address || 'Not provided'}</Text>
+        </View>
+
+        <View style={styles.detailSection}>
+          <Text style={styles.detailLabel}>Insurance Provider</Text>
+          <Text style={styles.detailText}>{pet.insurance_provider || 'Not provided'}</Text>
+        </View>
+      </View>
     </>
   );
 
@@ -330,7 +288,7 @@ const ClientPetsModal = ({ visible, onClose, client, onCreateBooking }) => {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Text style={styles.clientName}>{client?.name || client?.other_user_name}</Text>
+              <Text style={styles.clientName}>{otherUserName || 'Client'}</Text>
               <Text style={styles.clientSubtitle}>Client Pets</Text>
             </View>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
@@ -681,9 +639,6 @@ const styles = StyleSheet.create({
   },
   detailsSection: {
     marginBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    paddingBottom: 16,
   },
   sectionHeader: {
     fontSize: 18,
