@@ -145,7 +145,7 @@ const MoreScreen = ({ navigation }) => {
                 />
               : <List.Icon {...props} icon={item.icon} />
           }
-          onPress={() => handleNavigation(item.route, item.tab || 'Overview')}
+          onPress={() => handleNavigation(item.route, item.tab)}
           style={[
             styles.webListItem,
             { paddingHorizontal: screenWidth <= 900 ? 8 : 16 }

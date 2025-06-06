@@ -42,24 +42,58 @@ const MessageHistory = ({ navigation, route }) => {
   const [selectedConversationData, setSelectedConversationData] = useState(null);
   
   // Debug effect to monitor when a conversation is selected/deselected on mobile
+  // and update navigation params to control navigation visibility
   useEffect(() => {
+    // Log regardless of platform/width to see if this effect is running
+    debugLog('MBAo3hi4g4v: Conversation effect triggered', {
+      selectedConversation,
+      screenWidth,
+      platform: Platform.OS,
+      isWebAndMobile: Platform.OS === 'web' && screenWidth <= 600,
+      routeParams: JSON.stringify(route.params),
+      route: JSON.stringify(route),
+      timestamp: new Date().toISOString()
+    });
+    
     if (Platform.OS === 'web' && screenWidth <= 600) {
-      if (selectedConversation) {
-        debugLog('MBAo3hi4g4v: Conversation selected on mobile view', {
-          conversationId: selectedConversation,
+      // Check if we need to update params - only update if selectedConversation has changed from route params
+      const currentSelectedInParams = route.params?.selectedConversation;
+      if (currentSelectedInParams !== selectedConversation) {
+        // Update navigation params to control navigation visibility
+        debugLog('MBAo3hi4g4v: Setting navigation params', {
+          selectedConversation,
           screenWidth,
-          timestamp: new Date().toISOString(),
-          action: 'selected'
+          beforeParams: JSON.stringify(route.params)
         });
-      } else {
-        debugLog('MBAo3hi4g4v: Conversation deselected on mobile view', {
-          screenWidth,
-          timestamp: new Date().toISOString(),
-          action: 'deselected'
-        });
+        
+        // Don't include any screen or initialTab parameters - and prevent route.params.screen from persisting
+        navigation.setParams({ selectedConversation, screen: route.name });
+        
+        // Debug log after setting params
+        setTimeout(() => {
+          debugLog('MBAo3hi4g4v: After setting navigation params', {
+            selectedConversation,
+            routeParams: JSON.stringify(route.params)
+          });
+        }, 100);
+        
+        if (selectedConversation) {
+          debugLog('MBAo3hi4g4v: Conversation selected on mobile view', {
+            conversationId: selectedConversation,
+            screenWidth,
+            timestamp: new Date().toISOString(),
+            action: 'selected'
+          });
+        } else {
+          debugLog('MBAo3hi4g4v: Conversation deselected on mobile view', {
+            screenWidth,
+            timestamp: new Date().toISOString(),
+            action: 'deselected'
+          });
+        }
       }
     }
-  }, [selectedConversation, screenWidth]);
+  }, [selectedConversation, screenWidth, navigation, route.params]);
   
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
@@ -2792,7 +2826,14 @@ const MessageHistory = ({ navigation, route }) => {
     <ConversationList
       conversations={filteredConversations}
       selectedConversation={selectedConversation}
-      onSelectConversation={setSelectedConversation}
+      onSelectConversation={(convId) => {
+        debugLog('MBAo3hi4g4v: Conversation selected from list', {
+          conversationId: convId,
+          screenWidth,
+          platform: Platform.OS
+        });
+        setSelectedConversation(convId);
+      }}
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
       styles={styles}
@@ -2922,28 +2963,42 @@ const MessageHistory = ({ navigation, route }) => {
     );
   };
 
-  const renderMobileHeader = () => (
-    <View style={[
-      styles.mobileHeader,
-      { backgroundColor: theme.colors.surfaceContrast }  // Updated to use surfaceContrast
-    ]}>
-      <MessageHeader
-        selectedConversationData={selectedConversationData}
-        hasDraft={hasDraft}
-        draftData={draftData}
-        onEditDraft={(draftId) => {
-          if (draftId) {
-            handleOpenExistingDraft(draftId);
-          }
-        }}
-        onBackPress={() => setSelectedConversation(null)}
-        styles={styles}
-        isMobile={true}
-        onCreateBooking={handleCreateBooking}
-        onViewPets={handleViewPets}
-      />
-    </View>
-  );
+  const renderMobileHeader = () => {
+    // Use static counter to reduce logging frequency
+    renderMobileHeader.renderCount = (renderMobileHeader.renderCount || 0) + 1;
+    
+    // Only log every 5th render to reduce console spam
+    if (renderMobileHeader.renderCount % 5 === 1) {
+      debugLog('MBAo3hi4g4v: Rendering mobile header', {
+        selectedConversation,
+        screenWidth,
+        platform: Platform.OS
+      });
+    }
+    
+    return (
+      <View style={[
+        styles.mobileHeader,
+        { backgroundColor: theme.colors.surfaceContrast }  // Updated to use surfaceContrast
+      ]}>
+        <MessageHeader
+          selectedConversationData={selectedConversationData}
+          hasDraft={hasDraft}
+          draftData={draftData}
+          onEditDraft={(draftId) => {
+            if (draftId) {
+              handleOpenExistingDraft(draftId);
+            }
+          }}
+          onBackPress={() => setSelectedConversation(null)}
+          styles={styles}
+          isMobile={true}
+          onCreateBooking={handleCreateBooking}
+          onViewPets={handleViewPets}
+        />
+      </View>
+    );
+  };
 
   // Update renderEmptyState to remove prototype references
   const renderEmptyState = () => (

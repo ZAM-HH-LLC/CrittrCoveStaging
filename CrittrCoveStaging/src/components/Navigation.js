@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, SafeAreaView, Image } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -111,6 +111,58 @@ export default function Navigation({ state, descriptors, navigation }) {
   
   const [currentRoute, setCurrentRoute] = useState('');
   const [notificationCount, setNotificationCount] = useState(3); // We can make this dynamic later
+  
+  // Check if we're in a conversation view
+  const route = state?.routes?.[state?.index];
+  const routeName = route?.name;
+  const isInMessageHistory = routeName === 'MessageHistory';
+  const selectedConversation = route?.params?.selectedConversation;
+
+  debugLog('MBAo3hi4g4v: Navigation render conditions', { 
+    routeName,
+    isInMessageHistory,
+    selectedConversation,
+    screenWidth,
+    platform: Platform.OS,
+    route: JSON.stringify(route?.params),
+    stateIndex: state?.index,
+    stateRoutes: state?.routes?.length
+  });
+  
+  // Only log on the first render or when these values change to reduce console spam
+  const renderLogRef = useRef({ routeName, isInMessageHistory, selectedConversation, screenWidth });
+  const shouldLog = 
+    renderLogRef.current.routeName !== routeName || 
+    renderLogRef.current.isInMessageHistory !== isInMessageHistory ||
+    renderLogRef.current.selectedConversation !== selectedConversation ||
+    renderLogRef.current.screenWidth !== screenWidth;
+    
+  // if (shouldLog) {
+  //   renderLogRef.current = { routeName, isInMessageHistory, selectedConversation, screenWidth };
+  //   // Debug log all relevant conditions for visibility
+  //   debugLog('MBAo3hi4g4v: Navigation render conditions', { 
+  //     routeName,
+  //     isInMessageHistory,
+  //     selectedConversation,
+  //     screenWidth,
+  //     platform: Platform.OS,
+  //     route: JSON.stringify(route?.params),
+  //     stateIndex: state?.index,
+  //     stateRoutes: state?.routes?.length
+  //   });
+  // }
+  
+  // Hide navigation completely when in a conversation on mobile
+  if (isInMessageHistory && selectedConversation && screenWidth <= 600) {
+    if (shouldLog) {
+      debugLog('MBAo3hi4g4v: Hiding navigation for conversation view', { 
+        routeName, 
+        selectedConversation, 
+        screenWidth
+      });
+    }
+    return null;  // Don't render the navigation component at all
+  }
 
   // Animation values for hamburger menu
   const line1Rotation = useSharedValue(0);
@@ -578,7 +630,7 @@ export default function Navigation({ state, descriptors, navigation }) {
     return (
       <View style={[styles.sidebarContainer, { width: sidebarWidth }]}>
         <View style={styles.sidebarLogoContainer}>
-          <TouchableOpacity onPress={() => handleNavigation('Home', 'Overview')} style={styles.logoButton}>
+          <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.logoButton}>
             <Image 
               source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')}
               style={[styles.sidebarLogo, { width: isCollapsed ? 40 : 150, tintColor: theme.colors.primary }]}
@@ -667,7 +719,7 @@ export default function Navigation({ state, descriptors, navigation }) {
                   styles.sidebarItem,
                   isActive && styles.activeItem
                 ]}
-                onPress={() => handleNavigation(item.route, item.tab || 'Overview')}
+                onPress={() => handleNavigation(item.route, item.tab)}
               >
                 <View style={{ position: 'relative' }}>
                   <MaterialCommunityIcons 
@@ -739,7 +791,7 @@ export default function Navigation({ state, descriptors, navigation }) {
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.mobileHeaderContent}>
-          <TouchableOpacity onPress={() => handleNavigation('Home', 'Overview')} style={styles.logoButton}>
+          <TouchableOpacity onPress={() => handleNavigation('Home')} style={styles.logoButton}>
             <Image 
               source={require('../../assets/crittrcove-high-resolution-logo-transparent.png')} 
               style={[
@@ -833,7 +885,7 @@ export default function Navigation({ state, descriptors, navigation }) {
                   key={index}
                   style={styles.mobileMenuItem}
                   onPress={() => {
-                    handleNavigation(item.route, item.tab || 'Overview');
+                    handleNavigation(item.route, item.tab);
                     setIsMenuOpen(false);
                   }}
                 >
