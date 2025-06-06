@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.c03fa1c4.css",
-    "main.js": "/static/js/main.65b96a3b.js",
+    "main.js": "/static/js/main.0a73df3f.js",
     "static/js/9.00bce024.js": "/static/js/9.00bce024.js",
     "og-image.jpg": "/og-image.jpg",
     "static/media/default-profile.png": "/static/media/default-profile.0695878757dbc86fae81.png",
@@ -28,7 +28,7 @@
     "static/media/default-pet-image.png": "/static/media/default-pet-image.3b5628b61ce454d19bca.png",
     "static/media/FontAwesome6_Regular.ttf": "/static/media/FontAwesome6_Regular.17a6e1aebccdbaa39e78.ttf",
     "static/media/FontAwesome5_Regular.ttf": "/static/media/FontAwesome5_Regular.1017bce89c72f95bcf8e.ttf",
-    "static/media/crittrcove-high-resolution-logo-transparent.png": "/static/media/crittrcove-high-resolution-logo-transparent.761085745bd386bf07cb.png",
+    "static/media/logo.png": "/static/media/logo.761085745bd386bf07cb.png",
     "favicon.ico": "/favicon.ico",
     "index.html": "/index.html",
     "static/media/marker-icon-2x.png": "/static/media/marker-icon-2x.680f69f3c2e6b90c1812.png",
@@ -41,12 +41,12 @@
     "manifest.json": "/manifest.json",
     "serve.json": "/serve.json",
     "main.c03fa1c4.css.map": "/static/css/main.c03fa1c4.css.map",
-    "main.65b96a3b.js.map": "/static/js/main.65b96a3b.js.map",
+    "main.0a73df3f.js.map": "/static/js/main.0a73df3f.js.map",
     "9.00bce024.js.map": "/static/js/9.00bce024.js.map"
   },
   "entrypoints": [
     "static/js/9.00bce024.js",
     "static/css/main.c03fa1c4.css",
-    "static/js/main.65b96a3b.js"
+    "static/js/main.0a73df3f.js"
   ]
 }
