@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useContext, useMemo, useLayoutEffect } from 'react';
 import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Image, TextInput } from 'react-native';
 import { useTheme, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -1188,16 +1188,26 @@ const MessageHistory = ({ navigation, route }) => {
       isFetchingMessagesRef.current.add(fetchKey);
       debugLog('MBA98765 Fetching messages for conversation:', conversationId, 'page:', page);
       
+      // Only clear messages for the first page (initial load)
+      // For pagination, we'll append the new messages
       if (page === 1) {
         setMessages([]);
         setHasDraft(false);
         setDraftData(null);
         processedPagesRef.current.clear();
         messageIdsRef.current.clear();
+        // Reset pagination state
+        setCurrentPage(1);
+        // Don't set hasMore to true here - wait for API response
       }
 
-      setIsLoadingMore(page > 1);
-      isLoadingMoreRef.current = true;
+      // Set loading state
+      if (page > 1) {
+        setIsLoadingMore(true);
+        isLoadingMoreRef.current = true;
+      } else {
+        setIsLoadingMessages(true);
+      }
 
       const data = await getConversationMessages(conversationId, page);
       
@@ -1213,7 +1223,8 @@ const MessageHistory = ({ navigation, route }) => {
           conversationId,
           page,
           count: newMessages.length,
-          hasNext: !!data.has_more
+          hasNext: !!data.has_more,
+          isPagination: page > 1
         });
 
         // Check for draft data in the response
@@ -1223,30 +1234,39 @@ const MessageHistory = ({ navigation, route }) => {
           debugLog('MBA98765 Draft data found:', data.draft_data);
         }
 
+        // For first page, just set the messages
+        // For pagination, append to existing messages
         if (page === 1) {
           setMessages(newMessages);
         } else {
           setMessages(prevMessages => {
-            const combinedMessages = [...prevMessages, ...newMessages];
-            const uniqueMessages = combinedMessages.filter((message, index, array) => 
-              array.findIndex(m => m.message_id === message.message_id) === index
+            // Track existing message IDs to avoid duplicates
+            const existingIds = new Set(prevMessages.map(m => m.message_id));
+            
+            // Filter out duplicates from new messages
+            const uniqueNewMessages = newMessages.filter(
+              msg => !existingIds.has(msg.message_id)
             );
             
-            debugLog('MBA98765 Combined messages:', {
+            // Create combined array with all unique messages
+            const combinedMessages = [...prevMessages, ...uniqueNewMessages];
+            
+            debugLog('MBA98765 Combined messages for pagination:', {
               previous: prevMessages.length,
-              new: newMessages.length,
-              combined: combinedMessages.length,
-              unique: uniqueMessages.length
+              newUnique: uniqueNewMessages.length,
+              combined: combinedMessages.length
             });
             
-            return uniqueMessages;
+            return combinedMessages;
           });
         }
 
+        // Update pagination state
         setHasMore(!!data.has_more);
         setCurrentPage(page);
         processedPagesRef.current.add(page);
 
+        // Track message IDs to avoid duplicates
         newMessages.forEach(msg => {
           if (msg.message_id) {
             messageIdsRef.current.add(msg.message_id);
@@ -1261,8 +1281,15 @@ const MessageHistory = ({ navigation, route }) => {
       console.error('Error fetching messages:', error);
       debugLog('MBA98765 Error in fetchMessages:', error);
     } finally {
+      // Reset loading states
       setIsLoadingMore(false);
-      isLoadingMoreRef.current = false;
+      setIsLoadingMessages(false);
+      
+      // Add a small delay before resetting the loading ref to prevent immediate re-fetch
+      setTimeout(() => {
+        isLoadingMoreRef.current = false;
+      }, 500);
+      
       isFetchingMessagesRef.current.delete(fetchKey);
     }
   };
@@ -1489,17 +1516,40 @@ const MessageHistory = ({ navigation, route }) => {
       messagesLength: messages.length
     });
     
-    if (hasMore && !isLoadingMoreRef.current && selectedConversation) {
+    // Only load more messages if:
+    // 1. There are more messages to load
+    // 2. We're not already loading (both state and ref)
+    // 3. We have a selected conversation
+    // 4. The next page hasn't already been processed
+    if (hasMore && 
+        !isLoadingMoreRef.current && 
+        !isLoadingMore && 
+        selectedConversation && 
+        !processedPagesRef.current.has(currentPage + 1)) {
+      
       debugLog(`MBA2349f87g9qbh2nfv9cg: Starting pagination load for page ${currentPage + 1}`);
+      
+      // Set loading state before fetch to prevent multiple triggers
+      isLoadingMoreRef.current = true;
+      setIsLoadingMore(true);
+      
+      // Fetch the next page of messages
       fetchMessages(selectedConversation, currentPage + 1);
     } else {
       debugLog('MBA2349f87g9qbh2nfv9cg: Not loading more messages - conditions not met', {
         hasMore,
         isLoadingMoreRefCurrent: isLoadingMoreRef.current,
-        selectedConversation: !!selectedConversation
+        isLoadingMore,
+        selectedConversation: !!selectedConversation,
+        nextPageProcessed: processedPagesRef.current.has(currentPage + 1),
+        reasonText: !hasMore ? 'no more messages' : 
+                   isLoadingMoreRef.current ? 'already loading (ref)' :
+                   isLoadingMore ? 'already loading (state)' :
+                   !selectedConversation ? 'no conversation selected' :
+                   processedPagesRef.current.has(currentPage + 1) ? 'page already processed' : 'unknown'
       });
     }
-  }, [hasMore, currentPage, selectedConversation, messages.length]);
+  }, [hasMore, currentPage, selectedConversation, messages.length, isLoadingMore]);
 
   const renderMessage = useCallback(({ item }) => {
     // Create a map to keep track of which bookings have change requests and latest message timestamps
@@ -1880,13 +1930,14 @@ const MessageHistory = ({ navigation, route }) => {
     );
   }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages, messages]);
 
+  // Modify WebInput component to use our new focus handler
   const WebInput = React.memo(({ selectedConversation }) => {
     const [message, setMessage] = useState('');
     const inputRef = useRef(null);
     const isProcessingRef = useRef(false);
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-    debugLog('MBA2u3f89fbno4: [COMPONENT] WebInput render', {
+    debugLog('MBA9876: [COMPONENT] WebInput render', {
       timestamp: Date.now(),
       messageLength: message.length,
       isKeyboardVisible,
@@ -2026,6 +2077,9 @@ const MessageHistory = ({ navigation, route }) => {
         visualViewportHeight: window.visualViewport?.height,
         innerHeight: window.innerHeight
       });
+
+      // Call our new global input focus handler to fix message visibility
+      handleInputFocus();
 
       // Apply Android Chrome keyboard open CSS classes
       if (isAndroidChromeRef.current) {
@@ -2775,7 +2829,10 @@ const MessageHistory = ({ navigation, route }) => {
         {screenWidth > 900 && renderMessageHeader()}
         {/* Messages */}
         <View style={styles.messageSection}>
-          <View style={[styles.messagesContainer, mobileMessagesStyle]} className="message-container">
+          <View 
+            style={[styles.messagesContainer, mobileMessagesStyle]} 
+            className="messagesContainer"
+          >
             {isLoadingMessages ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -2791,9 +2848,13 @@ const MessageHistory = ({ navigation, route }) => {
                 renderMessage={renderMessage}
                 hasMore={hasMore}
                 isLoadingMore={isLoadingMore}
-                onLoadMore={() => loadMoreMessages(selectedConversation)}
+                onLoadMore={() => {
+                  // Only load more if we're actually scrolling
+                  loadMoreMessages(selectedConversation);
+                }}
                 styles={styles}
                 theme={theme}
+                className="message-list-component message-list-with-padding"
               />
             )}
           </View>
@@ -3300,6 +3361,379 @@ const MessageHistory = ({ navigation, route }) => {
       };
     }
   }, [screenWidth]);
+
+  // Function to ensure the latest message is visible - update to be more thorough
+  const ensureLatestMessageVisible = () => {
+    // Only run on web
+    if (Platform.OS === 'web') {
+      // Add a significant bottom padding to the FlatList content container
+      setTimeout(() => {
+        // Try different selectors to find the FlatList content container
+        const selectors = [
+          '.messagesContainer .message-list-component > div > div',
+          '.messagesContainer .message-list-component > div',
+          '.messagesContainer div[data-interactable="true"]',
+          '.messagesContainer > *',
+        ];
+        
+        let targetFound = false;
+        
+        // Try each selector until we find a match
+        for (const selector of selectors) {
+          const elements = document.querySelectorAll(selector);
+          if (elements && elements.length > 0) {
+            // Apply padding to ensure messages are visible
+            elements.forEach(el => {
+              // Use cssText to ensure !important works properly
+              el.style.cssText += '; padding-top: 300px !important; margin-top: 300px !important;';
+              targetFound = true;
+              debugLog('MBA9876: Added padding to element', {
+                selector,
+                element: el.tagName,
+                childCount: el.childElementCount
+              });
+            });
+            
+            // If we found a target with this selector, stop trying others
+            if (targetFound) break;
+          }
+        }
+        
+        // If we couldn't find any suitable container, log it
+        if (!targetFound) {
+          debugLog('MBA9876: Could not find suitable container for padding', {
+            selectors
+          });
+        }
+        
+        // Also try to force scroll to top of inverted list to show latest message
+        const messageList = document.querySelector('.messagesContainer');
+        if (messageList) {
+          messageList.scrollTop = 0;
+          debugLog('MBA9876: Forced scroll to top of message list');
+        }
+      }, 100); // Decreased timeout for faster response
+    }
+  };
+
+  // Add an interval to keep checking and fixing the padding
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !selectedConversation) return;
+    
+    // Run immediately
+    ensureLatestMessageVisible();
+    
+    // Set up an interval to continuously check and fix
+    const intervalId = setInterval(ensureLatestMessageVisible, 500);
+    
+    // Clean up interval on unmount
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [selectedConversation, messages]);
+
+  // Add this useEffect after the existing ones to directly fix message visibility after sending
+  useEffect(() => {
+    // Only run this on web
+    if (Platform.OS !== 'web' || !selectedConversation) return;
+    
+    // Function to directly fix message visibility with a direct approach
+    const fixMessageVisibility = () => {
+      // Target the FlatList directly
+      const flatList = document.querySelector('.messagesContainer .message-list-component');
+      if (!flatList) return;
+      
+      // Force scroll to top (latest message) for inverted list
+      flatList.scrollTop = 0;
+      
+      // Get the content container - this is what we need to add padding to
+      const contentContainer = flatList.querySelector('div > div');
+      if (contentContainer) {
+        // Check current padding before applying
+        const computedStyle = window.getComputedStyle(contentContainer);
+        const currentPaddingTop = parseInt(computedStyle.paddingTop) || 0;
+        
+        // Only apply if needed
+        if (currentPaddingTop < 300) {
+          // Add a very large padding to ensure latest message is visible
+          contentContainer.style.paddingTop = '300px';
+          // Also try margin in case padding is being overridden
+          contentContainer.style.marginTop = '300px';
+          
+          debugLog('MBA9876: Applied direct padding fix to FlatList content container', {
+            element: 'content container',
+            paddingApplied: '300px',
+            marginApplied: '300px'
+          });
+        }
+      }
+      
+      // Also try to apply padding to all direct children
+      const directChildren = flatList.querySelectorAll(':scope > div');
+      directChildren.forEach(child => {
+        // Check current padding
+        const computedStyle = window.getComputedStyle(child);
+        const currentPaddingTop = parseInt(computedStyle.paddingTop) || 0;
+        
+        // Only apply if needed
+        if (currentPaddingTop < 300) {
+          child.style.paddingTop = '300px';
+          child.style.marginTop = '300px';
+          
+          debugLog('MBA9876: Applied padding to direct child', {
+            child: child.className || child.tagName,
+            paddingApplied: '300px',
+            marginApplied: '300px'
+          });
+        }
+      });
+    };
+    
+    // Run the fix whenever messages change (new message sent or received)
+    if (messages.length > 0) {
+      // Run immediately
+      fixMessageVisibility();
+      
+      // And after a short delay to ensure the DOM has updated
+      setTimeout(fixMessageVisibility, 100);
+      setTimeout(fixMessageVisibility, 500);
+    }
+  }, [messages, selectedConversation]);
+
+  // Add a specific WebInput focus handler to fix message visibility when keyboard opens
+  const handleInputFocus = () => {
+    if (Platform.OS === 'web') {
+      // On mobile browsers, when keyboard opens, force scroll to show latest message
+      setTimeout(() => {
+        const flatList = document.querySelector('.messagesContainer .message-list-component');
+        if (flatList) {
+          flatList.scrollTop = 0;
+          debugLog('MBA9876: Forced scroll on input focus');
+        }
+      }, 300);
+    }
+  };
+
+  // Add this global interval setup to continuously fix message visibility
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    
+    // Create a global interval to periodically check and fix message padding
+    const intervalId = setInterval(() => {
+      // Only run if we have a selected conversation
+      if (!selectedConversation) return;
+      
+      // Find the FlatList content container using various possible selectors
+      const contentSelectors = [
+        '.messagesContainer .message-list-component > div > div',
+        '.messagesContainer .message-list-component > div',
+        '.messagesContainer > div > div',
+        '.message-list-component div[style*="flex-direction"]',
+      ];
+      
+      let foundContent = false;
+      
+      // Try each selector
+      for (const selector of contentSelectors) {
+        const elements = document.querySelectorAll(selector);
+        if (elements && elements.length > 0) {
+          elements.forEach(el => {
+            // Check if padding is less than our desired value
+            const currentPadding = parseInt(el.style.paddingBottom) || 0;
+            if (currentPadding < 300) {
+              el.style.paddingBottom = '300px';
+              foundContent = true;
+              debugLog('MBA9876: [INTERVAL] Fixed padding on element', {
+                selector,
+                elementType: el.tagName,
+                previousPadding: currentPadding,
+                newPadding: '300px'
+              });
+            }
+          });
+          
+          // If we found content with this selector, break out
+          if (foundContent) break;
+        }
+      }
+      
+      // Force scroll to top if we're at an active conversation
+      if (selectedConversation && document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
+        const flatList = document.querySelector('.messagesContainer .message-list-component');
+        if (flatList) {
+          flatList.scrollTop = 0;
+        }
+      }
+    }, 2000);
+    
+    // Clear the interval on unmount
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
+
+  // Add a more forceful style directly into the document head
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web') return;
+    
+    // Create a style element with high specificity and !important rules
+    const styleEl = document.createElement('style');
+    styleEl.id = 'message-fix-style';
+    styleEl.innerHTML = `
+      /* High specificity selectors with !important to override any other styles */
+      .messagesContainer .message-list-component > div {
+        padding-top: 300px !important;
+        margin-top: 300px !important;
+      }
+      
+      .messagesContainer .message-list-component > div > div {
+        padding-top: 300px !important;
+        margin-top: 300px !important;
+      }
+      
+      /* Target any potential scroll container */
+      .messagesContainer .message-list-component {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+      }
+      
+      /* Force the first message to be visible */
+      .messagesContainer .message-list-component > div > div > * {
+        margin-bottom: 300px !important;
+      }
+    `;
+    
+    // Add the style to the document head
+    document.head.appendChild(styleEl);
+    
+    debugLog('MBA9876: Added high-priority style fixes to document head', {
+      styleId: 'message-fix-style'
+    });
+    
+    // Clean up function
+    return () => {
+      const existingStyle = document.getElementById('message-fix-style');
+      if (existingStyle) {
+        existingStyle.remove();
+      }
+    };
+  }, []);
+  
+  // Add direct DOM manipulation in a layout effect for immediate application
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web' || !selectedConversation) return;
+    
+    // Function to find and modify the FlatList content elements
+    const applyDirectFixes = () => {
+      // Attempt to find the FlatList content container with multiple selectors
+      const selectors = [
+        '.messagesContainer .message-list-component > div',
+        '.messagesContainer .message-list-component > div > div',
+        '.message-list-component div[style*="flex-direction"]',
+      ];
+      
+      selectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          // Apply direct inline styles with !important
+          el.setAttribute('style', `${el.getAttribute('style') || ''}; padding-top: 300px !important; margin-top: 300px !important;`);
+          
+          debugLog('MBA9876: [DIRECT DOM] Applied critical fix to', {
+            selector,
+            element: el.tagName,
+            childCount: el.childElementCount
+          });
+        });
+      });
+      
+      // Try to find the first message element and add margin to it
+      const firstMessageContainer = document.querySelector('.messagesContainer .message-list-component > div > div > *');
+      if (firstMessageContainer) {
+        firstMessageContainer.style.marginBottom = '300px';
+        debugLog('MBA9876: [DIRECT DOM] Added margin to first message container');
+      }
+    };
+    
+    // Run immediately
+    applyDirectFixes();
+    
+    // And also after a short delay to account for async rendering
+    const timeoutId = setTimeout(applyDirectFixes, 500);
+    
+    // Clean up function
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [selectedConversation, messages]);
+  
+  // Create a MutationObserver to catch DOM changes and apply fixes
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !selectedConversation) return;
+    
+    // Create a function to fix the FlatList when DOM changes
+    const fixOnDomChanges = () => {
+      const observer = new MutationObserver((mutations) => {
+        debugLog('MBA9876: [MUTATION] DOM changed, reapplying fixes', {
+          mutationCount: mutations.length
+        });
+        
+        // Apply our fixes when DOM changes
+        const selectors = [
+          '.messagesContainer .message-list-component > div',
+          '.messagesContainer .message-list-component > div > div'
+        ];
+        
+        selectors.forEach(selector => {
+          const elements = document.querySelectorAll(selector);
+          elements.forEach(el => {
+            // Check current padding
+            const computedStyle = window.getComputedStyle(el);
+            const currentPaddingTop = parseInt(computedStyle.paddingTop) || 0;
+            
+            // Only apply if needed
+            if (currentPaddingTop < 300) {
+              el.style.paddingTop = '300px';
+              el.style.marginTop = '300px';
+              
+              debugLog('MBA9876: [MUTATION] Fixed padding on element after DOM change', {
+                selector,
+                element: el.tagName,
+                currentPaddingTop,
+                newPadding: '300px'
+              });
+            }
+          });
+        });
+      });
+      
+      // Start observing the message container
+      const container = document.querySelector('.messagesContainer');
+      if (container) {
+        observer.observe(container, { 
+          childList: true, 
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['style', 'class']
+        });
+        
+        debugLog('MBA9876: [MUTATION] Started observing DOM changes');
+      }
+      
+      // Return cleanup function
+      return observer;
+    };
+    
+    // Start the observer
+    const observer = fixOnDomChanges();
+    
+    // Clean up function
+    return () => {
+      if (observer) {
+        observer.disconnect();
+        debugLog('MBA9876: [MUTATION] Stopped observing DOM changes');
+      }
+    };
+  }, [selectedConversation]);
 
   // Add a loading overlay component at the bottom of the return statement, before any modals
   return (
