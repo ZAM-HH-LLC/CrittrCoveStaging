@@ -17,6 +17,7 @@ import useWebSocket from '../hooks/useWebSocket';
 import MessageNotificationContext from '../context/MessageNotificationContext';
 import { getConversationMessages, createDraftFromBooking, getConversations, sendDebugLog, logInputEvent } from '../api/API';
 import { navigateToFrom } from '../components/Navigation';
+import { applyViewportFix } from '../utils/viewport-fix';
 
 // Import our new components
 import MessageList from '../components/Messages/MessageList';
@@ -103,6 +104,8 @@ const MessageHistory = ({ navigation, route }) => {
   const actualViewportHeightRef = useRef(null);
   const inputContainerHeightRef = useRef(0);
   const isAndroidChromeRef = useRef(false);
+  
+  // No viewport fix needed, we're using pure flexbox
 
   // Add a ref to track if conversations fetch is already in progress
   const isFetchingConversationsRef = useRef(false);
@@ -2313,7 +2316,7 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Update renderMessageSection to use improved layout for iOS compatibility
+  // Update renderMessageSection to use simplified flexbox layout
   const renderMessageSection = () => {
     if (!selectedConversation) {
       return null;
@@ -2323,7 +2326,7 @@ const MessageHistory = ({ navigation, route }) => {
       <View style={styles.mainSection}>
         {screenWidth > 900 && renderMessageHeader()}
         {/* Messages */}
-        <View style={styles.messageSection}>
+        <View style={styles.messageSection} className="message-container">
           <View 
             style={styles.messagesContainer} 
             className="messagesContainer"
@@ -2352,43 +2355,23 @@ const MessageHistory = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Input Section - Fixed to bottom for all browsers */}
-        <View style={styles.inputSection} className="message-input-container">
-          <View style={styles.inputContainer}>
-            <View style={styles.attachButtonContainer}>
-              <TouchableOpacity 
-                style={styles.attachButton}
-                onPress={() => setShowDropdown(!showDropdown)}
-              >
-                <MaterialCommunityIcons 
-                  name={showDropdown ? "close" : "plus"} 
-                  size={24} 
-                  color={theme.colors.primary} 
-                />
-              </TouchableOpacity>
-              {showDropdown && (
-                <View style={styles.dropdownMenu}>
-                  <TouchableOpacity 
-                    style={styles.dropdownItem}
-                    onPress={() => {
-                      setShowDropdown(false);
-                    }}
-                  >
-                    <MaterialCommunityIcons 
-                      name="image" 
-                      size={20} 
-                      color={theme.colors.placeholder} 
-                    />
-                    <Text style={[styles.dropdownText, { color: theme.colors.placeholder }]}>
-                      Coming Soon - Images
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-            {renderMessageInput()}
-          </View>
-        </View>
+        {/* Input Section - Simplified to use flexbox positioning */}
+        <MessageInput 
+          onSendMessage={async (messageContent) => {
+            try {
+              setIsSending(true);
+              await SendNormalMessage(messageContent);
+              setIsSending(false);
+            } catch (error) {
+              console.error('Error sending message:', error);
+              setIsSending(false);
+            }
+          }}
+          onShowDropdown={(show) => setShowDropdown(show)}
+          showDropdown={showDropdown}
+          styles={styles}
+          screenWidth={screenWidth}
+        />
       </View>
     );
   };
@@ -3485,7 +3468,7 @@ const MessageHistory = ({ navigation, route }) => {
   }, []);
   
   return (
-    <SafeAreaView style={[
+    <View style={[
       styles.container,
       screenWidth <= 900 && selectedConversation && styles.mobileContainer,
       { marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0 },
@@ -3496,25 +3479,23 @@ const MessageHistory = ({ navigation, route }) => {
           <Text style={{ marginTop: 16, color: theme.colors.placeholder }}>Loading conversations...</Text>
         </View>
       ) : safeFilteredConversations.length > 0 ? (
-        <>
-          <View style={styles.contentContainer}>
-            {screenWidth <= 900 ? (
-              selectedConversation ? (
-                <View style={styles.mobileMessageView}>
-                  {renderMobileHeader()}
-                  {renderMessageSection()}
-                </View>
-              ) : (
-                renderConversationList()
-              )
-            ) : (
-              <>
-                {renderConversationList()}
+        <View style={styles.contentContainer}>
+          {screenWidth <= 900 ? (
+            selectedConversation ? (
+              <View style={styles.mobileMessageView}>
+                {renderMobileHeader()}
                 {renderMessageSection()}
-              </>
-            )}
-          </View>
-        </>
+              </View>
+            ) : (
+              renderConversationList()
+            )
+          ) : (
+            <>
+              {renderConversationList()}
+              {renderMessageSection()}
+            </>
+          )}
+        </View>
       ) : (
         renderEmptyState()
       )}
@@ -3669,7 +3650,7 @@ const MessageHistory = ({ navigation, route }) => {
         onContinueExisting={handleContinueExisting}
         onCreateNew={handleCreateNew}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

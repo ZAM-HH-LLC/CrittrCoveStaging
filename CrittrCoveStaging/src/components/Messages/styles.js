@@ -5,20 +5,19 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    paddingTop: screenWidth > 900 ? 0 : 0,
-    paddingRight: screenWidth > 900 ? 0 : 0,
-    paddingLeft: screenWidth > 900 ? 0 : 0,
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingLeft: 0,
     height: '100%',
     overflow: 'hidden',
-    position: 'fixed',
-    top: screenWidth > 900 ? 0 : 64,
+    position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     ...(Platform.OS === 'web' && screenWidth <= 900 ? {
-      height: 'calc(100vh - 64px)',
-      minHeight: 'calc(100vh - 64px)',
-      maxHeight: 'calc(100vh - 64px)',
+      display: 'flex',
+      flexDirection: 'column',
     } : {}),
   },
   headerContainer: {
@@ -47,6 +46,9 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     width: '100%',
     overflow: 'hidden',
     height: '100%',
+    display: 'flex',
+    marginTop: 0,
+    paddingTop: 0,
   },
   mainSection: {
     flex: 1,
@@ -58,6 +60,8 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     alignSelf: screenWidth <= 900 ? 'stretch' : 'flex-start',
     width: screenWidth <= 900 ? '100%' : 'auto',
     height: '100%',
+    marginTop: 0,
+    paddingTop: 0,
   },
   conversationListContainer: {
     width: screenWidth <= 900 ? '100%' : '30%',
@@ -121,7 +125,6 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     overflow: 'auto',
     width: '100%',
     ...(Platform.OS === 'web' && screenWidth <= 900 ? {
-      // paddingBottom: 80,
       WebkitOverflowScrolling: 'touch', // Smooth scrolling for iOS
     } : {}),
   },
@@ -200,7 +203,7 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     backgroundColor: theme.colors.surfaceContrast,
     zIndex: 10,
     ...(Platform.OS === 'web' && screenWidth <= 900 ? {
-      position: 'fixed',
+      position: 'relative', // Changed from fixed to relative
       bottom: 0,
       left: 0,
       right: 0,
@@ -211,7 +214,6 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
       shadowOpacity: 0.1,
       shadowRadius: 3,
       elevation: 3,
-      transform: 'translateZ(0)', // Hardware acceleration for iOS
     } : {}),
   },
   inputContainer: {
@@ -412,6 +414,8 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     shadowRadius: 2,
     elevation: 3,
     backgroundColor: theme.colors.surfaceContrast,
+    marginTop: 0,
+    paddingTop: 0,
   },
   mobileHeaderContent: {
     flexDirection: 'row',
@@ -565,9 +569,16 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     flexDirection: 'column',
     height: '100%',
     marginTop: 0,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   mobileContainer: {
-    top: 0,
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
     height: '100%',
   },
 }); 

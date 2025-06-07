@@ -49,7 +49,7 @@ const MessageInput = ({
   }, [handleSend]);
 
   return (
-    <View style={styles.inputSection}>
+    <View style={styles.inputSection} className="message-input-container">
       <View style={styles.inputContainer}>
         <View style={styles.attachButtonContainer}>
           <TouchableOpacity 

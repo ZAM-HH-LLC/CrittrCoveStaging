@@ -17,6 +17,12 @@ import { navigateToFrom } from './src/components/Navigation';
 import { TutorialProvider } from './src/context/TutorialContext';
 import { ToastProvider } from './src/components/ToastProvider';
 
+// Import CSS fixes for mobile browsers
+if (Platform.OS === 'web') {
+  // We need to import this statically for webpack to pick it up
+  require('./src/styles/viewport-fix.css');
+}
+
 // Import all your screen components
 import HomeScreen from './src/screens/HomeScreen';
 import AboutScreen from './src/screens/AboutScreen';

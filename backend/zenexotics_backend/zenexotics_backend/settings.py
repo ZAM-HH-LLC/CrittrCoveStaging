@@ -84,12 +84,14 @@ DOMAIN_MAP = {
     'production': ['beta.crittrcove.com', 'crittrcove.com']
 }
 
-# Allow override via environment variable
-ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
-if ALLOWED_HOSTS_ENV:
-    ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',')]
-else:
-    ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
+# # Allow override via environment variable
+# ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
+# if ALLOWED_HOSTS_ENV:
+#     ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',')]
+# else:
+#     ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
+
+ALLOWED_HOSTS = ['*']
 
 # Always disable DEBUG in staging/production
 DEBUG = IS_DEVELOPMENT
@@ -287,6 +289,7 @@ if IS_DEVELOPMENT:
     CORS_ALLOWED_ORIGINS.extend([
         'http://10.0.2.2:19006',
         'http://localhost:19006',
+        'http://10.0.0.169:19006',
         'http://127.0.0.1:19006'
     ])
 if IS_STAGING:
@@ -307,6 +310,7 @@ if IS_DEVELOPMENT:
     CSRF_TRUSTED_ORIGINS.extend([
         'http://10.0.2.2:19006',
         'http://localhost:19006',
+        'http://10.0.0.169:19006',
         'http://127.0.0.1:19006'
     ])
 if IS_STAGING:

@@ -1,0 +1,22 @@
+/* Mobile browser viewport fixes */
+
+/* Only keep essential mobile fixes */
+@media screen and (max-width: 900px) {
+  /* Prevent scroll issues */
+  .messagesContainer {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Ensure messages list takes available space */
+  .message-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  /* Ensure input stays visible */
+  .message-input-container {
+    position: relative;
+    z-index: 5;
+  }
+} 
