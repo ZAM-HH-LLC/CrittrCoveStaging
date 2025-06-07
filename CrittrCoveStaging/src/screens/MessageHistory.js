@@ -57,329 +57,9 @@ const MessageHistory = ({ navigation, route }) => {
   // Track whether we're intentionally deselecting
   const isIntentionallyDeselecting = useRef(false);
   
-  // New effect to handle navigation with conversationId parameter from ProfessionalServicesModal
-  useEffect(() => {
-    // Check if we have a conversationId in route params
-    if (route.params?.conversationId && isSignedIn) {
-      const newConversationId = route.params.conversationId;
-      
-      debugLog('MBA3456: Navigation detected with conversationId parameter', {
-        conversationId: newConversationId,
-        hasExistingConversations: conversations.length > 0,
-        isSignedIn
-      });
-      
-      // Immediately set loading state
-      setIsLoadingConversations(true);
-      
-      // Fetch conversations to make sure we have the latest data
-      fetchConversations().then((newConversationsData) => {
-        // Short delay to ensure state updates
-        setTimeout(() => {
-          // After fetching, find the new conversation in our data
-          const foundConversation = newConversationsData.find(
-            conv => conv.conversation_id === newConversationId
-          );
-          
-          debugLog('MBA3456: Looking for new conversation in fetched data', {
-            conversationId: newConversationId,
-            found: !!foundConversation,
-            totalConversations: newConversationsData.length,
-            foundConversation: foundConversation ? {
-              id: foundConversation.conversation_id,
-              is_professional: foundConversation.is_professional,
-              name: foundConversation.other_user_name
-            } : 'not found'
-          });
-          
-          // Set the conversation data directly to ensure it's available immediately
-          if (foundConversation) {
-            setSelectedConversationData(foundConversation);
-          }
-          
-          // Set the selected conversation
-          setSelectedConversation(newConversationId);
-          
-          // Clear the params to avoid selecting again on future navigations
-          navigation.setParams({
-            conversationId: undefined,
-            otherUserName: undefined,
-            _timestamp: undefined
-          });
-          
-          // Immediately try to fetch messages for this conversation
-          setTimeout(() => {
-            fetchMessages(newConversationId, 1);
-          }, 100);
-        }, 100);
-      });
-    }
-  }, [route.params?.conversationId, route.params?._timestamp, isSignedIn]);
-
-  // Effect to handle URL parameters for direct conversation navigation
-  useEffect(() => {
-    // Skip if we don't have any conversations loaded yet or there's no selectedConversation in URL
-    if (!conversations || conversations.length === 0 || !route.params?.selectedConversation) {
-      return;
-    }
-    
-    // Skip if we've already selected a conversation
-    if (selectedConversation) {
-      return;
-    }
-    
-    // Skip if we're intentionally deselecting (from handleBack)
-    if (isIntentionallyDeselecting.current) {
-      debugLog('MBA3456: Skipping URL initialization because we intentionally deselected', {
-        isIntentionallyDeselecting: isIntentionallyDeselecting.current
-      });
-      // Reset the flag after using it
-      isIntentionallyDeselecting.current = false;
-      return;
-    }
-    
-    // Initialize from URL parameters
-    const initializeFromURL = async () => {
-      try {
-        if (Platform.OS === 'web') {
-          const conversationIdFromURL = parseInt(route.params.selectedConversation, 10);
-          if (!isNaN(conversationIdFromURL)) {
-            debugLog('MBA3456: Found conversation ID in URL, initializing', {
-              conversationIdFromURL,
-              conversationsLoaded: conversations.length,
-              currentSelected: selectedConversation
-            });
-            
-            // Check if this conversation exists in our list before selecting it
-            const conversationExists = conversations.some(
-              conv => conv.conversation_id === conversationIdFromURL
-            );
-            
-            if (conversationExists) {
-              // Delay setting the selected conversation to ensure component is fully mounted
-              // Use a setTimeout to avoid immediate state changes during render
-              setTimeout(() => {
-                debugLog('MBA3456: Setting conversation from URL', {
-                  conversationId: conversationIdFromURL
-                });
-                setSelectedConversation(conversationIdFromURL);
-              }, 300);
-            } else {
-              // If conversation doesn't exist, clear the parameter from the URL
-              debugLog('MBA3456: Conversation from URL not found in list', {
-                conversationIdFromURL,
-                availableConversations: conversations.map(c => c.conversation_id)
-              });
-              
-              // Clear the parameter to avoid issues
-              navigation.setParams({ selectedConversation: undefined });
-            }
-          }
-        }
-      } catch (error) {
-        debugLog('MBA3456: Error initializing from URL', { error: error.message });
-      }
-    };
-    
-    initializeFromURL();
-  }, [conversations, route.params?.selectedConversation, selectedConversation, navigation]);
-
-  // Effect to handle navigation params for visibility control
-  useEffect(() => {
-    // Only log when something important changes
-    if (selectedConversation || route.params?.selectedConversation) {
-      debugLog('MBA3456: Conversation selection changed', {
-        selectedConversation,
-        paramsConversation: route.params?.selectedConversation
-      });
-    }
-    
-    if (Platform.OS === 'web' && screenWidth <= 900) {
-      // Check if we need to update params - only update if selectedConversation has changed from route params
-      const currentSelectedInParams = route.params?.selectedConversation;
-      const needsUpdate = 
-        // If we're selecting a conversation
-        (selectedConversation && currentSelectedInParams !== selectedConversation) ||
-        // Or if we're deselecting a conversation (going back to list)
-        (selectedConversation === null && currentSelectedInParams);
-      
-      if (needsUpdate) {
-        // Update navigation params to control navigation visibility
-        debugLog('MBAo3hi4g4v: Setting navigation params', {
-          selectedConversation,
-          screenWidth,
-          beforeParams: JSON.stringify(route.params),
-          needsUpdate,
-          action: selectedConversation ? 'selecting' : 'deselecting'
-        });
-        
-        // Only set the selectedConversation param - don't include screen or other params
-        // This ensures we don't have unneeded params in the URL that could cause issues
-        if (selectedConversation) {
-          navigation.setParams({ selectedConversation });
-        } else {
-          // When deselecting, we need to explicitly clear the parameter
-          navigation.setParams({ selectedConversation: undefined });
-        }
-        
-        // Debug log after setting params
-        setTimeout(() => {
-          debugLog('MBAo3hi4g4v: After setting navigation params', {
-            selectedConversation,
-            routeParams: JSON.stringify(route.params),
-            action: selectedConversation ? 'selected' : 'deselected'
-          });
-        }, 100);
-        
-        if (selectedConversation) {
-          debugLog('MBAo3hi4g4v: Conversation selected on mobile view', {
-            conversationId: selectedConversation,
-            screenWidth,
-            timestamp: new Date().toISOString(),
-            action: 'selected'
-          });
-        } else {
-          debugLog('MBAo3hi4g4v: Conversation deselected on mobile view', {
-            screenWidth,
-            timestamp: new Date().toISOString(),
-            action: 'deselected'
-          });
-        }
-      }
-    }
-  }, [selectedConversation, screenWidth, navigation, route.params]);
-  
-  // Add a handler for the back button to ensure we properly clear the selected conversation
-  useEffect(() => {
-    // Handle hardware back button on Android
-    const handleBackButton = () => {
-      if (selectedConversation && Platform.OS === 'android') {
-        debugLog('MBAo3hi4g4v: Android back button pressed, clearing selected conversation');
-        setSelectedConversation(null);
-        return true;  // Prevent default behavior
-      }
-      return false;
-    };
-
-    // Handle browser back button on web
-    const handleBrowserBack = () => {
-      // Check if we need to clear the selected conversation
-      if (selectedConversation && Platform.OS === 'web') {
-        debugLog('MBAo3hi4g4v: Browser back detected, clearing selected conversation');
-        
-        // Set flag to indicate we're intentionally deselecting
-        isIntentionallyDeselecting.current = true;
-        
-        // Clear the URL parameter
-        navigation.setParams({ selectedConversation: undefined });
-        
-        // Clear the selected conversation
-        setSelectedConversation(null);
-        
-        // Reset the flag after a delay
-        setTimeout(() => {
-          isIntentionallyDeselecting.current = false;
-        }, 500);
-      } else if (Platform.OS === 'web') {
-        // If no selected conversation, this means we're likely navigating away from MessageHistory
-        // Update the currentRoute in localStorage to match the URL
-        const currentPath = window.location.pathname;
-        debugLog('MBAo3hi4g4v: Browser back detected, updating navigation state', { currentPath });
-        
-        // Extract the route from the path
-        const pathSegments = currentPath.split('/').filter(Boolean);
-        const route = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
-        
-        // Update localStorage to reflect the new route
-        setStorage('currentRoute', route).then(() => {
-          debugLog('MBAo3hi4g4v: Updated currentRoute in localStorage', { route });
-        }).catch(error => {
-          debugLog('MBAo3hi4g4v: Error updating currentRoute', { error: error.message });
-        });
-      }
-    };
-
-    // Add Android back handler
-    if (Platform.OS === 'android') {
-      BackHandler.addEventListener('hardwareBackPress', handleBackButton);
-    }
-
-    // Add browser history listener for web
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.addEventListener('popstate', handleBrowserBack);
-    }
-
-    // Cleanup
-    return () => {
-      if (Platform.OS === 'android') {
-        BackHandler.removeEventListener('hardwareBackPress', handleBackButton);
-      }
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.removeEventListener('popstate', handleBrowserBack);
-      }
-    };
-  }, [selectedConversation]);
-  
-  // Add a URL monitoring effect to handle browser navigation
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    
-    let checkURLInterval;
-    let lastCheckedPath = null;
-    
-    const checkAndUpdateRoute = () => {
-      const currentPath = window.location.pathname;
-      
-      // Skip if the path hasn't changed since last check
-      if (lastCheckedPath === currentPath) {
-        return;
-      }
-      
-      // Update last checked path
-      lastCheckedPath = currentPath;
-      
-      const pathSegments = currentPath.split('/').filter(Boolean);
-      const currentPathRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
-      
-      // If we're not on MessageHistory route
-      if (currentPathRoute !== 'MessageHistory') {
-        getStorage('currentRoute').then(storedRoute => {
-          // If localStorage still thinks we're in MessageHistory, update it
-          if (storedRoute === 'MessageHistory') {
-            debugLog('MBA3456: URL changed to non-MessageHistory route, updating state', {
-              currentURL: currentPathRoute,
-              storedRoute
-            });
-            
-            setStorage('currentRoute', currentPathRoute).catch(error => {
-              debugLog('MBA3456: Error updating currentRoute', { error: error.message });
-            });
-          }
-        }).catch(error => {
-          debugLog('MBA3456: Error getting stored route', { error: error.message });
-        });
-      }
-    };
-    
-    // Run initial check
-    checkAndUpdateRoute();
-    
-    // Set up interval to periodically check and update, but use a much longer interval
-    // 5 seconds is plenty often for URL monitoring
-    checkURLInterval = setInterval(checkAndUpdateRoute, 5000);
-    
-    // Also check when window gains focus, which is a more likely time for URL changes
-    const handleWindowFocus = () => {
-      checkAndUpdateRoute();
-    };
-    
-    window.addEventListener('focus', handleWindowFocus);
-    
-    return () => {
-      clearInterval(checkURLInterval);
-      window.removeEventListener('focus', handleWindowFocus);
-    };
-  }, []);
+  // Add state for keyboard visibility
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const keyboardHeightRef = useRef(0);
   
   // All other state declarations
   const [hasMore, setHasMore] = useState(true);
@@ -421,7 +101,6 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add viewport height detection for mobile browsers - using ref instead of state
   const actualViewportHeightRef = useRef(null);
-  const keyboardHeightRef = useRef(0);
   const inputContainerHeightRef = useRef(0);
   const isAndroidChromeRef = useRef(false);
 
@@ -1285,9 +964,23 @@ const MessageHistory = ({ navigation, route }) => {
       isFetchingConversationsRef.current = false;
       isFetchingMessagesRef.current.clear();
       
-      // Clear the global selected conversation tracking
+      // Clear the global selected conversation tracking and URL params
       if (typeof window !== 'undefined') {
         window.selectedConversationId = null;
+        
+        // Clear URL params
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.has('conversationId')) {
+          currentUrl.searchParams.delete('conversationId');
+          window.history.replaceState({}, '', currentUrl.toString());
+          debugLog('MBA4477: Cleared URL params on component unmount');
+        }
+      }
+      
+      // Clear navigation params
+      if (navigation && navigation.setParams) {
+        navigation.setParams({ selectedConversation: undefined });
+        debugLog('MBA4477: Cleared navigation params on component unmount');
       }
     };
   }, [isSignedIn, loading, userRole, screenWidth]); // Added userRole, screenWidth to dependencies
@@ -2419,767 +2112,30 @@ const MessageHistory = ({ navigation, route }) => {
     );
   }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages, messages]);
 
-  // Modify WebInput component to use our new focus handler
-  const WebInput = React.memo(({ selectedConversation }) => {
-    const [message, setMessage] = useState('');
-    const inputRef = useRef(null);
-    const isProcessingRef = useRef(false);
-    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-
-    debugLog('MBA9876: [COMPONENT] WebInput render', {
-      timestamp: Date.now(),
-      messageLength: message.length,
-      isKeyboardVisible,
-      selectedConversation,
-      hasSelectedConversation: !!selectedConversation
-    });
-
-    const handleSend = async () => {
-      debugLog('MBA2u3f89fbno4: [SEND] handleSend called', {
-        messageLength: message.length,
-        messageTrimmed: message.trim().length,
-        isSending,
-        isProcessing: isProcessingRef.current,
-        selectedConversation,
-        hasSelectedConversation: !!selectedConversation,
-        timestamp: Date.now()
-      });
-
-      if (message.trim() && !isSending && !isProcessingRef.current && selectedConversation) {
-        isProcessingRef.current = true;
+  // Message input component implementation
+  const renderMessageInput = () => {
+    const handleSendMessage = async (messageContent) => {
+      try {
         setIsSending(true);
-        
-        try {
-          const messageToSend = message.trim();
-          
-          debugLog('MBA2u3f89fbno4: [SEND] About to send message', {
-            messageToSend: messageToSend.substring(0, 50),
-            messageLength: messageToSend.length,
-            selectedConversation,
-            timestamp: Date.now()
-          });
-          
-          // Store the message before clearing the input
-          const originalMessage = message;
-          setMessage('');
-          
-          const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-          
-          const optimisticMessage = {
-            message_id: tempId,
-            content: messageToSend,
-            timestamp: new Date().toISOString(),
-            status: 'sent',
-            type_of_message: 'normal_message',
-            is_clickable: false,
-            sent_by_other_user: false,
-            _isOptimistic: true
-          };
-          
-          setMessages(prevMessages => {
-            const messageExists = prevMessages.some(msg => 
-              msg._isOptimistic && msg.content === messageToSend
-            );
-            
-            if (messageExists) {
-              debugLog('MBA2u3f89fbno4: [SEND] Optimistic message already exists, skipping');
-              return prevMessages;
-            }
-            
-            debugLog('MBA2u3f89fbno4: [SEND] Adding optimistic message');
-            return [optimisticMessage, ...prevMessages];
-          });
-          
-          const sentMessage = await SendNormalMessage(messageToSend);
-          
-          debugLog('MBA2u3f89fbno4: [SEND] Message sent successfully', {
-            messageId: sentMessage.message_id,
-            timestamp: Date.now()
-          });
-          
-          setMessages(prevMessages => {
-            const filteredMessages = prevMessages.filter(msg => 
-              !(msg._isOptimistic && msg.content === messageToSend)
-            );
-            
-            const realMessageExists = filteredMessages.some(msg => 
-              msg.message_id && sentMessage.message_id && 
-              String(msg.message_id) === String(sentMessage.message_id)
-            );
-            
-            if (realMessageExists) {
-              debugLog('MBA2u3f89fbno4: [SEND] Real message already exists, keeping filtered list');
-              return filteredMessages;
-            }
-            
-            debugLog('MBA2u3f89fbno4: [SEND] Adding real message to list');
-            return [sentMessage, ...filteredMessages];
-          });
-        } catch (error) {
-          debugLog('MBA2u3f89fbno4: [SEND] Error sending message', {
-            error: error.message,
-            errorResponse: error.response?.data,
-            errorStatus: error.response?.status,
-            timestamp: Date.now()
-          });
-          
-          console.error('Failed to send message:', error);
-          
-          // Restore the original message on error
-          setMessage(originalMessage);
-          setMessages(prevMessages => 
-            prevMessages.filter(msg => !msg._isOptimistic)
-          );
-          Alert.alert('Error', 'Failed to send message. Please try again.');
-        } finally {
-          setIsSending(false);
-          setTimeout(() => {
-            isProcessingRef.current = false;
-          }, 300);
-        }
-      } else {
-        debugLog('MBA2u3f89fbno4: [SEND] Cannot send message', {
-          hasMessage: !!message.trim(),
-          isSending,
-          isProcessing: isProcessingRef.current,
-          hasSelectedConversation: !!selectedConversation,
-          selectedConversation,
-          timestamp: Date.now()
-        });
+        await SendNormalMessage(messageContent);
+        setIsSending(false);
+      } catch (error) {
+        console.error('Error sending message:', error);
+        setIsSending(false);
       }
     };
-
-    const handleFocus = () => {
-      const timestamp = Date.now();
-      debugLog('MBA9876: [INPUT FOCUS] === FOCUS EVENT START ===', {
-        timestamp,
-        isFocused: document.activeElement === inputRef.current,
-        activeElementTag: document.activeElement?.tagName,
-        activeElementType: document.activeElement?.type,
-        activeElementId: document.activeElement?.id,
-        isKeyboardVisible,
-        inputRefExists: !!inputRef.current,
-        inputDisabled: inputRef.current?.disabled,
-        inputReadOnly: inputRef.current?.readOnly,
-        documentHasFocus: document.hasFocus(),
-        windowHasInnerHeight: !!window.innerHeight,
-        visualViewportHeight: window.visualViewport?.height,
-        innerHeight: window.innerHeight
-      });
-
-      // Call our new global input focus handler to fix message visibility
-      handleInputFocus();
-
-      // Apply Android Chrome keyboard open CSS classes
-      if (isAndroidChromeRef.current) {
-        document.body.classList.add('keyboard-open');
-        
-        const inputContainer = document.querySelector('.message-input-container');
-        if (inputContainer) {
-          inputContainer.classList.add('keyboard-open');
-        }
-        
-        const messageContainer = document.querySelector('.message-container');
-        if (messageContainer) {
-          messageContainer.classList.add('keyboard-open');
-        }
-        
-        // Ensure we're scrolled to the bottom
-        setTimeout(() => {
-          window.scrollTo(0, document.body.scrollHeight);
-        }, 100);
-      }
-
-      // Track what happens 50ms later
-      setTimeout(() => {
-        debugLog('MBA9876: [INPUT FOCUS] Focus check after 50ms', {
-          timestamp: Date.now(),
-          isFocused: document.activeElement === inputRef.current,
-          activeElementTag: document.activeElement?.tagName,
-          activeElementType: document.activeElement?.type,
-          activeElementId: document.activeElement?.id,
-          isKeyboardVisible,
-          documentHasFocus: document.hasFocus()
-        });
-      }, 50);
-
-      // Track what happens 200ms later
-      setTimeout(() => {
-        debugLog('MBA9876: [INPUT FOCUS] Focus check after 200ms', {
-          timestamp: Date.now(),
-          isFocused: document.activeElement === inputRef.current,
-          activeElementTag: document.activeElement?.tagName,
-          activeElementType: document.activeElement?.type,
-          activeElementId: document.activeElement?.id,
-          isKeyboardVisible,
-          documentHasFocus: document.hasFocus()
-        });
-      }, 200);
-    };
-
-    const handleBlur = () => {
-      const timestamp = Date.now();
-      debugLog('MBA9876: [INPUT BLUR] === BLUR EVENT START ===', {
-        timestamp,
-        wasFocused: document.activeElement === inputRef.current,
-        newActiveElementTag: document.activeElement?.tagName,
-        newActiveElementType: document.activeElement?.type,
-        newActiveElementId: document.activeElement?.id,
-        isKeyboardVisible,
-        inputRefExists: !!inputRef.current,
-        documentHasFocus: document.hasFocus(),
-        relatedTarget: event?.relatedTarget?.tagName,
-        blurReason: 'user_blur_event'
-      });
-      
-      // Remove Android Chrome keyboard open CSS classes
-      if (isAndroidChromeRef.current) {
-        document.body.classList.remove('keyboard-open');
-        
-        const inputContainer = document.querySelector('.message-input-container');
-        if (inputContainer) {
-          inputContainer.classList.remove('keyboard-open');
-        }
-        
-        const messageContainer = document.querySelector('.message-container');
-        if (messageContainer) {
-          messageContainer.classList.remove('keyboard-open');
-        }
-        
-        // Fix scroll position when keyboard closes
-        setTimeout(() => {
-          window.scrollTo(0, 0);
-        }, 50);
-      }
-    };
-
-    const adjustHeight = () => {
-      if (inputRef.current) {
-        debugLog('MBA2u3f89fbno4: [INPUT HEIGHT] Adjusting height', {
-          currentHeight: inputRef.current.style.height,
-          scrollHeight: inputRef.current.scrollHeight,
-          valueLength: message.length,
-          isKeyboardVisible
-        });
-
-        // Store the current scroll position
-        const scrollTop = inputRef.current.scrollTop;
-        
-        // Reset height to recalculate
-        inputRef.current.style.height = 'inherit';
-        
-        // Set new height
-        const newHeight = Math.min(inputRef.current.scrollHeight, 120);
-        inputRef.current.style.height = `${newHeight}px`;
-        
-        debugLog('MBA2u3f89fbno4: [INPUT HEIGHT] Height adjusted', {
-          newHeight,
-          scrollTop,
-          finalHeight: inputRef.current.style.height,
-          isKeyboardVisible
-        });
-        
-        // If we've hit max height, restore scroll position
-        if (inputRef.current.scrollHeight > 120) {
-          inputRef.current.scrollTop = scrollTop;
-        }
-      }
-    };
-
-    const handleChange = (e) => {
-      debugLog('MBA9876: [INPUT CHANGE] Change event triggered', {
-        valueLength: e.target.value.length,
-        previousLength: message.length,
-        isProcessing: isProcessingRef.current,
-        isKeyboardVisible
-      });
-
-      setMessage(e.target.value);
-      adjustHeight();
-      
-      // For Android Chrome, ensure input stays in view while typing
-      if (isAndroidChromeRef.current) {
-        setTimeout(() => {
-          if (document.activeElement === inputRef.current) {
-            window.scrollTo(0, document.body.scrollHeight);
-          }
-        }, 10);
-      }
-    };
-
-    // Add effect to handle keyboard visibility with visualViewport API
-    useEffect(() => {
-      if (Platform.OS === 'web') {
-        const handleKeyboardChange = () => {
-          if (window.visualViewport) {
-            const keyboardHeight = window.screen.height - window.visualViewport.height;
-            const isKeyboardOpen = keyboardHeight > 150;
-            
-            debugLog('MBA9876: [KEYBOARD] WebInput keyboard detection', {
-              keyboardHeight,
-              isKeyboardOpen,
-              previous: isKeyboardVisible,
-              willUpdate: isKeyboardOpen !== isKeyboardVisible
-            });
-            
-            if (isKeyboardOpen !== isKeyboardVisible) {
-              setIsKeyboardVisible(isKeyboardOpen);
-              
-              // If keyboard just opened, focus the input
-              if (isKeyboardOpen && inputRef.current && document.activeElement !== inputRef.current) {
-                inputRef.current.focus();
-              }
-            }
-          }
-        };
-        
-        if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', handleKeyboardChange);
-          
-          return () => {
-            window.visualViewport.removeEventListener('resize', handleKeyboardChange);
-          };
-        }
-      }
-    }, [isKeyboardVisible]);
-
-    // Add effect to track document-level focus changes
-    useEffect(() => {
-      if (Platform.OS === 'web') {
-        const handleDocumentFocusIn = (e) => {
-          debugLog('MBA2u3f89fbno4: [DOCUMENT FOCUS] Document focusin event', {
-            targetTag: e.target?.tagName,
-            targetType: e.target?.type,
-            targetId: e.target?.id,
-            targetClassList: e.target?.classList?.toString(),
-            isOurInput: e.target === inputRef.current,
-            currentActiveElement: document.activeElement?.tagName,
-            timestamp: Date.now()
-          });
-        };
-
-        const handleDocumentFocusOut = (e) => {
-          debugLog('MBA2u3f89fbno4: [DOCUMENT FOCUS] Document focusout event', {
-            targetTag: e.target?.tagName,
-            targetType: e.target?.type,
-            targetId: e.target?.id,
-            isOurInput: e.target === inputRef.current,
-            relatedTargetTag: e.relatedTarget?.tagName,
-            relatedTargetType: e.relatedTarget?.type,
-            relatedTargetId: e.relatedTarget?.id,
-            currentActiveElement: document.activeElement?.tagName,
-            timestamp: Date.now()
-          });
-        };
-
-        const handleDocumentClick = (e) => {
-          debugLog('MBA2u3f89fbno4: [DOCUMENT CLICK] Document click event', {
-            targetTag: e.target?.tagName,
-            targetType: e.target?.type,
-            targetId: e.target?.id,
-            targetClassList: e.target?.classList?.toString(),
-            isOurInput: e.target === inputRef.current,
-            currentActiveElement: document.activeElement?.tagName,
-            timestamp: Date.now()
-          });
-        };
-
-        document.addEventListener('focusin', handleDocumentFocusIn, true);
-        document.addEventListener('focusout', handleDocumentFocusOut, true);
-        document.addEventListener('click', handleDocumentClick, true);
-
-        return () => {
-          document.removeEventListener('focusin', handleDocumentFocusIn, true);
-          document.removeEventListener('focusout', handleDocumentFocusOut, true);
-          document.removeEventListener('click', handleDocumentClick, true);
-        };
-      }
-    }, []);
-
-    // Add effect to intercept programmatic blur calls
-    useEffect(() => {
-      if (Platform.OS === 'web' && inputRef.current) {
-        const originalBlur = inputRef.current.blur;
-        
-        inputRef.current.blur = function(...args) {
-          debugLog('MBA2u3f89fbno4: [PROGRAMMATIC BLUR] blur() was called programmatically!', {
-            timestamp: Date.now(),
-            stackTrace: new Error().stack,
-            currentActiveElement: document.activeElement?.tagName,
-            inputRefExists: !!inputRef.current,
-            isOurInputFocused: document.activeElement === inputRef.current
-          });
-          
-          // Call the original blur method
-          return originalBlur.apply(this, args);
-        };
-
-        return () => {
-          if (inputRef.current) {
-            inputRef.current.blur = originalBlur;
-          }
-        };
-      }
-    }, []);
-
-    // Add component unmount tracking
-    useEffect(() => {
-      debugLog('MBA9876: [COMPONENT] WebInput component mounted');
-      
-      return () => {
-        debugLog('MBA9876: [COMPONENT] WebInput component unmounting');
-        
-        // Ensure all Android Chrome related classes are removed on unmount
-        if (isAndroidChromeRef.current) {
-          document.body.classList.remove('keyboard-open');
-          
-          const inputContainer = document.querySelector('.message-input-container');
-          if (inputContainer) {
-            inputContainer.classList.remove('keyboard-open');
-          }
-          
-          const messageContainer = document.querySelector('.message-container');
-          if (messageContainer) {
-            messageContainer.classList.remove('keyboard-open');
-          }
-          
-          // Reset normal scrolling
-          document.body.style.overflow = '';
-          document.documentElement.style.overflow = '';
-        }
-      };
-    }, []);
-
-    // Add effect to handle input container positioning on Android Chrome
-    useEffect(() => {
-      if (Platform.OS === 'web' && isAndroidChromeRef.current && inputRef.current) {
-        debugLog('MBA9876: [ANDROID] Setting up Android Chrome input focus handler');
-        
-        const handleInputFocus = () => {
-          debugLog('MBA9876: [ANDROID] Input focused on Android Chrome');
-          
-          // Short delay to let keyboard appear
-          setTimeout(() => {
-            // Apply fixed positioning directly
-            const inputContainer = document.querySelector('.message-input-container');
-            if (inputContainer) {
-              inputContainer.style.position = 'fixed';
-              inputContainer.style.bottom = '0px';
-              inputContainer.style.left = '0px';
-              inputContainer.style.right = '0px';
-              inputContainer.style.zIndex = '1000';
-              
-              // Ensure we're at the bottom of the page
-              window.scrollTo(0, document.body.scrollHeight);
-            }
-          }, 50);
-        };
-        
-        // Attach focus handler directly to input element
-        inputRef.current.addEventListener('focus', handleInputFocus);
-        
-        return () => {
-          if (inputRef.current) {
-            inputRef.current.removeEventListener('focus', handleInputFocus);
-          }
-        };
-      }
-    }, []);
-
+    
     return (
-      <View style={styles.inputInnerContainer}>
-        <textarea
-          ref={inputRef}
-          style={{
-            ...styles.webInput,
-            resize: 'none',
-            height: 'auto',
-            minHeight: '20px',
-            paddingLeft: '10px',
-            paddingRight: '10px',
-            // Simplified styles for better Android compatibility
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            fontSize: '16px', // Important: prevents zoom on iOS
-            outline: 'none',
-            fontFamily: 'inherit',
-            // Prevent scrolling when typing
-            overflow: 'hidden'
-          }}
-          placeholder="Type a Message..."
-          value={message}
-          onChange={handleChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onTouchStart={(e) => {
-            debugLog('MBA9876: [INPUT TOUCH] TouchStart event', {
-              timestamp: Date.now(),
-              targetTag: e.target?.tagName,
-              targetType: e.target?.type,
-              isOurInput: e.target === inputRef.current,
-              currentActiveElement: document.activeElement?.tagName,
-              touches: e.touches?.length,
-              clientX: e.touches?.[0]?.clientX,
-              clientY: e.touches?.[0]?.clientY
-            });
-          }}
-          onTouchEnd={(e) => {
-            debugLog('MBA2u3f89fbno4: [INPUT TOUCH] TouchEnd event', {
-              timestamp: Date.now(),
-              targetTag: e.target?.tagName,
-              targetType: e.target?.type,
-              isOurInput: e.target === inputRef.current,
-              currentActiveElement: document.activeElement?.tagName,
-              changedTouches: e.changedTouches?.length
-            });
-          }}
-          onMouseDown={(e) => {
-            debugLog('MBA2u3f89fbno4: [INPUT MOUSE] MouseDown event', {
-              timestamp: Date.now(),
-              targetTag: e.target?.tagName,
-              targetType: e.target?.type,
-              isOurInput: e.target === inputRef.current,
-              currentActiveElement: document.activeElement?.tagName,
-              button: e.button,
-              clientX: e.clientX,
-              clientY: e.clientY
-            });
-          }}
-          onMouseUp={(e) => {
-            debugLog('MBA2u3f89fbno4: [INPUT MOUSE] MouseUp event', {
-              timestamp: Date.now(),
-              targetTag: e.target?.tagName,
-              targetType: e.target?.type,
-              isOurInput: e.target === inputRef.current,
-              currentActiveElement: document.activeElement?.tagName,
-              button: e.button
-            });
-          }}
-          onClick={(e) => {
-            debugLog('MBA2u3f89fbno4: [INPUT CLICK] Click event', {
-              timestamp: Date.now(),
-              targetTag: e.target?.tagName,
-              targetType: e.target?.type,
-              isOurInput: e.target === inputRef.current,
-              currentActiveElement: document.activeElement?.tagName,
-              defaultPrevented: e.defaultPrevented
-            });
-          }}
-          onKeyPress={(e) => {
-            debugLog('MBA2u3f89fbno4: [INPUT KEYPRESS] Key pressed', {
-              key: e.key,
-              shiftKey: e.shiftKey,
-              messageLength: message.length,
-              isKeyboardVisible,
-              timestamp: Date.now(),
-              currentActiveElement: document.activeElement?.tagName,
-              isOurInputFocused: document.activeElement === inputRef.current
-            });
-
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault(); // Only prevent default for Enter key to send message
-              handleSend();
-            }
-            // Remove the blanket preventDefault() - let other keys work normally
-          }}
-          disabled={isSending}
-          rows={1}
-        />
-        <Button 
-          mode="contained" 
-          onPress={handleSend} 
-          disabled={isSending}
-          style={[styles.sendButton, screenWidth <= 900 && styles.sendButtonMobile]}
-        >
-          {isSending ? (
-            <ActivityIndicator color={theme.colors.whiteText} size="small" />
-          ) : screenWidth <= 900 ? (
-            <MaterialCommunityIcons name="arrow-up" size={16} color={theme.colors.whiteText} 
-            style={{
-              marginLeft: 0,
-              marginRight: 0,
-              marginTop: 0,
-              marginBottom: 0,
-              paddingHorizontal: 0,
-            }}
-            />
-          ) : (
-            'Send'
-          )}
-        </Button>
-      </View>
-    );
-  });
-
-  const MobileInput = ({ selectedConversation }) => {
-    const [message, setMessage] = useState('');
-    const inputRef = useRef(null);
-    const isProcessingRef = useRef(false);
-
-    const handleSend = async () => {
-      debugLog('MBA2u3f89fbno4: [MOBILE SEND] handleSend called', {
-        messageLength: message.length,
-        messageTrimmed: message.trim().length,
-        isSending,
-        isProcessing: isProcessingRef.current,
-        selectedConversation,
-        hasSelectedConversation: !!selectedConversation,
-        timestamp: Date.now()
-      });
-
-      // Prevent duplicate sends by checking if we're already sending
-      if (message.trim() && !isSending && !isProcessingRef.current && selectedConversation) {
-        isProcessingRef.current = true;
-        setIsSending(true);
-        
-        try {
-          // Clear input right away before API call to prevent double-sending
-          const messageToSend = message.trim(); // Save message content
-          const originalMessage = message; // Store original message for error restore
-          
-          debugLog('MBA2u3f89fbno4: [MOBILE SEND] About to send message', {
-            messageToSend: messageToSend.substring(0, 50),
-            messageLength: messageToSend.length,
-            selectedConversation,
-            timestamp: Date.now()
-          });
-          
-          setMessage(''); // Clear input field immediately
-          
-          // Generate a unique temporary ID for optimistic update
-          const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-          
-          // Optimistically add message to UI immediately
-          const optimisticMessage = {
-            message_id: tempId,
-            content: messageToSend,
-            timestamp: new Date().toISOString(),
-            status: 'sent',
-            type_of_message: 'normal_message',
-            is_clickable: false,
-            sent_by_other_user: false,
-            _isOptimistic: true // Flag to identify this as an optimistic update
-          };
-          
-          // Add to messages state
-          setMessages(prevMessages => {
-            // First check if we already have this message (prevent doubles)
-            const messageExists = prevMessages.some(msg => 
-              msg._isOptimistic && msg.content === messageToSend
-            );
-            
-            if (messageExists) {
-              debugLog('MBA2u3f89fbno4: [MOBILE SEND] Skipping duplicate optimistic message');
-              return prevMessages;
-            }
-            
-            debugLog('MBA2u3f89fbno4: [MOBILE SEND] Adding optimistic message');
-            return [optimisticMessage, ...prevMessages];
-          });
-          
-          // Actually send the message to the server
-          const sentMessage = await SendNormalMessage(messageToSend);
-          
-          debugLog('MBA2u3f89fbno4: [MOBILE SEND] Message sent successfully', {
-            messageId: sentMessage.message_id,
-            timestamp: Date.now()
-          });
-          
-          // Replace optimistic message with actual one
-          setMessages(prevMessages => {
-            // Remove optimistic message and add real one, ensuring no duplicates
-            const filteredMessages = prevMessages.filter(msg => 
-              // Keep all messages that are NOT our optimistic update
-              !(msg._isOptimistic && msg.content === messageToSend)
-            );
-            
-            // Check if the real message is already in the list
-            const realMessageExists = filteredMessages.some(msg => 
-              msg.message_id && sentMessage.message_id && 
-              String(msg.message_id) === String(sentMessage.message_id)
-            );
-            
-            if (realMessageExists) {
-              debugLog('MBA2u3f89fbno4: [MOBILE SEND] Real message already exists, skipping');
-              return filteredMessages;
-            }
-            
-            debugLog('MBA2u3f89fbno4: [MOBILE SEND] Adding real message to list');
-            // Add the real message
-            return [sentMessage, ...filteredMessages];
-          });
-        } catch (error) {
-          debugLog('MBA2u3f89fbno4: [MOBILE SEND] Error sending message', {
-            error: error.message,
-            errorResponse: error.response?.data,
-            errorStatus: error.response?.status,
-            timestamp: Date.now()
-          });
-          
-          console.error('Failed to send message:', error);
-          
-          // Restore the message in the input field on error
-          setMessage(originalMessage);
-          
-          // Remove optimistic message on error
-          setMessages(prevMessages => 
-            prevMessages.filter(msg => !msg._isOptimistic)
-          );
-          
-          // Show error
-          Alert.alert('Error', 'Failed to send message. Please try again.');
-        } finally {
-          setIsSending(false);
-          
-          // Add delay before allowing another send
-          setTimeout(() => {
-            isProcessingRef.current = false;
-          }, 300);
-        }
-      } else {
-        debugLog('MBA2u3f89fbno4: [MOBILE SEND] Cannot send message', {
-          hasMessage: !!message.trim(),
-          isSending,
-          isProcessing: isProcessingRef.current,
-          hasSelectedConversation: !!selectedConversation,
-          selectedConversation,
-          timestamp: Date.now()
-        });
-      }
-    };
-
-    return (
-      <View style={styles.inputContainer}>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          placeholder="Type a Message...."
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          blurOnSubmit={false}
-          editable={!isSending}
-        />
-        <Button 
-          mode="contained" 
-          onPress={handleSend}
-          disabled={isSending}
-        >
-          {isSending ? (
-            <ActivityIndicator color={theme.colors.primary} size="small" />
-          ) : (
-            'Send'
-          )}
-        </Button>
-      </View>
+      <MessageInput 
+        onSendMessage={handleSendMessage}
+        onShowDropdown={(show) => setShowDropdown(show)}
+        showDropdown={showDropdown}
+        styles={styles}
+        screenWidth={screenWidth}
+      />
     );
   };
 
-  // Memoized MessageInput to prevent re-creation
-  const MessageInput = useMemo(() => {
-    return Platform.OS === 'web' ? <WebInput selectedConversation={selectedConversation} /> : <MobileInput selectedConversation={selectedConversation} />;
-  }, [Platform.OS, selectedConversation]);
-  
   const handleBookingRequest = async (modalData) => {
     try {
       debugLog('MBA2349f87g9qbh2nfv9cg: handleBookingRequest called', {
@@ -3312,6 +2268,19 @@ const MessageHistory = ({ navigation, route }) => {
             conversationId: convId,
             previousConversation: selectedConversation
           });
+          
+          // Make sure to update navigation params directly to ensure Navigation component detects change
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.selectedConversationId = convId;
+            
+            // Update URL to include conversation ID
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('conversationId', convId);
+            window.history.replaceState({}, '', currentUrl.toString());
+          }
+          
+          // Update navigation params directly
+          navigation.setParams({ selectedConversation: convId });
         }
         setSelectedConversation(convId);
       }}
@@ -3344,29 +2313,11 @@ const MessageHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Update renderMessageSection to use our new component
+  // Update renderMessageSection to use improved layout for iOS compatibility
   const renderMessageSection = () => {
     if (!selectedConversation) {
       return null;
     }
-
-    // Calculate dynamic styles for mobile browsers
-    const mobileMessagesStyle = Platform.OS === 'web' && screenWidth <= 900 && actualViewportHeightRef.current ? {
-      height: keyboardHeightRef.current > 0 
-        ? `calc(${actualViewportHeightRef.current}px - ${inputContainerHeightRef.current}px)` 
-        : `${actualViewportHeightRef.current - 128}px`,
-      maxHeight: keyboardHeightRef.current > 0 
-        ? `calc(${actualViewportHeightRef.current}px - ${inputContainerHeightRef.current}px)` 
-        : `${actualViewportHeightRef.current - 128}px`,
-      paddingBottom: keyboardHeightRef.current > 0 ? 0 : 20,
-      overflowY: 'auto',
-      WebkitOverflowScrolling: 'touch',
-      // Ensure this container doesn't push content out of view on Android Chrome
-      ...(isAndroidChromeRef.current && keyboardHeightRef.current > 0 ? {
-        position: 'relative',
-        zIndex: 1
-      } : {})
-    } : {};
 
     return (
       <View style={styles.mainSection}>
@@ -3374,7 +2325,7 @@ const MessageHistory = ({ navigation, route }) => {
         {/* Messages */}
         <View style={styles.messageSection}>
           <View 
-            style={[styles.messagesContainer, mobileMessagesStyle]} 
+            style={styles.messagesContainer} 
             className="messagesContainer"
           >
             {isLoadingMessages ? (
@@ -3392,19 +2343,16 @@ const MessageHistory = ({ navigation, route }) => {
                 renderMessage={renderMessage}
                 hasMore={hasMore}
                 isLoadingMore={isLoadingMore}
-                onLoadMore={() => {
-                  // Only load more if we're actually scrolling
-                  loadMoreMessages(selectedConversation);
-                }}
+                onLoadMore={loadMoreMessages}
                 styles={styles}
                 theme={theme}
-                className="message-list-component message-list-with-padding"
+                className="message-list-component"
               />
             )}
           </View>
         </View>
 
-        {/* Input Section */}
+        {/* Input Section - Fixed to bottom for all browsers */}
         <View style={styles.inputSection} className="message-input-container">
           <View style={styles.inputContainer}>
             <View style={styles.attachButtonContainer}>
@@ -3438,7 +2386,7 @@ const MessageHistory = ({ navigation, route }) => {
                 </View>
               )}
             </View>
-            {MessageInput}
+            {renderMessageInput()}
           </View>
         </View>
       </View>
@@ -3457,6 +2405,20 @@ const MessageHistory = ({ navigation, route }) => {
     
     // First clear the URL parameter to prevent it from being re-read
     navigation.setParams({ selectedConversation: undefined });
+    
+    // Also update URL directly to ensure Navigation component sees the change
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete('conversationId');
+      window.history.replaceState({}, '', currentUrl.toString());
+      
+      // Clear global context variable used by Navigation
+      window.selectedConversationId = null;
+      
+      debugLog('MBA4477: Cleared conversationId from URL in handleBack', {
+        oldValue: selectedConversation
+      });
+    }
     
     // Clear the selected conversation state immediately
     setSelectedConversation(null);
@@ -3833,7 +2795,46 @@ const MessageHistory = ({ navigation, route }) => {
       newValue: selectedConversation,
       timestamp: Date.now()
     });
-  }, [selectedConversation]);
+    
+    // Update URL params and navigation state when selectedConversation changes
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // Update the URL with the selected conversation
+      const currentUrl = new URL(window.location.href);
+      
+      if (selectedConversation) {
+        // Set the conversationId parameter
+        currentUrl.searchParams.set('conversationId', selectedConversation);
+        // Store selectedConversation in global context for Navigation component
+        window.selectedConversationId = selectedConversation;
+        
+        debugLog('MBA4477: Updated URL with selectedConversation', {
+          selectedConversation,
+          newUrl: currentUrl.toString()
+        });
+      } else {
+        // Remove the parameter if no conversation is selected
+        currentUrl.searchParams.delete('conversationId');
+        // Clear global context
+        window.selectedConversationId = null;
+        
+        debugLog('MBA4477: Cleared conversationId from URL', {
+          oldValue: selectedConversation
+        });
+      }
+      
+      // Update the URL without refreshing the page
+      window.history.replaceState({}, '', currentUrl.toString());
+      
+      // Also update the navigation params directly
+      if (navigation && navigation.setParams) {
+        navigation.setParams({ selectedConversation });
+        
+        debugLog('MBA4477: Updated navigation params with selectedConversation', {
+          selectedConversation
+        });
+      }
+    }
+  }, [selectedConversation, navigation]);
 
   useEffect(() => {
     debugLog('MBA2u3f89fbno4: [STATE] isSignedIn changed', {
@@ -4081,237 +3082,198 @@ const MessageHistory = ({ navigation, route }) => {
   }, [messages, selectedConversation]);
 
   // Add a specific WebInput focus handler to fix message visibility when keyboard opens
+  // Improved input focus handler for cross-browser compatibility
   const handleInputFocus = () => {
     if (Platform.OS === 'web') {
       // On mobile browsers, when keyboard opens, force scroll to show latest message
       setTimeout(() => {
-        const flatList = document.querySelector('.messagesContainer .message-list-component');
-        if (flatList) {
-          flatList.scrollTop = 0;
-          debugLog('MBA9876: Forced scroll on input focus');
+        // Scroll the message list to show the latest messages (top for inverted list)
+        const messageList = document.querySelector('.messagesContainer');
+        if (messageList) {
+          messageList.scrollTop = 0;
+          debugLog('MBA9876: Forced scroll on input focus to show latest messages');
         }
-      }, 300);
+        
+        // For iOS Safari, we need additional handling to avoid the gray space
+        // This ensures content doesn't shift weirdly when the keyboard opens
+        if (isKeyboardVisible) {
+          // Force window scroll to ensure input is visible
+          window.scrollTo(0, 0);
+          
+          // Fix for iOS browsers - scroll input into view
+          const inputContainer = document.querySelector('.message-input-container');
+          if (inputContainer) {
+            // Make sure the input stays visible by forcing a reflow
+            inputContainer.style.transform = 'translateZ(0)';
+            
+            debugLog('MBA9876: Applied iOS input visibility fix');
+          }
+        }
+      }, 150);
     }
   };
 
-  // Add this global interval setup to continuously fix message visibility
+  // Add an effect to ensure keyboard handling works properly on iOS
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     
-    // Create a global interval to periodically check and fix message padding
-    const intervalId = setInterval(() => {
+    // Helper function to make adjustments when keyboard is visible
+    const adjustForKeyboard = () => {
       // Only run if we have a selected conversation
       if (!selectedConversation) return;
       
-      // Find the FlatList content container using various possible selectors
-      const contentSelectors = [
-        '.messagesContainer .message-list-component > div > div',
-        '.messagesContainer .message-list-component > div',
-        '.messagesContainer > div > div',
-        '.message-list-component div[style*="flex-direction"]',
-      ];
-      
-      let foundContent = false;
-      
-      // Try each selector
-      for (const selector of contentSelectors) {
-        const elements = document.querySelectorAll(selector);
-        if (elements && elements.length > 0) {
-          elements.forEach(el => {
-            // Check if padding is less than our desired value
-            const currentPadding = parseInt(el.style.paddingBottom) || 0;
-            if (currentPadding < 300) {
-              el.style.paddingBottom = '300px';
-              foundContent = true;
-              debugLog('MBA9876: [INTERVAL] Fixed padding on element', {
-                selector,
-                elementType: el.tagName,
-                previousPadding: currentPadding,
-                newPadding: '300px'
-              });
-            }
-          });
+      if (isKeyboardVisible) {
+        // When keyboard is visible, ensure the input is visible
+        const inputContainer = document.querySelector('.message-input-container');
+        if (inputContainer) {
+          // Ensure the input stays in view
+          inputContainer.style.position = 'fixed';
+          inputContainer.style.bottom = '0';
+          inputContainer.style.left = '0';
+          inputContainer.style.right = '0';
+          inputContainer.style.zIndex = '1000';
           
-          // If we found content with this selector, break out
-          if (foundContent) break;
+          // On iOS, use hardware acceleration to prevent rendering issues
+          inputContainer.style.transform = 'translateZ(0)';
+          
+          // Ensure messages have enough padding to not be hidden behind the input
+          const messageContainer = document.querySelector('.messagesContainer');
+          if (messageContainer) {
+            messageContainer.style.paddingBottom = '80px';
+          }
+          
+          debugLog('MBA9876: [KEYBOARD] Applied keyboard adjustments');
+        }
+        
+        // Force scroll if textarea is focused
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
+          const messageList = document.querySelector('.messagesContainer');
+          if (messageList) {
+            // For inverted list, scroll to top to see latest messages
+            messageList.scrollTop = 0;
+          }
         }
       }
-      
-      // Force scroll to top if we're at an active conversation
-      if (selectedConversation && document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
-        const flatList = document.querySelector('.messagesContainer .message-list-component');
-        if (flatList) {
-          flatList.scrollTop = 0;
-        }
-      }
-    }, 2000);
-    
-    // Clear the interval on unmount
-    return () => {
-      clearInterval(intervalId);
     };
-  }, []);
+    
+    // Add event listeners for iOS keyboard detection
+    window.addEventListener('focusin', adjustForKeyboard);
+    
+    // Run once on mount
+    adjustForKeyboard();
+    
+    // Clear the handlers on unmount
+    return () => {
+      window.removeEventListener('focusin', adjustForKeyboard);
+    };
+  }, [selectedConversation, isKeyboardVisible]);
 
-  // Add a more forceful style directly into the document head
+  // Add iOS-specific style adjustments
   useLayoutEffect(() => {
     if (Platform.OS !== 'web') return;
     
-    // Create a style element with high specificity and !important rules
+    // Create a style element with cross-browser compatible styles
     const styleEl = document.createElement('style');
-    styleEl.id = 'message-fix-style';
+    styleEl.id = 'ios-message-fix-style';
     styleEl.innerHTML = `
-      /* High specificity selectors with !important to override any other styles */
-      .messagesContainer .message-list-component > div {
-        padding-top: 300px !important;
-        margin-top: 300px !important;
+      /* Ensure proper message container height and scrolling */
+      .messagesContainer {
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 80px !important;
       }
       
-      .messagesContainer .message-list-component > div > div {
-        padding-top: 300px !important;
-        margin-top: 300px !important;
-      }
-      
-      /* Target any potential scroll container */
-      .messagesContainer .message-list-component {
-        padding-top: 0 !important;
+      /* Fix for inverted FlatList in Safari */
+      .message-list-component {
         padding-bottom: 0 !important;
+        transform: translateZ(0);
       }
       
-      /* Force the first message to be visible */
-      .messagesContainer .message-list-component > div > div > * {
-        margin-bottom: 300px !important;
+      /* Make sure there's enough space at the bottom to not cut off messages */
+      .message-list-component > div > div {
+        padding-bottom: 100px !important;
+      }
+      
+      /* Fix for iOS keyboard issues */
+      .message-input-container {
+        transform: translateZ(0);
+        z-index: 1000;
       }
     `;
     
     // Add the style to the document head
     document.head.appendChild(styleEl);
     
-    debugLog('MBA9876: Added high-priority style fixes to document head', {
-      styleId: 'message-fix-style'
+    debugLog('MBA9876: Added iOS-compatible style fixes', {
+      styleId: 'ios-message-fix-style'
     });
     
     // Clean up function
     return () => {
-      const existingStyle = document.getElementById('message-fix-style');
+      const existingStyle = document.getElementById('ios-message-fix-style');
       if (existingStyle) {
         existingStyle.remove();
       }
     };
   }, []);
   
-  // Add direct DOM manipulation in a layout effect for immediate application
+  // Add focused cleanup effect for iOS layout issues
   useLayoutEffect(() => {
     if (Platform.OS !== 'web' || !selectedConversation) return;
     
-    // Function to find and modify the FlatList content elements
-    const applyDirectFixes = () => {
-      // Attempt to find the FlatList content container with multiple selectors
-      const selectors = [
-        '.messagesContainer .message-list-component > div',
-        '.messagesContainer .message-list-component > div > div',
-        '.message-list-component div[style*="flex-direction"]',
-      ];
-      
-      selectors.forEach(selector => {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach(el => {
-          // Apply direct inline styles with !important
-          el.setAttribute('style', `${el.getAttribute('style') || ''}; padding-top: 300px !important; margin-top: 300px !important;`);
-          
-          debugLog('MBA9876: [DIRECT DOM] Applied critical fix to', {
-            selector,
-            element: el.tagName,
-            childCount: el.childElementCount
-          });
-        });
-      });
-      
-      // Try to find the first message element and add margin to it
-      const firstMessageContainer = document.querySelector('.messagesContainer .message-list-component > div > div > *');
-      if (firstMessageContainer) {
-        firstMessageContainer.style.marginBottom = '300px';
-        debugLog('MBA9876: [DIRECT DOM] Added margin to first message container');
+    // Simple function to ensure message list has proper padding
+    const ensureMessageListPadding = () => {
+      const messageList = document.querySelector('.messagesContainer');
+      if (messageList) {
+        // Ensure the message container has enough padding at the bottom
+        // to accommodate for the fixed input bar
+        if (parseInt(messageList.style.paddingBottom || '0') < 80) {
+          messageList.style.paddingBottom = '80px';
+        }
+        
+        // Make sure iOS properly renders the scroll container
+        messageList.style.WebkitOverflowScrolling = 'touch';
+        
+        debugLog('MBA9876: [iOS] Ensured message list has proper padding');
       }
     };
     
     // Run immediately
-    applyDirectFixes();
+    ensureMessageListPadding();
     
     // And also after a short delay to account for async rendering
-    const timeoutId = setTimeout(applyDirectFixes, 500);
+    const timeoutId = setTimeout(ensureMessageListPadding, 500);
     
     // Clean up function
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [selectedConversation, messages]);
+  }, [selectedConversation]);
   
-  // Create a MutationObserver to catch DOM changes and apply fixes
+  // Add a lightweight effect to ensure iOS scrolling works properly
   useEffect(() => {
     if (Platform.OS !== 'web' || !selectedConversation) return;
     
-    // Create a function to fix the FlatList when DOM changes
-    const fixOnDomChanges = () => {
-      const observer = new MutationObserver((mutations) => {
-        debugLog('MBA9876: [MUTATION] DOM changed, reapplying fixes', {
-          mutationCount: mutations.length
-        });
-        
-        // Apply our fixes when DOM changes
-        const selectors = [
-          '.messagesContainer .message-list-component > div',
-          '.messagesContainer .message-list-component > div > div'
-        ];
-        
-        selectors.forEach(selector => {
-          const elements = document.querySelectorAll(selector);
-          elements.forEach(el => {
-            // Check current padding
-            const computedStyle = window.getComputedStyle(el);
-            const currentPaddingTop = parseInt(computedStyle.paddingTop) || 0;
-            
-            // Only apply if needed
-            if (currentPaddingTop < 300) {
-              el.style.paddingTop = '300px';
-              el.style.marginTop = '300px';
-              
-              debugLog('MBA9876: [MUTATION] Fixed padding on element after DOM change', {
-                selector,
-                element: el.tagName,
-                currentPaddingTop,
-                newPadding: '300px'
-              });
-            }
-          });
-        });
-      });
-      
-      // Start observing the message container
-      const container = document.querySelector('.messagesContainer');
-      if (container) {
-        observer.observe(container, { 
-          childList: true, 
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['style', 'class']
-        });
-        
-        debugLog('MBA9876: [MUTATION] Started observing DOM changes');
+    // This timeout ensures the message container can scroll properly
+    // by adding the -webkit-overflow-scrolling property
+    const timeoutId = setTimeout(() => {
+      // Apply iOS-specific scrolling property
+      const messageContainer = document.querySelector('.messagesContainer');
+      if (messageContainer) {
+        messageContainer.style.WebkitOverflowScrolling = 'touch';
+        debugLog('MBA9876: [iOS] Applied smooth scrolling to message container');
       }
       
-      // Return cleanup function
-      return observer;
-    };
+      // Make sure input stays in place on iOS
+      const inputContainer = document.querySelector('.message-input-container');
+      if (inputContainer) {
+        // Force hardware acceleration to avoid rendering issues
+        inputContainer.style.transform = 'translateZ(0)';
+        debugLog('MBA9876: [iOS] Applied hardware acceleration to input container');
+      }
+    }, 250);
     
-    // Start the observer
-    const observer = fixOnDomChanges();
-    
-    // Clean up function
     return () => {
-      if (observer) {
-        observer.disconnect();
-        debugLog('MBA9876: [MUTATION] Stopped observing DOM changes');
-      }
+      clearTimeout(timeoutId);
     };
   }, [selectedConversation]);
 
@@ -4337,6 +3299,190 @@ const MessageHistory = ({ navigation, route }) => {
     : userRole === 'petOwner' || userRole === 'owner'
       ? filteredConversations.filter(c => c.is_professional === false) 
       : filteredConversations;
+  
+  // Ref for debounce timeout - define at component level to avoid hooks errors
+  const resizeTimeoutRef = useRef(null);
+  
+  // Add effect to handle screen width changes with debouncing to prevent excessive re-renders
+  useEffect(() => {
+    const handleScreenWidthChange = () => {
+      // Clear any existing timeout
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      
+      // Set a new timeout to debounce the navigation param update
+      resizeTimeoutRef.current = setTimeout(() => {
+        // Only update if we have a selected conversation and we're at the width threshold
+        if (selectedConversation && Platform.OS === 'web' && typeof window !== 'undefined') {
+          const isMobile = window.innerWidth <= 900;
+          
+          // Update the navigation params to ensure Navigation component detects the change
+          navigation.setParams({ 
+            selectedConversation: selectedConversation,
+            isMobile: isMobile
+          });
+          
+          debugLog('MBA4477: Updated navigation params after screen width change', {
+            selectedConversation,
+            screenWidth: window.innerWidth,
+            isMobile
+          });
+        }
+      }, 200); // 200ms debounce
+    };
+    
+    // Add resize event listener
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('resize', handleScreenWidthChange);
+    }
+    
+    // Cleanup
+    return () => {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.removeEventListener('resize', handleScreenWidthChange);
+      }
+      
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+    };
+  }, [selectedConversation, navigation]);
+  
+  // Direct solution for Brave/DuckDuckGo overlay issues
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    
+    // Brave/DuckDuckGo mobile detection attempt
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isBrave = userAgent.includes('brave') || (navigator.brave && navigator.brave.isBrave && navigator.brave.isBrave.name === 'isBrave');
+    const isDuckDuckGo = userAgent.includes('duckduckgo');
+    const isMobile = userAgent.includes('iphone') || userAgent.includes('ipad') || userAgent.includes('mobile');
+
+    // Create a more aggressive CSS fix
+    const styleEl = document.createElement('style');
+    styleEl.id = 'brave-duckduckgo-fix';
+    styleEl.innerHTML = `
+      /* Target CSS fix specifically for mobile */
+      @media (max-width: 900px) {
+        /* Fix input container with !important flags to override browser styles */
+        .message-input-container, .inputSection {
+          background-color: #FFFFFF !important;
+          background: #FFFFFF !important;
+          border-top: 1px solid #ECECEC !important;
+          position: relative !important;
+          z-index: 999 !important;
+          bottom: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          margin: 0 !important;
+          padding: 8px !important;
+        }
+        
+        /* Aggressively remove any translucent overlays */
+        .messagesContainer::after,
+        .inputSection::after,
+        .message-input-container::after,
+        .messagesContainer::before,
+        .inputSection::before,
+        .message-input-container::before,
+        .mainSection::after,
+        .mainSection::before {
+          display: none !important;
+          opacity: 0 !important;
+          content: none !important;
+          visibility: hidden !important;
+        }
+        
+        /* Force white background on containers */
+        html, body, #root, .mainSection, .messageSection, .messagesContainer {
+          background-color: #FFFFFF !important;
+        }
+        
+        /* Ensure message input stays on top */
+        .message-input-container textarea,
+        .message-input-container input {
+          position: relative !important;
+          z-index: 1000 !important;
+          opacity: 1 !important;
+          visibility: visible !important;
+        }
+      }
+    `;
+    
+    // Add style to document
+    document.head.appendChild(styleEl);
+    
+    // For Brave/DuckDuckGo on mobile, add extra fix
+    if ((isBrave || isDuckDuckGo || true) && isMobile) {
+      // Wait for DOM to be fully loaded
+      setTimeout(() => {
+        // Direct DOM fix
+        const fixGreySpace = () => {
+          // Fix input container
+          const inputContainer = document.querySelector('.message-input-container');
+          if (inputContainer) {
+            // Make sure input is visible
+            inputContainer.style.backgroundColor = '#FFFFFF';
+            inputContainer.style.position = 'relative';
+            inputContainer.style.zIndex = '999';
+            inputContainer.style.borderTop = '1px solid #ECECEC';
+            
+            // Fix parent containers
+            const inputSection = document.querySelector('.inputSection');
+            if (inputSection) {
+              inputSection.style.backgroundColor = '#FFFFFF';
+              inputSection.style.position = 'relative';
+              inputSection.style.zIndex = '998';
+            }
+          }
+          
+          // Fix message container
+          const messageContainer = document.querySelector('.messagesContainer');
+          if (messageContainer) {
+            messageContainer.style.backgroundColor = '#FFFFFF';
+          }
+        };
+        
+        // Run fix
+        fixGreySpace();
+        
+        // Run again after slight delay
+        setTimeout(fixGreySpace, 100);
+        
+        // Run on resize or orientation change
+        window.addEventListener('resize', fixGreySpace);
+        window.addEventListener('orientationchange', fixGreySpace);
+        
+        // Run on input focus (when keyboard appears)
+        document.addEventListener('focusin', (e) => {
+          if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+            setTimeout(fixGreySpace, 100);
+          }
+        });
+      }, 500);
+      
+      // Return cleanup function
+      return () => {
+        window.removeEventListener('resize', () => {});
+        window.removeEventListener('orientationchange', () => {});
+        document.removeEventListener('focusin', () => {});
+        
+        const existingStyle = document.getElementById('brave-duckduckgo-fix');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+      };
+    } else {
+      // Clean up for non-mobile browsers
+      return () => {
+        const existingStyle = document.getElementById('brave-duckduckgo-fix');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+      };
+    }
+  }, []);
   
   return (
     <SafeAreaView style={[

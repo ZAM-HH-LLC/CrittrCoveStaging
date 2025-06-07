@@ -8,7 +8,7 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     paddingTop: screenWidth > 900 ? 0 : 0,
     paddingRight: screenWidth > 900 ? 0 : 0,
     paddingLeft: screenWidth > 900 ? 0 : 0,
-    height: screenWidth > 900 ? '100vh' : 'calc(100vh - 64px)',
+    height: '100%',
     overflow: 'hidden',
     position: 'fixed',
     top: screenWidth > 900 ? 0 : 64,
@@ -89,11 +89,8 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     overflow: 'hidden',
     paddingHorizontal: 5,
     backgroundColor: theme.colors.surface,
-    ...(Platform.OS === 'web' && screenWidth <= 900 ? {
-      paddingBottom: 0,
-    } : {
-      paddingBottom: 8,
-    }),
+    paddingBottom: 0,
+    position: 'relative',
   },
   messageHeader: {
     padding: 12,
@@ -102,6 +99,10 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 1,
+    ...(Platform.OS === 'web' && screenWidth <= 900 ? {
+      position: 'sticky',
+      top: 0,
+    } : {}),
   },
   profilePhoto: {
     width: 40,
@@ -119,13 +120,14 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     flex: 1,
     overflow: 'auto',
     width: '100%',
+    ...(Platform.OS === 'web' && screenWidth <= 900 ? {
+      // paddingBottom: 80,
+      WebkitOverflowScrolling: 'touch', // Smooth scrolling for iOS
+    } : {}),
   },
   messageList: {
     width: '100%',
     paddingBottom: 16,
-    ...(Platform.OS === 'web' && screenWidth <= 900 ? {
-      paddingTop: 24,
-    } : {}),
   },
   textInput: {
     flex: 1,
@@ -195,14 +197,13 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
   inputSection: {
     width: '100%',
     padding: 8,
-    zIndex: 1,
+    backgroundColor: theme.colors.surfaceContrast,
+    zIndex: 10,
     ...(Platform.OS === 'web' && screenWidth <= 900 ? {
       position: 'fixed',
       bottom: 0,
       left: 0,
       right: 0,
-      zIndex: 1000,
-      backgroundColor: theme.colors.surfaceContrast,
       paddingTop: 8,
       paddingBottom: 8,
       shadowColor: '#000',
@@ -210,11 +211,8 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
       shadowOpacity: 0.1,
       shadowRadius: 3,
       elevation: 3,
-    } : {
-      backgroundColor: theme.colors.surfaceContrast,
-      paddingTop: 8,
-      paddingBottom: 8,
-    }),
+      transform: 'translateZ(0)', // Hardware acceleration for iOS
+    } : {}),
   },
   inputContainer: {
     flexDirection: 'row',
@@ -405,13 +403,15 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     width: '100%',
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
-    position: 'relative',
+    position: 'sticky',
+    top: 0,
     zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 3,
+    backgroundColor: theme.colors.surfaceContrast,
   },
   mobileHeaderContent: {
     flexDirection: 'row',
@@ -568,8 +568,6 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
   },
   mobileContainer: {
     top: 0,
-    height: '100vh',
-    minHeight: '100vh',
-    maxHeight: '100vh',
+    height: '100%',
   },
 }); 
