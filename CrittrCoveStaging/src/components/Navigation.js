@@ -1073,7 +1073,8 @@ export default function Navigation(props) {
   // More robust check for selectedConversation to prevent falsy values from causing issues
   const hasSelectedConversation = selectedConversation !== null && 
                                 selectedConversation !== undefined && 
-                                selectedConversation !== '';
+                                selectedConversation !== '' &&
+                                selectedConversation !== 'null';
   
   const shouldHideNavigation = isInMessageHistory && 
                               hasSelectedConversation && 
