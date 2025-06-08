@@ -480,15 +480,33 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       padding: theme.spacing.small,
       borderRadius: 8,
     },
+    animalInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: theme.spacing.medium,
+      marginBottom: theme.spacing.small,
+    },
     animalInput: {
+      flex: 1,
       height: 48,
       borderWidth: 0,
       borderRadius: 8,
       paddingHorizontal: theme.spacing.medium,
       backgroundColor: theme.colors.background,
       fontSize: theme.fontSizes.medium,
-      marginHorizontal: theme.spacing.medium,
-      marginBottom: theme.spacing.small,
+    },
+    addAnimalButton: {
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      marginLeft: theme.spacing.small,
+    },
+    addAnimalButtonText: {
+      color: theme.colors.whiteText,
+      fontWeight: '600',
+      fontSize: theme.fontSizes.small,
+      fontFamily: theme.fonts.regular.fontFamily,
     },
     animalSuggestionsWrapper: {
       flex: 1,
@@ -648,6 +666,8 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
 
   const OtherAnimalInput = ({ value, onChange, suggestions, onSuggestionSelect, isVisible, onClose, onAnimalSelect }) => {
     const animalInputRef = useRef(null);
+    // Add a ref to track whether a suggestion was selected
+    const suggestionSelectedRef = useRef(false);
 
     const debouncedSearch = useCallback(
       debounce((text) => {
@@ -664,6 +684,19 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       [onSuggestionSelect]
     );
 
+    // Function to handle adding a custom animal
+    const handleAddCustomAnimal = () => {
+      if (value.trim() === '') return;
+      
+      // Add the custom animal
+      onAnimalSelect(value.trim());
+      
+      // Reset input and close
+      onChange('');
+      onSuggestionSelect([]);
+      onClose();
+    };
+
     if (!isVisible) return null;
 
     return (
@@ -674,17 +707,43 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
             <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
           </TouchableOpacity>
         </View>
-        <TextInput
-          ref={animalInputRef}
-          style={styles.animalInput}
-          placeholder="Type animal name (e.g., Snake, Turtle, Horse)"
-          value={value}
-          onChangeText={(text) => {
-            onChange(text);
-            debouncedSearch(text);
-          }}
-          autoFocus={true}
-        />
+        <View style={styles.animalInputContainer}>
+          <TextInput
+            ref={animalInputRef}
+            style={styles.animalInput}
+            placeholder="Type animal name (e.g., Snake, Turtle, Horse)"
+            value={value}
+            onChangeText={(text) => {
+              onChange(text);
+              debouncedSearch(text);
+              // Reset suggestion selected flag when text changes
+              suggestionSelectedRef.current = false;
+            }}
+            onBlur={() => {
+              // Don't add empty values
+              if (value.trim() === '') return;
+              
+              // Delay to allow for suggestion selection before adding custom value
+              setTimeout(() => {
+                // Only add if a suggestion wasn't selected
+                if (value.trim() !== '' && !suggestionSelectedRef.current) {
+                  handleAddCustomAnimal();
+                }
+                // Reset the flag after processing
+                suggestionSelectedRef.current = false;
+              }, 200);
+            }}
+            autoFocus={true}
+          />
+          {value.trim() !== '' && (
+            <TouchableOpacity 
+              style={styles.addAnimalButton} 
+              onPress={handleAddCustomAnimal}
+            >
+              <Text style={styles.addAnimalButtonText}>Add</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         {suggestions.length > 0 && (
           <View style={styles.animalSuggestionsWrapper}>
             <ScrollView 
@@ -697,6 +756,9 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
                   key={index}
                   style={styles.animalSuggestionItem}
                   onPress={() => {
+                    // Mark that a suggestion was selected to prevent the onBlur handler
+                    // from adding the partial text
+                    suggestionSelectedRef.current = true;
                     onAnimalSelect(animal);
                     onChange('');
                     onSuggestionSelect([]);
