@@ -668,6 +668,8 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
     const animalInputRef = useRef(null);
     // Add a ref to track whether a suggestion was selected
     const suggestionSelectedRef = useRef(false);
+    // Add a ref to track if the close button was clicked
+    const closeButtonClickedRef = useRef(false);
 
     const debouncedSearch = useCallback(
       debounce((text) => {
@@ -697,13 +699,19 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       onClose();
     };
 
+    // Custom close handler that sets the close flag before calling the original onClose
+    const handleClose = () => {
+      closeButtonClickedRef.current = true;
+      onClose();
+    };
+
     if (!isVisible) return null;
 
     return (
       <View style={styles.otherAnimalInputWrapper}>
         <View style={styles.otherAnimalHeader}>
           <Text style={styles.otherAnimalTitle}>Search for animal type</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
           </TouchableOpacity>
         </View>
@@ -716,8 +724,9 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
             onChangeText={(text) => {
               onChange(text);
               debouncedSearch(text);
-              // Reset suggestion selected flag when text changes
+              // Reset flags when text changes
               suggestionSelectedRef.current = false;
+              closeButtonClickedRef.current = false;
             }}
             onBlur={() => {
               // Don't add empty values
@@ -725,12 +734,13 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
               
               // Delay to allow for suggestion selection before adding custom value
               setTimeout(() => {
-                // Only add if a suggestion wasn't selected
-                if (value.trim() !== '' && !suggestionSelectedRef.current) {
+                // Only add if a suggestion wasn't selected AND close button wasn't clicked
+                if (value.trim() !== '' && !suggestionSelectedRef.current && !closeButtonClickedRef.current) {
                   handleAddCustomAnimal();
                 }
-                // Reset the flag after processing
+                // Reset the flags after processing
                 suggestionSelectedRef.current = false;
+                closeButtonClickedRef.current = false;
               }, 200);
             }}
             autoFocus={true}
@@ -756,8 +766,7 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
                   key={index}
                   style={styles.animalSuggestionItem}
                   onPress={() => {
-                    // Mark that a suggestion was selected to prevent the onBlur handler
-                    // from adding the partial text
+                    // Mark that a suggestion was selected
                     suggestionSelectedRef.current = true;
                     onAnimalSelect(animal);
                     onChange('');
