@@ -2141,30 +2141,6 @@ const MessageHistory = ({ navigation, route }) => {
     );
   }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages, messages]);
 
-  // Message input component implementation
-  const renderMessageInput = () => {
-    const handleSendMessage = async (messageContent) => {
-      try {
-        setIsSending(true);
-        await SendNormalMessage(messageContent);
-        setIsSending(false);
-      } catch (error) {
-        console.error('Error sending message:', error);
-        setIsSending(false);
-      }
-    };
-    
-    return (
-      <MessageInput 
-        onSendMessage={handleSendMessage}
-        onShowDropdown={(show) => setShowDropdown(show)}
-        showDropdown={showDropdown}
-        styles={styles}
-        screenWidth={screenWidth}
-      />
-    );
-  };
-
   const handleBookingRequest = async (modalData) => {
     try {
       debugLog('MBA2349f87g9qbh2nfv9cg: handleBookingRequest called', {
