@@ -20,10 +20,13 @@ const MessageList = forwardRef(({
   const preventInitialPaginationRef = useRef(true);
   const scrollPositionRef = useRef(0);
   const lastPaginationTimeRef = useRef(0);
-  const PAGINATION_COOLDOWN = 2000; // ms to wait before allowing another pagination trigger
+  const PAGINATION_COOLDOWN = 1000; // Reduced from 2000 to 1000 for more responsive pagination
   
   // Track which indices we've already triggered pagination for
   const paginatedIndicesRef = useRef(new Set());
+  
+  // Add a visibility flag to track if we're near pagination boundaries
+  const isNearPaginationBoundaryRef = useRef(false);
   
   // Reset pagination indices when the message array changes significantly
   React.useEffect(() => {
@@ -40,18 +43,26 @@ const MessageList = forwardRef(({
   }, [messages.length]);
   
   // Actually trigger the pagination
-  const triggerPagination = useCallback((triggerIndex) => {
+  const triggerPagination = useCallback((triggerIndex, forceTrigger = false) => {
     const now = Date.now();
     const timeSinceLastPagination = now - lastPaginationTimeRef.current;
     
     // Skip if we don't meet base conditions
     if (!hasMore || isLoadingMore || isLoadingMoreRef.current || 
-        !isUserScrollingRef.current || initialRenderRef.current) {
+        (!isUserScrollingRef.current && !forceTrigger) || initialRenderRef.current) {
+      debugLog('MBA9876: Skipping pagination - basic conditions not met', {
+        hasMore,
+        isLoadingMore,
+        isLoadingMoreRef: isLoadingMoreRef.current,
+        isUserScrolling: isUserScrollingRef.current,
+        forceTrigger,
+        initialRender: initialRenderRef.current
+      });
       return false;
     }
     
-    // Skip if on cooldown
-    if (timeSinceLastPagination < PAGINATION_COOLDOWN) {
+    // Skip if on cooldown, unless we're forcing the trigger
+    if (timeSinceLastPagination < PAGINATION_COOLDOWN && !forceTrigger) {
       debugLog('MBA9876: Pagination on cooldown', {
         timeSinceLastPagination,
         cooldown: PAGINATION_COOLDOWN
@@ -59,8 +70,8 @@ const MessageList = forwardRef(({
       return false;
     }
     
-    // Skip if we've already paginated at this index
-    if (paginatedIndicesRef.current.has(triggerIndex)) {
+    // Skip if we've already paginated at this index, unless we're forcing the trigger
+    if (paginatedIndicesRef.current.has(triggerIndex) && !forceTrigger) {
       debugLog('MBA9876: Already paginated at index', {
         triggerIndex,
         paginatedIndices: Array.from(paginatedIndicesRef.current)
@@ -73,7 +84,8 @@ const MessageList = forwardRef(({
       messageCount: messages.length,
       timeSinceLastPagination,
       hasMore,
-      isLoadingMore
+      isLoadingMore,
+      forceTrigger
     });
     
     // Mark this index as paginated
@@ -95,9 +107,13 @@ const MessageList = forwardRef(({
   }, [hasMore, isLoadingMore, onLoadMore, messages.length]);
   
   // Very aggressively check for top messages becoming visible
-  const onViewableItemsChangedRef = useRef(({ viewableItems }) => {
-    if (!viewableItems || viewableItems.length === 0 || 
-        !isUserScrollingRef.current || initialRenderRef.current) {
+  const onViewableItemsChangedRef = useRef(({ viewableItems, changed }) => {
+    if (!viewableItems || viewableItems.length === 0) {
+      return;
+    }
+    
+    // Now we also handle cases when user isn't scrolling but needs to load more
+    if (initialRenderRef.current) {
       return;
     }
     
@@ -105,6 +121,23 @@ const MessageList = forwardRef(({
     const FIRST_BATCH_SIZE = 20;
     if (messages.length <= FIRST_BATCH_SIZE) {
       return; // Not enough messages for pagination yet
+    }
+    
+    // Check if we can see the very last message in the list (oldest message)
+    // This is the most reliable trigger for pagination
+    const isLastMessageVisible = viewableItems.some(item => item.index === messages.length - 1);
+    
+    // Force pagination if we can see the last message and haven't paginated yet
+    if (isLastMessageVisible && hasMore && !isLoadingMore && !isLoadingMoreRef.current && 
+        !paginatedIndicesRef.current.has(messages.length - 1)) {
+      debugLog('MBA9876: Last message (oldest) is visible - forcing pagination', {
+        lastMessageIndex: messages.length - 1,
+        viewableItemsCount: viewableItems.length
+      });
+      
+      // Trigger pagination immediately at the end of the list
+      triggerPagination(messages.length - 1, true);
+      return;
     }
     
     // Track the oldest index we can see
@@ -115,11 +148,63 @@ const MessageList = forwardRef(({
       }
     });
     
+    // Also look for newly visible items that might be close to batch boundaries
+    let newestChangedItem = -1;
+    if (changed && changed.length > 0) {
+      changed.forEach(change => {
+        if (change.isViewable && change.index > newestChangedItem) {
+          newestChangedItem = change.index;
+        }
+      });
+    }
+    
+    // Use the changed item index if it's newer than our current oldest
+    if (newestChangedItem > oldestVisibleIndex) {
+      oldestVisibleIndex = newestChangedItem;
+    }
+    
     debugLog('MBA9876: Viewing oldest index', {
       oldestVisibleIndex,
       messagesLength: messages.length,
-      viewableItemsCount: viewableItems.length
+      viewableItemsCount: viewableItems.length,
+      newestChangedItem
     });
+    
+    // More aggressive pagination boundary detection
+    // If we're seeing messages close to a batch boundary, set the flag
+    const BATCH_SIZE = 20;
+    const batchNumber = Math.floor(oldestVisibleIndex / BATCH_SIZE) + 1;
+    const batchEndIndex = (batchNumber * BATCH_SIZE) - 1;
+    const distanceToBatchBoundary = batchEndIndex - oldestVisibleIndex;
+    
+    // Check if we're near a pagination boundary (within 5 items)
+    isNearPaginationBoundaryRef.current = (distanceToBatchBoundary >= 0 && distanceToBatchBoundary <= 5);
+    
+    // Also check if we're within 3 items of the end of the list - another pagination trigger
+    const isNearEndOfList = (messages.length - oldestVisibleIndex) <= 3;
+    if (isNearEndOfList) {
+      isNearPaginationBoundaryRef.current = true;
+    }
+    
+    debugLog('MBA9876: Pagination boundary check', {
+      oldestVisibleIndex,
+      batchNumber,
+      batchEndIndex,
+      distanceToBatchBoundary,
+      isNearBoundary: isNearPaginationBoundaryRef.current,
+      isNearEndOfList
+    });
+    
+    // If we're within a few items of the end, force pagination
+    if (isNearEndOfList && hasMore && !isLoadingMore && !isLoadingMoreRef.current && 
+        !paginatedIndicesRef.current.has(messages.length - 1)) {
+      debugLog('MBA9876: Very close to end of list - forcing pagination', {
+        distanceFromEnd: messages.length - oldestVisibleIndex
+      });
+      
+      triggerPagination(messages.length - 1, true);
+      return;
+    }
     
     // Calculate specific trigger points based on the batches (aggressively)
     // Each batch is 20 messages from the backend
@@ -129,18 +214,21 @@ const MessageList = forwardRef(({
     for (let i = 1; i < 10; i++) {  // Support up to 10 pages
       const batchEndIndex = (i * 20) - 1;  // End of each batch (19, 39, 59, etc)
       
-      // Add several trigger points near the batch boundary for redundancy
+      // Add more trigger points for more reliable detection
+      triggerPoints.push(batchEndIndex - 6);  // Further away from boundary
       triggerPoints.push(batchEndIndex - 4);  // Trigger a bit before the boundary
       triggerPoints.push(batchEndIndex - 2);  // Another trigger point
+      triggerPoints.push(batchEndIndex - 1);  // Just before boundary
       triggerPoints.push(batchEndIndex);      // The exact boundary
       triggerPoints.push(batchEndIndex + 1);  // Just after boundary for safety
+      triggerPoints.push(batchEndIndex + 2);  // Another safety point
     }
     
-    // Check if we're at or past any trigger point
+    // Check if we're at or past any trigger point - use a wider range
     const matchingTriggerPoints = triggerPoints.filter(point => 
       oldestVisibleIndex >= point && 
-      oldestVisibleIndex <= point + 2 && // Allow a small range
-      point < messages.length - 5 // Make sure we're not too close to the end
+      oldestVisibleIndex <= point + 4 && // Increased range for better detection
+      point < messages.length - 3 // Make sure we're not too close to the end
     );
     
     if (matchingTriggerPoints.length > 0) {
@@ -153,40 +241,177 @@ const MessageList = forwardRef(({
       
       // Only trigger if we haven't paginated at this point already
       if (!paginatedIndicesRef.current.has(triggerPoint)) {
-        triggerPagination(triggerPoint);
+        // If we're scrolling or very close to boundary, force the trigger
+        const forceTrigger = isUserScrollingRef.current || 
+                            (Math.abs(oldestVisibleIndex - triggerPoint) <= 1);
+        triggerPagination(triggerPoint, forceTrigger);
       }
     }
   });
   
-  // Specifically check for the very end of the list
+  // Enhanced end reached handler for more reliable pagination at list boundaries
   const handleEndReached = useCallback(() => {
-    if (!hasMore || initialRenderRef.current || preventInitialPaginationRef.current || 
-        isLoadingMore || isLoadingMoreRef.current) {
+    // Always allow pagination when we reach the end of the list, even if initial load
+    // but still respect loading states
+    if (!hasMore || isLoadingMore || isLoadingMoreRef.current) {
+      debugLog('MBA9876: End reached but skipping pagination - conditions not met', {
+        hasMore,
+        isLoadingMore,
+        isLoadingMoreRef: isLoadingMoreRef.current,
+        messagesLength: messages.length
+      });
       return;
+    }
+    
+    // For web, try to get the FlatList scroll metrics directly
+    // This provides a much more reliable way to detect if we're at the end
+    if (Platform.OS === 'web' && flatListRef.current) {
+      try {
+        // Access the scroll node directly to get precise measurements
+        const node = flatListRef.current;
+        if (node && typeof node.getScrollableNode === 'function') {
+          const scrollNode = node.getScrollableNode();
+          if (scrollNode) {
+            const { scrollHeight, clientHeight, scrollTop } = scrollNode;
+            const distanceFromBottom = scrollHeight - (clientHeight + scrollTop);
+            
+            debugLog('MBA9876: End reached - DOM scroll metrics', {
+              scrollHeight,
+              clientHeight,
+              scrollTop,
+              distanceFromBottom,
+              messagesLength: messages.length
+            });
+            
+            // If we're very close to the bottom (oldest messages in inverted list)
+            // Force pagination regardless of other conditions
+            if (distanceFromBottom < 200) {
+              const endIndex = messages.length - 1;
+              
+              debugLog('MBA9876: End reached - close to oldest messages, forcing pagination', {
+                distanceFromBottom,
+                endIndex
+              });
+              
+              // Force trigger pagination at the end of the list
+              setTimeout(() => {
+                triggerPagination(endIndex, true);
+              }, 50);
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        // Fallback to regular pagination if DOM access fails
+        debugLog('MBA9876: Error accessing DOM node in handleEndReached', {
+          error: error.message
+        });
+      }
     }
     
     debugLog('MBA9876: End reached', {
       messagesLength: messages.length,
-      scrollPosition: scrollPositionRef.current
+      scrollPosition: scrollPositionRef.current,
+      preventInitialPagination: preventInitialPaginationRef.current
     });
     
-    // Specifically check for the last few items
-    const endIndex = messages.length - 1;
-    
-    // Try to trigger pagination at the very end if we haven't already
-    if (!paginatedIndicesRef.current.has(endIndex)) {
-      debugLog('MBA9876: Trying to paginate at the very end');
-      triggerPagination(endIndex);
+    // For inverted lists, this actually means we're at the oldest messages
+    // Allow pagination even on initial load if we're truly at the end
+    if (messages.length > 0) {
+      const endIndex = messages.length - 1;
+      
+      // Check if we have already paginated at several endpoints
+      const hasPaginatedAtEnd = paginatedIndicesRef.current.has(endIndex);
+      const hasPaginatedNearEnd = Array.from(paginatedIndicesRef.current).some(
+        index => index > endIndex - 5 && index <= endIndex
+      );
+      
+      // Force pagination at the end of the list, overriding most restrictions
+      if (!hasPaginatedAtEnd) {
+        debugLog('MBA9876: Forcing pagination at the very end of the list');
+        triggerPagination(endIndex, true);
+      } else if (!hasPaginatedNearEnd) {
+        // Try the next best index if we've already paginated at the end
+        const nextBestIndex = messages.length - 5;
+        if (nextBestIndex > 0 && !paginatedIndicesRef.current.has(nextBestIndex)) {
+          debugLog('MBA9876: Trying alternative pagination index near end', {
+            nextBestIndex
+          });
+          triggerPagination(nextBestIndex, true);
+        }
+      } else {
+        // We've already tried endpoints, try batch boundaries
+        const BATCH_SIZE = 20;
+        const batchEndIndex = Math.floor(messages.length / BATCH_SIZE) * BATCH_SIZE - 1;
+        
+        if (batchEndIndex > 0 && !paginatedIndicesRef.current.has(batchEndIndex)) {
+          debugLog('MBA9876: Trying batch boundary after exhausting end indices', {
+            batchEndIndex
+          });
+          triggerPagination(batchEndIndex, true);
+        }
+      }
     }
   }, [hasMore, isLoadingMore, triggerPagination, messages.length]);
   
-  // Handle scroll to track position and user scrolling state
+  // Enhanced scroll handler that better detects when we're at pagination boundaries
   const handleScroll = useCallback((event) => {
     // Store current scroll position
     scrollPositionRef.current = event.nativeEvent.contentOffset.y;
     
+    // Get the full scroll metrics for better pagination detection
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    
+    // For inverted lists, being near the content bottom means we're seeing oldest messages
+    // This calculation tells us how close we are to the oldest messages
+    const distanceFromOldestMessages = 
+      contentSize.height - (layoutMeasurement.height + contentOffset.y);
+    
+    // Check if we're very close to the oldest messages (near bottom of inverted list)
+    // This is a critical check for pagination that works independent of other checks
+    if (hasMore && !isLoadingMore && !isLoadingMoreRef.current && distanceFromOldestMessages < 150) {
+      debugLog('MBA9876: Very close to oldest messages - checking for pagination', {
+        distanceFromOldestMessages,
+        contentHeight: contentSize.height,
+        visibleHeight: layoutMeasurement.height,
+        scrollY: contentOffset.y
+      });
+      
+      // Find the most appropriate batch boundary to paginate
+      const BATCH_SIZE = 20;
+      const currentBatchNumber = Math.floor(messages.length / BATCH_SIZE);
+      
+      // Try to find an unpaginated batch boundary, starting from the oldest
+      let targetIndex = -1;
+      
+      // First try the exact batch boundary
+      const exactBatchIndex = (currentBatchNumber * BATCH_SIZE) - 1;
+      if (exactBatchIndex > 0 && exactBatchIndex < messages.length && 
+          !paginatedIndicesRef.current.has(exactBatchIndex)) {
+        targetIndex = exactBatchIndex;
+      }
+      
+      // If no exact batch boundary, try the end of the list
+      if (targetIndex === -1 && !paginatedIndicesRef.current.has(messages.length - 1)) {
+        targetIndex = messages.length - 1;
+      }
+      
+      // If we found a valid index, trigger pagination
+      if (targetIndex !== -1) {
+        debugLog('MBA9876: Triggering pagination at oldest message boundary', {
+          targetIndex,
+          messagesLength: messages.length,
+          currentBatch: currentBatchNumber
+        });
+        triggerPagination(targetIndex, true); // Force trigger
+        
+        // Early return to avoid duplicating pagination requests
+        return;
+      }
+    }
+    
     // Consider user as scrolling when they've scrolled a bit from the top
-    if (event.nativeEvent.contentOffset.y > 30) {
+    if (event.nativeEvent.contentOffset.y > 20) { // Reduced from 30 to be more sensitive
       if (!isUserScrollingRef.current) {
         debugLog('MBA9876: User started scrolling', {
           scrollY: event.nativeEvent.contentOffset.y
@@ -194,13 +419,53 @@ const MessageList = forwardRef(({
         isUserScrollingRef.current = true;
         preventInitialPaginationRef.current = false;
       }
+      
+      // Check if we're very close to the end of the scroll content
+      // This helps catch cases where the user scrolls very fast
+      if (hasMore && !isLoadingMore && !isLoadingMoreRef.current) {
+        // If we're close to the end and near a pagination boundary, trigger pagination
+        if (distanceFromOldestMessages < 100 && isNearPaginationBoundaryRef.current) {
+          debugLog('MBA9876: Close to end of content during scroll', {
+            distanceFromOldestMessages,
+            isNearPaginationBoundary: isNearPaginationBoundaryRef.current
+          });
+          
+          // For fast scrolls, we may need to trigger pagination on multiple batch boundaries
+          // Try to find a batch boundary we haven't paginated for yet
+          const BATCH_SIZE = 20;
+          let foundUnpaginatedBoundary = false;
+          
+          // Look through the last few batch boundaries
+          for (let i = 1; i <= 3; i++) {
+            if (messages.length > i * BATCH_SIZE) {
+              const batchEndIndex = messages.length - (i * BATCH_SIZE) + (i-1);
+              if (!paginatedIndicesRef.current.has(batchEndIndex)) {
+                debugLog('MBA9876: Found unpaginated batch boundary during fast scroll', {
+                  batchEndIndex
+                });
+                triggerPagination(batchEndIndex, true);
+                foundUnpaginatedBoundary = true;
+                break;
+              }
+            }
+          }
+          
+          // If no unpaginated batch boundary was found, try the end of the list
+          if (!foundUnpaginatedBoundary) {
+            const endIndex = messages.length - 1;
+            if (!paginatedIndicesRef.current.has(endIndex)) {
+              triggerPagination(endIndex, true);
+            }
+          }
+        }
+      }
     }
-  }, []);
+  }, [hasMore, isLoadingMore, triggerPagination, messages.length]);
   
-  // Config for viewability
+  // Config for viewability - more sensitive to detect items earlier
   const viewabilityConfigRef = useRef({
-    itemVisiblePercentThreshold: 10,  // Need less of the item to be visible
-    minimumViewTime: 50              // Need less time to be considered visible
+    itemVisiblePercentThreshold: 5,  // Reduced from 10 to be more sensitive
+    minimumViewTime: 20             // Reduced from 50 to be more sensitive
   });
   
   // Stable handlers as refs
@@ -210,40 +475,118 @@ const MessageList = forwardRef(({
     debugLog('MBA9876: Scroll drag began');
   });
   
+  // Enhanced momentum scroll end handler for more reliable pagination
   const onMomentumScrollEndRef = useRef(() => {
+    // If no messages or can't load more, don't proceed
+    if (messages.length === 0 || !hasMore || isLoadingMore || isLoadingMoreRef.current) {
+      return;
+    }
+    
     debugLog('MBA9876: Momentum scroll ended', {
       scrollPosition: scrollPositionRef.current,
       messagesLength: messages.length
     });
     
+    // Get current DOM metrics to check if we're near the oldest messages
+    // This is for web only since we can directly access the DOM
+    if (Platform.OS === 'web' && flatListRef.current) {
+      try {
+        // Try to get the underlying DOM node for direct measurement
+        // This is a more reliable way to detect scroll position
+        const node = flatListRef.current;
+        if (node && typeof node.getScrollableNode === 'function') {
+          const scrollNode = node.getScrollableNode();
+          if (scrollNode) {
+            const { scrollHeight, clientHeight, scrollTop } = scrollNode;
+            const distanceFromBottom = scrollHeight - (clientHeight + scrollTop);
+            
+            // If we're very close to the bottom (oldest messages), force pagination
+            if (distanceFromBottom < 200 && !initialRenderRef.current) {
+              debugLog('MBA9876: Momentum ended very close to oldest messages - forcing pagination', {
+                distanceFromBottom,
+                scrollHeight,
+                clientHeight,
+                scrollTop
+              });
+              
+              // Find oldest message batch boundary not yet paginated
+              const BATCH_SIZE = 20;
+              const currentBatchNumber = Math.floor(messages.length / BATCH_SIZE);
+              const exactBatchIndex = (currentBatchNumber * BATCH_SIZE) - 1;
+              
+              if (exactBatchIndex > 0 && 
+                  exactBatchIndex < messages.length && 
+                  !paginatedIndicesRef.current.has(exactBatchIndex)) {
+                setTimeout(() => {
+                  triggerPagination(exactBatchIndex, true);
+                }, 50);
+                return;
+              } else {
+                // If we couldn't find a specific batch boundary, try the end of the list
+                const endIndex = messages.length - 1;
+                if (!paginatedIndicesRef.current.has(endIndex)) {
+                  setTimeout(() => {
+                    triggerPagination(endIndex, true);
+                  }, 50);
+                  return;
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Fallback to standard logic if DOM access fails
+        debugLog('MBA9876: Error accessing DOM node, falling back to standard logic', {
+          error: error.message
+        });
+      }
+    }
+    
     // Special handling: when scroll momentum ends, check if we're near a batch boundary
     // This helps catch cases where scrolling is too fast and the viewability events miss
     const BATCH_SIZE = 20;
     
-    // Calculate batch boundaries
-    for (let i = 1; i < 10; i++) {  // Support up to 10 pages
+    // For fast scrolls, we need more aggressive pagination checks
+    // Check multiple batch boundaries when momentum ends
+    let shouldTriggerPagination = false;
+    let triggerIndex = -1;
+    
+    // Calculate batch boundaries - check more boundaries for fast scrolls
+    for (let i = 1; i < Math.min(10, Math.ceil(messages.length / BATCH_SIZE)); i++) {
       const batchEndIndex = (i * BATCH_SIZE) - 1;  // End of each batch (19, 39, 59, etc)
       
-      // Adjust this based on testing - see if we can identify when momentum scroll
-      // ends near a batch boundary based on the scroll position
-      if (scrollPositionRef.current > 100 && batchEndIndex < messages.length - 5) {
-        const triggerIndex = batchEndIndex;
-        
-        if (!paginatedIndicesRef.current.has(triggerIndex)) {
-          debugLog('MBA9876: Momentum ended, trying backup pagination at batch boundary', {
+      // Try to detect if we should trigger pagination at this boundary
+      // For momentum end, we're less restrictive to ensure we catch fast scrolls
+      if (batchEndIndex < messages.length - 3) {
+        // If we haven't paginated at this index yet, consider triggering
+        if (!paginatedIndicesRef.current.has(batchEndIndex)) {
+          shouldTriggerPagination = true;
+          triggerIndex = batchEndIndex;
+          
+          debugLog('MBA9876: Identified potential pagination point at momentum end', {
             batchEndIndex,
             scrollPosition: scrollPositionRef.current
           });
           
-          // Use timeout to let the scroll settle
-          setTimeout(() => {
-            triggerPagination(triggerIndex);
-          }, 100);
-          
-          // Only try one batch boundary
+          // Prefer earlier batch boundaries (older messages) for pagination
           break;
         }
       }
+    }
+    
+    // If we should trigger pagination and we're likely scrolled up enough
+    if (shouldTriggerPagination && scrollPositionRef.current > 50 && triggerIndex > 0) {
+      debugLog('MBA9876: Momentum ended, triggering backup pagination at batch boundary', {
+        triggerIndex,
+        scrollPosition: scrollPositionRef.current
+      });
+      
+      // Use timeout to let the scroll settle, then force the trigger
+      setTimeout(() => {
+        if (triggerPagination) {
+          triggerPagination(triggerIndex, true);
+        }
+      }, 50);
     }
   });
   
@@ -484,8 +827,8 @@ const MessageList = forwardRef(({
       keyExtractor={keyExtractor}
       style={[styles.messageList, { minHeight: '100%' }]}
       onEndReached={handleEndReached}
-      onEndReachedThreshold={0.1}
-      scrollEventThrottle={16}
+      onEndReachedThreshold={0.5} // Increased to 0.5 to trigger pagination earlier
+      scrollEventThrottle={8} // More frequent scroll events for better detection
       onScroll={handleScroll}
       onViewableItemsChanged={onViewableItemsChangedRef.current}
       viewabilityConfig={viewabilityConfigRef.current}

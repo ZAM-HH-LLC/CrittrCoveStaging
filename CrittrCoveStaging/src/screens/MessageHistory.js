@@ -1701,18 +1701,31 @@ const MessageHistory = ({ navigation, route }) => {
       messagesLength: messages.length
     });
     
+    // Add a safety check to ensure we have a conversation selected
+    if (!selectedConversation) {
+      debugLog('MBA2349f87g9qbh2nfv9cg: No conversation selected, cannot load more messages');
+      return;
+    }
+    
+    // More reliable condition checking with better logging
+    const isAlreadyLoading = isLoadingMoreRef.current || isLoadingMore;
+    const nextPageAlreadyProcessed = processedPagesRef.current.has(currentPage + 1);
+    
     // Only load more messages if:
     // 1. There are more messages to load
     // 2. We're not already loading (both state and ref)
     // 3. We have a selected conversation
     // 4. The next page hasn't already been processed
     if (hasMore && 
-        !isLoadingMoreRef.current && 
-        !isLoadingMore && 
-        selectedConversation && 
-        !processedPagesRef.current.has(currentPage + 1)) {
+        !isAlreadyLoading && 
+        !nextPageAlreadyProcessed) {
       
-      debugLog(`MBA2349f87g9qbh2nfv9cg: Starting pagination load for page ${currentPage + 1}`);
+      debugLog(`MBA2349f87g9qbh2nfv9cg: Starting pagination load for page ${currentPage + 1}`, {
+        hasMore,
+        isAlreadyLoading,
+        nextPageAlreadyProcessed,
+        currentPage
+      });
       
       // Set loading state before fetch to prevent multiple triggers
       isLoadingMoreRef.current = true;
@@ -1720,19 +1733,32 @@ const MessageHistory = ({ navigation, route }) => {
       
       // Fetch the next page of messages
       fetchMessages(selectedConversation, currentPage + 1);
+      
+      // Extra protection against rapid pagination requests
+      // This acts as a backup to prevent request spam
+      setTimeout(() => {
+        // Reset loading flags if they're still set after 5 seconds
+        // This helps recover from cases where the loadingMore state gets stuck
+        if (isLoadingMoreRef.current) {
+          debugLog('MBA2349f87g9qbh2nfv9cg: Resetting stuck loading state after timeout');
+          isLoadingMoreRef.current = false;
+          setIsLoadingMore(false);
+        }
+      }, 5000);
+      
+      return true;
     } else {
       debugLog('MBA2349f87g9qbh2nfv9cg: Not loading more messages - conditions not met', {
         hasMore,
         isLoadingMoreRefCurrent: isLoadingMoreRef.current,
         isLoadingMore,
         selectedConversation: !!selectedConversation,
-        nextPageProcessed: processedPagesRef.current.has(currentPage + 1),
+        nextPageProcessed: nextPageAlreadyProcessed,
         reasonText: !hasMore ? 'no more messages' : 
-                   isLoadingMoreRef.current ? 'already loading (ref)' :
-                   isLoadingMore ? 'already loading (state)' :
-                   !selectedConversation ? 'no conversation selected' :
-                   processedPagesRef.current.has(currentPage + 1) ? 'page already processed' : 'unknown'
+                   isAlreadyLoading ? 'already loading messages' :
+                   nextPageAlreadyProcessed ? 'page already processed' : 'unknown'
       });
+      return false;
     }
   }, [hasMore, currentPage, selectedConversation, messages.length, isLoadingMore]);
 
