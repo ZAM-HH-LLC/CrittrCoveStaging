@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, Text, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
@@ -12,6 +12,21 @@ const MessageInput = ({
 }) => {
   const [messageContent, setMessageContent] = useState('');
   const textInputRef = useRef(null);
+  const defaultHeight = 40; // Define constant for default height
+
+  const resetInputHeight = useCallback(() => {
+    if (Platform.OS === 'web' && textInputRef.current) {
+      textInputRef.current.style.height = 'auto';
+      textInputRef.current.style.height = `${defaultHeight}px`; // Reset to default height
+    }
+  }, []);
+
+  // Set initial height when component mounts
+  useEffect(() => {
+    if (Platform.OS === 'web' && textInputRef.current) {
+      textInputRef.current.style.height = `${defaultHeight}px`;
+    }
+  }, []);
 
   const handleSend = useCallback(async () => {
     if (messageContent.trim()) {
@@ -20,17 +35,33 @@ const MessageInput = ({
         setMessageContent('');
         if (textInputRef.current) {
           textInputRef.current.clear();
+          resetInputHeight(); // Reset height after sending
+          
+          // Keep focus on the input after sending
+          setTimeout(() => {
+            if (textInputRef.current) {
+              console.log('MBA5001: Refocusing input after send');
+              textInputRef.current.focus();
+            }
+          }, 0);
         }
       } catch (error) {
         console.error('Error sending message:', error);
       }
     }
-  }, [messageContent, onSendMessage]);
+  }, [messageContent, onSendMessage, resetInputHeight]);
 
   const adjustHeight = useCallback(() => {
     if (Platform.OS === 'web' && textInputRef.current) {
-      textInputRef.current.style.height = 'auto';
-      textInputRef.current.style.height = Math.min(textInputRef.current.scrollHeight, 120) + 'px';
+      // Only adjust height if content requires more space than default
+      // Add a 10px buffer to prevent premature expansion
+      const scrollHeight = textInputRef.current.scrollHeight;      
+      if (scrollHeight > defaultHeight + 10) {
+        const newHeight = Math.min(scrollHeight, 120);
+        textInputRef.current.style.height = `${newHeight}px`;
+      } else {
+        textInputRef.current.style.height = `${defaultHeight}px`;
+      }
     }
   }, []);
 
@@ -88,7 +119,8 @@ const MessageInput = ({
               styles.textInput,
               Platform.OS === 'web' && { 
                 maxHeight: 120,
-                minHeight: 40
+                minHeight: defaultHeight,
+                fontSize: 22 // Increased font size
               }
             ]}
             placeholder="Type a Message..."
@@ -103,7 +135,9 @@ const MessageInput = ({
         <TouchableOpacity 
           style={[
             styles.sendButton,
-            messageContent.trim() ? styles.sendButtonActive : styles.sendButtonInactive
+            messageContent.trim() ? 
+              {...styles.sendButtonActive, backgroundColor: theme.colors.primary} : 
+              styles.sendButtonInactive
           ]}
           onPress={handleSend}
           disabled={!messageContent.trim()}
@@ -111,7 +145,7 @@ const MessageInput = ({
           <MaterialCommunityIcons 
             name="send" 
             size={20} 
-            color={messageContent.trim() ? theme.colors.surface : theme.colors.placeholder}
+            color={messageContent.trim() ? (theme.colors.surfaceContrast || 'white') : theme.colors.surfaceContrast}
           />
         </TouchableOpacity>
       </View>
