@@ -31,7 +31,7 @@ export default function SignIn() {
     let isValid = true;
     
     // Validate email
-    const emailValidation = validateEmail(email);
+    const emailValidation = validateEmail(email.trim());
     setEmailError(emailValidation.message);
     if (!emailValidation.isValid) isValid = false;
     
@@ -61,7 +61,7 @@ export default function SignIn() {
         url: `${API_BASE_URL}/api/token/`,
         method: 'POST',
         data: {
-          email: email.toLowerCase(),
+          email: email.trim().toLowerCase(),
           password: '***' // masked for security
         }
       });
@@ -69,7 +69,7 @@ export default function SignIn() {
       debugLog('MBA67890 Attempting to authenticate with backend');
       
       const response = await axios.post(`${API_BASE_URL}/api/token/`, {
-        email: email.toLowerCase(),
+        email: email.trim().toLowerCase(),
         password: password,
       });
 
