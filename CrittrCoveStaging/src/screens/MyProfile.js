@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Image, Platform, StatusBar, Alert, useWindowDimensions, SafeAreaView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { Button, Portal, Dialog, Paragraph } from 'react-native-paper';
@@ -62,7 +62,7 @@ const MyProfile = () => {
     completeTutorial,
   } = useContext(TutorialContext);
 
-  const loadActiveTab = async () => {
+  const loadActiveTab = useCallback(async () => {
     try {
       // First, check URL parameters directly when on web
       if (Platform.OS === 'web') {
@@ -108,108 +108,9 @@ const MyProfile = () => {
     } catch (error) {
       debugLog('MBAuieo2o34nf Error loading active tab', error);
     }
-  };
-
-  // Get initialTab from navigation params
-  useEffect(() => {
-    loadActiveTab();
   }, [navigation, stepData]);
 
-  // Store the active tab whenever it changes
-  useEffect(() => {
-    const storeActiveTab = async () => {
-      try {
-        await setStorage('MyProfileActiveTab', activeTab);
-        
-        // Update URL params without reloading the page
-        if (Platform.OS === 'web') {
-          const url = new URL(window.location.href);
-          url.searchParams.set('initialTab', activeTab);
-          window.history.replaceState({}, '', url.toString());
-        }
-        
-        debugLog('MBAuieo2o34nf Stored active tab', { activeTab });
-      } catch (error) {
-        debugLog('MBAuieo2o34nf Error storing active tab', error);
-      }
-    };
-    
-    if (activeTab) {
-      storeActiveTab();
-    }
-  }, [activeTab]);
-
-  // Add a new useEffect to handle tab changes from the tutorial
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-      if (params?.screen) {
-        debugLog('MBA54321 MyProfile focus event - setting active tab', { screen: params.screen });
-        setActiveTab(params.screen);
-      } else if (params?.initialTab) {
-        debugLog('MBA54321 MyProfile focus event - setting active tab', { initialTab: params.initialTab });
-        setActiveTab(params.initialTab);
-      }
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  // Add a new useEffect to handle tab changes from the tutorial
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('state', () => {
-      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-      if (params?.screen) {
-        debugLog('MBA54321 MyProfile state change - setting active tab', { screen: params.screen });
-        setActiveTab(params.screen);
-      } else if (params?.initialTab) {
-        debugLog('MBA54321 MyProfile state change - setting active tab', { initialTab: params.initialTab });
-        setActiveTab(params.initialTab);
-      }
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  useEffect(() => {
-    const updateLayout = () => {
-      setIsMobile(screenWidth <= 900);
-      setIsWideScreen(screenWidth >= 1200);
-    };
-    updateLayout();
-  }, [screenWidth]);
-
-  useEffect(() => {
-    debugLog('MBA5678: MyProfile useEffect running - about to call loadProfileData');
-    loadProfileData();
-  }, []);
-
-  const loadProfileData = async () => {
-    try {
-      setLoading(true);
-      // Log the userToken before making the API call
-      const token = await getStorage('userToken');
-      debugLog('MBA5678: userToken before userProfile call:', token);
-      const response = await userProfile();
-      setProfileData(response);
-      
-      // Check for pets with missing owners and fix them if needed
-      await checkAndFixPetOwners();
-      
-      setLoading(false);
-      
-      // Wait for the tab to be loaded before trying to update active tab from URL
-      setTimeout(() => {
-        loadActiveTab();
-      }, 100);
-    } catch (error) {
-      setError('Failed to load profile data');
-      setLoading(false);
-      debugLog('Failed to load profile data:', error);
-    }
-  };
-  
-  const checkAndFixPetOwners = async () => {
+  const checkAndFixPetOwners = useCallback(async () => {
     try {
       // Check if we have any pets that need fixing
       if (profileData?.pets && profileData.pets.length > 0) {
@@ -245,7 +146,106 @@ const MyProfile = () => {
     } catch (error) {
       debugLog('MBA5432', 'Error checking/fixing pet owners:', error);
     }
-  };
+  }, [profileData]);
+
+  const loadProfileData = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Log the userToken before making the API call
+      const token = await getStorage('userToken');
+      debugLog('MBA5678: userToken before userProfile call:', token);
+      const response = await userProfile();
+      setProfileData(response);
+      
+      // Check for pets with missing owners and fix them if needed
+      await checkAndFixPetOwners();
+      
+      setLoading(false);
+      
+      // Wait for the tab to be loaded before trying to update active tab from URL
+      setTimeout(() => {
+        loadActiveTab();
+      }, 100);
+    } catch (error) {
+      setError('Failed to load profile data');
+      setLoading(false);
+      debugLog('Failed to load profile data:', error);
+    }
+  }, [checkAndFixPetOwners, loadActiveTab]);
+
+  // Get initialTab from navigation params
+  useEffect(() => {
+    loadActiveTab();
+  }, [loadActiveTab]);
+
+  // Add a new useEffect to handle tab changes from the tutorial
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Reload profile data when screen comes into focus
+      debugLog('MBA54321 MyProfile focus event - reloading profile data');
+      loadProfileData();
+      
+      // Existing tab handling code
+      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+      if (params?.screen) {
+        debugLog('MBA54321 MyProfile focus event - setting active tab', { screen: params.screen });
+        setActiveTab(params.screen);
+      } else if (params?.initialTab) {
+        debugLog('MBA54321 MyProfile focus event - setting active tab', { initialTab: params.initialTab });
+        setActiveTab(params.initialTab);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, loadProfileData, setActiveTab]);
+
+  // Store the active tab whenever it changes
+  useEffect(() => {
+    const storeActiveTab = async () => {
+      try {
+        await setStorage('MyProfileActiveTab', activeTab);
+        
+        // Update URL params without reloading the page
+        if (Platform.OS === 'web') {
+          const url = new URL(window.location.href);
+          url.searchParams.set('initialTab', activeTab);
+          window.history.replaceState({}, '', url.toString());
+        }
+        
+        debugLog('MBAuieo2o34nf Stored active tab', { activeTab });
+      } catch (error) {
+        debugLog('MBAuieo2o34nf Error storing active tab', error);
+      }
+    };
+    
+    if (activeTab) {
+      storeActiveTab();
+    }
+  }, [activeTab]);
+
+  // Add a new useEffect to handle tab changes from the tutorial
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('state', () => {
+      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+      if (params?.screen) {
+        debugLog('MBA54321 MyProfile state change - setting active tab', { screen: params.screen });
+        setActiveTab(params.screen);
+      } else if (params?.initialTab) {
+        debugLog('MBA54321 MyProfile state change - setting active tab', { initialTab: params.initialTab });
+        setActiveTab(params.initialTab);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setIsMobile(screenWidth <= 900);
+      setIsWideScreen(screenWidth >= 1200);
+    };
+    updateLayout();
+  }, [screenWidth]);
 
   const handleLogout = async () => {
     try {
