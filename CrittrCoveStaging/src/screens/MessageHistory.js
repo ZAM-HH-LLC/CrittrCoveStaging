@@ -19,6 +19,9 @@ import MessageNotificationContext from '../context/MessageNotificationContext';
 import { getConversationMessages, createDraftFromBooking, getConversations, sendDebugLog, logInputEvent } from '../api/API';
 import { navigateToFrom } from '../components/Navigation';
 import { applyViewportFix } from '../utils/viewport-fix';
+import ImageViewer from '../components/Messages/ImageViewer';
+import { useImageViewer } from '../components/Messages/useImageViewer';
+import ClickableImage from '../components/Messages/ClickableImage';
 
 // Import our new components
 import MessageList from '../components/Messages/MessageList';
@@ -28,6 +31,8 @@ import MessageHeader from '../components/Messages/MessageHeader';
 import { useMessageLogic } from '../components/Messages/useMessageLogic';
 import { createMessageStyles } from '../components/Messages/styles';
 import ClientPetsModal from '../components/ClientPetsModal';
+import { formatMessageTime, shouldShowTimestamp } from '../components/Messages/messageTimeUtils';
+import MessageTimestamp from '../components/Messages/MessageTimestamp';
 
 const MessageHistory = ({ navigation, route }) => {
   // IMPORTANT: React hooks rules require that hooks are called in the same order
@@ -46,6 +51,14 @@ const MessageHistory = ({ navigation, route }) => {
   
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [selectedConversationData, setSelectedConversationData] = useState(null);
+  
+  // Add image viewer state
+  const { 
+    isImageViewerVisible, 
+    selectedImageUrl, 
+    handleImagePress, 
+    closeImageViewer 
+  } = useImageViewer();
   
   // Move these state declarations before the useEffect that uses them
   const [messages, setMessages] = useState([]);
@@ -1816,7 +1829,7 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [hasMore, currentPage, selectedConversation, messages.length, isLoadingMore]);
 
-  const renderMessage = useCallback(({ item }) => {
+  const renderMessage = useCallback(({ item, index }) => {
     // Create a map to keep track of which bookings have change requests and latest message timestamps
     const bookingMessages = groupMessagesByBookingId(messages);
     
@@ -1825,6 +1838,16 @@ const MessageHistory = ({ navigation, route }) => {
       .filter(m => m.type_of_message === 'booking_confirmed')
       .map(m => m.metadata?.booking_id)
       .filter(Boolean);
+    
+    // Get previous message (newer in the timeline since the list is inverted)
+    const prevMessage = index < messages.length - 1 ? messages[index + 1] : null;
+    
+    // Check if we should show timestamp for this message
+    const showTimestamp = shouldShowTimestamp(item, prevMessage, index === 0);
+    
+    // Format the message time if we have a timestamp
+    const formattedTime = item.timestamp ? 
+      formatMessageTime(item.timestamp, timeSettings?.timezone || 'America/Denver') : '';
       
     // Check if the message has images in various formats
     const hasImages = item.image_urls && item.image_urls.length > 0;
@@ -1835,18 +1858,6 @@ const MessageHistory = ({ navigation, route }) => {
     // If it's an image message but we don't have any detected images yet, force hasLegacyImage to true
     // This is needed for single image messages without a separate image_urls array
     const forceHasImage = isImageMessage && !hasImages && !hasLegacyImage && item.image_url;
-    
-    // Debug log the message details to see what we're working with
-    debugLog('MBA9999: Rendering message:', {
-      messageId: item.message_id,
-      type: item.type_of_message,
-      hasImages,
-      hasLegacyImage,
-      isImageMessage,
-      imageUrl: item.image_url,
-      imageUrls: item.image_urls,
-      metadata: item.metadata
-    });
     
     // Find approval requests for already confirmed bookings
     const bookingsWithUpdates = {};
@@ -1980,50 +1991,59 @@ const MessageHistory = ({ navigation, route }) => {
       }
 
       return (
-        <BookingMessageCard
-          type={item.type_of_message === 'initial_booking_request' ? 'request' : 'approval'}
-          displayType={isUpdateToConfirmedBooking ? 'booking_update' : undefined}
-          data={{
-            ...item.metadata,
-            booking_id: item.metadata.booking_id,
-            service_type: item.metadata.service_type,
-            total_owner_cost: totalOwnerCost,
-            occurrences: item.metadata.occurrences || []
-          }}
-          isFromMe={isFromMe}
-          onPress={() => {
-            // Navigate to booking details if we have a booking_id
-            if (item.metadata.booking_id) {
-              navigation.navigate('BookingDetails', { 
-                bookingId: item.metadata.booking_id,
-                from: 'MessageHistory'
-              });
-            }
-          }}
-          isProfessional={selectedConversationData?.is_professional}
-          onApproveSuccess={(response) => {
-            // Update the messages list to reflect the approval
-            // You would typically update the booking status here
-            if (response && response.status) {
-              Alert.alert('Success', 'Booking approved successfully');
-              // Refresh messages to update the UI
-              debugLog(`MBA2349f87g9qbh2nfv9cg: Refreshing messages after approval success`);
-              fetchMessages(selectedConversation, 1);
-            }
-          }}
-          onApproveError={(error) => {
-            Alert.alert('Error', error || 'Failed to approve booking');
-          }}
-          onEditDraft={showEditDraft ? () => {
-            debugLog('MBA6428: Edit Draft button clicked, calling handleEditDraft with bookingId:', bookingId);
-            handleEditDraft(bookingId);
-          } : undefined}
-          bookingStatus={bookingStatus}
-          hasChangeRequest={hasAssociatedChangeRequest || hasNewerRequestChanges}
-          isNewestMessage={isNewestMessage}
-          messageCreatedAt={messageCreatedAt}
-          isAfterConfirmation={isUpdateToConfirmedBooking}
-        />
+        <View>
+          <MessageTimestamp 
+            message={item}
+            isFromMe={isFromMe}
+            styles={styles}
+            userTimezone={timeSettings?.timezone || 'America/Denver'}
+            show={showTimestamp}
+          />
+          <BookingMessageCard
+            type={item.type_of_message === 'initial_booking_request' ? 'request' : 'approval'}
+            displayType={isUpdateToConfirmedBooking ? 'booking_update' : undefined}
+            data={{
+              ...item.metadata,
+              booking_id: item.metadata.booking_id,
+              service_type: item.metadata.service_type,
+              total_owner_cost: totalOwnerCost,
+              occurrences: item.metadata.occurrences || []
+            }}
+            isFromMe={isFromMe}
+            onPress={() => {
+              // Navigate to booking details if we have a booking_id
+              if (item.metadata.booking_id) {
+                navigation.navigate('BookingDetails', { 
+                  bookingId: item.metadata.booking_id,
+                  from: 'MessageHistory'
+                });
+              }
+            }}
+            isProfessional={selectedConversationData?.is_professional}
+            onApproveSuccess={(response) => {
+              // Update the messages list to reflect the approval
+              // You would typically update the booking status here
+              if (response && response.status) {
+                Alert.alert('Success', 'Booking approved successfully');
+                // Refresh messages to update the UI
+                debugLog(`MBA2349f87g9qbh2nfv9cg: Refreshing messages after approval success`);
+                fetchMessages(selectedConversation, 1);
+              }
+            }}
+            onApproveError={(error) => {
+              Alert.alert('Error', error || 'Failed to approve booking');
+            }}
+            onEditDraft={showEditDraft ? () => {
+              debugLog('MBA6428: Edit Draft button clicked, calling handleEditDraft with bookingId:', bookingId);
+              handleEditDraft(bookingId);
+            } : undefined}
+            bookingStatus={bookingStatus}
+            hasChangeRequest={hasAssociatedChangeRequest || hasNewerRequestChanges}
+            isNewestMessage={isNewestMessage}
+            messageCreatedAt={messageCreatedAt}
+            isAfterConfirmation={isUpdateToConfirmedBooking}
+          />
+        </View>
       );
     }
 
@@ -2090,46 +2110,55 @@ const MessageHistory = ({ navigation, route }) => {
       });
       
       return (
-        <BookingMessageCard
-          type="request_changes"
-          data={{
-            ...item.metadata,
-            booking_id: bookingId,
-            service_type: serviceType,
-            cost_summary: item.metadata?.cost_summary || {},
-            occurrences: item.metadata?.occurrences || [],
-            content: item.content // Include the message content for display
-          }}
-          isFromMe={isFromMe}
-          onPress={() => {
-            // Navigate to booking details if we have a booking_id
-            if (bookingId) {
-              navigation.navigate('BookingDetails', { 
-                bookingId: bookingId,
-                from: 'MessageHistory'
-              });
-            }
-          }}
-          isProfessional={selectedConversationData?.is_professional}
-          onApproveSuccess={(response) => {
-            if (response && response.status) {
-              Alert.alert('Success', 'Changes handled successfully');
-              debugLog(`MBA2349f87g9qbh2nfv9cg: Refreshing messages after change approval`);
-              fetchMessages(selectedConversation, 1);
-            }
-          }}
-          onApproveError={(error) => {
-            Alert.alert('Error', error || 'Failed to process changes');
-          }}
-          onEditDraft={selectedConversationData?.is_professional ? () => {
-            handleEditDraft(bookingId);
-          } : undefined}
-          bookingStatus={bookingStatus}
-          hasChangeRequest={false} // Change requests don't have change requests themselves
-          isNewestMessage={isNewestChangeRequest} // Use enhanced newest message check
-          messageCreatedAt={messageCreatedAt}
-          isAfterConfirmation={isRelatedToUpdate} // Flag for change requests after an update
-        />
+        <View>
+          <MessageTimestamp 
+            message={item}
+            isFromMe={isFromMe}
+            styles={styles}
+            userTimezone={timeSettings?.timezone || 'America/Denver'}
+            show={showTimestamp}
+          />
+          <BookingMessageCard
+            type="request_changes"
+            data={{
+              ...item.metadata,
+              booking_id: bookingId,
+              service_type: serviceType,
+              cost_summary: item.metadata?.cost_summary || {},
+              occurrences: item.metadata?.occurrences || [],
+              content: item.content // Include the message content for display
+            }}
+            isFromMe={isFromMe}
+            onPress={() => {
+              // Navigate to booking details if we have a booking_id
+              if (bookingId) {
+                navigation.navigate('BookingDetails', { 
+                  bookingId: bookingId,
+                  from: 'MessageHistory'
+                });
+              }
+            }}
+            isProfessional={selectedConversationData?.is_professional}
+            onApproveSuccess={(response) => {
+              if (response && response.status) {
+                Alert.alert('Success', 'Changes handled successfully');
+                debugLog(`MBA2349f87g9qbh2nfv9cg: Refreshing messages after change approval`);
+                fetchMessages(selectedConversation, 1);
+              }
+            }}
+            onApproveError={(error) => {
+              Alert.alert('Error', error || 'Failed to process changes');
+            }}
+            onEditDraft={selectedConversationData?.is_professional ? () => {
+              handleEditDraft(bookingId);
+            } : undefined}
+            bookingStatus={bookingStatus}
+            hasChangeRequest={false} // Change requests don't have change requests themselves
+            isNewestMessage={isNewestChangeRequest} // Use enhanced newest message check
+            messageCreatedAt={messageCreatedAt}
+            isAfterConfirmation={isRelatedToUpdate} // Flag for change requests after an update
+          />
+        </View>
       );
     }
 
@@ -2163,36 +2192,45 @@ const MessageHistory = ({ navigation, route }) => {
       });
       
       return (
-        <BookingMessageCard
-          type="booking_confirmed"
-          data={{
-            booking_id: bookingId,
-            service_type: serviceType,
-            cost_summary: {
-              total_client_cost: totalCost,
-              total_sitter_payout: payout
-            }
-          }}
-          isFromMe={isFromMe}
-          onPress={() => {
-            // Navigate to booking details if we have a booking_id
-            if (bookingId) {
-              navigation.navigate('BookingDetails', { 
-                bookingId: bookingId,
-                from: 'MessageHistory'
-              });
-            }
-          }}
-          isProfessional={selectedConversationData?.is_professional}
-          bookingStatus="Confirmed"
-          isNewestMessage={isNewestMessage}
-          messageCreatedAt={messageCreatedAt}
-          onEditDraft={selectedConversationData?.is_professional ? () => {
-            debugLog('MBA6428: Edit Draft button clicked for confirmed booking with bookingId:', bookingId);
-            handleEditDraft(bookingId);
-          } : undefined}
-          hasNewerApprovalRequests={hasNewerApprovalRequests}
-        />
+        <View>
+          <MessageTimestamp 
+            message={item}
+            isFromMe={isFromMe}
+            styles={styles}
+            userTimezone={timeSettings?.timezone || 'America/Denver'}
+            show={showTimestamp}
+          />
+          <BookingMessageCard
+            type="booking_confirmed"
+            data={{
+              booking_id: bookingId,
+              service_type: serviceType,
+              cost_summary: {
+                total_client_cost: totalCost,
+                total_sitter_payout: payout
+              }
+            }}
+            isFromMe={isFromMe}
+            onPress={() => {
+              // Navigate to booking details if we have a booking_id
+              if (bookingId) {
+                navigation.navigate('BookingDetails', { 
+                  bookingId: bookingId,
+                  from: 'MessageHistory'
+                });
+              }
+            }}
+            isProfessional={selectedConversationData?.is_professional}
+            bookingStatus="Confirmed"
+            isNewestMessage={isNewestMessage}
+            messageCreatedAt={messageCreatedAt}
+            onEditDraft={selectedConversationData?.is_professional ? () => {
+              debugLog('MBA6428: Edit Draft button clicked for confirmed booking with bookingId:', bookingId);
+              handleEditDraft(bookingId);
+            } : undefined}
+            hasNewerApprovalRequests={hasNewerApprovalRequests}
+          />
+        </View>
       );
     }
 
@@ -2223,28 +2261,14 @@ const MessageHistory = ({ navigation, route }) => {
         isFromMe
       });
       return (
-        <>
-          {/* Render caption first if it exists */}
-          {item.content && item.content.trim().length > 0 && (
-            <View style={[
-              isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer,
-              { marginBottom: 4 } // Add space between caption and images
-            ]}>
-              <View style={[
-                styles.messageCard, 
-                isFromMe ? styles.sentMessage : styles.receivedMessage
-              ]}>
-                <View style={styles.messageContent}>
-                  <Text style={[
-                    styles.messageText,
-                    isFromMe ? styles.sentMessageText : styles.receivedMessageText
-                  ]}>
-                    {item.content}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
+        <View>
+          <MessageTimestamp 
+            message={item}
+            isFromMe={isFromMe}
+            styles={styles}
+            userTimezone={timeSettings?.timezone || 'America/Denver'}
+            show={showTimestamp}
+          />
           
           {/* Image Container */}
           <View style={isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer}>
@@ -2260,19 +2284,21 @@ const MessageHistory = ({ navigation, route }) => {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginVertical: 8,
+                    // marginVertical: 8,
                     width: '100%',
                   }}>
                     {item.image_urls.map((imageUrl, index) => (
-                      <Image 
+                      <ClickableImage
                         key={`${imageUrl}-${index}`}
-                        source={{ uri: API_BASE_URL + imageUrl }} 
+                        imageUrl={imageUrl}
+                        onPress={handleImagePress}
                         style={{
-                          width: 250,
-                          height: 250,
-                          borderRadius: 8,
-                          marginVertical: 4,
-                          resizeMode: 'cover',
+                          image: {
+                            width: 250,
+                            height: 250,
+                            borderRadius: 8,
+                            // marginVertical: 4,
+                          }
                         }}
                       />
                     ))}
@@ -2289,15 +2315,17 @@ const MessageHistory = ({ navigation, route }) => {
                     width: '100%',
                   }}>
                     {item.metadata.image_urls.map((imageUrl, index) => (
-                      <Image 
+                      <ClickableImage
                         key={`${imageUrl}-${index}`}
-                        source={{ uri: API_BASE_URL + imageUrl }} 
+                        imageUrl={imageUrl}
+                        onPress={handleImagePress}
                         style={{
-                          width: 250,
-                          height: 250,
-                          borderRadius: 8,
-                          marginVertical: 4,
-                          resizeMode: 'cover',
+                          image: {
+                            width: 250,
+                            height: 250,
+                            borderRadius: 8,
+                            marginVertical: 4,
+                          }
                         }}
                       />
                     ))}
@@ -2313,14 +2341,16 @@ const MessageHistory = ({ navigation, route }) => {
                     marginVertical: 8,
                     width: '100%',
                   }}>
-                    <Image 
-                      source={{ uri: item.image.url }} 
+                    <ClickableImage
+                      imageUrl={item.image.url}
+                      onPress={handleImagePress}
                       style={{
-                        width: 250,
-                        height: 250,
-                        borderRadius: 8,
-                        marginVertical: 4,
-                        resizeMode: 'cover',
+                        image: {
+                          width: 250,
+                          height: 250,
+                          borderRadius: 8,
+                          marginVertical: 4,
+                        }
                       }}
                     />
                   </View>
@@ -2335,14 +2365,16 @@ const MessageHistory = ({ navigation, route }) => {
                     marginVertical: 8,
                     width: '100%',
                   }}>
-                    <Image 
-                      source={{ uri: API_BASE_URL + item.image_url }} 
+                    <ClickableImage
+                      imageUrl={item.image_url}
+                      onPress={handleImagePress}
                       style={{
-                        width: 250,
-                        height: 250,
-                        borderRadius: 8,
-                        marginVertical: 4,
-                        resizeMode: 'cover',
+                        image: {
+                          width: 250,
+                          height: 250,
+                          borderRadius: 8,
+                          marginVertical: 4,
+                        }
                       }}
                     />
                   </View>
@@ -2357,14 +2389,16 @@ const MessageHistory = ({ navigation, route }) => {
                     marginVertical: 8,
                     width: '100%',
                   }}>
-                    <Image 
-                      source={{ uri: API_BASE_URL + item.image_url }} 
+                    <ClickableImage
+                      imageUrl={item.image_url}
+                      onPress={handleImagePress}
                       style={{
-                        width: 250,
-                        height: 250,
-                        borderRadius: 8,
-                        marginVertical: 4,
-                        resizeMode: 'cover',
+                        image: {
+                          width: 250,
+                          height: 250,
+                          borderRadius: 8,
+                          marginVertical: 4,
+                        }
                       }}
                     />
                   </View>
@@ -2372,30 +2406,60 @@ const MessageHistory = ({ navigation, route }) => {
               </View>
             </View>
           </View>
-        </>
+          
+          {/* Render caption AFTER the images if it exists */}
+          {item.content && item.content.trim().length > 0 && (
+            <View style={[
+              isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer
+            ]}>
+              <View style={[
+                styles.messageCard, 
+                isFromMe ? styles.sentMessage : styles.receivedMessage
+              ]}>
+                <View style={styles.messageContent}>
+                  <Text style={[
+                    styles.messageText,
+                    isFromMe ? styles.sentMessageText : styles.receivedMessageText
+                  ]}>
+                    {item.content}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
       );
     }
     
     // Handle normal text messages
     const isFromMe = !item.sent_by_other_user;
     return (
-      <View style={isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer}>
-        <View style={[
-          styles.messageCard, 
-          isFromMe ? styles.sentMessage : styles.receivedMessage
-        ]}>
-          <View style={styles.messageContent}>
-            <Text style={[
-              styles.messageText,
-              isFromMe ? styles.sentMessageText : styles.receivedMessageText
-            ]}>
-              {item.content}
-            </Text>
+      <View>
+        <MessageTimestamp 
+          message={item}
+          isFromMe={isFromMe}
+          styles={styles}
+          userTimezone={timeSettings?.timezone || 'America/Denver'}
+          show={showTimestamp}
+        />
+        <View style={isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer}>
+          <View style={[
+            styles.messageCard, 
+            isFromMe ? styles.sentMessage : styles.receivedMessage
+          ]}>
+            <View style={styles.messageContent}>
+              <Text style={[
+                styles.messageText,
+                isFromMe ? styles.sentMessageText : styles.receivedMessageText
+              ]}>
+                {item.content}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
     );
-  }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages, messages]);
+  }, [navigation, selectedConversationData, timeSettings, hasDraft, draftData, selectedConversation, fetchMessages, messages, handleImagePress]);
 
   const handleBookingRequest = async (modalData) => {
     try {
@@ -2608,6 +2672,7 @@ const MessageHistory = ({ navigation, route }) => {
                 styles={styles}
                 theme={theme}
                 className="message-list-component"
+                userTimezone={timeSettings?.timezone || 'America/Denver'}
               />
             )}
           </View>
@@ -3942,6 +4007,13 @@ const MessageHistory = ({ navigation, route }) => {
         onClose={() => setShowDraftConfirmModal(false)}
         onContinueExisting={handleContinueExisting}
         onCreateNew={handleCreateNew}
+      />
+      
+      {/* Image Viewer Modal */}
+      <ImageViewer
+        visible={isImageViewerVisible}
+        imageUrl={selectedImageUrl}
+        onClose={closeImageViewer}
       />
     </View>
   );

@@ -1,6 +1,9 @@
-import React, { useRef, useCallback, forwardRef, useState } from 'react';
-import { FlatList, ActivityIndicator, Platform } from 'react-native';
+import React, { useRef, useCallback, forwardRef, useState, useMemo } from 'react';
+import { FlatList, ActivityIndicator, Platform, View } from 'react-native';
 import { debugLog } from '../../context/AuthContext';
+import MessageDateSeparator from './MessageDateSeparator';
+import { formatMessageDate, groupMessagesByDate } from './messageTimeUtils';
+import moment from 'moment-timezone';
 
 const MessageList = forwardRef(({ 
   messages, 
@@ -10,7 +13,8 @@ const MessageList = forwardRef(({
   onLoadMore,
   styles,
   theme,
-  className
+  className,
+  userTimezone
 }, ref) => {
   const flatListRef = useRef(null);
   const isUserScrollingRef = useRef(false);
@@ -21,6 +25,11 @@ const MessageList = forwardRef(({
   const scrollPositionRef = useRef(0);
   const lastPaginationTimeRef = useRef(0);
   const PAGINATION_COOLDOWN = 1000; // Reduced from 2000 to 1000 for more responsive pagination
+  
+  // Group messages by date
+  const messagesByDate = useMemo(() => {
+    return groupMessagesByDate(messages, userTimezone);
+  }, [messages, userTimezone]);
   
   // Track which indices we've already triggered pagination for
   const paginatedIndicesRef = useRef(new Set());
@@ -819,11 +828,123 @@ const MessageList = forwardRef(({
     }
   }), []);
   
+  // Create message groups by date
+  const messageGroups = useMemo(() => {
+    const groups = groupMessagesByDate(messages, userTimezone);
+    debugLog('MBA2349fh04h: Message groups created', { 
+      dateCount: Object.keys(groups).length,
+      dates: Object.keys(groups),
+      timezone: userTimezone
+    });
+    return groups;
+  }, [messages, userTimezone]);
+
+  // Function to get the date key from a timestamp
+  const getDateKey = useCallback((timestamp) => {
+    if (!timestamp) return null;
+    try {
+      return moment(timestamp).tz(userTimezone).format('YYYY-MM-DD');
+    } catch (error) {
+      debugLog('MBA2349fh04h: Error getting date key', { error: error.message, timestamp });
+      return null;
+    }
+  }, [userTimezone]);
+
+  // Function to determine if a message should show a date separator
+  const shouldShowDateSeparator = useCallback((item, index) => {
+    if (!item || !item.timestamp) {
+      return false;
+    }
+    
+    // Get the date key for current message
+    const currentDateKey = getDateKey(item.timestamp);
+    if (!currentDateKey) return false;
+    
+    // For the oldest message (last in array, top of visual list), always show date
+    // but we'll render it ABOVE the message, not below
+    if (index === messages.length - 1) {
+      return true;
+    }
+    
+    // For other messages, we check if the next message (older visually above)
+    // has a different date
+    if (index < messages.length - 1) {
+      const nextMessage = messages[index + 1];
+      if (!nextMessage || !nextMessage.timestamp) return false;
+      
+      const nextDateKey = getDateKey(nextMessage.timestamp);
+      if (!nextDateKey) return false;
+      
+      // Only show date separator when the date actually changes
+      return currentDateKey !== nextDateKey;
+    }
+    
+    return false;
+  }, [messages, getDateKey]);
+
+  // Enhanced renderItem function that adds date separators
+  const renderItemWithDateSeparator = useCallback(({ item, index }) => {
+    const isOldestMessage = index === messages.length - 1;
+    
+    // Check if this message needs a date separator
+    const needsDateSeparator = shouldShowDateSeparator(item, index);
+    let formattedDate = null;
+    
+    if (needsDateSeparator && item.timestamp) {
+      formattedDate = formatMessageDate(item.timestamp, userTimezone);
+      
+      // Fix for the "Today" label issue
+      if (formattedDate === 'Today') {
+        const now = moment().tz(userTimezone);
+        const todayKey = now.format('YYYY-MM-DD');
+        const messageKey = getDateKey(item.timestamp);
+        
+        // If the message is not actually from today, use the full date format
+        if (messageKey !== todayKey) {
+          const messageDate = moment(item.timestamp).tz(userTimezone);
+          formattedDate = messageDate.format('MMMM D, YYYY');
+        }
+      }
+    }
+    
+    // Render the message content
+    const renderedMessage = renderMessage({ item, index });
+    
+    // For hidden messages that don't render content
+    if (!renderedMessage) {
+      return needsDateSeparator && formattedDate ? (
+        <View>
+          <MessageDateSeparator date={formattedDate} />
+        </View>
+      ) : null;
+    }
+    
+    // Special handling for oldest message - put date ABOVE
+    if (isOldestMessage) {
+      return (
+        <View>
+          {formattedDate && <MessageDateSeparator date={formattedDate} />}
+          {renderedMessage}
+        </View>
+      );
+    }
+    
+    // For regular messages - date goes BELOW (which appears above in inverted list)
+    return (
+      <View>
+        {renderedMessage}
+        {needsDateSeparator && formattedDate && !isOldestMessage && (
+          <MessageDateSeparator date={formattedDate} />
+        )}
+      </View>
+    );
+  }, [renderMessage, shouldShowDateSeparator, userTimezone, getDateKey, messages.length]);
+
   return (
     <FlatList
       ref={flatListRef}
       data={messages}
-      renderItem={renderMessage}
+      renderItem={renderItemWithDateSeparator}
       keyExtractor={keyExtractor}
       style={[styles.messageList, { minHeight: '100%' }]}
       onEndReached={handleEndReached}

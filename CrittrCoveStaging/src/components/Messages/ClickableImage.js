@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     borderRadius: 8,
-    marginVertical: 4,
+    // marginVertical: 4,
   },
   image: {
     width: 250,

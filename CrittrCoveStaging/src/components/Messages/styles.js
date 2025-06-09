@@ -274,7 +274,7 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     fontFamily: theme.fonts.regular.fontFamily,
   },
   messageCard: {
-    marginVertical: 4,
+    // marginVertical: 4,
     maxWidth: screenWidth > 900 ? '40%' : '75%',
     borderRadius: 12,
     overflow: 'hidden',
@@ -298,7 +298,7 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
   },
   sentMessageContainer: {
     alignItems: 'flex-end',
-    marginBottom: 4,
+    // marginBottom: 4,
   },
   receivedMessageContainer: {
     alignItems: 'flex-start',
@@ -309,6 +309,27 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
   },
   receivedMessageText: {
     color: theme.colors.text,
+  },
+  // Timestamp styles
+  messageTimestampContainer: {
+    paddingHorizontal: 4,
+    marginBottom: 2,
+    marginTop: 8,
+  },
+  sentMessageTimestamp: {
+    alignSelf: 'flex-end',
+    marginRight: 4,
+    marginBottom: 2,
+  },
+  receivedMessageTimestamp: {
+    alignSelf: 'flex-start',
+    marginLeft: 4,
+    marginBottom: 2,
+  },
+  messageTimestampText: {
+    fontSize: 12,
+    color: theme.colors.placeholder,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
   searchContainer: {
     padding: 16,
@@ -643,7 +664,7 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     width: 250,
     height: 250,
     borderRadius: 8,
-    marginVertical: 4,
+    // marginVertical: 4,
     resizeMode: 'cover',
   },
   messageImagesContainer: {
