@@ -613,7 +613,7 @@ const MessageList = forwardRef(({
   // Calculate extra padding for mobile - much more for web to ensure message visibility
   // Reduce padding on iOS to avoid grey space issues
   const extraPadding = Platform.OS === 'web' ? 
-    (Platform.isPad || (Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent))) ? 0 : 0 
+    (Platform.isPad || (Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent))) ? 5 : 5 
     : 50;
   
   // Scroll to the top of the inverted list when messages change

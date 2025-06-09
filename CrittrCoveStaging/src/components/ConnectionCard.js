@@ -218,7 +218,7 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                 onMouseEnter={() => deviceSupportsHover && setIsCreateBookingHovered(true)}
                 onMouseLeave={() => deviceSupportsHover && setIsCreateBookingHovered(false)}
               >
-                <Text style={styles.createBookingText}>Create Booking</Text>
+                <Text style={styles.createBookingText}>Create Booking In Messages</Text>
               </TouchableOpacity>
             )}
           </View>

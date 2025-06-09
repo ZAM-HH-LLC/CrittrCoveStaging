@@ -3034,11 +3034,26 @@ const MessageHistory = ({ navigation, route }) => {
         // First check URL parameters on web
         if (Platform.OS === 'web') {
           const currentUrl = new URL(window.location.href);
-          const urlConversationId = currentUrl.searchParams.get('conversationId');
+          
+          // Check both possible parameter names
+          let urlConversationId = currentUrl.searchParams.get('selectedConversation');
+          
+          // If not found, try the alternate parameter name
+          if (!urlConversationId) {
+            urlConversationId = currentUrl.searchParams.get('conversationId');
+          }
           
           if (urlConversationId) {
             initialConversationId = urlConversationId;
             debugLog(`MBA4321: Using conversation ID ${urlConversationId} from URL parameters`);
+            
+            // Clean up URL parameters to be consistent
+            currentUrl.searchParams.delete('conversationId');
+            currentUrl.searchParams.delete('selectedConversation');
+            
+            // Set to the standard parameter name
+            currentUrl.searchParams.set('selectedConversation', urlConversationId);
+            window.history.replaceState({}, '', currentUrl.toString());
           }
         }
         
@@ -3091,10 +3106,60 @@ const MessageHistory = ({ navigation, route }) => {
     };
   }, []);
   
-  // Fix the beforeunload effect
+  // Handle web-specific URL parameters on page reload
   useEffect(() => {
-    // Only run in browser environment
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // When the page reloads, we need to clear the conversation parameters
+      if (window.performance) {
+        // This checks specifically for reload events (not initial page load)
+        const navigationEntry = window.performance.getEntriesByType('navigation')[0];
+        if (navigationEntry && navigationEntry.type === 'reload') {
+          debugLog('MBA3210: Page reload detected, clearing conversation parameters from URL');
+          
+          // Clear all possible URL parameters - handle both parameter names
+          const currentUrl = new URL(window.location.href);
+          
+          // Check for selectedConversation param
+          if (currentUrl.searchParams.has('selectedConversation')) {
+            currentUrl.searchParams.delete('selectedConversation');
+            debugLog('MBA3210: Removed selectedConversation parameter from URL');
+          }
+          
+          // Also check for conversationId param
+          if (currentUrl.searchParams.has('conversationId')) {
+            currentUrl.searchParams.delete('conversationId');
+            debugLog('MBA3210: Removed conversationId parameter from URL');
+          }
+          
+          // And check for isMobile param if needed
+          if (currentUrl.searchParams.has('isMobile')) {
+            currentUrl.searchParams.delete('isMobile');
+            debugLog('MBA3210: Removed isMobile parameter from URL');
+          }
+          
+          // Update the URL without refreshing the page
+          window.history.replaceState({}, '', currentUrl.toString());
+          debugLog('MBA3210: Updated URL:', currentUrl.toString());
+          
+          // Reset the selected conversation state
+          setSelectedConversation(null);
+          setSelectedConversationData(null);
+          
+          // Clear global tracking variable
+          window.selectedConversationId = null;
+          
+          // Update navigation params directly
+          if (navigation && navigation.setParams) {
+            navigation.setParams({ 
+              selectedConversation: null,
+              conversationId: null,
+              isMobile: null
+            });
+          }
+        }
+      }
+      
+      // Keep the WebSocket alive on page unload
       const handleBeforeUnload = () => {
         debugLog('MBA3210: Page unloading, but keeping websocket alive for session restore');
         // No longer disconnect WebSocket on page unload
@@ -3106,7 +3171,7 @@ const MessageHistory = ({ navigation, route }) => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
       };
     }
-  }, []);
+  }, [navigation]);
 
   // Clear processed messages cache when switching conversations
   useEffect(() => {
@@ -3143,8 +3208,14 @@ const MessageHistory = ({ navigation, route }) => {
       const currentUrl = new URL(window.location.href);
       
       if (selectedConversation) {
-        // Set the conversationId parameter
-        currentUrl.searchParams.set('conversationId', selectedConversation);
+        // First clear any existing conversation parameters for consistency
+        if (currentUrl.searchParams.has('conversationId')) {
+          currentUrl.searchParams.delete('conversationId');
+        }
+        
+        // Set the selectedConversation parameter (match the parameter name used in the URL)
+        currentUrl.searchParams.set('selectedConversation', selectedConversation);
+        
         // Store selectedConversation in global context for Navigation component
         window.selectedConversationId = selectedConversation;
         
@@ -3153,14 +3224,18 @@ const MessageHistory = ({ navigation, route }) => {
           newUrl: currentUrl.toString()
         });
       } else {
-        // Remove the parameter if no conversation is selected
-        currentUrl.searchParams.delete('conversationId');
+        // Remove both possible parameter names if no conversation is selected
+        if (currentUrl.searchParams.has('conversationId')) {
+          currentUrl.searchParams.delete('conversationId');
+        }
+        if (currentUrl.searchParams.has('selectedConversation')) {
+          currentUrl.searchParams.delete('selectedConversation');
+        }
+        
         // Clear global context
         window.selectedConversationId = null;
         
-        debugLog('MBA4477: Cleared conversationId from URL', {
-          oldValue: selectedConversation
-        });
+        debugLog('MBA4477: Cleared conversation parameters from URL');
       }
       
       // Update the URL without refreshing the page
