@@ -195,10 +195,16 @@ const PetsPreferencesTab = ({
     // Clone the current pet data to edit
     const petToEdit = pets.find(pet => pet.id === petId);
     
+    // Make sure medications is a string, not an object
+    const editData = {...petToEdit};
+    if (editData.medications && typeof editData.medications === 'object') {
+      editData.medications = '';
+    }
+    
     // Update the edited data for this specific pet
     setEditedPetsData(prev => ({
       ...prev,
-      [petId]: {...petToEdit}
+      [petId]: editData
     }));
     
     // Add this pet's ID to the set of pets being edited
@@ -416,6 +422,7 @@ const PetsPreferencesTab = ({
         potty_break_schedule: editedData.pottyBreakSchedule || '',
         energy_level: editedData.energyLevel || '',
         can_be_left_alone: editedData.canBeLeftAlone,
+        medications: editedData.medications || '', // Added the medications field as a string
         medication_notes: editedData.medicalNotes || '',
         special_care_instructions: editedData.specialCareInstructions || '',
         vet_name: editedData.vetName || '',
@@ -460,6 +467,8 @@ const PetsPreferencesTab = ({
               birthday: response.pet.birthday ? formatDateFromBackend(response.pet.birthday) : editedData.birthday,
               // Format adoption date properly if it exists
               adoptionDate: response.pet.adoption_date ? formatDateFromBackend(response.pet.adoption_date) : editedData.adoptionDate,
+              // Just use the medications as plain text
+              medications: response.pet.medications || editedData.medications || '',
             };
             
             debugLog("MBA5555", "SAVE PET - Successfully created pet. Old ID:", petId, "New ID:", newPetId);
@@ -526,6 +535,8 @@ const PetsPreferencesTab = ({
               specialCareInstructions: response.special_care_instructions || editedData.specialCareInstructions,
               birthday: response.birthday ? formatDateFromBackend(response.birthday) : editedData.birthday,
               adoptionDate: response.adoption_date ? formatDateFromBackend(response.adoption_date) : editedData.adoptionDate,
+              // Just use the medications as plain text
+              medications: response.medications || editedData.medications || '',
             };
             
             // Update the pet in the parent component
@@ -1347,7 +1358,7 @@ const PetsPreferencesTab = ({
                         {isEditing ? (
                           <TextInput
                             style={styles.editInputMedications}
-                            value={typeof editedPetData.medications === 'string' ? editedPetData.medications : ''}
+                            value={editedPetData.medications || ''}
                             onChangeText={(text) => handleEditChange(pet.id, 'medications', text)}
                             placeholder="Enter medications"
                             placeholderTextColor={theme.colors.placeholder}
@@ -1355,9 +1366,7 @@ const PetsPreferencesTab = ({
                           />
                         ) : (
                           <Text style={styles.medicationsText}>
-                            {typeof pet.medications === 'string' ? pet.medications : 
-                             (pet.medications === null ? 'None' : 
-                              (typeof pet.medications === 'object' ? 'None' : String(pet.medications)))}
+                            {pet.medications || 'None'}
                           </Text>
                         )}
                       </View>

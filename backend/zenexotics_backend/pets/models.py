@@ -139,7 +139,7 @@ class Pet(models.Model):
     potty_break_schedule = models.TextField(blank=True)
     energy_level = models.CharField(max_length=20, choices=ENERGY_LEVEL_CHOICES, blank=True)
     can_be_left_alone = models.BooleanField(null=True, blank=True)
-    medications = models.JSONField(default=dict, blank=True)
+    medications = models.TextField(blank=True)
     medication_notes = models.TextField(blank=True)
     special_care_instructions = models.TextField(blank=True)
     

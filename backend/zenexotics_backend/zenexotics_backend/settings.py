@@ -58,6 +58,7 @@ FILE_UPLOAD_PERMISSIONS = 0o644
 USER_PROFILE_PHOTOS_DIR = 'users/profile_photos'
 PET_PROFILE_PHOTOS_DIR = 'pets/profile_photos'
 PET_GALLERY_PHOTOS_DIR = 'pets/gallery_photos'
+MESSAGE_IMAGES_DIR = 'message_images'
 
 # Maximum upload size (5MB)
 MAX_UPLOAD_SIZE = 5242880

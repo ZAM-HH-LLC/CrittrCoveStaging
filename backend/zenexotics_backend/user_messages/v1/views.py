@@ -11,6 +11,7 @@ from professionals.models import Professional
 from services.models import Service
 from pets.models import Pet
 import logging
+import json
 from datetime import datetime
 from bookings.models import Booking
 from booking_summary.models import BookingSummary
@@ -25,6 +26,8 @@ from core.time_utils import (
 import pytz
 from decimal import Decimal
 import traceback
+from django.core.exceptions import ValidationError
+from user_messages.helpers import validate_message_image, process_base64_image
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +77,14 @@ def get_conversation_messages(request, conversation_id):
                 'is_deleted': False,
                 'booking_id': None
             }
+            
+            # Add image URL if the message has an image
+            if message.image:
+                message_data['image_url'] = message.image.url
+                
+            # Add image URLs from metadata if they exist (multiple images case)
+            if message.metadata and 'image_urls' in message.metadata:
+                message_data['image_urls'] = message.metadata['image_urls']
 
             # Handle booking request messages
             if message.type_of_message == 'initial_booking_request' and message.metadata:
@@ -187,15 +198,41 @@ def send_normal_message(request):
     Required POST data:
     - conversation_id: ID of the conversation
     - content: Text content of the message
+    
+    Optional POST data:
+    - image_message_ids: List of IDs of previously uploaded image messages to attach to this message
+    - image_message_id: (Legacy) ID of a single previously uploaded image message (for backward compatibility)
     """
     try:
         conversation_id = request.data.get('conversation_id')
         content = request.data.get('content')
+        
+        # Handle both multiple image IDs (new) and single image ID (legacy)
+        image_message_ids = request.data.get('image_message_ids', [])
+        legacy_image_message_id = request.data.get('image_message_id')
+        
+        # If we get a legacy single ID but no list, add it to the list
+        if legacy_image_message_id and not image_message_ids:
+            image_message_ids = [legacy_image_message_id]
+        
+        # Convert to list if it's a string (for JSON parsing compatibility)
+        if isinstance(image_message_ids, str):
+            try:
+                image_message_ids = json.loads(image_message_ids)
+            except json.JSONDecodeError:
+                image_message_ids = [image_message_ids]
 
         # Validate required fields
-        if not conversation_id or not content:
+        if not conversation_id:
             return Response(
-                {'error': 'conversation_id and content are required'}, 
+                {'error': 'conversation_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Either content or image(s) must be provided
+        if not content and not image_message_ids:
+            return Response(
+                {'error': 'Either content or image_message_ids is required'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -209,31 +246,134 @@ def send_normal_message(request):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Create the message
-        message = UserMessage.objects.create(
-            conversation=conversation,
-            sender=current_user,
-            content=content,
-            type_of_message='normal_message',
-            is_clickable=False,
-            status='sent'
-        )
+        # Check if we have image IDs to process
+        if image_message_ids:
+            # For multiple images, we need to process them differently
+            if len(image_message_ids) == 1:
+                # Single image case - update the existing image message
+                try:
+                    # Find the temporary image message
+                    image_message = UserMessage.objects.get(
+                        message_id=image_message_ids[0],
+                        conversation=conversation,
+                        sender=current_user,
+                        content=''  # Temporary image messages have empty content
+                    )
+                    
+                    # Update the image message with the content
+                    if content:
+                        image_message.content = content
+                    
+                    # Ensure it's properly marked as an image message
+                    image_message.type_of_message = 'image_message'
+                    
+                    # Make sure image_url is properly set for frontend access
+                    if image_message.image:
+                        image_message.image_url = image_message.image.url
+                    
+                    image_message.save()
+                    message = image_message
+                    
+                    # If we don't have content, use a placeholder for the conversation
+                    display_content = content if content else '[Image]'
+                    
+                except UserMessage.DoesNotExist:
+                    # If the image message doesn't exist, create a new message without an image
+                    message = UserMessage.objects.create(
+                        conversation=conversation,
+                        sender=current_user,
+                        content=content,
+                        type_of_message='normal_message',
+                        is_clickable=False,
+                        status='sent'
+                    )
+                    display_content = content
+            else:
+                # Multiple images case - create a new message and collect image URLs
+                message = UserMessage.objects.create(
+                    conversation=conversation,
+                    sender=current_user,
+                    content=content,
+                    type_of_message='image_message',  # Use our new image_message type for multiple images
+                    is_clickable=False,
+                    status='sent',
+                    metadata={'image_urls': []}  # Initialize the image_urls array in metadata
+                )
+                
+                # Collect image URLs from temporary messages
+                image_urls = []
+                for img_id in image_message_ids:
+                    try:
+                        temp_message = UserMessage.objects.get(
+                            message_id=img_id,
+                            conversation=conversation,
+                            sender=current_user,
+                            content=''  # Temporary image messages have empty content
+                        )
+                        
+                        if temp_message.image and temp_message.image.url:
+                            image_urls.append(temp_message.image.url)
+                            
+                            # Keep the temp message to maintain the file but mark it as hidden
+                            temp_message.metadata = temp_message.metadata or {}
+                            temp_message.metadata['is_attachment'] = True
+                            temp_message.save()
+                    except UserMessage.DoesNotExist:
+                        # Just skip any images that don't exist
+                        continue
+                
+                # Store the image URLs in the message metadata
+                message.metadata = message.metadata or {}
+                message.metadata['image_urls'] = image_urls
+                
+                # Also store the image_urls directly on the message for easier frontend access
+                message.image_urls = image_urls
+                
+                # Set the message type to image_message to ensure proper display
+                message.type_of_message = 'image_message'
+                
+                message.save()
+                
+                # Set display content for conversation
+                display_content = content if content else f'[{len(image_urls)} Images]'
+        else:
+            # Create a regular message without an image
+            message = UserMessage.objects.create(
+                conversation=conversation,
+                sender=current_user,
+                content=content,
+                type_of_message='normal_message',
+                is_clickable=False,
+                status='sent'
+            )
+            display_content = content
 
         # Update conversation's last message and time
-        conversation.last_message = content
+        conversation.last_message = display_content
         conversation.last_message_time = timezone.now()
         conversation.save()
 
-        # Return only necessary data since we know it's from current user
-        return Response({
+        # Prepare the response data
+        response_data = {
             'message_id': message.message_id,
             'content': message.content,
             'timestamp': message.timestamp,
             'booking_id': None,
             'status': message.status,
             'type_of_message': message.type_of_message,
-            'is_clickable': message.is_clickable
-        }, status=status.HTTP_201_CREATED)
+            'is_clickable': message.is_clickable,
+            'metadata': message.metadata
+        }
+        
+        # Add image URL to the response if one exists directly on the message
+        if message.image:
+            response_data['image_url'] = message.image.url
+            
+        # Add image URLs from metadata if they exist (multiple images case)
+        if message.metadata and 'image_urls' in message.metadata:
+            response_data['image_urls'] = message.metadata['image_urls']
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         return Response(
@@ -528,5 +668,317 @@ def get_unread_message_count(request):
         logger.exception("Full traceback:")
         return Response(
             {'error': 'An error occurred while fetching unread message count'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_message_image(request):
+    """
+    Upload an image to be attached to a message.
+    
+    This endpoint handles both direct file uploads and base64-encoded images.
+    
+    Required POST data:
+    - conversation_id: ID of the conversation the image belongs to
+    
+    Optional POST data (at least one required):
+    - image_file: The image file being uploaded (multipart/form-data)
+    - image_data: Base64-encoded image data (with or without data URI prefix)
+    
+    Returns:
+    - image_url: URL of the uploaded image
+    - image_id: Unique identifier for the image
+    """
+    try:
+        # Get conversation ID
+        conversation_id = request.data.get('conversation_id')
+        
+        if not conversation_id:
+            return Response(
+                {'error': 'conversation_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the conversation and verify the user is a participant
+        conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
+        current_user = request.user
+        
+        if current_user not in [conversation.participant1, conversation.participant2]:
+            return Response(
+                {'error': 'You are not a participant in this conversation'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Initialize variables
+        image_file = None
+        image_filename = None
+        
+        # Check if we have a file upload
+        if 'image_file' in request.FILES:
+            image_file = request.FILES['image_file']
+            image_filename = image_file.name
+            
+            # Validate the image file
+            try:
+                validate_message_image(image_file)
+            except ValidationError as e:
+                return Response(
+                    {'error': str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        # Check if we have base64 image data
+        elif 'image_data' in request.data and request.data['image_data']:
+            try:
+                image_content, file_ext = process_base64_image(
+                    request.data['image_data'],
+                    conversation_id
+                )
+                image_filename = f"image.{file_ext}"
+                image_file = image_content
+            except ValidationError as e:
+                return Response(
+                    {'error': str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            return Response(
+                {'error': 'No image provided. Please upload an image file or provide base64 image data.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create a temporary message to store the image
+        # This message will now be created with content if provided in the send_normal_message call
+        temp_message = UserMessage.objects.create(
+            conversation=conversation,
+            sender=current_user,
+            content='',  # Empty content until send_normal_message is called
+            type_of_message='image_message',  # Use our new image_message type
+            is_clickable=False,
+            status='sent',
+            metadata={'is_attachment': True}  # Mark this as an attachment message to handle display
+        )
+        
+        # Attach the image to the message
+        temp_message.image.save(image_filename, image_file)
+        
+        # Ensure image_url is properly populated for frontend
+        if temp_message.image:
+            temp_message.image_url = temp_message.image.url
+        
+        temp_message.save()
+        
+        # Get the URL of the uploaded image
+        image_url = temp_message.image.url if temp_message.image else None
+        
+        # Return the image URL and message ID
+        return Response({
+            'image_url': image_url,
+            'message_id': temp_message.message_id
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"Error in upload_message_image: {str(e)}")
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_and_send_message(request):
+    """
+    Upload multiple images and send them as a single message with an optional caption.
+    
+    This endpoint handles both direct file uploads and base64-encoded images.
+    
+    Required POST data:
+    - conversation_id: ID of the conversation the images belong to
+    
+    Optional POST data:
+    - content: Text caption to include with the images
+    - image_file_X: Multiple image files where X is the index (multipart/form-data)
+    - image_data_X: Multiple base64-encoded images where X is the index
+    
+    Returns:
+    - message_id: ID of the created message
+    - image_urls: List of URLs of all uploaded images
+    """
+    try:
+        # Get conversation ID
+        conversation_id = request.data.get('conversation_id')
+        
+        if not conversation_id:
+            return Response(
+                {'error': 'conversation_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the conversation and verify the user is a participant
+        conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
+        current_user = request.user
+        
+        if current_user not in [conversation.participant1, conversation.participant2]:
+            return Response(
+                {'error': 'You are not a participant in this conversation'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get caption/message content if provided
+        content = request.data.get('content', '')
+        
+        # Process all images in the request
+        image_urls = []
+        
+        # First, look for files with names like image_file_0, image_file_1, etc.
+        image_files = {}
+        for key in request.FILES:
+            if key.startswith('image_file_'):
+                index = key.split('_')[-1]
+                image_files[index] = request.FILES[key]
+        
+        # If no indexed files, check for a single image_file
+        if not image_files and 'image_file' in request.FILES:
+            image_files['0'] = request.FILES['image_file']
+        
+        # Process base64 image data
+        image_data = {}
+        for key in request.data:
+            if key.startswith('image_data_') and request.data[key]:
+                index = key.split('_')[-1]
+                image_data[index] = request.data[key]
+        
+        # If no indexed data, check for a single image_data
+        if not image_data and 'image_data' in request.data and request.data['image_data']:
+            image_data['0'] = request.data['image_data']
+            
+        # If we have neither files nor data, check if this is a "images" field with JSON data
+        if not image_files and not image_data and 'images' in request.data:
+            try:
+                # Try to parse as JSON
+                if isinstance(request.data['images'], str):
+                    images_list = json.loads(request.data['images'])
+                else:
+                    images_list = request.data['images']
+                    
+                # Process each image in the list
+                for i, img_data in enumerate(images_list):
+                    image_data[str(i)] = img_data
+            except json.JSONDecodeError:
+                # Not valid JSON, might be a single image
+                image_data['0'] = request.data['images']
+            except Exception as e:
+                logger.error(f"Error processing images field: {str(e)}")
+        
+        # Check if we have any images to process
+        if not image_files and not image_data:
+            return Response(
+                {'error': 'No images provided. Please upload at least one image.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Process file uploads first
+        for index, image_file in image_files.items():
+            try:
+                # Validate the image file
+                validate_message_image(image_file)
+                
+                # Create a temporary message to hold this image
+                temp_message = UserMessage.objects.create(
+                    conversation=conversation,
+                    sender=current_user,
+                    content='',  # Empty content for attachment messages
+                    type_of_message='image_message',
+                    is_clickable=False,
+                    status='sent',
+                    metadata={'is_attachment': True}  # Mark as attachment
+                )
+                
+                # Attach the image
+                temp_message.image.save(image_file.name, image_file)
+                
+                # Add to our list of image URLs
+                if temp_message.image and temp_message.image.url:
+                    image_urls.append(temp_message.image.url)
+            except ValidationError as e:
+                logger.error(f"Error validating image file {index}: {str(e)}")
+                # Continue with other images
+                continue
+        
+        # Process base64 image data
+        for index, img_data in image_data.items():
+            try:
+                # Process the base64 data
+                image_content, file_ext = process_base64_image(img_data, conversation_id)
+                image_filename = f"image_{index}.{file_ext}"
+                
+                # Create a temporary message to hold this image
+                temp_message = UserMessage.objects.create(
+                    conversation=conversation,
+                    sender=current_user,
+                    content='',  # Empty content for attachment messages
+                    type_of_message='image_message',
+                    is_clickable=False,
+                    status='sent',
+                    metadata={'is_attachment': True}  # Mark as attachment
+                )
+                
+                # Attach the image
+                temp_message.image.save(image_filename, image_content)
+                
+                # Add to our list of image URLs
+                if temp_message.image and temp_message.image.url:
+                    image_urls.append(temp_message.image.url)
+            except ValidationError as e:
+                logger.error(f"Error processing base64 image {index}: {str(e)}")
+                # Continue with other images
+                continue
+        
+        # Check if we successfully processed any images
+        if not image_urls:
+            return Response(
+                {'error': 'Failed to process any of the provided images.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create the main message that will be displayed to the user
+        message = UserMessage.objects.create(
+            conversation=conversation,
+            sender=current_user,
+            content=content,
+            type_of_message='image_message',  # Always use image_message type for messages with images
+            is_clickable=False,
+            status='sent',
+            metadata={
+                'image_urls': image_urls  # Store all image URLs in metadata
+            }
+        )
+        
+        # Update conversation's last message and time
+        display_content = content if content else f'[{len(image_urls)} Images]'
+        conversation.last_message = display_content
+        conversation.last_message_time = timezone.now()
+        conversation.save()
+        
+        # Prepare the response data
+        response_data = {
+            'message_id': message.message_id,
+            'content': message.content,
+            'timestamp': message.timestamp,
+            'type_of_message': message.type_of_message,
+            'is_clickable': message.is_clickable,
+            'status': message.status,
+            'image_urls': image_urls,
+            'metadata': message.metadata
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"Error in upload_and_send_message: {str(e)}")
+        logger.exception("Full traceback:")
+        return Response(
+            {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

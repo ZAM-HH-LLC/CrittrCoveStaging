@@ -225,11 +225,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
         <View style={styles.detailSection}>
           <Text style={styles.detailLabel}>Medications</Text>
           <Text style={styles.detailText}>
-            {pet.formatted_medications && pet.formatted_medications.length > 0 
-              ? pet.formatted_medications.map(med => 
-                  `${med.name}: ${med.dosage || 'No dosage specified'} ${med.schedule || 'No schedule specified'}`
-                ).join('\n')
-              : 'No medications listed'}
+            {pet.medications || 'No medications listed'}
           </Text>
         </View>
 

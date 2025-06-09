@@ -66,7 +66,6 @@ class HouseholdMemberSerializer(serializers.Serializer):
 class PetSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField()
     is_dog = serializers.SerializerMethodField()
-    formatted_medications = serializers.SerializerMethodField()
     
     class Meta:
         model = Pet
@@ -86,7 +85,7 @@ class PetSerializer(serializers.ModelSerializer):
             
             # Medical Information
             'spayed_neutered', 'house_trained', 'microchipped',
-            'medications', 'formatted_medications', 'medication_notes',
+            'medications', 'medication_notes',
             
             # Veterinary Information
             'vet_name', 'vet_address', 'vet_phone', 'insurance_provider',
@@ -124,22 +123,6 @@ class PetSerializer(serializers.ModelSerializer):
     def get_is_dog(self, obj):
         """Helper field to identify dogs for the frontend"""
         return obj.species and obj.species.upper() == 'DOG'
-    
-    def get_formatted_medications(self, obj):
-        """Format medications as a list for easier frontend handling"""
-        if not obj.medications or not isinstance(obj.medications, dict):
-            return []
-        
-        formatted = []
-        for name, details in obj.medications.items():
-            formatted.append({
-                'name': name,
-                'dosage': details.get('dosage', ''),
-                'schedule': details.get('schedule', ''),
-                'notes': details.get('notes', '')
-            })
-        
-        return formatted
 
 class ClientBookingOccurrenceSerializer(serializers.ModelSerializer):
     professional_name = serializers.CharField(source='booking.professional.user.name')

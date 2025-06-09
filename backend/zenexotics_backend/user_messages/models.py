@@ -1,6 +1,8 @@
 from django.db import models
+from django.conf import settings
 from users.models import User
 from bookings.models import Booking
+from .helpers import message_image_path, validate_message_image
 
 class UserMessage(models.Model):
     MESSAGE_STATUS_CHOICES = [
@@ -16,6 +18,7 @@ class UserMessage(models.Model):
         ('request_changes', 'Request Changes'), # This is a request for changes from the professional
         ('send_approved_message', 'Send Approved Message'), # This is a message sent by the client to the pro after the booking is approved
         ('booking_confirmed', 'Booking Confirmed'), # This is a message sent when a booking is confirmed
+        ('image_message', 'Image Message'), # This is a message with image attachments
     ]
 
     message_id = models.AutoField(primary_key=True)
@@ -28,6 +31,13 @@ class UserMessage(models.Model):
     type_of_message = models.CharField(max_length=30, choices=MESSAGE_TYPE_CHOICES, default='normal_message')
     is_clickable = models.BooleanField(default=True)
     metadata = models.JSONField(null=True, blank=True)
+    image = models.ImageField(
+        upload_to=message_image_path,
+        null=True,
+        blank=True,
+        validators=[validate_message_image],
+        help_text="Image attachment for the message. Maximum size: 5MB. Allowed formats: JPEG, PNG, GIF, WebP"
+    )
 
     class Meta:
         ordering = ['-timestamp']

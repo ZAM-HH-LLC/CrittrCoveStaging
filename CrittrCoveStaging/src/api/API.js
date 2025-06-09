@@ -1236,3 +1236,137 @@ export const getClientPets = async (conversationId) => {
   }
 };
 
+/**
+ * Upload an image to be attached to a message
+ * @param {string|number} conversationId - The conversation ID
+ * @param {File|Blob|string} imageData - The image file, blob, or base64 string
+ * @returns {Promise<Object>} - Object containing image_url and message_id
+ */
+export const uploadMessageImage = async (conversationId, imageData) => {
+  try {
+    debugLog('MBA5678: Uploading message image for conversation:', conversationId);
+    
+    const formData = new FormData();
+    formData.append('conversation_id', conversationId);
+    
+    // Handle different types of image data
+    if (typeof imageData === 'string') {
+      // If it's a base64 string or data URI
+      debugLog('MBA5678: Image data is a string, sending as base64');
+      
+      // Use JSON format instead of FormData for base64
+      const response = await axios.post(
+        `${API_BASE_URL}/api/messages/v1/upload_image/`,
+        {
+          conversation_id: conversationId,
+          image_data: imageData
+        }
+      );
+      
+      debugLog('MBA5678: Image uploaded successfully:', response.data);
+      return response.data;
+    } else {
+      // If it's a File or Blob object
+      debugLog('MBA5678: Image data is a File/Blob, sending as multipart/form-data');
+      formData.append('image_file', imageData);
+      
+      const response = await axios.post(
+        `${API_BASE_URL}/api/messages/v1/upload_image/`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+      
+      debugLog('MBA5678: Image uploaded successfully:', response.data);
+      return response.data;
+    }
+  } catch (error) {
+    debugLog('MBA5678: Error uploading message image:', error);
+    throw error;
+  }
+};
+
+/**
+ * Upload and send images in a single message using a direct approach with FormData
+ * @param {string|number} conversationId - The conversation ID
+ * @param {Array<File|Blob|string>} images - Array of image files, blobs, or base64 strings
+ * @param {string} caption - Optional caption to include with the images
+ * @returns {Promise<Object>} - Object containing message data including image_urls
+ */
+export const uploadAndSendImageMessage = async (conversationId, images, caption = '') => {
+  try {
+    debugLog('MBA5511: Uploading and sending image message directly:', {
+      conversationId,
+      imageCount: images.length,
+      hasCaption: !!caption?.trim().length
+    });
+    
+    if (!images || images.length === 0) {
+      throw new Error('No images provided for upload');
+    }
+    
+    // Prepare images array for sending
+    const processedImages = images.map(image => {
+      if (image.base64) {
+        return `data:image/jpeg;base64,${image.base64}`;
+      } else if (image.uri) {
+        return image.uri;
+      } else {
+        return image;
+      }
+    });
+    
+    // Send a single request with all images as base64 strings
+    const response = await axios.post(
+      `${API_BASE_URL}/api/messages/v1/upload_and_send/`,
+      {
+        conversation_id: conversationId,
+        content: caption || '',
+        images: processedImages
+      }
+    );
+    
+    debugLog('MBA5511: Image message uploaded and sent successfully:', {
+      messageId: response.data.message_id,
+      imageCount: images.length,
+      hasCaption: !!caption
+    });
+    
+    // Create a message object that can be directly added to the UI
+    const messageObject = {
+      message_id: response.data.message_id,
+      content: caption || '',
+      sent_by_other_user: false,
+      timestamp: new Date().toISOString(),
+      type_of_message: 'image_message',
+      status: 'sent',
+      is_clickable: false,
+      image_urls: response.data.image_urls || [],
+      metadata: {
+        image_urls: response.data.image_urls || []
+      }
+    };
+    
+    return messageObject;
+  } catch (error) {
+    debugLog('MBA5511: Error uploading and sending image message:', error);
+    throw error;
+  }
+};
+
+/**
+ * Upload multiple images in a single message (previous implementation)
+ * @param {string|number} conversationId - The conversation ID
+ * @param {Array<File|Blob|string>} images - Array of image files, blobs, or base64 strings
+ * @param {string} caption - Optional caption to include with the images
+ * @returns {Promise<Object>} - Object containing image_urls and message_id
+ * @deprecated Use uploadAndSendImageMessage instead
+ */
+export const sendImageMessage = async (conversationId, images, caption = '') => {
+  // Just call the new function
+  return uploadAndSendImageMessage(conversationId, images, caption);
+};
+

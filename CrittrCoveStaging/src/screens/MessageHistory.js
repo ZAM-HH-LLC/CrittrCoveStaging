@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useContext, useMemo, useLayoutEffect } from 'react';
 import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Image, TextInput, BackHandler } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -1480,7 +1481,7 @@ const MessageHistory = ({ navigation, route }) => {
   };
 
   // Function to send a message
-  const SendNormalMessage = async (messageContent) => {
+  const SendNormalMessage = async (messageContent, imageMessageIds = [], messageObject = null) => {
     try {
       debugLog('MBA2u3f89fbno4: [API] SendNormalMessage called', {
         messageContentLength: messageContent?.length,
@@ -1488,6 +1489,11 @@ const MessageHistory = ({ navigation, route }) => {
         selectedConversation,
         hasSelectedConversation: !!selectedConversation,
         selectedConversationType: typeof selectedConversation,
+        hasImageMessageIds: imageMessageIds && imageMessageIds.length > 0,
+        imageMessageIds,
+        imageCount: imageMessageIds?.length || 0,
+        hasMessageObject: !!messageObject,
+        isImageMessage: messageObject?.type_of_message === 'image_message',
         currentMessageCount: messages.length,
         timestamp: Date.now()
       });
@@ -1496,16 +1502,64 @@ const MessageHistory = ({ navigation, route }) => {
         throw new Error('No conversation selected');
       }
 
-      if (!messageContent || !messageContent.trim()) {
-        throw new Error('Message content is empty');
+      // If we have a pre-created message object from an image upload, use it directly
+      if (messageObject) {
+        debugLog('MBA5511: Using pre-created message object:', {
+          messageId: messageObject.message_id,
+          type: messageObject.type_of_message,
+          hasImageUrls: !!messageObject.image_urls && messageObject.image_urls.length > 0,
+          imageCount: messageObject.image_urls?.length || 0
+        });
+        
+        // Add new message to the beginning of the list since FlatList is inverted
+        setMessages(prevMessages => {
+          debugLog('MBA5511: Adding message object directly to list', {
+            beforeLength: prevMessages.length,
+            afterLength: prevMessages.length + 1,
+            newMessageId: messageObject.message_id
+          });
+          
+          return [messageObject, ...prevMessages];
+        });
+        
+        // Update conversation's last message
+        setConversations(prev => prev.map(conv => 
+          conv.conversation_id === selectedConversation 
+            ? {
+                ...conv,
+                last_message: messageObject.content || 'Image message',
+                last_message_time: messageObject.timestamp
+              }
+            : conv
+        ));
+        
+        return messageObject;
       }
+
+      // Normal message flow (text only or with separate image IDs)
+      // Allow empty content if we have images
+      if ((!imageMessageIds || imageMessageIds.length === 0) && (!messageContent || !messageContent.trim())) {
+        throw new Error('Message content is empty and no images provided');
+      }
+      
+      // Log that we're sending either text or images or both
+      debugLog('MBA2u3f89fbno4: [API] Sending message with content and/or images', {
+        hasContent: !!messageContent && messageContent.trim().length > 0,
+        hasImages: imageMessageIds && imageMessageIds.length > 0,
+        imageCount: imageMessageIds?.length || 0
+      });
       
       const token = await getStorage('userToken');
       
       const requestData = {
         conversation_id: selectedConversation,
-        content: messageContent.trim()
+        content: messageContent ? messageContent.trim() : ''
       };
+      
+      // Add the image message IDs if available
+      if (imageMessageIds && imageMessageIds.length > 0) {
+        requestData.image_message_ids = imageMessageIds;
+      }
       
       debugLog('MBA2u3f89fbno4: [API] About to send API request', {
         requestData,
@@ -1771,6 +1825,28 @@ const MessageHistory = ({ navigation, route }) => {
       .filter(m => m.type_of_message === 'booking_confirmed')
       .map(m => m.metadata?.booking_id)
       .filter(Boolean);
+      
+    // Check if the message has images in various formats
+    const hasImages = item.image_urls && item.image_urls.length > 0;
+    // For backwards compatibility with older messages that might have a single image_url
+    const hasLegacyImage = !hasImages && item.image_url && item.image_url.length > 0;
+    // Check if this is an image_message type message
+    const isImageMessage = item.type_of_message === 'image_message';
+    // If it's an image message but we don't have any detected images yet, force hasLegacyImage to true
+    // This is needed for single image messages without a separate image_urls array
+    const forceHasImage = isImageMessage && !hasImages && !hasLegacyImage && item.image_url;
+    
+    // Debug log the message details to see what we're working with
+    debugLog('MBA9999: Rendering message:', {
+      messageId: item.message_id,
+      type: item.type_of_message,
+      hasImages,
+      hasLegacyImage,
+      isImageMessage,
+      imageUrl: item.image_url,
+      imageUrls: item.image_urls,
+      metadata: item.metadata
+    });
     
     // Find approval requests for already confirmed bookings
     const bookingsWithUpdates = {};
@@ -2120,7 +2196,187 @@ const MessageHistory = ({ navigation, route }) => {
       );
     }
 
-    // Handle normal messages
+    // Check if this is an attachment message (temporary image container)
+    const isAttachmentMessage = item.metadata && item.metadata.is_attachment === true;
+    
+    // Skip rendering attachment messages - they should not be displayed directly
+    // They're only containers for images that get referenced in actual image messages
+    if (isAttachmentMessage) {
+      debugLog('MBA9999: Skipping attachment message (container only):', {
+        messageId: item.message_id,
+        hasImageUrl: !!item.image_url,
+        imageUrl: item.image_url,
+        type: item.type_of_message
+      });
+      return null;
+    }
+    
+    // Handle image messages or normal messages with images
+    if (isImageMessage || hasImages || hasLegacyImage || forceHasImage) {
+      const isFromMe = !item.sent_by_other_user;
+      
+      // For images, first render the caption (if exists) and then the images
+      debugLog('MBA4567: Rendering message with images and possibly caption:', {
+        messageId: item.message_id,
+        hasCaption: item.content && item.content.trim().length > 0,
+        captionText: item.content,
+        isFromMe
+      });
+      return (
+        <>
+          {/* Render caption first if it exists */}
+          {item.content && item.content.trim().length > 0 && (
+            <View style={[
+              isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer,
+              { marginBottom: 4 } // Add space between caption and images
+            ]}>
+              <View style={[
+                styles.messageCard, 
+                isFromMe ? styles.sentMessage : styles.receivedMessage
+              ]}>
+                <View style={styles.messageContent}>
+                  <Text style={[
+                    styles.messageText,
+                    isFromMe ? styles.sentMessageText : styles.receivedMessageText
+                  ]}>
+                    {item.content}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+          
+          {/* Image Container */}
+          <View style={isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer}>
+            <View style={[
+              styles.messageCard, 
+              // Don't use colored background for image messages
+              { backgroundColor: 'transparent', shadowColor: 'transparent' }
+            ]}>
+              <View style={styles.messageContent}>
+                {/* Handle images from image_urls in the message itself */}
+                {hasImages && (
+                  <View style={{
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginVertical: 8,
+                    width: '100%',
+                  }}>
+                    {item.image_urls.map((imageUrl, index) => (
+                      <Image 
+                        key={`${imageUrl}-${index}`}
+                        source={{ uri: API_BASE_URL + imageUrl }} 
+                        style={{
+                          width: 250,
+                          height: 250,
+                          borderRadius: 8,
+                          marginVertical: 4,
+                          resizeMode: 'cover',
+                        }}
+                      />
+                    ))}
+                  </View>
+                )}
+                
+                {/* Handle images from metadata.image_urls */}
+                {!hasImages && item.metadata && item.metadata.image_urls && item.metadata.image_urls.length > 0 && (
+                  <View style={{
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginVertical: 8,
+                    width: '100%',
+                  }}>
+                    {item.metadata.image_urls.map((imageUrl, index) => (
+                      <Image 
+                        key={`${imageUrl}-${index}`}
+                        source={{ uri: API_BASE_URL + imageUrl }} 
+                        style={{
+                          width: 250,
+                          height: 250,
+                          borderRadius: 8,
+                          marginVertical: 4,
+                          resizeMode: 'cover',
+                        }}
+                      />
+                    ))}
+                  </View>
+                )}
+                
+                {/* Handle single image directly attached to the message */}
+                {item.image && item.image.url && (
+                  <View style={{
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginVertical: 8,
+                    width: '100%',
+                  }}>
+                    <Image 
+                      source={{ uri: item.image.url }} 
+                      style={{
+                        width: 250,
+                        height: 250,
+                        borderRadius: 8,
+                        marginVertical: 4,
+                        resizeMode: 'cover',
+                      }}
+                    />
+                  </View>
+                )}
+                
+                {/* Handle legacy single image for backward compatibility */}
+                {(hasLegacyImage || forceHasImage) && (
+                  <View style={{
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginVertical: 8,
+                    width: '100%',
+                  }}>
+                    <Image 
+                      source={{ uri: API_BASE_URL + item.image_url }} 
+                      style={{
+                        width: 250,
+                        height: 250,
+                        borderRadius: 8,
+                        marginVertical: 4,
+                        resizeMode: 'cover',
+                      }}
+                    />
+                  </View>
+                )}
+                
+                {/* Handle attachment messages with image_url */}
+                {isAttachmentMessage && item.image_url && (
+                  <View style={{
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginVertical: 8,
+                    width: '100%',
+                  }}>
+                    <Image 
+                      source={{ uri: API_BASE_URL + item.image_url }} 
+                      style={{
+                        width: 250,
+                        height: 250,
+                        borderRadius: 8,
+                        marginVertical: 4,
+                        resizeMode: 'cover',
+                      }}
+                    />
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        </>
+      );
+    }
+    
+    // Handle normal text messages
     const isFromMe = !item.sent_by_other_user;
     return (
       <View style={isFromMe ? styles.sentMessageContainer : styles.receivedMessageContainer}>
@@ -2359,13 +2615,47 @@ const MessageHistory = ({ navigation, route }) => {
 
         {/* Input Section - Simplified to use flexbox positioning */}
         <MessageInput 
-          onSendMessage={async (messageContent) => {
+          onSendMessage={async (messageContent, imageMessageIds, messageObject, alreadySent) => {
             try {
               setIsSending(true);
-              await SendNormalMessage(messageContent);
+              
+              // If the message was already sent directly through uploadAndSendImageMessage
+              if (alreadySent && messageObject) {
+                debugLog('MBA5511: Message already sent directly:', {
+                  messageId: messageObject.message_id,
+                  messageType: messageObject.type_of_message
+                });
+                
+                // Add message to UI without making another API call
+                setMessages(prevMessages => [messageObject, ...prevMessages]);
+                
+                // Update conversation's last message
+                setConversations(prev => prev.map(conv => 
+                  conv.conversation_id === selectedConversation 
+                    ? {
+                        ...conv,
+                        last_message: messageObject.content || 'Image message',
+                        last_message_time: messageObject.timestamp
+                      }
+                    : conv
+                ));
+              } 
+              // Otherwise, send normally through SendNormalMessage
+              else {
+                // Add the image message IDs to the request if available
+                if (imageMessageIds && imageMessageIds.length > 0) {
+                  debugLog('MBA5678: Sending message with images:', {
+                    messageContent,
+                    imageMessageIds,
+                    imageCount: imageMessageIds.length
+                  });
+                }
+                await SendNormalMessage(messageContent, imageMessageIds, messageObject);
+              }
+              
               setIsSending(false);
             } catch (error) {
-              console.error('Error sending message:', error);
+              debugLog('MBA5678: Error sending message:', error);
               setIsSending(false);
             }
           }}
@@ -2373,6 +2663,7 @@ const MessageHistory = ({ navigation, route }) => {
           showDropdown={showDropdown}
           styles={styles}
           screenWidth={screenWidth}
+          selectedConversation={selectedConversation}
         />
       </View>
     );
