@@ -504,6 +504,7 @@ const NavigationContent = ({
   
   const renderMenuItems = () => {
     let items = [];
+    let logoutItem = null;
     
     if (!isSignedIn) {
       // Signed-out menu items
@@ -520,9 +521,11 @@ const NavigationContent = ({
         { icon: 'briefcase-outline', label: 'Services', route: 'ServiceManager' },
         { icon: 'account-group-outline', label: 'Connections', route: 'Connections' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
-        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
-        { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
       ];
+      
+      // Store logout item separately
+      logoutItem = { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout };
     } else {
       // Pet Owner menu items in the specified order
       items = [
@@ -530,48 +533,52 @@ const NavigationContent = ({
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
-        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
-        { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
+        { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
       ];
+      
+      // Store logout item separately
+      logoutItem = { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout };
     }
     
-    return items.map((item, index) => (
-      <TouchableOpacity
-        key={index}
-        style={[
-          styles.sidebarItem,
-          currentRoute === item.route && styles.activeItem,
-          item.route === 'logout' && styles.logoutItem
-        ]}
-        onPress={() => item.action ? item.action() : handleNavigation(item.route)}
-      >
-        <MaterialCommunityIcons
-          name={item.icon}
-          size={24}
-          color={item.route === 'logout' ? '#F26969' : (currentRoute === item.route ? theme.colors.primary : theme.colors.text)}
-        />
-        <Text
+    return {
+      menuItems: items.map((item, index) => (
+        <TouchableOpacity
+          key={index}
           style={[
-            styles.sidebarItemText,
-            {
-              color: item.route === 'logout' ? '#F26969' : (currentRoute === item.route ? theme.colors.primary : theme.colors.text),
-              marginLeft: isCollapsed ? 0 : 12,
-              display: isCollapsed ? 'none' : 'flex',
-            }
+            styles.sidebarItem,
+            currentRoute === item.route && styles.activeItem
           ]}
+          onPress={() => item.action ? item.action() : handleNavigation(item.route)}
         >
-          {item.label}
-        </Text>
-        {item.notification && (
-          <View style={styles.messageNotificationDot} />
-        )}
-        {item.count > 0 && (
-          <View style={styles.messageNotificationBadge}>
-            <Text style={styles.messageNotificationText}>{item.count}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    ));
+          <MaterialCommunityIcons
+            name={item.icon}
+            size={24}
+            color={currentRoute === item.route ? theme.colors.primary : theme.colors.text}
+          />
+          <Text
+            style={[
+              styles.sidebarItemText,
+              {
+                color: currentRoute === item.route ? theme.colors.primary : theme.colors.text,
+                marginLeft: isCollapsed ? 0 : 12,
+                display: isCollapsed ? 'none' : 'flex',
+              }
+            ]}
+          >
+            {item.label}
+          </Text>
+          {item.notification && (
+            <View style={styles.messageNotificationDot} />
+          )}
+          {item.count > 0 && (
+            <View style={styles.messageNotificationBadge}>
+              <Text style={styles.messageNotificationText}>{item.count}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )),
+      logoutItem
+    };
   };
   
   const renderMobileMenuItems = () => {
@@ -585,7 +592,7 @@ const NavigationContent = ({
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' }
       ];
     } else if (userRole === 'professional') {
-      // Professional menu items in the specified order
+      // Professional menu items in the specified order - keep logout in the menu for mobile
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
@@ -596,7 +603,7 @@ const NavigationContent = ({
         { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
       ];
     } else {
-      // Pet Owner menu items in the specified order
+      // Pet Owner menu items in the specified order - keep logout in the menu for mobile
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
@@ -690,6 +697,7 @@ const NavigationContent = ({
   
   const renderDesktopSidebar = () => {
     const sidebarWidth = isCollapsed ? 72 : 250;
+    const { menuItems, logoutItem } = renderMenuItems();
     
     return (
       <View style={[styles.sidebarContainer, { width: sidebarWidth }]}>
@@ -765,8 +773,36 @@ const NavigationContent = ({
             </View>
           )}
           
-          {renderMenuItems()}
+          {menuItems}
         </View>
+        
+        {/* Logout Button at the bottom */}
+        {isSignedIn && logoutItem && (
+          <View style={styles.logoutButtonContainer}>
+            <TouchableOpacity
+              style={styles.sidebarItem}
+              onPress={logoutItem.action}
+            >
+              <MaterialCommunityIcons
+                name={logoutItem.icon}
+                size={24}
+                color="#F26969"
+              />
+              <Text
+                style={[
+                  styles.sidebarItemText,
+                  {
+                    color: '#F26969',
+                    marginLeft: isCollapsed ? 0 : 12,
+                    display: isCollapsed ? 'none' : 'flex',
+                  }
+                ]}
+              >
+                {logoutItem.label}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -1603,5 +1639,13 @@ const styles = StyleSheet.create({
     right: 0,
     top: 70,
     width: 250,
+  },
+  logoutButtonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceContrast,
+    borderBottomRightRadius: 24,
   },
 });
