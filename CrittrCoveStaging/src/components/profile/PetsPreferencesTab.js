@@ -8,6 +8,9 @@ import { addPet, updatePet, fixPetOwner, deletePet } from '../../api/API';
 import { useToast } from '../../components/ToastProvider';
 import ConfirmationModal from '../ConfirmationModal';
 import { calculateAge } from '../../data/calculations';
+import * as ImagePicker from 'expo-image-picker';
+import ProfilePhotoCropper from './ProfilePhotoCropper';
+import { processImageWithCrop, prepareImageForUpload } from '../../utils/imageCropUtils';
 
 const PetsPreferencesTab = ({
   pets = [],
@@ -62,6 +65,12 @@ const PetsPreferencesTab = ({
   // Add these new state variables at the top of the component with other state declarations
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
+
+  // Add state for pet photo cropping
+  const [selectedPetPhotoUri, setSelectedPetPhotoUri] = useState(null);
+  const [showPetPhotoCropper, setShowPetPhotoCropper] = useState(false);
+  const [currentEditingPetId, setCurrentEditingPetId] = useState(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Add window resize listener
   useEffect(() => {
@@ -383,211 +392,176 @@ const PetsPreferencesTab = ({
   };
   
   const handleSavePetEdit = async (petId) => {
-    // Prevent multiple clicks
-    if (savingPet) {
-      debugLog("MBA5555", "SAVE PET - Already saving, ignoring duplicate click");
-      return;
-    }
-    
     try {
-      // Mark that we're starting a save operation
+      // Already saving? Prevent double-saving
+      if (savingPet) {
+        debugLog("MBA456", "Already in process of saving pet");
+        return;
+      }
+      
+      // Set saving flag and show toast
       setSavingPet(true);
       
-      // Log current state for debugging
-      debugLog("MBA5555", "SAVE PET - Starting save with pets:", pets.map(p => ({id: p.id, name: p.name || 'unnamed'})));
-      debugLog("MBA5555", "SAVE PET - Saving petId:", petId);
+      // Get the pet data that is currently being edited
+      const petData = editedPetsData[petId];
+      if (!petData) {
+        throw new Error("Edited pet data not found.");
+      }
       
-      // Get the edited data for this pet
-      const editedData = editedPetsData[petId] || {};
+      debugLog("MBA456", "Saving pet with ID:", petId);
       
-      // Format the pet data for the backend
-      const petData = {
-        name: editedData.name || '',
-        species: editedData.type || '',
-        breed: editedData.breed || '',
-        age_years: editedData.ageYears,
-        age_months: editedData.ageMonths,
-        weight: editedData.weight,
-        birthday: editedData.birthday ? formatDateForBackend(editedData.birthday) : null,
-        sex: editedData.sex,
-        adoption_date: editedData.adoptionDate ? formatDateForBackend(editedData.adoptionDate) : null,
-        pet_description: editedData.description || '',
-        friendly_with_children: editedData.childrenFriendly,
-        friendly_with_cats: editedData.catFriendly,
-        friendly_with_dogs: editedData.dogFriendly,
-        spayed_neutered: editedData.spayedNeutered,
-        house_trained: editedData.houseTrained,
-        microchipped: editedData.microchipped,
-        feeding_schedule: editedData.feedingInstructions || '',
-        potty_break_schedule: editedData.pottyBreakSchedule || '',
-        energy_level: editedData.energyLevel || '',
-        can_be_left_alone: editedData.canBeLeftAlone,
-        medications: editedData.medications || '', // Added the medications field as a string
-        medication_notes: editedData.medicalNotes || '',
-        special_care_instructions: editedData.specialCareInstructions || '',
-        vet_name: editedData.vetName || '',
-        vet_address: editedData.vetAddress || '',
-        vet_phone: editedData.vetPhone || '',
-        insurance_provider: editedData.insuranceProvider || '',
-        vet_documents: editedData.vetDocuments || [],
+      // Determine if this is a new pet or an existing pet
+      const isNewPet = petId && String(petId).startsWith('temp_');
+      
+      // Format the pet data for the API
+      let petToSave = {
+        name: petData.name || '',
+        breed: petData.breed || '',
+        birthday: petData.birthday ? formatDateForBackend(petData.birthday) : null,
+        adoption_date: petData.adoptionDate ? formatDateForBackend(petData.adoptionDate) : null,
+        weight: petData.weight || null,
+        feeding_schedule: petData.feedingInstructions || '',
+        medication_notes: petData.medicalNotes || '',
+        potty_break_schedule: petData.pottyBreakSchedule || '',
+        special_care_instructions: petData.specialCareInstructions || '',
+        species: petData.type || '',
+        microchip_id: petData.microchipId || '',
+        sex: petData.sex || null,
+        medications: petData.medications || '',
+        allergies: petData.allergies || '',
+        vaccinations: petData.vaccinations || '',
+        vet_name: petData.vetName || '',
+        vet_phone: petData.vetPhone || '',
+        spayed_neutered: petData.spayedNeutered === 'Yes',
+        house_trained: petData.houseTrained === 'Yes',
+        gets_along_with_dogs: petData.getsAlongWithDogs === 'Yes',
+        gets_along_with_cats: petData.getsAlongWithCats === 'Yes',
+        gets_along_with_children: petData.getsAlongWithChildren === 'Yes',
+        energy_level: petData.energyLevel || null,
       };
       
-      debugLog("MBA5555", "SAVE PET - Pet data being sent:", petData);
+      // Create a FormData object for sending multipart/form-data (needed for file upload)
+      const formData = new FormData();
       
-      const isNewPet = String(petId).startsWith('temp_');
-      debugLog("MBA5555", "SAVE PET - Is this a new pet?", isNewPet);
-      
-      let successMessage = "";
-      
-      if (isNewPet) {
-        debugLog("MBA5555", "SAVE PET - Creating a new pet with backend API call");
+      // Add the pet photo if available
+      if (petData.photo) {
+        debugLog("MBA5555", "Adding pet photo to form data");
         
-        try {
-          // Call the API to create the pet
-          const response = await addPet(petData);
-          debugLog("MBA5555", "SAVE PET - API response from addPet:", response);
+        // If it's a base64 image (web platform)
+        if (petData.photo.base64Data) {
+          formData.append('pet_photo_base64', petData.photo.base64Data);
+        } 
+        // If it's a file URI (native platforms)
+        else if (petData.photo.uri) {
+          const photoFile = {
+            uri: Platform.OS === 'android' ? petData.photo.uri : petData.photo.uri.replace('file://', ''),
+            type: 'image/jpeg',
+            name: 'pet_photo.jpg'
+          };
+          formData.append('pet_photo', photoFile);
           
-          // If we have a valid response with pet data
-          if (response && response.pet && response.pet.pet_id) {
-            // Extract the real pet ID from the backend response
-            const newPetId = response.pet.pet_id; 
-            
-            // Update our pet data with the real ID and all data from the response
-            const updatedPetData = {
-              ...editedData, // Keep our local edited data
-              ...response.pet, // Add all the pet data from the response
-              id: newPetId, // Ensure the ID field is set properly
-              type: response.pet.species || editedData.type, // Map species to type for UI consistency
-              // Make sure UI-specific fields are properly mapped from backend data
-              feedingInstructions: response.pet.feeding_schedule || editedData.feedingInstructions,
-              medicalNotes: response.pet.medication_notes || editedData.medicalNotes,
-              pottyBreakSchedule: response.pet.potty_break_schedule || editedData.pottyBreakSchedule,
-              specialCareInstructions: response.pet.special_care_instructions || editedData.specialCareInstructions,
-              // Format birthday properly if it exists
-              birthday: response.pet.birthday ? formatDateFromBackend(response.pet.birthday) : editedData.birthday,
-              // Format adoption date properly if it exists
-              adoptionDate: response.pet.adoption_date ? formatDateFromBackend(response.pet.adoption_date) : editedData.adoptionDate,
-              // Just use the medications as plain text
-              medications: response.pet.medications || editedData.medications || '',
-            };
-            
-            debugLog("MBA5555", "SAVE PET - Successfully created pet. Old ID:", petId, "New ID:", newPetId);
-            
-            // *** CRITICAL FIX: Use replacePet instead of separate delete and add operations ***
-            replaceTempPetWithReal(petId, updatedPetData);
-            
-            // Set success message
-            successMessage = `Pet "${updatedPetData.name}" was successfully created!`;
-            
-            // Show success toast
-            toast({
-              message: successMessage,
-              type: 'success',
-              duration: 3000
-            });
-            
-            // Reset all editing state for this pet
-            setEditingPetIds(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(petId);
-              return newSet;
-            });
-            
-            setEditedPetsData(prev => {
-              const newData = {...prev};
-              delete newData[petId];
-              return newData;
-            });
-            
-            // Update expanded state to show the real pet
-            setExpandedPetIds(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(petId);
-              newSet.add(newPetId);
-              return newSet;
-            });
+          // Add crop parameters if provided
+          if (petData.photo.cropParams) {
+            formData.append('crop_params', JSON.stringify(petData.photo.cropParams));
           }
-        } catch (apiError) {
-          debugLog("MBA5555", "SAVE PET - API error adding pet:", apiError);
-          setSavingPet(false); // Reset saving flag
-          
-          // Show error message with details from the API error
-          showErrorMessage("Failed to Create Pet", apiError);
-          return; // Exit the function early to prevent further processing
-        }
-      } else {
-        debugLog("MBA5555", "SAVE PET - Updating existing pet:", petId);
-        
-        try {
-          const response = await updatePet(petId, petData);
-          debugLog("MBA5555", "SAVE PET - API response from updatePet:", response);
-          
-          // Update our local pet data with the response data
-          if (response) {
-            const updatedPetData = {
-              ...editedData,
-              ...response,
-              id: petId,
-              type: response.species || editedData.type,
-              feedingInstructions: response.feeding_schedule || editedData.feedingInstructions,
-              medicalNotes: response.medication_notes || editedData.medicalNotes,
-              pottyBreakSchedule: response.potty_break_schedule || editedData.pottyBreakSchedule,
-              specialCareInstructions: response.special_care_instructions || editedData.specialCareInstructions,
-              birthday: response.birthday ? formatDateFromBackend(response.birthday) : editedData.birthday,
-              adoptionDate: response.adoption_date ? formatDateFromBackend(response.adoption_date) : editedData.adoptionDate,
-              // Just use the medications as plain text
-              medications: response.medications || editedData.medications || '',
-            };
-            
-            // Update the pet in the parent component
-            onEditPet(petId, updatedPetData);
-            
-            // Set success message
-            successMessage = `Pet "${updatedPetData.name}" was successfully updated!`;
-            
-            // Show success toast
-            toast({
-              message: successMessage,
-              type: 'success',
-              duration: 3000
-            });
-            
-            // Reset editing state for this pet
-            setEditingPetIds(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(petId);
-              return newSet;
-            });
-            
-            setEditedPetsData(prev => {
-              const newData = {...prev};
-              delete newData[petId];
-              return newData;
-            });
-            
-            debugLog("MBA5555", "SAVE PET - Successfully updated pet:", petId);
-          }
-        } catch (apiError) {
-          debugLog("MBA5555", "SAVE PET - API error updating pet:", apiError);
-          
-          // Show error message with details from the API error
-          showErrorMessage("Failed to Update Pet", apiError);
-          setSavingPet(false); // Reset saving flag
-          return; // Exit early
         }
       }
       
-      // Reset saving flag
-      setTimeout(() => {
-        setSavingPet(false);
-        debugLog("MBA5555", "SAVE PET - Final state after all operations:", pets.map(p => ({id: p.id, name: p.name || 'unnamed'})));
-      }, 100);
-    } catch (error) {
-      debugLog("MBA5555", "SAVE PET - Unexpected error saving pet:", error);
-      setSavingPet(false); // Reset saving flag even on error
+      // Add all the pet data fields to the FormData
+      Object.entries(petToSave).forEach(([key, value]) => {
+        // Only add fields that have values
+        if (value !== null && value !== undefined) {
+          formData.append(key, value);
+        }
+      });
       
-      // Show generic error message for unexpected errors
-      showErrorMessage("Failed to Save Pet", error);
+      let response;
+      
+      if (isNewPet) {
+        // This is a new pet, add it
+        debugLog("MBA456", "Adding new pet");
+        response = await addPet(formData);
+        
+        // Check if it's a successful response
+        if (response && response.pet) {
+          const savedPet = response.pet;
+          
+          // Show success toast
+          toast({
+            message: `${savedPet.name || 'Pet'} added successfully!`,
+            type: 'success',
+            duration: 3000
+          });
+          
+          // Replace the temporary pet with the real one
+          replaceTempPetWithReal(petId, savedPet);
+          
+          // Notify parent component of the new pet
+          if (onAddPet) {
+            onAddPet(savedPet);
+          }
+        } else {
+          throw new Error("Invalid response from server when adding pet");
+        }
+      } else {
+        // This is an existing pet, update it
+        debugLog("MBA456", "Updating existing pet with ID:", petId);
+        response = await updatePet(petId, formData);
+        
+        // Check if it's a successful response
+        if (response && response.pet) {
+          const updatedPet = response.pet;
+          
+          // Show success toast
+          toast({
+            message: `${updatedPet.name || 'Pet'} updated successfully!`,
+            type: 'success',
+            duration: 3000
+          });
+          
+          // Notify parent component of the updated pet
+          if (onEditPet) {
+            onEditPet(updatedPet);
+          }
+        } else {
+          throw new Error("Invalid response from server when updating pet");
+        }
+      }
+      
+      // Remove this pet from the editing set
+      setEditingPetIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(petId);
+        return newSet;
+      });
+      
+      // Remove from edited data
+      setEditedPetsData(prev => {
+        const newData = { ...prev };
+        delete newData[petId];
+        return newData;
+      });
+      
+    } catch (error) {
+      debugLog("MBA456", "Error saving pet:", error);
+      
+      // Show error toast
+      toast({
+        message: `Failed to save pet: ${error.message || 'Unknown error'}`,
+        type: 'error',
+        duration: 5000
+      });
+      
+      // Mark the pet as failed
+      setEditedPetsData(prev => ({
+        ...prev,
+        [petId]: {
+          ...(prev[petId] || {}),
+          lastEditFailed: true
+        }
+      }));
+    } finally {
+      setSavingPet(false);
     }
   };
   
@@ -721,34 +695,54 @@ const PetsPreferencesTab = ({
 
   const handleUploadDocument = async (petId) => {
     try {
-      debugLog("MBA456", "Document upload simulated");
-      // Simulate a document being selected
-      const mockDocument = {
-        name: `Document_${new Date().getTime()}.pdf`,
-        size: 1024 * 1024 * 2, // 2MB
-        type: 'application/pdf'
-      };
+      debugLog("MBA5555", "Opening image picker for pet:", petId);
       
-      setEditedPetsData(prev => ({
-        ...prev,
-        [petId]: {
-          ...(prev[petId] || {}),
-          vetDocuments: [...(prev[petId]?.vetDocuments || []), mockDocument]
+      // Request permissions first if on native platforms
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          debugLog('MBA5555', 'Permission to access media library was denied');
+          toast({
+            message: 'Permission to access media library was denied',
+            type: 'error',
+            duration: 3000
+          });
+          return;
         }
-      }));
+      }
       
-      // Show a toast notification
-      toast({
-        message: "Document added successfully. Full document upload feature coming soon.",
-        type: 'info',
-        duration: 3000
+      // Launch image picker with platform-specific options
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Disable built-in editing as we'll use our custom cropper
+        quality: 1,
+        // On web, we need base64 for direct upload
+        base64: Platform.OS === 'web',
+        allowsMultipleSelection: false,
       });
-    } catch (error) {
-      debugLog("MBA456", "Error with document upload", error);
       
-      // Show error toast notification
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        
+        debugLog('MBA5555', 'Selected pet photo:', {
+          uri: selectedAsset.uri.substring(0, 30) + '...',
+          type: selectedAsset.type || 'image/jpeg',
+          width: selectedAsset.width,
+          height: selectedAsset.height,
+          hasBase64: !!selectedAsset.base64
+        });
+        
+        // Store the selected photo URI and pet ID
+        setSelectedPetPhotoUri(selectedAsset.uri);
+        setCurrentEditingPetId(petId);
+        
+        // Show the photo cropper
+        setShowPetPhotoCropper(true);
+      }
+    } catch (error) {
+      debugLog('MBA5555', 'Error selecting pet photo:', error);
       toast({
-        message: "Failed to add document",
+        message: 'Failed to select pet photo. Please try again.',
         type: 'error',
         duration: 3000
       });
@@ -931,10 +925,17 @@ const PetsPreferencesTab = ({
                         style={styles.profilePhotoButton}
                         onPress={() => handleUploadDocument(pet.id)}
                       >
-                        <Image 
-                          source={require('../../../assets/default-pet-image.png')}
-                          style={styles.petPhoto}
-                        />
+                        {editedPetData.photoUri ? (
+                          <Image 
+                            source={{ uri: editedPetData.photoUri }}
+                            style={styles.petPhoto}
+                          />
+                        ) : (
+                          <Image 
+                            source={require('../../../assets/default-pet-image.png')}
+                            style={styles.petPhoto}
+                          />
+                        )}
                         <View style={styles.plusIconContainer}>
                           <MaterialCommunityIcons name="plus-circle" size={20} color={theme.colors.primary} />
                         </View>
@@ -1170,10 +1171,17 @@ const PetsPreferencesTab = ({
                 </View>
               ) : (
                 <>
-                  <Image 
-                    source={require('../../../assets/default-pet-image.png')}
-                    style={styles.petPhoto}
-                  />
+                  {editedPetData.photoUri ? (
+                    <Image 
+                      source={{ uri: editedPetData.photoUri }}
+                      style={styles.petPhoto}
+                    />
+                  ) : (
+                    <Image 
+                      source={require('../../../assets/default-pet-image.png')}
+                      style={styles.petPhoto}
+                    />
+                  )}
                   <View style={[
                     styles.petInfo,
                     windowWidth < 600 && styles.petInfoWithButtonPadding
@@ -2355,59 +2363,107 @@ const PetsPreferencesTab = ({
     try {
       debugLog("MBA5555", "REPLACE PET - Replacing temp pet with real pet in parent state");
       
-      // Find the current pets array and create a new one with the temp pet replaced by the real one
-      const currentPetsArray = [...pets];
-      const tempPetIndex = currentPetsArray.findIndex(p => p.id === tempPetId);
-      
-      if (tempPetIndex !== -1) {
-        // Create a new array with the temp pet replaced by the real one
-        const updatedPets = [
-          ...currentPetsArray.slice(0, tempPetIndex),
-          realPetData,
-          ...currentPetsArray.slice(tempPetIndex + 1)
-        ];
-        
-        // Log the before and after state for debugging
-        debugLog("MBA5555", "REPLACE PET - Before replace:", currentPetsArray.map(p => ({id: p.id, name: p.name || 'unnamed'})));
-        debugLog("MBA5555", "REPLACE PET - After replace:", updatedPets.map(p => ({id: p.id, name: p.name || 'unnamed'})));
-        
-        // Update the parent's state with the new array
-        try {
-          debugLog("MBA5555", "REPLACE PET - Calling onReplacePet with new array");
-          onReplacePet(updatedPets);
-          debugLog("MBA5555", "REPLACE PET - Atomic replacement completed");
-        } catch (callbackError) {
-          debugLog("MBA5555", "REPLACE PET - Error in onReplacePet callback:", callbackError);
-          // If the callback fails, try the fallback approach
-          try {
-            debugLog("MBA5555", "REPLACE PET - Trying fallback: delete + add");
-            onDeletePet(tempPetId);
-            setTimeout(() => {
-              onAddPet(realPetData);
-            }, 50);
-          } catch (fallbackError) {
-            debugLog("MBA5555", "REPLACE PET - Even fallback failed:", fallbackError);
-            // At this point, we've tried everything - just re-throw
-            throw fallbackError;
-          }
-        }
-      } else {
-        debugLog("MBA5555", "REPLACE PET - Temp pet not found in array of length " + currentPetsArray.length);
-        debugLog("MBA5555", "REPLACE PET - Current pet IDs: " + currentPetsArray.map(p => p.id).join(', '));
-        debugLog("MBA5555", "REPLACE PET - Temp pet ID we're looking for: " + tempPetId);
-        debugLog("MBA5555", "REPLACE PET - Falling back to add");
-        
-        try {
-          onAddPet(realPetData);
-        } catch (addError) {
-          debugLog("MBA5555", "REPLACE PET - Error in onAddPet fallback:", addError);
-          throw addError;
-        }
+      // Make sure we have valid input data
+      if (!tempPetId || !realPetData || !realPetData.id) {
+        debugLog("MBA5555", "REPLACE PET - Invalid data provided", { tempPetId, realPetData });
+        return;
       }
+      
+      // Format the pet data with the correct field mappings for UI
+      const formattedPetData = {
+        ...realPetData,
+        // Ensure proper type mapping between backend and UI
+        type: realPetData.species || realPetData.type,
+        // Make sure feeding instructions are mapped properly
+        feedingInstructions: realPetData.feeding_schedule || realPetData.feedingInstructions,
+        // Make sure medical notes are mapped properly
+        medicalNotes: realPetData.medication_notes || realPetData.medicalNotes,
+        // Make sure potty break schedule is mapped properly
+        pottyBreakSchedule: realPetData.potty_break_schedule || realPetData.pottyBreakSchedule,
+        // Make sure special care instructions are mapped properly
+        specialCareInstructions: realPetData.special_care_instructions || realPetData.specialCareInstructions,
+        // Format dates correctly
+        birthday: realPetData.birthday ? formatDateFromBackend(realPetData.birthday) : null,
+        adoptionDate: realPetData.adoption_date ? formatDateFromBackend(realPetData.adoption_date) : null,
+        // Preserve photo information if it exists
+        photoUri: realPetData.profile_photo || null,
+      };
+      
+      // Notify parent component of the replacement
+      if (onReplacePet) {
+        onReplacePet(tempPetId, formattedPetData);
+      } else {
+        debugLog("MBA5555", "REPLACE PET - No onReplacePet handler provided by parent component");
+      }
+      
+      // Clear any editing state for the temp pet
+      setEditingPetIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tempPetId);
+        return newSet;
+      });
+      
+      // Remove from edited data
+      setEditedPetsData(prev => {
+        const newData = {...prev};
+        delete newData[tempPetId];
+        return newData;
+      });
+      
+      // Update expanded state to show the real pet
+      setExpandedPetIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tempPetId);
+        newSet.add(formattedPetData.id);
+        return newSet;
+      });
+      
     } catch (error) {
-      debugLog("MBA5555", "REPLACE PET - Unexpected error during pet replacement:", error);
-      // Re-throw the error so the caller can handle it
-      throw error;
+      debugLog("MBA5555", "REPLACE PET - Error replacing pet:", error);
+    }
+  };
+
+  // Handle saving the cropped pet image
+  const handleSaveCroppedPetImage = async (imageUri, cropParams) => {
+    try {
+      setIsUploadingPhoto(true);
+      
+      debugLog('MBA5555', 'Processing cropped pet image with params:', cropParams);
+      
+      // Process the image with crop parameters
+      const processedImage = await processImageWithCrop(imageUri, cropParams);
+      
+      // Update the edited pet data with the new photo URI
+      setEditedPetsData(prev => {
+        const petData = prev[currentEditingPetId] || {};
+        return {
+          ...prev,
+          [currentEditingPetId]: {
+            ...petData,
+            photo: processedImage, // Store the processed image for later upload
+            photoUri: imageUri, // Store original URI for display
+          }
+        };
+      });
+      
+      toast({
+        message: 'Pet photo updated. It will be saved when you save the pet.',
+        type: 'success',
+        duration: 3000
+      });
+      
+    } catch (error) {
+      debugLog('MBA5555', 'Error processing pet photo:', error);
+      toast({
+        message: 'Failed to process pet photo. Please try again.',
+        type: 'error',
+        duration: 3000
+      });
+    } finally {
+      setIsUploadingPhoto(false);
+      setShowPetPhotoCropper(false);
+      setSelectedPetPhotoUri(null);
+      setCurrentEditingPetId(null);
     }
   };
 
@@ -2487,6 +2543,19 @@ const PetsPreferencesTab = ({
 
       {renderEmergencyContactsSection()}
       {renderHouseholdMembersSection()} */}
+      
+      {/* Pet Photo Cropper Modal */}
+      <ProfilePhotoCropper
+        visible={showPetPhotoCropper}
+        imageUri={selectedPetPhotoUri}
+        onClose={() => {
+          setShowPetPhotoCropper(false);
+          setSelectedPetPhotoUri(null);
+          setCurrentEditingPetId(null);
+        }}
+        onSave={handleSaveCroppedPetImage}
+        isUploading={isUploadingPhoto}
+      />
     </ScrollView>
   );
 };
@@ -2559,6 +2628,19 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 50,
+  },
+  profilePhotoButton: {
+    position: 'relative',
+  },
+  plusIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
   },
   petInfo: {
     flex: 1,
@@ -2923,22 +3005,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.secondary,
     marginBottom: 4,
-  },
-  profilePhotoButton: {
-    position: 'relative',
-  },
-  plusIconContainer: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: theme.colors.background,
-    borderRadius: 10,
-  },
-  sectionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
   },
   editMainContainer: {
     width: '100%',
