@@ -267,7 +267,7 @@ const PetsPreferencesTab = ({
       toast({
         message: "Attempting to repair pet data. Please wait...",
         type: 'info',
-        duration: 3000
+        duration: 4000
       });
       
       // Call the fix pet owner API
@@ -338,7 +338,7 @@ const PetsPreferencesTab = ({
       toast({
         message: `Unable to delete pet - could not find pet with ID ${petId}`,
         type: 'error',
-        duration: 3000
+        duration: 4000
       });
       return;
     }
@@ -367,7 +367,7 @@ const PetsPreferencesTab = ({
       toast({
         message: `Deleting ${petName}...`,
         type: 'info',
-        duration: 3000
+        duration: 4000
       });
       
       // Call the delete pet API
@@ -389,7 +389,7 @@ const PetsPreferencesTab = ({
       toast({
         message: `${petName} has been successfully deleted.`,
         type: 'success',
-        duration: 3000
+        duration: 4000
       });
       
     } catch (error) {
@@ -624,7 +624,7 @@ const PetsPreferencesTab = ({
             toast({
               message: `${petToSave.name || 'Pet'} added successfully!`,
               type: 'success',
-              duration: 3000
+              duration: 4000
             });
             
             // Replace the temporary pet with the real one - this needs to be atomic to prevent duplicates
@@ -650,7 +650,7 @@ const PetsPreferencesTab = ({
           toast({
             message: `Error saving pet: ${error.message}`,
             type: 'error',
-            duration: 3000
+            duration: 4000
           });
           
           debugLog("MBA456", "Error in pet creation:", error);
@@ -674,9 +674,9 @@ const PetsPreferencesTab = ({
           
           // Show success toast
           toast({
-            message: `${updatedPet.name || 'Pet'} updated successfully!`,
+            message: `${updatedPet.name ? updatedPet.name.charAt(0).toUpperCase() + updatedPet.name.slice(1).toLowerCase() : 'Pet'} updated successfully!`,
             type: 'success',
-            duration: 3000
+            duration: 4000
           });
           
           // Process the profile_photo URL from the server to ensure it's complete
@@ -952,7 +952,7 @@ const PetsPreferencesTab = ({
       toast({
         message: "Unable to add pet - system error",
         type: 'error',
-        duration: 3000
+        duration: 4000
       });
       return;
     }
@@ -979,7 +979,7 @@ const PetsPreferencesTab = ({
       toast({
         message: "Error adding pet",
         type: 'error',
-        duration: 3000
+        duration: 4000
       });
     }
   };
@@ -996,7 +996,7 @@ const PetsPreferencesTab = ({
           toast({
             message: 'Permission to access media library was denied',
             type: 'error',
-            duration: 3000
+            duration: 4000
           });
           return;
         }
@@ -1035,7 +1035,7 @@ const PetsPreferencesTab = ({
       toast({
         message: 'Failed to select pet photo. Please try again.',
         type: 'error',
-        duration: 3000
+        duration: 4000
       });
     }
   };
@@ -2691,7 +2691,7 @@ const PetsPreferencesTab = ({
         toast({
           message: `Pet saved successfully!`,
           type: 'success',
-          duration: 3000
+          duration: 4000
         });
         return;
       }
@@ -2864,7 +2864,7 @@ const PetsPreferencesTab = ({
             toast({
               message: "Unable to update pets list. Please refresh the page.",
               type: 'error',
-              duration: 3000
+              duration: 4000
             });
           }
         }
@@ -2901,7 +2901,7 @@ const PetsPreferencesTab = ({
         toast({
           message: "Pet saved but display may not be updated. Please refresh if needed.",
           type: 'info',
-          duration: 3000
+          duration: 4000
         });
       }
       
@@ -2962,7 +2962,7 @@ const PetsPreferencesTab = ({
       toast({
         message: 'Pet photo updated. It will be saved when you save the pet.',
         type: 'success',
-        duration: 3000
+        duration: 4000
       });
       
     } catch (error) {
@@ -2970,7 +2970,7 @@ const PetsPreferencesTab = ({
       toast({
         message: 'Failed to process pet photo. Please try again.',
         type: 'error',
-        duration: 3000
+        duration: 4000
       });
     } finally {
       setIsUploadingPhoto(false);
@@ -3148,6 +3148,7 @@ const styles = StyleSheet.create({
   },
   petsList: {
     gap: 16,
+    paddingBottom: 70, // Add extra padding at the bottom for better scrolling on mobile
   },
   petCard: {
     borderRadius: 12,

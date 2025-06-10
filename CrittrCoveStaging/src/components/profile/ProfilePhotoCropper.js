@@ -11,7 +11,8 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
-  SafeAreaView
+  SafeAreaView,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
@@ -40,6 +41,34 @@ const ProfilePhotoCropper = ({
   
   // Animation values
   const pan = useRef(new Animated.ValueXY()).current;
+
+  // Disable scrolling in parent when modal is open (for web)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const disableScroll = (e) => {
+        // Prevent scrolling when the modal is open
+        if (visible) {
+          e.preventDefault();
+        }
+      };
+      
+      // Add event listeners to prevent scrolling
+      document.addEventListener('touchmove', disableScroll, { passive: false });
+      document.addEventListener('wheel', disableScroll, { passive: false });
+      
+      // Also set overflow hidden on body
+      if (visible) {
+        document.body.style.overflow = 'hidden';
+      }
+      
+      return () => {
+        // Clean up
+        document.removeEventListener('touchmove', disableScroll);
+        document.removeEventListener('wheel', disableScroll);
+        document.body.style.overflow = '';
+      };
+    }
+  }, [visible]);
   
   // Reset values when the modal becomes visible or the image changes
   useEffect(() => {
@@ -90,7 +119,10 @@ const ProfilePhotoCropper = ({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to deliberate movements
+        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
+      },
       onPanResponderGrant: () => {
         debugLog('MBA23o9h8v45', 'Pan responder activated');
         pan.setOffset({
@@ -99,11 +131,9 @@ const ProfilePhotoCropper = ({
         });
         pan.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: (evt, gestureState) => {
-        Animated.event(
-          [null, { dx: pan.x, dy: pan.y }],
-          { useNativeDriver: false }
-        )(evt, gestureState);
+      onPanResponderMove: (_, gestureState) => {
+        pan.x.setValue(gestureState.dx);
+        pan.y.setValue(gestureState.dy);
       },
       onPanResponderRelease: () => {
         debugLog('MBA23o9h8v45', 'Pan responder released');
@@ -114,7 +144,9 @@ const ProfilePhotoCropper = ({
           x: pan.x._value,
           y: pan.y._value
         });
-      }
+      },
+      // Don't let other components steal the gesture
+      onPanResponderTerminationRequest: () => false,
     })
   ).current;
   
@@ -161,131 +193,132 @@ const ProfilePhotoCropper = ({
   const minZoom = initialScaleRef.current || 1;
   const maxZoom = (initialScaleRef.current || 1) * 3;
   
+  if (!visible) return null;
+  
   return (
     <Modal
       visible={visible}
       transparent={true}
       animationType="fade"
       onRequestClose={onClose}
+      statusBarTranslucent={true}
+      presentationStyle="overFullScreen"
     >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.contentContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Adjust Profile Photo</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Main crop area container - this defines the visible area */}
-          <View style={styles.cropAreaOuterContainer}>
-            <View style={styles.cropAreaContainer}>
-              {/* This is where we clip/mask the image to only show within this container */}
-              <View style={styles.imageViewport}>
-                {/* This is the actual photo that will be cropped */}
-                <Animated.View
-                  style={[styles.imageContainer, imageTransform]}
-                >
-                  {imageUri && imageLoaded ? (
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={[
-                        styles.image,
-                        {
-                          width: imageSize.width,
-                          height: imageSize.height,
-                        }
-                      ]}
-                      resizeMode="contain"
-                      onLoad={() => {
-                        debugLog('MBA23o9h8v45', 'Image loaded in cropper component');
-                      }}
-                    />
-                  ) : (
-                    <ActivityIndicator size="large" color={theme.colors.primary} />
-                  )}
-                </Animated.View>
-                
-                {/* Semi-transparent overlay with hole for the crop circle */}
-                <View style={styles.overlay}>
-                  {/* This creates the transparent circle in the overlay */}
-                  <View style={styles.cropCircleHole} />
+      <TouchableWithoutFeedback>
+        <View style={styles.modalContainer}>
+          <View style={styles.contentContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Adjust Profile Photo</Text>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Main crop area container - this defines the visible area */}
+            <View style={styles.cropAreaOuterContainer}>
+              <View style={styles.cropAreaContainer}>
+                {/* This is where we clip/mask the image to only show within this container */}
+                <View style={styles.imageViewport}>
+                  {/* This is the actual photo that will be cropped */}
+                  <Animated.View
+                    style={[styles.imageContainer, imageTransform]}
+                    {...panResponder.panHandlers}
+                  >
+                    {imageUri && imageLoaded ? (
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={[
+                          styles.image,
+                          {
+                            width: imageSize.width,
+                            height: imageSize.height,
+                          }
+                        ]}
+                        resizeMode="contain"
+                        onLoad={() => {
+                          debugLog('MBA23o9h8v45', 'Image loaded in cropper component');
+                        }}
+                      />
+                    ) : (
+                      <ActivityIndicator size="large" color={theme.colors.primary} />
+                    )}
+                  </Animated.View>
+                  
+                  {/* Semi-transparent overlay with hole for the crop circle */}
+                  <View style={styles.overlay} pointerEvents="none">
+                    {/* This creates the transparent circle in the overlay */}
+                    <View style={styles.cropCircleHole} />
+                  </View>
+                  
+                  {/* Circle guide border */}
+                  <View style={styles.circleGuide} pointerEvents="none" />
                 </View>
-                
-                {/* Circle guide border */}
-                <View style={styles.circleGuide} />
-                
-                {/* Transparent touchable area for dragging, on top of everything */}
-                <View 
-                  style={styles.touchableArea}
-                  {...panResponder.panHandlers}
-                />
               </View>
             </View>
-          </View>
-          
-          {/* Zoom slider */}
-          <View style={styles.sliderContainer}>
-            <TouchableOpacity 
-              onPress={() => {
-                const newScale = Math.max(minZoom, scale - 0.1);
-                handleScaleChange(newScale);
-              }}
-              style={styles.zoomButton}
-            >
-              <MaterialCommunityIcons name="magnify-minus" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-            <Slider
-              style={styles.slider}
-              minimumValue={minZoom}
-              maximumValue={maxZoom}
-              value={scale}
-              onValueChange={handleScaleChange}
-              minimumTrackTintColor={theme.colors.primary}
-              maximumTrackTintColor={theme.colors.border}
-              thumbTintColor={theme.colors.primary}
-            />
-            <TouchableOpacity 
-              onPress={() => {
-                const newScale = Math.min(maxZoom, scale + 0.1);
-                handleScaleChange(newScale);
-              }}
-              style={styles.zoomButton}
-            >
-              <MaterialCommunityIcons name="magnify-plus" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.instructionsContainer}>
-            <Text style={styles.instructionsText}>
-              Use slider to zoom • Drag to position • Return slider to left to reset zoom
-            </Text>
-          </View>
-          
-          <View style={styles.footer}>
-            <TouchableOpacity 
-              style={[styles.button, styles.cancelButton]} 
-              onPress={onClose}
-              disabled={isUploading}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
             
-            <TouchableOpacity 
-              style={[styles.button, styles.saveButton, isUploading && styles.disabledButton]} 
-              onPress={handleSave}
-              disabled={isUploading || !imageLoaded}
-            >
-              {isUploading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save</Text>
-              )}
-            </TouchableOpacity>
+            {/* Zoom slider */}
+            <View style={styles.sliderContainer}>
+              <TouchableOpacity 
+                onPress={() => {
+                  const newScale = Math.max(minZoom, scale - 0.1);
+                  handleScaleChange(newScale);
+                }}
+                style={styles.zoomButton}
+              >
+                <MaterialCommunityIcons name="magnify-minus" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+              <Slider
+                style={styles.slider}
+                minimumValue={minZoom}
+                maximumValue={maxZoom}
+                value={scale}
+                onValueChange={handleScaleChange}
+                minimumTrackTintColor={theme.colors.primary}
+                maximumTrackTintColor={theme.colors.border}
+                thumbTintColor={theme.colors.primary}
+              />
+              <TouchableOpacity 
+                onPress={() => {
+                  const newScale = Math.min(maxZoom, scale + 0.1);
+                  handleScaleChange(newScale);
+                }}
+                style={styles.zoomButton}
+              >
+                <MaterialCommunityIcons name="magnify-plus" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.instructionsContainer}>
+              <Text style={styles.instructionsText}>
+                Use slider to zoom • Drag to position • Return slider to left to reset zoom
+              </Text>
+            </View>
+            
+            <View style={styles.footer}>
+              <TouchableOpacity 
+                style={[styles.button, styles.cancelButton]} 
+                onPress={onClose}
+                disabled={isUploading}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.button, styles.saveButton, isUploading && styles.disabledButton]} 
+                onPress={handleSave}
+                disabled={isUploading || !imageLoaded}
+              >
+                {isUploading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </SafeAreaView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -394,13 +427,6 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.primary,
     borderStyle: 'dashed',
     zIndex: 3,
-  },
-  touchableArea: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'transparent',
-    zIndex: 4, // This needs to be on top to capture touches
   },
   sliderContainer: {
     flexDirection: 'row',

@@ -1306,7 +1306,7 @@ const ProfileInfoTab = ({
           </View>
 
           {/* Right Side Sections */}
-          <View style={[styles.sectionsContainer, !isMobile && styles.sectionsContainerDesktop]}>
+          <View style={[styles.sectionsContainer, { paddingBottom: isMobile ? 150 : 0 }, !isMobile && styles.sectionsContainerDesktop]}>
             {/* About Me Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>

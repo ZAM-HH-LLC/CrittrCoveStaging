@@ -4122,6 +4122,7 @@ const MessageHistory = ({ navigation, route }) => {
         conversation={{
           id: selectedConversationData?.conversation_id
         }}
+        otherUserProfilePhoto={selectedConversationData?.profile_picture}
         otherUserName={selectedConversationData?.other_user_name}
         onCreateBooking={handleCreateBooking}
       />

@@ -415,7 +415,7 @@ const SettingsPaymentsTab = ({
   );
 
   const renderMobileLayout = () => (
-    <ScrollView style={styles.mobileContainer}>
+    <ScrollView style={styles.mobileContainer} contentContainerStyle={{ paddingBottom: 100 }}>
       {/* TODO: Add back after MVP 
       {renderPlansSection()}
       {renderPaymentMethodsSection()} */}

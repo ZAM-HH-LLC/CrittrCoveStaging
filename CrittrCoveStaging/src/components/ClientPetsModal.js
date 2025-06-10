@@ -3,9 +3,10 @@ import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, ActivityIn
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { getClientPets } from '../api/API';
+import { API_BASE_URL } from '../config/config';
 import { AuthContext, debugLog } from '../context/AuthContext';
 
-const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCreateBooking }) => {
+const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCreateBooking, otherUserProfilePhoto }) => {
   const [pets, setPets] = useState([]);
   const [selectedPet, setSelectedPet] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -72,7 +73,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
     <>
       <View style={styles.petImageContainer}>
         {pet.profile_photo ? (
-          <Image source={{ uri: pet.profile_photo }} style={styles.petImage} />
+          <Image source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} style={styles.petImage} />
         ) : (
           <View style={styles.petImagePlaceholder}>
             <MaterialCommunityIcons name="paw" size={50} color={theme.colors.placeholder} />
@@ -86,12 +87,12 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
         
         <View style={styles.detailSection}>
           <Text style={styles.detailLabel}>Type</Text>
-          <Text style={styles.detailText}>{pet.species || 'Not specified'}</Text>
+          <Text style={styles.detailText}>{pet.species.charAt(0).toUpperCase() + pet.species.slice(1).toLowerCase() || 'Not specified'}</Text>
         </View>
 
         <View style={styles.detailSection}>
           <Text style={styles.detailLabel}>Breed</Text>
-          <Text style={styles.detailText}>{pet.breed || 'Not specified'}</Text>
+          <Text style={styles.detailText}>{pet.breed.charAt(0).toUpperCase() + pet.breed.slice(1).toLowerCase() || 'Not specified'}</Text>
         </View>
 
         
@@ -284,8 +285,17 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Text style={styles.clientName}>{otherUserName || 'Client'}</Text>
-              <Text style={styles.clientSubtitle}>Client Pets</Text>
+              {otherUserProfilePhoto ? (
+                <Image source={{ uri: `${API_BASE_URL}${otherUserProfilePhoto}` }} style={styles.clientProfilePhoto} />
+              ) : (
+                <View style={styles.clientProfilePhotoPlaceholder}>
+                  <MaterialCommunityIcons name="account" size={24} color={theme.colors.placeholder} />
+                </View>
+              )}
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.clientName}>{otherUserName || 'Client'}</Text>
+                <Text style={styles.clientSubtitle}>Your Client's Pets</Text>
+              </View>
             </View>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
@@ -320,12 +330,23 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
                         onPress={() => handlePetSelect(pet)}
                       >
                         <View style={styles.mobilePetContent}>
-                          <Text style={styles.mobilePetName}>
-                            {pet.name}
-                          </Text>
-                          <Text style={styles.mobilePetType}>
-                            {pet.species}
-                          </Text>
+                          <View style={styles.petListImageContainer}>
+                            {pet.profile_photo ? (
+                              <Image source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} style={styles.petListImage} />
+                            ) : (
+                              <View style={styles.petListImagePlaceholder}>
+                                <MaterialCommunityIcons name="paw" size={16} color={theme.colors.placeholder} />
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.petTextContainer}>
+                            <Text style={styles.mobilePetName}>
+                              {pet.name.charAt(0).toUpperCase() + pet.name.slice(1).toLowerCase()}
+                            </Text>
+                            <Text style={styles.mobilePetType}>
+                              {pet.species.charAt(0).toUpperCase() + pet.species.slice(1).toLowerCase()}
+                            </Text>
+                          </View>
                         </View>
                         <MaterialCommunityIcons 
                           name="chevron-right" 
@@ -352,7 +373,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
                         color={theme.colors.primary} 
                       />
                     </TouchableOpacity>
-                    <Text style={styles.mobileDetailsTitle}>{selectedPet.name}</Text>
+                    <Text style={styles.mobileDetailsTitle}>{selectedPet.name.charAt(0).toUpperCase() + selectedPet.name.slice(1).toLowerCase()}</Text>
                   </View>
                   <ScrollView style={styles.mobileDetailsScrollView}>
                     {renderPetDetails(selectedPet)}
@@ -376,18 +397,31 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
                           ]}
                           onPress={() => handlePetSelect(pet)}
                         >
-                          <Text style={[
-                            styles.petName,
-                            selectedPet?.pet_id === pet.pet_id && styles.petNameSelected
-                          ]}>
-                            {pet.name}
-                          </Text>
-                          <Text style={[
-                            styles.petType,
-                            selectedPet?.pet_id === pet.pet_id && styles.petTypeSelected
-                          ]}>
-                            {pet.species}
-                          </Text>
+                          <View style={styles.petItemContent}>
+                            <View style={styles.petListImageContainer}>
+                              {pet.profile_photo ? (
+                                <Image source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} style={styles.petListImage} />
+                              ) : (
+                                <View style={styles.petListImagePlaceholder}>
+                                  <MaterialCommunityIcons name="paw" size={16} color={theme.colors.placeholder} />
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.petTextContainer}>
+                              <Text style={[
+                                styles.petName,
+                                selectedPet?.pet_id === pet.pet_id && styles.petNameSelected
+                              ]}>
+                                {pet.name.charAt(0).toUpperCase() + pet.name.slice(1).toLowerCase()}
+                              </Text>
+                              <Text style={[
+                                styles.petType,
+                                selectedPet?.pet_id === pet.pet_id && styles.petTypeSelected
+                              ]}>
+                                {pet.species.charAt(0).toUpperCase() + pet.species.slice(1).toLowerCase()}
+                              </Text>
+                            </View>
+                          </View>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -397,7 +431,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
                   <View style={styles.petDetails}>
                     {selectedPet ? (
                       <ScrollView style={styles.detailsScrollView}>
-                        <Text style={styles.detailsTitle}>{selectedPet.name}</Text>
+                        <Text style={styles.detailsTitle}>{selectedPet.name.charAt(0).toUpperCase() + selectedPet.name.slice(1).toLowerCase()}</Text>
                         {renderPetDetails(selectedPet)}
                       </ScrollView>
                     ) : (
@@ -436,6 +470,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  petListImageContainer: {
+    marginRight: 12,
+  },
+  petListImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  petListImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  petItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  petTextContainer: {
+    flex: 1,
+  },
   modalContainer: {
     backgroundColor: theme.colors.surface,
     borderRadius: 12,
@@ -461,6 +520,28 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  clientProfilePhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 15,
+  },
+  clientProfilePhotoPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginRight: 15,
   },
   clientName: {
     fontSize: 20,
@@ -525,6 +606,8 @@ const styles = StyleSheet.create({
   },
   mobilePetContent: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   mobilePetName: {
     fontSize: 16,
