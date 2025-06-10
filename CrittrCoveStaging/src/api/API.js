@@ -428,6 +428,57 @@ export const updateProfileInfo = async (profileData) => {
 };
 
 /**
+ * Upload a profile picture for the user
+ * @param {FormData} formData - FormData containing the profile_picture file
+ * @returns {Promise<Object>} - Object containing the profile_photo URL
+ */
+export const uploadProfilePicture = async (formData) => {
+  try {
+    debugLog('MBA3oin4f084', 'Starting profile picture upload');
+    
+    if (!(formData instanceof FormData)) {
+      throw new Error('uploadProfilePicture requires FormData');
+    }
+    
+    // Check if formData contains a profile_picture entry
+    let hasFile = false;
+    for (let pair of formData.entries()) {
+      if (pair[0] === 'profile_picture') {
+        hasFile = true;
+        debugLog('MBA3oin4f084', `FormData contains profile_picture: ${typeof pair[1]}`);
+        break;
+      }
+    }
+    
+    if (!hasFile) {
+      throw new Error('FormData does not contain profile_picture');
+    }
+    
+    // Ensure we're not setting Content-Type ourselves - let axios set it with boundary
+    const response = await axios({
+      method: 'post',
+      url: `${API_BASE_URL}/api/users/v1/upload-profile-picture/`,
+      data: formData,
+      headers: {
+        'Accept': 'application/json',
+        // Let axios set the content-type with boundary
+      },
+      // Increase timeout for larger files
+      timeout: 30000
+    });
+    
+    debugLog('MBA3oin4f084', 'Profile picture upload successful with response:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA3oin4f084', 'Error uploading profile picture:', error);
+    if (error.response) {
+      debugLog('MBA3oin4f084', 'Server error response:', error.response);
+    }
+    throw error;
+  }
+};
+
+/**
  * Add a new pet to the user's account
  * This function sends pet data to the backend to create a new pet record
  * @param {Object} petData - Object containing the pet details
@@ -1251,7 +1302,7 @@ export const uploadMessageImage = async (conversationId, imageData) => {
     
     // Handle different types of image data
     if (typeof imageData === 'string') {
-      // If it's a base64 string or data URI
+      // If it's a base64 string, convert to file object
       debugLog('MBA5678: Image data is a string, sending as base64');
       
       // Use JSON format instead of FormData for base64

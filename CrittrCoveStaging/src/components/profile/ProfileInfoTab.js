@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator, Platform, Keyboard } from 'react-native';
+import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext, debugLog } from '../../context/AuthContext';
-import { updateProfileInfo } from '../../api/API';
+import { updateProfileInfo, uploadProfilePicture } from '../../api/API';
 import { useToast } from '../../components/ToastProvider';
 import { geocodeAddressGraceful } from '../../utils/geocoding';
 import AddressAutocomplete from '../AddressAutocomplete';
+import axios from 'axios';
+import { API_BASE_URL } from '../../config/config';
+import ProfilePhotoCropper from './ProfilePhotoCropper';
+import { processImageWithCrop, prepareImageForUpload } from '../../utils/imageCropUtils';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -391,12 +395,30 @@ const ProfileInfoTab = ({
   const [selectedInsurance, setSelectedInsurance] = useState(insurance);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Add state for photo cropper
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [showCropper, setShowCropper] = useState(false);
+  
   // Add state to track edited values that should display in the UI
   const [displayValues, setDisplayValues] = useState({
     name: name || authName || "Your Name",
     email: email || "",
     bio: isProfessional ? bio : about_me,
     location: `${address || ''}${city ? `, ${city}` : ''}${state ? `, ${state}` : ''}`,
+  });
+  
+  // Add profileData state to store all profile-related data including profile photo
+  const [profileData, setProfileData] = useState({
+    name: name || authName || "Your Name",
+    email: email || "",
+    bio: isProfessional ? bio : about_me,
+    about_me: about_me || "",
+    profile_photo: profilePhoto || null,
+    address: address || "",
+    city: city || "",
+    state: state || "",
+    zip: zip || "",
+    coordinates: coordinates || null,
   });
   
   const showToast = useToast();
@@ -424,6 +446,17 @@ const ProfileInfoTab = ({
     }
   }, [hasEdits, setHasUnsavedChanges]);
   
+  // Update profileData when profilePhoto prop changes
+  useEffect(() => {
+    if (profilePhoto) {
+      debugLog('MBA5080', 'Updating profile photo from props:', profilePhoto);
+      setProfileData(prevData => ({
+        ...prevData,
+        profile_photo: profilePhoto
+      }));
+    }
+  }, [profilePhoto]);
+  
   // Update the initial useEffect to only run once
   useEffect(() => {
     debugLog('MBA230uvj0834h9', 'ProfileInfoTab mounted with props:', { 
@@ -448,6 +481,21 @@ const ProfileInfoTab = ({
       bio: isProfessional ? bio : about_me,
       location: locationDisplay
     });
+    
+    // Initialize profileData with all props
+    setProfileData(prevData => ({
+      ...prevData,
+      profile_photo: profilePhoto || prevData.profile_photo,
+      name: name || prevData.name,
+      email: email || prevData.email,
+      bio: isProfessional ? (bio || prevData.bio) : (about_me || prevData.bio),
+      about_me: about_me || prevData.about_me,
+      address: address || prevData.address,
+      city: city || prevData.city,
+      state: state || prevData.state,
+      zip: zip || prevData.zip,
+      coordinates: coordinates || prevData.coordinates,
+    }));
   }, []); // Empty dependency array - only run on mount
 
   // Add effect to update bio when isProfessional changes
@@ -831,7 +879,10 @@ const ProfileInfoTab = ({
       
       // Notify parent component if needed
       if (onSaveComplete) {
+        debugLog('MBA3oin4f084', 'Notifying parent component of profile photo update:', updatedProfile.profile_photo);
         onSaveComplete(updatedProfile);
+      } else {
+        debugLog('MBA3oin4f084', 'No onSaveComplete function provided by parent component');
       }
     } catch (error) {
       debugLog('MBA4928', `Error saving ${field}:`, error);
@@ -877,46 +928,147 @@ const ProfileInfoTab = ({
   // Display name (use display values instead of context)
   const displayName = displayValues.name || "Your Name";
   
-  // Simplify the profile photo handler
+  // Handle profile photo selection and upload
   const handleProfilePhotoSelection = async () => {
     try {
-      // Let the parent component handle the actual image picking
-      const newPhotoUri = await pickImage();
+      // Request permissions first if on native platforms
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          debugLog('MBA8080', 'Permission to access media library was denied');
+          showToast({
+            message: 'Permission to access media library was denied',
+            type: 'error',
+            duration: 3000
+          });
+          return;
+        }
+      }
       
-      if (newPhotoUri) {
+      // Launch image picker with platform-specific options
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Disable built-in editing as we'll use our custom cropper
+        quality: 1,
+        // On web, we need base64 for direct upload
+        base64: Platform.OS === 'web',
+        allowsMultipleSelection: false,
+      });
+      
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        
+        debugLog('MBA8080', 'Selected profile photo:', {
+          uri: selectedAsset.uri.substring(0, 30) + '...',
+          type: selectedAsset.type || 'image/jpeg',
+          width: selectedAsset.width,
+          height: selectedAsset.height,
+          hasBase64: !!selectedAsset.base64
+        });
+        
+        // Store the selected photo and show the cropper
+        setSelectedPhoto(selectedAsset.uri);
+        setShowCropper(true);
+      }
+    } catch (error) {
+      debugLog('MBA8080', 'Error selecting profile photo:', error);
+      showToast({
+        message: 'Failed to select profile photo. Please try again.',
+        type: 'error',
+        duration: 3000
+      });
+    }
+  };
+  
+  // Handle saving the cropped image
+  const handleSaveCroppedImage = async (imageUri, cropParams) => {
+    try {
         setIsSaving(true);
         
-        // Create form data for photo upload
-        const formData = new FormData();
-        const photoFile = {
-          uri: newPhotoUri,
-          type: 'image/jpeg',
-          name: 'profile_photo.jpg'
-        };
+      // Add the current profile photo URL to cropParams for deletion
+      const currentProfilePhotoUrl = profileData.profile_photo || null;
+      const cropParamsWithOldPhoto = {
+        ...cropParams,
+        oldProfilePhotoUrl: currentProfilePhotoUrl
+      };
+      
+      debugLog('MBA8080', 'Processing cropped image with params:', cropParamsWithOldPhoto);
+      debugLog('MBA8080', 'Old profile photo URL for deletion:', currentProfilePhotoUrl);
+      
+      // Process the image with crop parameters
+      const processedImage = await processImageWithCrop(imageUri, cropParamsWithOldPhoto);
+      
+      // Prepare the image data for upload
+      const imageData = prepareImageForUpload(processedImage);
+      
+      let response;
+      
+      // Handle web platform (use JSON with base64)
+      if (imageData.isBase64) {
+        debugLog('MBA8080', 'Uploading as base64 (web platform)');
         
-        formData.append('profile_picture', photoFile);
+        // Send as JSON with oldProfilePhotoUrl
+        response = await axios.post(
+          `${API_BASE_URL}/api/users/v1/upload-profile-picture/`,
+          { 
+            image_data: imageData.data,
+            old_profile_photo_url: imageData.oldProfilePhotoUrl
+          }
+        );
+      }
+      // Handle native platforms (use FormData)
+      else {
+        debugLog('MBA8080', 'Uploading as FormData (native platform)');
         
-        // Upload the photo directly
-        debugLog('MBA4928', 'Uploading profile photo');
-        await updateProfileInfo(formData);
+        // Send as FormData (already contains old_profile_photo_url)
+        response = await uploadProfilePicture(imageData.data);
+      }
+      
+      // Handle the response
+      debugLog('MBA8080', 'Profile photo upload successful:', response.data);
+        
+      // Update UI with the new photo URL
+      if (response.data && response.data.profile_photo) {
+        const photoUrl = response.data.profile_photo;
+        debugLog('MBA5080', 'Setting profile photo in local state:', photoUrl);
+        debugLog('MBA5080', 'Full photo URL will be:', photoUrl.startsWith('http') 
+          ? photoUrl 
+          : `${API_BASE_URL}${photoUrl}`);
+        
+        // Update the profile photo in our local state
+        setProfileData(prev => ({
+          ...prev,
+          profile_photo: photoUrl
+        }));
+        
+        // Notify parent component of the change
+        if (onSaveComplete) {
+          debugLog('MBA8080', 'Notifying parent component of profile photo update:', response.data.profile_photo);
+          onSaveComplete({ profile_photo: photoUrl });
+        } else {
+          debugLog('MBA8080', 'No onSaveComplete function provided by parent component');
+        }
         
         showToast({
           message: 'Profile photo updated successfully',
           type: 'success',
           duration: 3000
         });
-        
-        // No need to update local state - let the parent handle it via onSaveComplete
       }
-    } catch (error) {
-      debugLog('MBA4928', 'Error uploading profile photo:', error);
+    } catch (uploadError) {
+      debugLog('MBA8080', 'Error uploading profile photo:', uploadError);
+      if (uploadError.response) {
+        debugLog('MBA8080', 'Server error response:', uploadError.response.data);
+      }
       showToast({
-        message: 'Failed to update profile photo. Please try again.',
+        message: 'Failed to upload profile photo. Please try again.',
         type: 'error',
-        duration: 4000
+        duration: 3000
       });
     } finally {
       setIsSaving(false);
+      setShowCropper(false);
+      setSelectedPhoto(null);
     }
   };
   
@@ -1070,8 +1222,21 @@ const ProfileInfoTab = ({
           <View style={[styles.profileSection, !isMobile && styles.profileSectionDesktop]}>
             <View style={styles.profileCard}>
               <TouchableOpacity onPress={handleProfilePhotoSelection} style={styles.profilePhotoContainer}>
-                {profilePhoto ? (
-                  <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
+                {profileData.profile_photo ? (
+                  <Image 
+                    source={{ 
+                      uri: profileData.profile_photo.startsWith('http') 
+                        ? profileData.profile_photo 
+                        : `${API_BASE_URL}${profileData.profile_photo}` 
+                    }} 
+                    style={styles.profilePhoto}
+                    onError={(e) => {
+                      debugLog('MBA5080', 'Error loading profile photo:', e.nativeEvent.error);
+                      debugLog('MBA5080', 'Profile photo URI:', profileData.profile_photo.startsWith('http') 
+                        ? profileData.profile_photo 
+                        : `${API_BASE_URL}${profileData.profile_photo}`);
+                    }}
+                  />
                 ) : (
                   <View style={[styles.profilePhoto, styles.profilePhotoPlaceholder]}>
                     <MaterialCommunityIcons name="camera-plus" size={40} color={theme.colors.placeholder} />
@@ -1081,48 +1246,60 @@ const ProfileInfoTab = ({
                   <MaterialCommunityIcons name="camera" size={20} color={theme.colors.background} />
                 </View>
               </TouchableOpacity>
-              <View style={styles.profileInfo}>
-                <View style={styles.nameContainer}>
-                  <Text style={styles.name}>{displayValues.name}</Text>
+              
+              <View style={styles.nameSection}>
+                <Text style={styles.name}>
+                  {name || authName || 'Your Name'}
+                </Text>
                   <TouchableOpacity 
-                    style={styles.editIcon}
                     onPress={() => handleEdit('name', displayValues.name)}
+                  style={styles.editButton}
                   >
-                    <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.text} />
+                  <MaterialCommunityIcons name="pencil" size={24} color={theme.colors.primary} />
                   </TouchableOpacity>
                 </View>
-                <View style={styles.emailContainer}>
-                  <MaterialCommunityIcons name="email" size={16} color={theme.colors.secondary} />
-                  <Text style={styles.email}>{displayValues.email || 'No email provided'}</Text>
+              
+              <View style={styles.section}>
+                <View style={styles.sectionTitleContainer}>
+                  <MaterialCommunityIcons
+                    name="email-outline"
+                    size={24}
+                    color={theme.colors.text}
+                  />
+                  <Text style={styles.sectionTitle}>Email</Text>
+                </View>
+                <View style={styles.sectionContent}>
+                  <Text style={styles.sectionText}>
+                    {email || 'Add your email'}
+                  </Text>
                   <TouchableOpacity 
-                    style={styles.editIcon}
                     onPress={() => handleEdit('email', displayValues.email)}
+                    style={styles.editButton}
                   >
-                    <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.text} />
+                    <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
                   </TouchableOpacity>
                 </View>
-                <View style={styles.locationContainer}>
-                  <View style={styles.locationIconWrapper}>
-                    <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.secondary} />
                   </View>
-                  <Text style={styles.location}>{displayValues.location || 'Set Location'}</Text>
-                  <TouchableOpacity 
-                    style={styles.locationEditIcon}
-                    onPress={() => handleEdit('location', displayValues.location)}
-                  >
-                    <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.text} />
-                  </TouchableOpacity>
+              
+              <View style={styles.section}>
+                <View style={styles.sectionTitleContainer}>
+                  <MaterialCommunityIcons
+                    name="map-marker-outline"
+                    size={24}
+                    color={theme.colors.text}
+                  />
+                  <Text style={styles.sectionTitle}>Location</Text>
                 </View>
-                <View style={styles.reviewsContainer}>
-                  {rating ? (
-                    <View style={styles.ratingContainer}>
-                      <MaterialCommunityIcons name="star" size={20} color={theme.colors.warning} />
-                      <Text style={styles.rating}>{rating}</Text>
-                      <Text style={styles.reviews}>({reviews} reviews)</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.noReviews}>No reviews yet</Text>
-                  )}
+                <View style={styles.sectionContent}>
+                  <Text style={styles.sectionText}>
+                    {displayValues.location || 'Add your location'}
+                  </Text>
+                  <TouchableOpacity 
+                    onPress={() => handleEdit('location', displayValues.location)}
+                    style={styles.editButton}
+                  >
+                    <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -1180,6 +1357,18 @@ const ProfileInfoTab = ({
         </View>
       </View>
 
+      {/* Photo Cropper Modal */}
+      <ProfilePhotoCropper
+        visible={showCropper}
+        imageUri={selectedPhoto}
+        onClose={() => {
+          setShowCropper(false);
+          setSelectedPhoto(null);
+        }}
+        onSave={handleSaveCroppedImage}
+        isUploading={isSaving}
+      />
+
       <EditOverlay
         visible={!!editingField}
         onClose={() => setEditingField(null)}
@@ -1235,8 +1424,7 @@ const styles = StyleSheet.create({
   profilePhoto: {
     width: 200,
     height: 200,
-    borderRadius: 8,
-    backgroundColor: theme.colors.surface,
+    borderRadius: 100,
   },
   profilePhotoPlaceholder: {
     justifyContent: 'center',
@@ -1341,7 +1529,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceContrast,
     borderRadius: 8,
     padding: 16,
-    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1747,6 +1934,27 @@ const styles = StyleSheet.create({
     color: theme.colors.background,
     fontSize: 14,
     fontWeight: '500',
+  },
+  nameSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionText: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts?.regular?.fontFamily,
   },
 });
 

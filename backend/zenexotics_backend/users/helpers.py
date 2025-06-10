@@ -40,7 +40,7 @@ def get_user_profile_data(user):
             'email': user.email,
             'phone': getattr(user, 'phone_number', ""),
             'age': None,
-            'profile_photo': None,
+            'profile_photo': user.profile_picture.url if user.profile_picture else None,
             'about_me': client.about_me,
             'emergency_contact': client.emergency_contact,
             'authorized_household_members': client.authorized_household_members,

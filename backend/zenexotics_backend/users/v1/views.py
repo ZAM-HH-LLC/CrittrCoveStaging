@@ -23,6 +23,14 @@ from clients.models import Client
 from django.urls import clear_url_caches
 from django.http import HttpResponse
 from professionals.models import Professional
+import base64
+import io
+import uuid
+from PIL import Image, ImageDraw
+from django.core.files.base import ContentFile
+import json
+from django.core.files.uploadedfile import InMemoryUploadedFile
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -361,3 +369,341 @@ def update_profile_info(request):
             {'error': f'Failed to update profile: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST
         ) 
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_profile_picture(request):
+    """
+    Upload a profile picture for the authenticated user.
+    
+    This endpoint handles both FormData file uploads and JSON base64 image uploads.
+    It also supports cropping parameters for precise image cropping and can delete
+    the old profile picture when a new one is uploaded.
+    
+    Accepts:
+    - FormData with 'profile_picture' file, optional 'crop_params' JSON string, and optional 'old_profile_photo_url'
+    - OR JSON with 'image_data' base64 string, optional 'crop_params' object, and optional 'old_profile_photo_url'
+    
+    Returns:
+    - profile_photo: URL of the uploaded profile picture
+    """
+    user = request.user
+    logger.debug(f"upload_profile_picture: Processing request for user {user.id}")
+    
+    try:
+        # Enhanced debugging
+        logger.debug(f"upload_profile_picture: Content-Type: {request.content_type}")
+        logger.debug(f"upload_profile_picture: FILES keys: {list(request.FILES.keys())}")
+        logger.debug(f"upload_profile_picture: DATA keys: {list(request.data.keys())}")
+        
+        # Get old profile photo URL if provided for deletion
+        old_photo_url = None
+        if 'old_profile_photo_url' in request.data:
+            old_photo_url = request.data.get('old_profile_photo_url')
+            logger.debug(f"upload_profile_picture: Old profile photo URL for deletion: {old_photo_url}")
+        
+        # Get crop parameters if provided
+        crop_params = None
+        if 'crop_params' in request.data:
+            try:
+                # If it's a string (from FormData), parse it
+                if isinstance(request.data['crop_params'], str):
+                    crop_params = json.loads(request.data['crop_params'])
+                else:
+                    # If it's already a dict/object (from JSON), use directly
+                    crop_params = request.data['crop_params']
+                logger.debug(f"upload_profile_picture: Crop parameters received: {crop_params}")
+            except Exception as e:
+                logger.warning(f"upload_profile_picture: Failed to parse crop parameters: {str(e)}")
+        
+        # Check for base64 image data (usually from web)
+        if 'image_data' in request.data and request.data['image_data']:
+            logger.debug(f"upload_profile_picture: Processing base64 image data")
+            
+            try:
+                # Get the base64 data
+                image_data = request.data['image_data']
+                
+                # Check if it starts with the data URI prefix
+                if image_data.startswith('data:'):
+                    # Parse the data URI to get content type and data
+                    header, encoded = image_data.split(',', 1)
+                    content_type = header.split(':')[1].split(';')[0]
+                    
+                    # Validate image type
+                    if not content_type.startswith('image/'):
+                        logger.warning(f"upload_profile_picture: Invalid content type for base64 image: {content_type}")
+                        return Response({
+                            "error": "Invalid image type. Please upload a valid image."
+                        }, status=400)
+                    
+                    # Decode the base64 data
+                    image_data = base64.b64decode(encoded)
+                    
+                    # Validate the image
+                    try:
+                        image = Image.open(io.BytesIO(image_data))
+                        image.verify()  # Verify it's a valid image
+                    except Exception as e:
+                        logger.warning(f"upload_profile_picture: Invalid image data: {str(e)}")
+                        return Response({
+                            "error": "Invalid image data. Please upload a valid image."
+                        }, status=400)
+                    
+                    # Process the image if crop params provided
+                    if crop_params:
+                        try:
+                            # We need to reload the image since verify() closes it
+                            image = Image.open(io.BytesIO(image_data))
+                            image = process_image_crop(image, crop_params)
+                            
+                            # Convert back to bytes
+                            img_byte_arr = io.BytesIO()
+                            image.save(img_byte_arr, format='JPEG', quality=90)
+                            image_data = img_byte_arr.getvalue()
+                            
+                            logger.debug(f"upload_profile_picture: Image cropped successfully")
+                        except Exception as e:
+                            logger.warning(f"upload_profile_picture: Failed to crop image: {str(e)}")
+                    
+                    # Save the old profile picture path for deletion
+                    old_picture_path = None
+                    if user.profile_picture:
+                        old_picture_path = user.profile_picture.path if hasattr(user.profile_picture, 'path') else None
+                    
+                    # Create a ContentFile from the image data
+                    file_ext = content_type.split('/')[1]
+                    image_file = ContentFile(
+                        image_data, 
+                        name=f"profile_{user.id}_{uuid.uuid4().hex}.{file_ext}"
+                    )
+                    
+                    # Save to user profile
+                    user.profile_picture = image_file
+                    user.save()
+                    
+                    # Delete the old profile picture file if it exists
+                    if old_picture_path and os.path.exists(old_picture_path):
+                        try:
+                            os.remove(old_picture_path)
+                            logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
+                        except Exception as e:
+                            logger.warning(f"upload_profile_picture: Failed to delete old profile picture: {str(e)}")
+                    
+                    # Return success
+                    profile_photo_url = user.profile_picture.url if user.profile_picture else None
+                    logger.debug(f"upload_profile_picture: Base64 image saved successfully, URL: {profile_photo_url}")
+                    
+                    return Response({"profile_photo": profile_photo_url}, status=200)
+                else:
+                    logger.warning("upload_profile_picture: Received image_data that doesn't start with 'data:'")
+                    return Response({
+                        "error": "Invalid base64 image format. Must be a data URI."
+                    }, status=400)
+                    
+            except Exception as e:
+                logger.exception(f"upload_profile_picture: Error processing base64 image: {str(e)}")
+                return Response({
+                    "error": f"Error processing base64 image: {str(e)}"
+                }, status=400)
+        
+        # Handle normal file upload case
+        if 'profile_picture' in request.FILES:
+            # Get the uploaded file
+            profile_picture = request.FILES['profile_picture']
+            logger.debug(f"upload_profile_picture: Received file: {profile_picture.name}, size: {profile_picture.size}, content_type: {profile_picture.content_type}")
+            
+            # Validate file type
+            if not profile_picture.content_type.startswith('image/'):
+                logger.warning(f"upload_profile_picture: Invalid file type: {profile_picture.content_type}")
+                return Response({
+                    "error": "Invalid file type. Please upload an image file."
+                }, status=400)
+            
+            # Process the image if crop params provided
+            if crop_params:
+                try:
+                    # Load the image from the uploaded file
+                    image = Image.open(profile_picture)
+                    
+                    # Apply cropping
+                    image = process_image_crop(image, crop_params)
+                    
+                    # Save the cropped image to a temporary file
+                    img_byte_arr = io.BytesIO()
+                    image.save(img_byte_arr, format='JPEG', quality=90)
+                    img_byte_arr.seek(0)
+                    
+                    # Create a new InMemoryUploadedFile from the processed image
+                    profile_picture = InMemoryUploadedFile(
+                        img_byte_arr,
+                        'profile_picture',
+                        f"profile_{user.id}_{uuid.uuid4().hex}.jpg",
+                        'image/jpeg',
+                        img_byte_arr.getbuffer().nbytes,
+                        None
+                    )
+                    
+                    logger.debug(f"upload_profile_picture: Image cropped successfully")
+                except Exception as e:
+                    logger.warning(f"upload_profile_picture: Failed to crop image: {str(e)}")
+            
+            # Save the old profile picture path for deletion
+            old_picture_path = None
+            if user.profile_picture:
+                old_picture_path = user.profile_picture.path if hasattr(user.profile_picture, 'path') else None
+            
+            # Save the file to the user's profile
+            user.profile_picture = profile_picture
+            user.save()
+            logger.debug(f"upload_profile_picture: File saved successfully for user {user.id}")
+            
+            # Delete the old profile picture file if it exists
+            if old_picture_path and os.path.exists(old_picture_path):
+                try:
+                    os.remove(old_picture_path)
+                    logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
+                except Exception as e:
+                    logger.warning(f"upload_profile_picture: Failed to delete old profile picture: {str(e)}")
+            
+            # Return the URL of the uploaded image
+            profile_photo_url = user.profile_picture.url if user.profile_picture else None
+            logger.debug(f"upload_profile_picture: Returning profile photo URL: {profile_photo_url}")
+            
+            return Response({"profile_photo": profile_photo_url}, status=200)
+        
+        # No valid data found
+        logger.warning(f"upload_profile_picture: No profile_picture in request.FILES and no image_data in request.data")
+        return Response({
+            "error": "No profile picture provided. Please upload an image file or provide base64 image data."
+        }, status=400)
+        
+    except Exception as e:
+        logger.exception(f"upload_profile_picture: Error processing request: {str(e)}")
+        return Response({"error": f"An error occurred: {str(e)}"}, status=500)
+
+def process_image_crop(image, crop_params):
+    """
+    Process image cropping based on crop parameters.
+    
+    Args:
+        image (PIL.Image): The image to crop
+        crop_params (dict): Crop parameters containing:
+            - scale: Image scale factor
+            - x, y: Image translation
+            - imageWidth, imageHeight: Original image dimensions
+            - cropWidth, cropHeight: Dimensions of the crop area
+            
+    Returns:
+        PIL.Image: The cropped image
+    """
+    # Get parameters from crop_params
+    scale = crop_params.get('scale', 1)
+    x_offset = crop_params.get('x', 0)
+    y_offset = crop_params.get('y', 0)
+    crop_width = crop_params.get('cropWidth', 200)
+    crop_height = crop_params.get('cropHeight', 200)
+    image_width = crop_params.get('imageWidth', image.width)
+    image_height = crop_params.get('imageHeight', image.height)
+    
+    logger.debug(f"process_image_crop: Processing with params: scale={scale}, x={x_offset}, y={y_offset}, "
+                 f"cropWidth={crop_width}, cropHeight={crop_height}, "
+                 f"imageWidth={image_width}, imageHeight={image_height}")
+    
+    # Calculate the size of the circle area
+    crop_size = min(crop_width, crop_height)
+    
+    # Calculate the center of the crop area
+    crop_center_x = crop_size / 2
+    crop_center_y = crop_size / 2
+    
+    # Calculate the image center in the crop window
+    # The image position is relative to the crop window center
+    image_center_x = crop_center_x - x_offset
+    image_center_y = crop_center_y - y_offset
+    
+    # Calculate the scaled image dimensions
+    scaled_width = image_width * scale
+    scaled_height = image_height * scale
+    
+    # Calculate the top-left corner of the image in the crop window
+    image_left = image_center_x - (scaled_width / 2)
+    image_top = image_center_y - (scaled_height / 2)
+    
+    # Calculate the corresponding crop box on the original image
+    # This is where we need to map from crop window coordinates to image coordinates
+    
+    # Normalize the crop center position relative to the image
+    rel_crop_x = (crop_center_x - image_left) / scaled_width
+    rel_crop_y = (crop_center_y - image_top) / scaled_height
+    
+    # Calculate crop area on the original image
+    crop_radius = crop_size / 2 / scale
+    
+    # Calculate crop coordinates on the original image
+    left = max(0, image_width * rel_crop_x - crop_radius)
+    top = max(0, image_height * rel_crop_y - crop_radius)
+    right = min(image_width, image_width * rel_crop_x + crop_radius)
+    bottom = min(image_height, image_height * rel_crop_y + crop_radius)
+    
+    logger.debug(f"process_image_crop: Calculated crop box: left={left}, top={top}, right={right}, bottom={bottom}")
+    
+    # Make sure we're cropping a square
+    crop_size_orig = min(right - left, bottom - top)
+    
+    # Recalculate to ensure square crop
+    center_x_orig = (left + right) / 2
+    center_y_orig = (top + bottom) / 2
+    
+    left = center_x_orig - crop_size_orig / 2
+    top = center_y_orig - crop_size_orig / 2
+    right = center_x_orig + crop_size_orig / 2
+    bottom = center_y_orig + crop_size_orig / 2
+    
+    # Ensure crop box stays within image bounds
+    if left < 0:
+        right -= left
+        left = 0
+    if top < 0:
+        bottom -= top
+        top = 0
+    if right > image_width:
+        left -= (right - image_width)
+        right = image_width
+    if bottom > image_height:
+        top -= (bottom - image_height)
+        bottom = image_height
+    
+    # Crop the image
+    try:
+        cropped_img = image.crop((left, top, right, bottom))
+        
+        # Resize to the target size (make it square)
+        target_size = (crop_size, crop_size)
+        final_img = cropped_img.resize(target_size, Image.LANCZOS)
+        
+        logger.debug(f"process_image_crop: Successfully cropped and resized image to {target_size}")
+        
+        # Create a circular mask for the image
+        mask = Image.new('L', target_size, 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0, crop_size, crop_size), fill=255)
+        
+        # Create a new transparent image for the result
+        result = Image.new('RGBA', target_size, (0, 0, 0, 0))
+        
+        # Convert the cropped image to RGBA
+        if final_img.mode != 'RGBA':
+            final_img = final_img.convert('RGBA')
+        
+        # Paste the cropped image using the circular mask
+        result.paste(final_img, (0, 0), mask)
+        
+        # Convert back to RGB for JPEG compatibility
+        result = result.convert('RGB')
+        
+        return result
+    except Exception as e:
+        logger.exception(f"process_image_crop: Error cropping image: {str(e)}")
+        # Return the original image if cropping fails
+        return image 

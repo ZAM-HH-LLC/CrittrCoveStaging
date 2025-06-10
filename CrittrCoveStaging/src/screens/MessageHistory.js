@@ -1849,6 +1849,20 @@ const MessageHistory = ({ navigation, route }) => {
     const formattedTime = item.timestamp ? 
       formatMessageTime(item.timestamp, timeSettings?.timezone || 'America/Denver') : '';
       
+    // Add extra debug logging for booking-related messages
+    if (item.type_of_message === 'send_approved_message' || 
+        item.type_of_message === 'request_changes' || 
+        item.type_of_message === 'initial_booking_request' ||
+        item.type_of_message === 'booking_confirmed') {
+      debugLog('MBA6677: Booking message timestamp details', {
+        messageId: item.message_id,
+        messageType: item.type_of_message,
+        timestamp: item.timestamp,
+        formattedTime,
+        timezone: timeSettings?.timezone || 'America/Denver'
+      });
+    }
+      
     // Check if the message has images in various formats
     const hasImages = item.image_urls && item.image_urls.length > 0;
     // For backwards compatibility with older messages that might have a single image_url

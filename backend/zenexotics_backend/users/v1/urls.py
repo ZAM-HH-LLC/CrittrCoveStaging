@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from ..views import TutorialStatusViewSet
 from . import views
-from .views import user_profile, clear_url_cache, update_profile_info
+from .views import user_profile, clear_url_cache, update_profile_info, upload_profile_picture
 from .views_invitation import (
     InvitationListCreateView, InvitationDetailView,
     verify_invitation, accept_invitation, resend_invitation_email
@@ -25,6 +25,7 @@ urlpatterns = [
     path('update-time-settings/', views.update_time_settings, name='update_time_settings'),
     path('profile/', views.user_profile, name='user-profile'),
     path('update-profile/', update_profile_info, name='update-profile-info'),
+    path('upload-profile-picture/', upload_profile_picture, name='upload-profile-picture'),
     path('clear-url-cache/', clear_url_cache, name='clear-url-cache'),
     
     # Invitation URLs

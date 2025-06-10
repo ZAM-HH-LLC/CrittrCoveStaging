@@ -155,7 +155,21 @@ const MyProfile = () => {
       const token = await getStorage('userToken');
       debugLog('MBA5678: userToken before userProfile call:', token);
       const response = await userProfile();
-      setProfileData(response);
+      
+      // Log the profile data received from API
+      debugLog('MBA5080', 'Profile data received from API:', {
+        name: response.name,
+        email: response.email,
+        profile_photo: response.profile_photo
+      });
+      
+      // Make sure profile_photo is properly mapped to profilePhoto
+      const processedResponse = {
+        ...response,
+        profilePhoto: response.profile_photo || null
+      };
+      
+      setProfileData(processedResponse);
       
       // Check for pets with missing owners and fix them if needed
       await checkAndFixPetOwners();
@@ -265,17 +279,9 @@ const MyProfile = () => {
   ];
 
   const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setProfileData(prev => ({ ...prev, profilePhoto: result.assets[0].uri }));
-      setHasUnsavedChanges(true);
-    }
+    // This function is now just a stub that returns a promise
+    // The actual image picking and uploading is handled in ProfileInfoTab
+    return null;
   };
 
   // Handle save completion from child components
@@ -297,8 +303,21 @@ const MyProfile = () => {
         city: newProfileData.city,
         state: newProfileData.state,
         zip: newProfileData.zip,
-        country: newProfileData.country
+        country: newProfileData.country,
+        profilePhoto: updatedProfile.profile_photo || newProfileData.profilePhoto,
+        profile_photo: updatedProfile.profile_photo || newProfileData.profile_photo
       });
+      
+      // Ensure profilePhoto is set from either property name
+      if (updatedProfile.profile_photo) {
+        debugLog('MBA5080', 'Setting profilePhoto from profile_photo:', updatedProfile.profile_photo);
+        newProfileData.profilePhoto = updatedProfile.profile_photo;
+        newProfileData.profile_photo = updatedProfile.profile_photo;
+      } else if (updatedProfile.profilePhoto) {
+        debugLog('MBA5080', 'Setting profile_photo from profilePhoto:', updatedProfile.profilePhoto);
+        newProfileData.profile_photo = updatedProfile.profilePhoto;
+        newProfileData.profilePhoto = updatedProfile.profilePhoto;
+      }
       
       return newProfileData;
     });
