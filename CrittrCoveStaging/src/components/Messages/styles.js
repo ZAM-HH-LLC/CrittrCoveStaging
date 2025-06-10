@@ -75,6 +75,26 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     width: '100%',
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  conversationProfilePhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  conversationProfilePhotoFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  conversationContent: {
+    flex: 1,
   },
   selectedConversation: {
     backgroundColor: theme.colors.primary + '20',
@@ -119,6 +139,25 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     fontWeight: 'bold',
     color: theme.colors.text,
     fontFamily: theme.fonts.header.fontFamily,
+  },
+  // Mobile header profile photo styles
+  mobileProfilePhotoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  mobileProfilePhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  mobileProfilePhotoFallback: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   messagesContainer: {
     flex: 1,
@@ -363,10 +402,6 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
       WebkitAppearance: 'none',
     }),
   },
-  conversationContent: {
-    flex: 1,
-    width: '100%',
-  },
   conversationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -462,10 +497,11 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     flexWrap: 'wrap',
   },
   mobileHeaderNameContainer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     flexWrap: 'wrap',
+    paddingHorizontal: 30, // Add padding to prevent overlap with back button
   },
   backArrow: {
     position: 'absolute',

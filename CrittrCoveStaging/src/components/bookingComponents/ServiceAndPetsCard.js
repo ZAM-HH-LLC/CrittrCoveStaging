@@ -13,6 +13,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { AuthContext } from '../../context/AuthContext';
+import { API_BASE_URL } from '../../config/config';
 import { getBookingAvailableServices, getBookingAvailablePets } from '../../api/API';
 import axios from 'axios';
 import { navigateToFrom } from '../Navigation';
@@ -170,9 +171,9 @@ const ServiceAndPetsCard = ({
         onPress={() => onPetSelect(pet)}
       >
         <View style={styles.petImageContainer}>
-          {pet.image_url ? (
+          {pet.profile_photo ? (
             <Image 
-              source={{ uri: pet.image_url }} 
+              source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} 
               style={styles.petImage}
               defaultSource={require('../../../assets/default-pet-image.png')}
             />
@@ -187,9 +188,9 @@ const ServiceAndPetsCard = ({
           )}
         </View>
         <View style={styles.petInfo}>
-          <Text style={styles.petName}>{pet.name}</Text>
+          <Text style={styles.petName}>{pet.name.toLowerCase().charAt(0).toUpperCase() + pet.name.toLowerCase().slice(1)}</Text>
           <Text style={styles.petDetails}>
-            {pet.breed} • {pet.age} years
+            {pet.species ? pet.species.toLowerCase().charAt(0).toUpperCase() + pet.species.toLowerCase().slice(1) : 'No species'} • {pet.breed ? pet.breed.toLowerCase().charAt(0).toUpperCase() + pet.breed.toLowerCase().slice(1) : 'No breed'}
           </Text>
         </View>
         {isSelected && (

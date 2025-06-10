@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, TextInput } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../../context/AuthContext';
 import { theme } from '../../styles/theme';
+import ProfilePhoto from './ProfilePhoto';
 
 const ConversationList = ({
   conversations,
@@ -71,6 +72,11 @@ const ConversationList = ({
               }
             }}
           >
+            <ProfilePhoto 
+              profilePicture={conv.profile_picture}
+              style={styles.conversationProfilePhoto}
+            />
+            
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>

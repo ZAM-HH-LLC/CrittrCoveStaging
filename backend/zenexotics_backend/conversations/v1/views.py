@@ -49,6 +49,11 @@ def get_conversations(request):
             # Log for debugging
             logger.debug(f"User {other_user.id} online status: {other_participant_online}")
 
+            # Get the other user's profile picture directly from the User model
+            profile_picture = None
+            if other_user.profile_picture and hasattr(other_user.profile_picture, 'url'):
+                profile_picture = other_user.profile_picture.url
+            
             conversations_data.append({
                 'conversation_id': conversation.conversation_id,
                 'is_professional': is_professional,
@@ -56,6 +61,7 @@ def get_conversations(request):
                 'last_message_time': conversation.last_message_time,
                 'other_user_name': other_user.name,
                 'other_participant_online': other_participant_online,
+                'profile_picture': profile_picture,
                 'participant1_id': conversation.participant1.id,
                 'participant2_id': conversation.participant2.id
             })

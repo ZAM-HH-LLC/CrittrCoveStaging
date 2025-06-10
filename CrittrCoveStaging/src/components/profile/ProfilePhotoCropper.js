@@ -35,9 +35,11 @@ const ProfilePhotoCropper = ({
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
   
+  // Reference to track the initial scale
+  const initialScaleRef = useRef(1);
+  
   // Animation values
   const pan = useRef(new Animated.ValueXY()).current;
-  const prevScale = useRef(1);
   
   // Reset values when the modal becomes visible or the image changes
   useEffect(() => {
@@ -47,26 +49,22 @@ const ProfilePhotoCropper = ({
       
       // Get image dimensions
       Image.getSize(imageUri, (width, height) => {
-        debugLog('MBA8080', 'Image dimensions:', { width, height });
+        debugLog('MBA23o9h8v45', 'Image dimensions:', { width, height });
         setImageSize({ width, height });
         
         // Calculate the initial scale to fit the image within the crop circle
         const initialScale = calculateInitialScale(width, height);
         setScale(initialScale);
-        prevScale.current = initialScale;
+        initialScaleRef.current = initialScale; // Store initial scale for reference
         
         // Center the image initially
-        const centerX = 0;  // Center position is 0,0 in our coordinate system
-        const centerY = 0;
-        
-        // Reset position
-        setImagePosition({ x: centerX, y: centerY });
-        pan.setValue({ x: centerX, y: centerY });
+        pan.setValue({ x: 0, y: 0 });
+        setImagePosition({ x: 0, y: 0 });
         
         // Mark image as loaded
         setImageLoaded(true);
       }, error => {
-        debugLog('MBA8080', 'Error getting image dimensions:', error);
+        debugLog('MBA23o9h8v45', 'Error getting image dimensions:', error);
       });
     }
   }, [visible, imageUri]);
@@ -94,7 +92,7 @@ const ProfilePhotoCropper = ({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        debugLog('MBA8080', 'Pan responder activated');
+        debugLog('MBA23o9h8v45', 'Pan responder activated');
         pan.setOffset({
           x: pan.x._value,
           y: pan.y._value
@@ -102,14 +100,13 @@ const ProfilePhotoCropper = ({
         pan.setValue({ x: 0, y: 0 });
       },
       onPanResponderMove: (evt, gestureState) => {
-        debugLog('MBA8080', 'Moving image:', gestureState.dx, gestureState.dy);
         Animated.event(
           [null, { dx: pan.x, dy: pan.y }],
           { useNativeDriver: false }
         )(evt, gestureState);
       },
       onPanResponderRelease: () => {
-        debugLog('MBA8080', 'Pan responder released');
+        debugLog('MBA23o9h8v45', 'Pan responder released');
         pan.flattenOffset();
         
         // Update the image position state after pan ends
@@ -121,19 +118,24 @@ const ProfilePhotoCropper = ({
     })
   ).current;
   
-  // Handle scale change from slider
-  const handleScaleChange = (value) => {
-    setScale(value);
-    prevScale.current = value;
+  // Simple direct scale change function - keeps position stable
+  const handleScaleChange = (newScale) => {
+    // If returning to initial scale, reset position
+    if (Math.abs(newScale - initialScaleRef.current) < 0.01) {
+      // Reset position to center
+      pan.setValue({ x: 0, y: 0 });
+      setImagePosition({ x: 0, y: 0 });
+    }
+    
+    // Update scale
+    setScale(newScale);
   };
   
   // Handle save button press
   const handleSave = () => {
     // Calculate crop parameters to pass to the parent component
-    // These parameters will ensure we crop exactly what's visible in the circle
     const cropParams = {
       scale,
-      // Invert the position values to fix the cropping issue
       x: -pan.x._value,
       y: -pan.y._value,
       imageWidth: imageSize.width,
@@ -142,7 +144,7 @@ const ProfilePhotoCropper = ({
       cropHeight: CIRCLE_SIZE
     };
     
-    debugLog('MBA8080', 'Saving cropped image with params:', cropParams);
+    debugLog('MBA23o9h8v45', 'Saving cropped image with params:', cropParams);
     onSave(imageUri, cropParams);
   };
   
@@ -154,6 +156,10 @@ const ProfilePhotoCropper = ({
       { scale: scale }
     ]
   };
+  
+  // Calculate the min and max zoom values
+  const minZoom = initialScaleRef.current || 1;
+  const maxZoom = (initialScaleRef.current || 1) * 3;
   
   return (
     <Modal
@@ -193,7 +199,7 @@ const ProfilePhotoCropper = ({
                       ]}
                       resizeMode="contain"
                       onLoad={() => {
-                        debugLog('MBA8080', 'Image loaded in cropper component');
+                        debugLog('MBA23o9h8v45', 'Image loaded in cropper component');
                       }}
                     />
                   ) : (
@@ -222,15 +228,18 @@ const ProfilePhotoCropper = ({
           {/* Zoom slider */}
           <View style={styles.sliderContainer}>
             <TouchableOpacity 
-              onPress={() => setScale(Math.max(0.5, scale - 0.1))}
+              onPress={() => {
+                const newScale = Math.max(minZoom, scale - 0.1);
+                handleScaleChange(newScale);
+              }}
               style={styles.zoomButton}
             >
               <MaterialCommunityIcons name="magnify-minus" size={24} color={theme.colors.text} />
             </TouchableOpacity>
             <Slider
               style={styles.slider}
-              minimumValue={0.5}
-              maximumValue={3}
+              minimumValue={minZoom}
+              maximumValue={maxZoom}
               value={scale}
               onValueChange={handleScaleChange}
               minimumTrackTintColor={theme.colors.primary}
@@ -238,7 +247,10 @@ const ProfilePhotoCropper = ({
               thumbTintColor={theme.colors.primary}
             />
             <TouchableOpacity 
-              onPress={() => setScale(Math.min(3, scale + 0.1))}
+              onPress={() => {
+                const newScale = Math.min(maxZoom, scale + 0.1);
+                handleScaleChange(newScale);
+              }}
               style={styles.zoomButton}
             >
               <MaterialCommunityIcons name="magnify-plus" size={24} color={theme.colors.text} />
@@ -247,7 +259,7 @@ const ProfilePhotoCropper = ({
           
           <View style={styles.instructionsContainer}>
             <Text style={styles.instructionsText}>
-              Drag to position • Pinch or use slider to zoom
+              Use slider to zoom • Drag to position • Return slider to left to reset zoom
             </Text>
           </View>
           

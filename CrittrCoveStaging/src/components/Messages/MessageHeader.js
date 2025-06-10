@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
+import ProfilePhoto from './ProfilePhoto';
 
 const MessageHeader = ({
   selectedConversationData,
@@ -65,7 +66,16 @@ const MessageHeader = ({
           </TouchableOpacity>
           
           <View style={styles.mobileHeaderNameContainer}>
-            <Text style={styles.mobileHeaderName}>
+            {/* Profile picture circle centered above the name */}
+            <View style={[styles.mobileProfilePhotoContainer, { alignSelf: 'center' }]}>
+              <ProfilePhoto 
+                profilePicture={selectedConversationData?.profile_picture}
+                size={60}
+                fallbackIconSize={30}
+                style={styles.mobileProfilePhoto}
+              />
+            </View>
+            <Text style={[styles.mobileHeaderName, { textAlign: 'center', fontSize: 16 }]}>
               {selectedConversationData?.name || selectedConversationData?.other_user_name}
             </Text>
           </View>
@@ -154,8 +164,8 @@ const MessageHeader = ({
   return (
     <View style={styles.messageHeader}>
       <View style={styles.messageHeaderContent}>
-        <Image
-          source={selectedConversationData?.profile_photo || require('../../../assets/default-profile.png')}
+        <ProfilePhoto 
+          profilePicture={selectedConversationData?.profile_picture} 
           style={styles.profilePhoto}
         />
         <Text style={styles.messageHeaderName}>

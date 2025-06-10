@@ -480,6 +480,7 @@ class AvailablePetsView(APIView):
                     ('breed', pet.breed),
                     ('pet_id', pet.pet_id),
                     ('species', pet.species),
+                    ('profile_photo', pet.profile_photo.url if pet.profile_photo else None),
                     ('is_selected', pet.pet_id in selected_pet_ids)
                 ])
                 for pet in client_pets

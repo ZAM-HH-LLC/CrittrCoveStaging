@@ -47,6 +47,7 @@ const ProfessionalServiceCard = ({
     <View style={styles.serviceCard}>
       <View style={styles.cardHeader}>
         <Text style={styles.serviceName} numberOfLines={2} ellipsizeMode="tail">{item.serviceName}</Text>
+        {/* TODO: Add back in after MVP and make it the primary toggle instead of active. 
         <View style={styles.activeToggleContainer}>
           <Text style={isActive ? styles.activeText : styles.inactiveText}>
             {isActive ? 'Active' : 'Inactive'}
@@ -61,7 +62,7 @@ const ProfessionalServiceCard = ({
             thumbColor={theme.colors.surfaceContrast}
             style={styles.switch}
           />
-        </View>
+        </View> */}
       </View>
 
       <View style={[styles.ratesContainer, { backgroundColor: getPricingBackgroundColor() }]}>

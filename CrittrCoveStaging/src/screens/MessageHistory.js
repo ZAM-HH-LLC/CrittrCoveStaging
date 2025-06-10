@@ -43,6 +43,14 @@ const MessageHistory = ({ navigation, route }) => {
   const { screenWidth, isCollapsed, isSignedIn, loading } = useContext(AuthContext);
   const styles = createMessageStyles(screenWidth, isCollapsed);
   
+  // Helper function to safely get initial width
+  const getInitialWidth = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.innerWidth;
+    }
+    return screenWidth; // Fall back to context screenWidth
+  };
+  
   // Add loading states
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -1068,85 +1076,94 @@ const MessageHistory = ({ navigation, route }) => {
   useEffect(() => {
     if (!isSignedIn) return; // Don't do anything if not signed in
     
+    // Only track width changes for actual threshold crossings
     const prevWidth = prevScreenWidthRef.current;
     const hasWidthCrossedThreshold = 
       (prevWidth <= 900 && screenWidth > 900) || 
       (prevWidth > 900 && screenWidth <= 900);
 
+    // Skip the effect if we haven't crossed the threshold
+    if (!hasWidthCrossedThreshold) {
+      // Still update the reference for next check
+      prevScreenWidthRef.current = screenWidth;
+      return;
+    }
+
     if (is_DEBUG) {
-      console.log('MBA98765 Screen width change:', {
+      console.log('MBA98765 Screen width threshold crossed:', {
         prev: prevWidth,
         current: screenWidth,
-        crossedThreshold: hasWidthCrossedThreshold
+        crossedFrom: prevWidth <= 900 ? 'mobile' : 'desktop',
+        crossedTo: screenWidth <= 900 ? 'mobile' : 'desktop'
       });
     }
 
+    // Update reference
     prevScreenWidthRef.current = screenWidth;
 
-    // Only handle width threshold crossing
-    if (hasWidthCrossedThreshold) {
-      if (screenWidth > 900 && conversations.length > 0 && !selectedConversation) {
-        if (is_DEBUG) {
-          console.log('MBA98765 Auto-selecting first conversation on width change');
-        }
-        setSelectedConversation(conversations[0].conversation_id);
+    // Only auto-select a conversation when crossing from mobile to desktop
+    if (prevWidth <= 900 && screenWidth > 900 && conversations.length > 0 && !selectedConversation) {
+      if (is_DEBUG) {
+        console.log('MBA98765 Auto-selecting first conversation when crossing to desktop');
       }
+      setSelectedConversation(conversations[0].conversation_id);
     }
   }, [screenWidth, isSignedIn]);
 
+  // Add a ref outside of any effect to track previous screen width
+  const prevFilterScreenWidthRef = useRef(getInitialWidth());
+  
   // Add effect to filter conversations based on user role
   useEffect(() => {
     if (!conversations || conversations.length === 0) return;
     
-    debugLog('MBA3456: Filtering conversations by role', {
-      currentRole: userRole,
-      totalConversations: conversations.length,
-      conversationDetails: conversations.map(c => ({
-        id: c.conversation_id,
-        is_professional: c.is_professional,
-        other_user_name: c.other_user_name
-      }))
-    });
+    const isDesktopView = screenWidth > 900;
+    const wasPreviouslyDesktopView = prevFilterScreenWidthRef.current > 900;
+    
+    // Only log when there's an actual change to filter (not on every resize)
+    const shouldDetailLog = conversations.length < 20;  // Limit detailed logging for performance
+    
+    if (shouldDetailLog) {
+      debugLog('MBA3456: Filtering conversations by role', {
+        currentRole: userRole,
+        totalConversations: conversations.length,
+        screenWidth: screenWidth,
+        isDesktopView
+      });
+    }
     
     // Filter conversations based on the role from context
     const filteredByRole = conversations.filter(conv => {
       // For professional role, show only conversations where is_professional is true
       if (userRole === 'professional') {
-        debugLog('MBA3456: Filtering for professional role', {
-          conversation_id: conv.conversation_id,
-          is_professional: conv.is_professional,
-          should_include: conv.is_professional === true
-        });
         return conv.is_professional === true;
       }
       // For pet owner role, show only conversations where is_professional is false
       else if (userRole === 'petOwner' || userRole === 'owner') {
-        debugLog('MBA3456: Filtering for pet owner role', {
-          conversation_id: conv.conversation_id,
-          is_professional: conv.is_professional,
-          should_include: conv.is_professional === false
-        });
         return conv.is_professional === false;
       }
       // If no role specified, show all conversations (fallback)
       return true;
     });
     
-    debugLog('MBA3456: Filtered conversations result', {
-      originalCount: conversations.length,
-      filteredCount: filteredByRole.length,
-      currentRole: userRole,
-      filteredConversations: filteredByRole.map(c => ({
-        id: c.conversation_id,
-        is_professional: c.is_professional
-      }))
-    });
+    if (shouldDetailLog) {
+      debugLog('MBA3456: Filtered conversations result', {
+        originalCount: conversations.length,
+        filteredCount: filteredByRole.length,
+        currentRole: userRole
+      });
+    }
     
     // Update the filteredConversations state
     setFilteredConversations(filteredByRole);
     
-    // Auto-select logic for desktop view
-    if (Platform.OS === 'web' && screenWidth > 900) {
+    // Only run auto-select logic when:
+    // 1. We're in desktop view
+    // 2. AND either we just crossed from mobile to desktop OR we need to select an initial conversation
+    const justCrossedToDesktop = isDesktopView && !wasPreviouslyDesktopView;
+    const needsInitialSelection = isDesktopView && !selectedConversation;
+    
+    if (Platform.OS === 'web' && (justCrossedToDesktop || needsInitialSelection)) {
       // If we have filtered conversations, ensure one is selected
       if (filteredByRole.length > 0) {
         // Check if the currently selected conversation is in the filtered list
@@ -1165,8 +1182,8 @@ const MessageHistory = ({ navigation, route }) => {
           if (sortedConversations.length > 0) {
             debugLog('MBA3456: Auto-selecting most recent conversation after role filter', {
               conversation_id: sortedConversations[0].conversation_id,
-              last_message_time: sortedConversations[0].last_message_time,
-              other_user_name: sortedConversations[0].other_user_name
+              justCrossedToDesktop,
+              needsInitialSelection
             });
             setSelectedConversation(sortedConversations[0].conversation_id);
             setSelectedConversationData(sortedConversations[0]);
@@ -1178,7 +1195,11 @@ const MessageHistory = ({ navigation, route }) => {
         setSelectedConversationData(null);
       }
     }
-  }, [conversations, userRole, screenWidth, selectedConversation]);
+    
+    // Update the screenWidth reference for next comparison
+    prevFilterScreenWidthRef.current = screenWidth;
+    
+  }, [conversations, userRole, selectedConversation, screenWidth]);
 
   // Update the existing useEffect for search query to work with the filtered conversations
   useEffect(() => {
@@ -3730,11 +3751,19 @@ const MessageHistory = ({ navigation, route }) => {
       ? filteredConversations.filter(c => c.is_professional === false) 
       : filteredConversations;
   
-  // Ref for debounce timeout - define at component level to avoid hooks errors
+  // Refs for resize handling
   const resizeTimeoutRef = useRef(null);
+  
+  // Track previous width for threshold crossing detection
+  const lastWidthRef = useRef(getInitialWidth());
   
   // Add effect to handle screen width changes with debouncing to prevent excessive re-renders
   useEffect(() => {
+    // Only run on web platform
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+    
     const handleScreenWidthChange = () => {
       // Clear any existing timeout
       if (resizeTimeoutRef.current) {
@@ -3743,35 +3772,41 @@ const MessageHistory = ({ navigation, route }) => {
       
       // Set a new timeout to debounce the navigation param update
       resizeTimeoutRef.current = setTimeout(() => {
-        // Only update if we have a selected conversation and we're at the width threshold
-        if (selectedConversation && Platform.OS === 'web' && typeof window !== 'undefined') {
-          const isMobile = window.innerWidth <= 900;
+        // Only update if we have a selected conversation
+        if (selectedConversation && typeof window !== 'undefined') {
+          const currentWidth = window.innerWidth;
+          const lastWidth = lastWidthRef.current;
+          const isMobile = currentWidth <= 900;
+          const wasMobile = lastWidth <= 900;
           
-          // Update the navigation params to ensure Navigation component detects the change
-          navigation.setParams({ 
-            selectedConversation: selectedConversation,
-            isMobile: isMobile
-          });
-          
-          debugLog('MBA4477: Updated navigation params after screen width change', {
-            selectedConversation,
-            screenWidth: window.innerWidth,
-            isMobile
-          });
+          // Only update if crossing the mobile/desktop threshold to avoid unnecessary API calls
+          if (isMobile !== wasMobile) {
+            // Update the navigation params to ensure Navigation component detects the change
+            navigation.setParams({ 
+              selectedConversation: selectedConversation,
+              isMobile: isMobile
+            });
+            
+            debugLog('MBA4477: Updated navigation params after crossing width threshold', {
+              selectedConversation,
+              previousWidth: lastWidth,
+              currentWidth,
+              isMobile
+            });
+            
+            // Update the last width reference
+            lastWidthRef.current = currentWidth;
+          }
         }
-      }, 200); // 200ms debounce
+      }, 500); // 500ms debounce (increased from 200ms)
     };
     
     // Add resize event listener
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.addEventListener('resize', handleScreenWidthChange);
-    }
+    window.addEventListener('resize', handleScreenWidthChange);
     
     // Cleanup
     return () => {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.removeEventListener('resize', handleScreenWidthChange);
-      }
+      window.removeEventListener('resize', handleScreenWidthChange);
       
       if (resizeTimeoutRef.current) {
         clearTimeout(resizeTimeoutRef.current);
