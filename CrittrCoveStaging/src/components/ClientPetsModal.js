@@ -3,7 +3,7 @@ import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, ActivityIn
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { getClientPets } from '../api/API';
-import { API_BASE_URL } from '../config/config';
+import { getMediaUrl } from '../config/config';
 import { AuthContext, debugLog } from '../context/AuthContext';
 
 const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCreateBooking, otherUserProfilePhoto }) => {
@@ -73,7 +73,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
     <>
       <View style={styles.petImageContainer}>
         {pet.profile_photo ? (
-          <Image source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} style={styles.petImage} />
+          <Image source={{ uri: getMediaUrl(pet.profile_photo) }} style={styles.petImage} />
         ) : (
           <View style={styles.petImagePlaceholder}>
             <MaterialCommunityIcons name="paw" size={50} color={theme.colors.placeholder} />
@@ -286,7 +286,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               {otherUserProfilePhoto ? (
-                <Image source={{ uri: `${API_BASE_URL}${otherUserProfilePhoto}` }} style={styles.clientProfilePhoto} />
+                <Image source={{ uri: getMediaUrl(otherUserProfilePhoto) }} style={styles.clientProfilePhoto} />
               ) : (
                 <View style={styles.clientProfilePhotoPlaceholder}>
                   <MaterialCommunityIcons name="account" size={24} color={theme.colors.placeholder} />
@@ -332,7 +332,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
                         <View style={styles.mobilePetContent}>
                           <View style={styles.petListImageContainer}>
                             {pet.profile_photo ? (
-                              <Image source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} style={styles.petListImage} />
+                              <Image source={{ uri: getMediaUrl(pet.profile_photo) }} style={styles.petListImage} />
                             ) : (
                               <View style={styles.petListImagePlaceholder}>
                                 <MaterialCommunityIcons name="paw" size={16} color={theme.colors.placeholder} />
@@ -400,7 +400,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
                           <View style={styles.petItemContent}>
                             <View style={styles.petListImageContainer}>
                               {pet.profile_photo ? (
-                                <Image source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} style={styles.petListImage} />
+                                <Image source={{ uri: getMediaUrl(pet.profile_photo) }} style={styles.petListImage} />
                               ) : (
                                 <View style={styles.petListImagePlaceholder}>
                                   <MaterialCommunityIcons name="paw" size={16} color={theme.colors.placeholder} />

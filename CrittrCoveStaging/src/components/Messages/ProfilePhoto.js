@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
-import { API_BASE_URL } from '../../config/config';
+import { getMediaUrl } from '../../config/config';
 
 /**
  * ProfilePhoto component for displaying user profile pictures consistently
@@ -35,7 +35,7 @@ const ProfilePhoto = ({
   if (profilePicture) {
     return (
       <Image
-        source={{ uri: `${API_BASE_URL}${profilePicture}` }}
+        source={{ uri: getMediaUrl(profilePicture) }}
         style={containerStyle}
         testID={testID}
       />

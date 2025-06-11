@@ -10,7 +10,7 @@ import { useToast } from '../../components/ToastProvider';
 import { geocodeAddressGraceful } from '../../utils/geocoding';
 import AddressAutocomplete from '../AddressAutocomplete';
 import axios from 'axios';
-import { API_BASE_URL } from '../../config/config';
+import { API_BASE_URL, getMediaUrl } from '../../config/config';
 import ProfilePhotoCropper from './ProfilePhotoCropper';
 import { processImageWithCrop, prepareImageForUpload } from '../../utils/imageCropUtils';
 
@@ -1031,9 +1031,7 @@ const ProfileInfoTab = ({
       if (response.data && response.data.profile_photo) {
         const photoUrl = response.data.profile_photo;
         debugLog('MBA5080', 'Setting profile photo in local state:', photoUrl);
-        debugLog('MBA5080', 'Full photo URL will be:', photoUrl.startsWith('http') 
-          ? photoUrl 
-          : `${API_BASE_URL}${photoUrl}`);
+        debugLog('MBA5080', 'Full photo URL will be:', getMediaUrl(photoUrl));
         
         // Update the profile photo in our local state
         setProfileData(prev => ({
@@ -1225,16 +1223,12 @@ const ProfileInfoTab = ({
                 {profileData.profile_photo ? (
                   <Image 
                     source={{ 
-                      uri: profileData.profile_photo.startsWith('http') 
-                        ? profileData.profile_photo 
-                        : `${API_BASE_URL}${profileData.profile_photo}` 
+                      uri: getMediaUrl(profileData.profile_photo)
                     }} 
                     style={styles.profilePhoto}
                     onError={(e) => {
                       debugLog('MBA5080', 'Error loading profile photo:', e.nativeEvent.error);
-                      debugLog('MBA5080', 'Profile photo URI:', profileData.profile_photo.startsWith('http') 
-                        ? profileData.profile_photo 
-                        : `${API_BASE_URL}${profileData.profile_photo}`);
+                      debugLog('MBA5080', 'Profile photo URI:', getMediaUrl(profileData.profile_photo));
                     }}
                   />
                 ) : (

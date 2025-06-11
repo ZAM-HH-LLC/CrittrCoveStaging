@@ -13,7 +13,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { AuthContext } from '../../context/AuthContext';
-import { API_BASE_URL } from '../../config/config';
+import { API_BASE_URL, getMediaUrl } from '../../config/config';
 import { getBookingAvailableServices, getBookingAvailablePets } from '../../api/API';
 import axios from 'axios';
 import { navigateToFrom } from '../Navigation';
@@ -173,7 +173,7 @@ const ServiceAndPetsCard = ({
         <View style={styles.petImageContainer}>
           {pet.profile_photo ? (
             <Image 
-              source={{ uri: `${API_BASE_URL}${pet.profile_photo}` }} 
+              source={{ uri: getMediaUrl(pet.profile_photo) }} 
               style={styles.petImage}
               defaultSource={require('../../../assets/default-pet-image.png')}
             />

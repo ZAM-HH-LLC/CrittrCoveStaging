@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Image, StyleSheet } from 'react-native';
-import { API_BASE_URL } from '../../config/config';
+import { getMediaUrl } from '../../config/config';
 import { debugLog } from '../../context/AuthContext';
 
 /**
@@ -15,9 +15,7 @@ const ClickableImage = ({
   testID
 }) => {
   // Process the image URL to ensure it has the API base URL if needed
-  const processedImageUrl = imageUrl && !imageUrl.startsWith('http') 
-    ? `${API_BASE_URL}${imageUrl}` 
-    : imageUrl;
+  const processedImageUrl = getMediaUrl(imageUrl);
 
   // Handle press with the unprocessed URL so the parent component can process it
   const handlePress = () => {

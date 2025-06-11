@@ -2,13 +2,11 @@ import React from 'react';
 import { View, Modal, Image, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../../context/AuthContext';
-import { API_BASE_URL } from '../../config/config';
+import { getMediaUrl } from '../../config/config';
 
 const ImageViewer = ({ visible, imageUrl, onClose }) => {
-  // Process the image URL - add API_BASE_URL prefix if needed
-  const processedImageUrl = imageUrl && !imageUrl.startsWith('http') 
-    ? `${API_BASE_URL}${imageUrl}` 
-    : imageUrl;
+  // Process the image URL - add MEDIA_URL prefix if needed
+  const processedImageUrl = getMediaUrl(imageUrl);
     
   debugLog('MBA7654: Showing image viewer', {
     visible,

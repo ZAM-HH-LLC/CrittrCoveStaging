@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { API_BASE_URL } from '../config/config';
+import { getMediaUrl } from '../config/config';
 import { BACKEND_TO_FRONTEND_TIME_UNIT } from '../data/mockData';
 import { debugLog } from '../context/AuthContext';
 
@@ -25,7 +25,7 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
   // Get profile picture source - use default if no URL provided
   const getProfilePictureSource = () => {
     if (professional.profile_picture_url) {
-      return { uri: `${API_BASE_URL}${professional.profile_picture_url}` };
+      return { uri: getMediaUrl(professional.profile_picture_url) };
     }
     return require('../../assets/default-profile.png');
   };

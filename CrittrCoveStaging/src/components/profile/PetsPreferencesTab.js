@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, ScrollView,
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { debugLog } from '../../context/AuthContext';
-import { API_BASE_URL } from '../../config/config';
+import { getMediaUrl } from '../../config/config';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { addPet, updatePet, fixPetOwner, deletePet } from '../../api/API';
 import { useToast } from '../../components/ToastProvider';
@@ -682,9 +682,9 @@ const PetsPreferencesTab = ({
           // Process the profile_photo URL from the server to ensure it's complete
           let profilePhotoUrl = updatedPet.profile_photo;
           
-          // Only prepend API_BASE_URL if the URL is a relative path
+          // Only prepend MEDIA_URL if the URL is a relative path
           if (profilePhotoUrl && !profilePhotoUrl.startsWith('http') && !profilePhotoUrl.startsWith('data:')) {
-            profilePhotoUrl = `${API_BASE_URL}${profilePhotoUrl}`;
+            profilePhotoUrl = getMediaUrl(profilePhotoUrl);
           }
           
           debugLog("MBA5555", "Pet updated successfully, profile photo URL:", profilePhotoUrl);
@@ -1188,7 +1188,7 @@ const PetsPreferencesTab = ({
         photoUri = editedPetData.photoUri;
       } else {
         // If it's a relative path, prepend the API base URL
-        photoUri = `${API_BASE_URL}${editedPetData.photoUri}`;
+        photoUri = getMediaUrl(editedPetData.photoUri);
       }
       debugLog('MBA5555', 'Using edited pet photo URI:', photoUri);
     } 
@@ -1199,7 +1199,7 @@ const PetsPreferencesTab = ({
         photoUri = pet.profile_photo;
       } else {
         // If it's a relative path, prepend the API base URL
-        photoUri = `${API_BASE_URL}${pet.profile_photo}`;
+        photoUri = getMediaUrl(pet.profile_photo);
       }
       debugLog('MBA5555', 'Using server profile photo:', photoUri);
     }
@@ -1388,7 +1388,7 @@ const PetsPreferencesTab = ({
                         style={styles.editInput}
                         value={editedPetData.breed || ''}
                         onChangeText={(text) => handleEditChange(pet.id, 'breed', text)}
-                        placeholder="Enter breed"
+                        placeholder="Enter breed - ex: Golden Retriever"
                         placeholderTextColor={theme.colors.placeholder}
                       />
                     </View>
@@ -1403,7 +1403,7 @@ const PetsPreferencesTab = ({
                           style={styles.editInput}
                           value={editedPetData.type || ''}
                           onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
-                          placeholder="Enter type"
+                          placeholder="Enter type - ex: Dog"
                           placeholderTextColor={theme.colors.placeholder}
                         />
                       </View>
@@ -2757,9 +2757,7 @@ const PetsPreferencesTab = ({
         adoptionDate: realPetData.adoption_date ? formatDateFromBackend(realPetData.adoption_date) : null,
         // Preserve photo information if it exists
         photoUri: realPetData.profile_photo ? 
-          (realPetData.profile_photo.startsWith('http') ? 
-            realPetData.profile_photo : 
-            `${API_BASE_URL}${realPetData.profile_photo}`) : 
+          getMediaUrl(realPetData.profile_photo) : 
           null,
         // Add a flag to indicate this pet was just created (for UI logic)
         justCreated: true,

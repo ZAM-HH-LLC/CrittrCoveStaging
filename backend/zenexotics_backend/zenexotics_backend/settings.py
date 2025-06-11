@@ -301,7 +301,7 @@ if IS_STAGING:
     CORS_ALLOWED_ORIGINS.append('http://localhost:19006')
 if IS_PRODUCTION:
     CORS_ALLOWED_ORIGINS.extend([
-        'https://beta.crittrcove.com',
+        'https://ec2.crittrcove.com',
         'https://crittrcove.com'
     ])
 
