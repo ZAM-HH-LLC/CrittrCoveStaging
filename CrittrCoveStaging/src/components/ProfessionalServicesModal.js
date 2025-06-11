@@ -189,10 +189,33 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
 
     setIsCreatingConversation(true);
     try {
-      debugLog('MBA3456', 'Creating conversation with professional:', professional.professional_id);
+      debugLog('MBA24u45vn', 'Creating conversation with professional - START', {
+        professional_id: professional.professional_id,
+        professional_name: professional.name,
+        from_screen: navigation.getState()?.routes?.[navigation.getState()?.index]?.name || 'unknown',
+        previous_screen: navigation.getState()?.routes?.[navigation.getState()?.index - 1]?.name || 'unknown'
+      });
+      
       const response = await createConversation(professional.professional_id);
       
-      debugLog('MBA3456', 'Conversation created, navigating to MessageHistory with ID:', response.conversation_id);
+      debugLog('MBA24u45vn', 'Conversation created successfully', {
+        conversation_id: response.conversation_id,
+        other_user_name: response.other_user_name,
+        status: response.status,
+        is_professional: response.is_professional,
+        full_response: JSON.stringify(response)
+      });
+      
+      // Get current navigation state for logging
+      const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index]?.name;
+      const currentParams = navigation.getState()?.routes?.[navigation.getState()?.index]?.params;
+      
+      debugLog('MBA24u45vn', 'About to navigate to MessageHistory', {
+        from_route: currentRoute,
+        current_params: JSON.stringify(currentParams),
+        conversation_id: response.conversation_id,
+        navigation_timestamp: Date.now()
+      });
       
       // Close the modal first
       onClose();
