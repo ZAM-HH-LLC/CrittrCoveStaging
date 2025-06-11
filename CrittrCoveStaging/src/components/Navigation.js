@@ -202,10 +202,6 @@ const NavigationContent = ({
   const renderCountRef = useRef(0);
   useEffect(() => {
     renderCountRef.current += 1;
-    debugLog('MBA3uiobv59u: Navigation rendered:', {
-      renderCount: renderCountRef.current,
-      timeStamp: new Date().toISOString()
-    });
   });
   
   // Get message notification state
