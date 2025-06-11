@@ -713,7 +713,7 @@ const Dashboard = ({ navigation }) => {
           }
         ]}
       >
-        {renderHeader()}
+        {/* TODO: Add back after mvp launch.{renderHeader()} */}
         {renderWelcomeSection()}
         {renderOnboardingProgress()}
         {renderBookingFilters()}
