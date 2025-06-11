@@ -831,11 +831,6 @@ const MessageList = forwardRef(({
   // Create message groups by date
   const messageGroups = useMemo(() => {
     const groups = groupMessagesByDate(messages, userTimezone);
-    debugLog('MBA2349fh04h: Message groups created', { 
-      dateCount: Object.keys(groups).length,
-      dates: Object.keys(groups),
-      timezone: userTimezone
-    });
     return groups;
   }, [messages, userTimezone]);
 
@@ -850,18 +845,6 @@ const MessageList = forwardRef(({
       // Format as YYYY-MM-DD for date key
       const dateKey = localMoment.format('YYYY-MM-DD');
       
-      // Add detailed logging for problematic timestamps
-      if (timestamp.includes('2025-06-08') || timestamp.includes('2025-06-09') || 
-          timestamp.includes('2025-06-06')) {
-        debugLog('MBA2349fh04h: Getting date key with proper timezone conversion', { 
-          timestamp,
-          utcDate: utcMoment.format('YYYY-MM-DD'),
-          localDate: localMoment.format('YYYY-MM-DD'),
-          dateKey,
-          userTimezone,
-          tzOffset: moment.tz(userTimezone).utcOffset() / 60
-        });
-      }
       
       return dateKey;
     } catch (error) {
@@ -990,29 +973,41 @@ const MessageList = forwardRef(({
       
       // Double-check the "Today" label accuracy with proper timezone conversion
       if (formattedDate === 'Today') {
-        // In the demo app, "today" is 2025-06-09
-        const mockToday = moment('2025-06-09').tz(userTimezone);
-        const mockTodayKey = mockToday.format('YYYY-MM-DD');
+        // Check if this is a test message (from 2025) or a real message
+        const isTestMessage = item.timestamp && (
+          item.timestamp.includes('2025-06-09') || 
+          item.timestamp.includes('2025-06-08') || 
+          item.timestamp.includes('2025-06-06')
+        );
+        
+        // Use appropriate date for comparison - fixed date for test messages, real date for others
+        const actualToday = isTestMessage 
+          ? moment('2025-06-09').tz(userTimezone) 
+          : moment().tz(userTimezone);
+        
+        const todayKey = actualToday.format('YYYY-MM-DD');
         const messageKey = getDateKey(item.timestamp);
         
         // Compare the dates to ensure Today is shown correctly
         debugLog('MBA3oub497v4: Today label check', {
           messageId: item.message_id,
           messageKey,
-          mockTodayKey,
-          isActuallyToday: messageKey === mockTodayKey,
+          todayKey,
+          isTestMessage,
+          isActuallyToday: messageKey === todayKey,
           formattedDate
         });
         
-        // If the message is not actually from mock today, use the proper date format
-        if (messageKey !== mockTodayKey) {
+        // If the message is not actually from the appropriate today, use the proper date format
+        if (messageKey !== todayKey) {
           formattedDate = localMoment.format('MMMM D, YYYY');
           
           debugLog('MBA3oub497v4: Corrected Today label', {
             messageId: item.message_id,
             formattedDate,
             messageKey,
-            mockTodayKey,
+            todayKey,
+            isTestMessage,
             timestamp: item.timestamp,
             userTimezone
           });

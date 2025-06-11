@@ -18,12 +18,6 @@ const ClickableImage = ({
   const processedImageUrl = imageUrl && !imageUrl.startsWith('http') 
     ? `${API_BASE_URL}${imageUrl}` 
     : imageUrl;
-  
-  // Log the processed URL for debugging
-  debugLog('MBA7654: Rendering clickable image', {
-    originalUrl: imageUrl,
-    processedUrl: processedImageUrl
-  });
 
   // Handle press with the unprocessed URL so the parent component can process it
   const handlePress = () => {

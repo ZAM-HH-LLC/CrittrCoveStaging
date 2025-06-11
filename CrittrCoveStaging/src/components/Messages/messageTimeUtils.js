@@ -82,16 +82,6 @@ export const formatMessageDate = (timestamp, userTimezone) => {
     const messageIdMatch = timestamp.match(/(\d+)\.(\d+)Z$/);
     const extractedId = messageIdMatch ? messageIdMatch[1] : 'unknown';
     
-    // Debug logging for specific timestamps we're troubleshooting
-    if (timestamp.includes('2025-06-08') || timestamp.includes('2025-06-09') || 
-        timestamp.includes('2025-06-06')) {
-      debugLog('MBA3oub497v4: Processing timestamp with proper timezone conversion', {
-        timestamp,
-        extracted: extractedId,
-        userTimezone,
-        messageId: extractedId
-      });
-    }
     
     // Parse the UTC timestamp properly
     const utcMoment = moment.utc(timestamp);
@@ -108,86 +98,52 @@ export const formatMessageDate = (timestamp, userTimezone) => {
     const now = isTestMessage ? 
                 moment('2025-06-09T12:00:00').tz(userTimezone) : 
                 moment().tz(userTimezone);
-    
-    // Extra debug logging for troubleshooting date issues
-    debugLog('MBA6677: Formatting message date', {
-      timestamp,
-      userTimezone,
-      nowFormatted: now.format('YYYY-MM-DD HH:mm:ss'),
-      messageDateFormatted: messageDate.format('YYYY-MM-DD HH:mm:ss'),
-      utcDateFormatted: utcMoment.format('YYYY-MM-DD HH:mm:ss'),
-      messageYear: messageDate.year(),
-      currentYear: now.year(),
-      // Add timezone offset info
-      offsetHours: moment.tz(userTimezone).utcOffset() / 60,
-      isTestMessage,
-      usingFixedToday: isTestMessage
-    });
+  
     
     // Get today and yesterday in user's timezone
-    const today = now.clone().startOf('day');
-    const yesterday = now.clone().subtract(1, 'day').startOf('day');
+    const today = moment(Date.now()).tz(userTimezone).startOf('day');
+    const yesterday = moment(Date.now()).tz(userTimezone).subtract(1, 'day').startOf('day');
     const messageDateStartOfDay = messageDate.clone().startOf('day');
     
     // Check if the date is today, yesterday, or another date
     let result;
     
-    // Check if the message's date is the same as "today" in the app
-    // Note: This is a special case for the demo app where "today" is actually 2025-06-09
-    // We need to mock "today" as being that date
-    const mockToday = moment('2025-06-09').tz(userTimezone);
-    const mockYesterday = mockToday.clone().subtract(1, 'day');
+    // For test messages, use the mock date; for real messages, use the actual current date
+    // This allows test messages to show "Today" on the test date while real messages 
+    // use the actual current date for Today/Yesterday labels
+    const realToday = moment(Date.now()).tz(userTimezone);
+    const realYesterday = realToday.clone().subtract(1, 'day');
     
     // Compare using YYYY-MM-DD format for consistency
     const messageDateKey = messageDate.format('YYYY-MM-DD');
-    const mockTodayKey = mockToday.format('YYYY-MM-DD');
-    const mockYesterdayKey = mockYesterday.format('YYYY-MM-DD');
+    
+    // Either use the real date or the mock date based on whether this is a test message
+    const todayToUse = isTestMessage ? today : realToday.clone().startOf('day');
+    const yesterdayToUse = isTestMessage ? yesterday : realYesterday.clone().startOf('day');
+    const todayKey = todayToUse.format('YYYY-MM-DD');
+    const yesterdayKey = yesterdayToUse.format('YYYY-MM-DD');
     
     // Log the comparison for debugging
-    debugLog('MBA6677: Date comparison', {
-      messageDate: messageDateKey,
-      mockToday: mockTodayKey,
-      mockYesterday: mockYesterdayKey,
-      isToday: messageDateKey === mockTodayKey,
-      isYesterday: messageDateKey === mockYesterdayKey
-    });
     
     // Determine the display format
-    if (messageDateKey === mockTodayKey) {
+    if (messageDateKey === todayKey) {
       result = 'Today';
-    } else if (messageDateKey === mockYesterdayKey) {
+    } else if (messageDateKey === yesterdayKey) {
       result = 'Yesterday';
     } else {
       // For other dates, just format as month and day (same year) or with year (different year)
-      if (messageDate.year() === mockToday.year()) {
+      const yearToCompare = isTestMessage ? today.year() : realToday.year();
+      if (messageDate.year() === yearToCompare) {
         result = messageDate.format('MMMM D');
       } else {
         result = messageDate.format('MMMM D, YYYY');
       }
     }
     
-    // Special case debugging for specific message IDs
-    if (extractedId === '169' || extractedId === '177' || 
-        extractedId === '85' || extractedId === '44') {
-      debugLog('MBA3oub497v4: Special message date formatting', {
-        messageId: extractedId,
-        timestamp,
-        formattedDate: result,
-        utcDate: utcMoment.format('YYYY-MM-DD'),
-        localDate: messageDate.format('YYYY-MM-DD'),
-        isToday: messageDateStartOfDay.isSame(today, 'day'),
-        isYesterday: messageDateStartOfDay.isSame(yesterday, 'day')
-      });
-    }
     
     // Cache the result
     formatCache.dates.set(cacheKey, result);
     clearCacheIfNeeded();
-    
-    debugLog('MBA6677: Formatted date result', {
-      timestamp,
-      result
-    });
     
     return result;
   } catch (error) {
