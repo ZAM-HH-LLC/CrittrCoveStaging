@@ -1115,6 +1115,8 @@ class UpdateBookingView(APIView):
             conversation.last_message_time = timezone.now()
             conversation.save()
 
+            logger.info(f"MBA976asd2n2h5 Updated conversation {conversation.conversation_id} with last_message='{conversation.last_message}', last_message_time='{conversation.last_message_time}'")
+
             # Update booking status to PENDING_CLIENT_APPROVAL
             booking.status = BookingStates.PENDING_CLIENT_APPROVAL
             booking.save()
@@ -1283,6 +1285,7 @@ class ApproveBookingView(APIView):
                     conversation.last_message_time = timezone.now()
                     conversation.save()
                     
+                    logger.info(f"Updated conversation {conversation.conversation_id} with last_message='{conversation.last_message}', last_message_time='{conversation.last_message_time}'")
                     logger.info(f"Sent confirmation message for booking {booking_id} in conversation {conversation.conversation_id}")
                     logger.info(f"Confirmation message metadata: {confirmation_message.metadata}")
                 else:
@@ -1807,6 +1810,8 @@ class CreateFromDraftView(APIView):
             conversation.last_message = "Approval Request"
             conversation.last_message_time = timezone.now()
             conversation.save()
+            
+            logger.info(f"MBA66777 Updated conversation {conversation.conversation_id} with last_message='{conversation.last_message}', last_message_time='{conversation.last_message_time}'")
             
             # Delete the draft
             draft.delete()

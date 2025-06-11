@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../../context/AuthContext';
@@ -16,6 +16,28 @@ const ConversationList = ({
   getConversationUnreadCount,
   markConversationAsRead
 }) => {
+  // Add logging on initial render to check what props we're receiving
+  useEffect(() => {
+    debugLog('MBA2o3uihf48hv: ConversationList component mounted', {
+      conversationsCount: conversations?.length || 0,
+      selectedConversation,
+      hasGetConversationUnreadCount: !!getConversationUnreadCount,
+      hasMarkConversationAsRead: !!markConversationAsRead
+    });
+
+    // Log unread counts for each conversation
+    if (getConversationUnreadCount && conversations?.length > 0) {
+      const conversationUnreadCounts = conversations.map(conv => ({
+        conversationId: conv.conversation_id,
+        unreadCount: getConversationUnreadCount(String(conv.conversation_id))
+      }));
+      
+      debugLog('MBA2o3uihf48hv: Current conversation unread counts', {
+        conversationUnreadCounts
+      });
+    }
+  }, [conversations, selectedConversation, getConversationUnreadCount, markConversationAsRead]);
+
   return (
     <View style={styles.conversationListContainer}>
       <View style={styles.searchContainer}>
@@ -56,6 +78,17 @@ const ConversationList = ({
         const unreadCount = getConversationUnreadCount ? 
           getConversationUnreadCount(String(conv.conversation_id)) : 0;
         
+        // Log details about each conversation's unread state for debugging
+        if (unreadCount > 0) {
+          debugLog(`MBA2o3uihf48hv: Conversation ${conv.conversation_id} has ${unreadCount} unread messages`, {
+            conversationId: conv.conversation_id,
+            unreadCount,
+            isSelected,
+            convUnreadFlag: conv.unread,
+            name: otherParticipantName
+          });
+        }
+        
         return (
           <TouchableOpacity
             key={conv.conversation_id}
@@ -64,11 +97,46 @@ const ConversationList = ({
               isSelected && styles.selectedConversation
             ]}
             onPress={() => {
-              onSelectConversation(conv.conversation_id);
+              debugLog(`MBA2o3uihf48hv: Conversation ${conv.conversation_id} clicked`, {
+                previouslySelected: isSelected,
+                unreadCount,
+                willCallMarkAsRead: markConversationAsRead && unreadCount > 0
+              });
               
+              // Set the selected conversation in the global variable immediately
+              if (typeof window !== 'undefined') {
+                window.selectedConversationId = conv.conversation_id;
+              }
+              
+              // First mark as read if needed, before changing selection
               if (markConversationAsRead && unreadCount > 0) {
-                debugLog(`MBA4321: Marking conversation ${conv.conversation_id} as read when clicked`);
-                markConversationAsRead(conv.conversation_id);
+                debugLog(`MBA2o3uihf48hv: Marking conversation ${conv.conversation_id} as read when clicked`, {
+                  unreadCount
+                });
+                
+                try {
+                  // Call markConversationAsRead first to clear notifications
+                  markConversationAsRead(conv.conversation_id);
+                  
+                  // Send explicit command to parent to reset message refs
+                  debugLog(`MBA2o3uihf48hv: Forcing message state reset for conversation`, {
+                    conversationId: conv.conversation_id,
+                    hasUnread: unreadCount > 0
+                  });
+                  
+                  // Use a custom data attribute to tell MessageHistory to force refresh
+                  onSelectConversation(conv.conversation_id, { forceRefresh: true });
+                } catch (error) {
+                  debugLog(`MBA2o3uihf48hv: Error marking conversation as read`, {
+                    error: error.message
+                  });
+                  // Still select the conversation even if marking as read fails
+                  onSelectConversation(conv.conversation_id, { forceRefresh: true });
+                }
+              } else {
+                // If no unread messages, just update selection
+                // Still pass forceRefresh: true to ensure messages are loaded
+                onSelectConversation(conv.conversation_id, { forceRefresh: true });
               }
             }}
           >
@@ -102,6 +170,7 @@ const ConversationList = ({
                   {conv.last_message}
                 </Text>
                 
+                {/* Make sure unread indicator is shown when unreadCount > 0 */}
                 {unreadCount > 0 && !isSelected && (
                   <View style={styles.unreadBadge}>
                     <Text style={styles.unreadBadgeText}>{unreadCount}</Text>

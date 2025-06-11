@@ -195,16 +195,45 @@ const NavigationContent = ({
     switchRole, 
     screenWidth, 
     signOut,
-    isApprovedProfessional 
+    isApprovedProfessional
   } = useContext(AuthContext);
+  
+  // Add render counter for debugging
+  const renderCountRef = useRef(0);
+  useEffect(() => {
+    renderCountRef.current += 1;
+    debugLog('MBA3uiobv59u: Navigation rendered:', {
+      renderCount: renderCountRef.current,
+      timeStamp: new Date().toISOString()
+    });
+  });
   
   // Get message notification state
   const {
     hasUnreadMessages,
     unreadCount,
+    ownerUnreadCount,
+    professionalUnreadCount,
+    getCurrentRoleUnreadCount,
+    getOtherRoleUnreadCount,
+    hasCurrentRoleUnreadMessages,
     resetNotifications,
     updateRoute
   } = useContext(MessageNotificationContext);
+  
+  // Add a notification state update effect when the notification context changes
+  useEffect(() => {
+    debugLog('MBA3uiobv59u: Navigation received notification update:', {
+      hasUnreadMessages,
+      unreadCount,
+      ownerUnreadCount,
+      professionalUnreadCount,
+      userRole,
+      currentRoute
+    });
+
+    // Force update display of notifications on role change or when notification state changes
+  }, [hasUnreadMessages, unreadCount, ownerUnreadCount, professionalUnreadCount, userRole]);
   
   // Animation values for hamburger menu
   const line1Rotation = useSharedValue(0);
@@ -269,6 +298,20 @@ const NavigationContent = ({
     }
   }, [isSignedIn, userRole, isApprovedProfessional, currentRoute, is_DEBUG]);
   
+  // Add logging for message notifications on state change
+  useEffect(() => {
+    // Only log if there are unread messages to reduce noise
+    if (hasUnreadMessages) {
+      debugLog('MBA2o3uihf48hv: Navigation notification state changed', {
+        hasUnreadMessages,
+        unreadCount,
+        currentRoute,
+        isInMessageHistory: currentRoute === 'MessageHistory',
+        selectedConversationId: typeof window !== 'undefined' ? window.selectedConversationId : null
+      });
+    }
+  }, [hasUnreadMessages, unreadCount, currentRoute]);
+  
   useEffect(() => {
     const updateLayout = () => {
       setIsMobile(Dimensions.get('window').width < 900);
@@ -281,6 +324,90 @@ const NavigationContent = ({
     };
   }, []);
 
+  // Helper function to check and reset conversation notifications if needed
+  const checkAndResetConversationNotifications = () => {
+    // Only run if we're on the MessageHistory screen
+    if (currentRoute === 'MessageHistory') {
+      // Check for selected conversation ID
+      const selectedConvId = (typeof window !== 'undefined') ? window.selectedConversationId : null;
+      
+      if (selectedConvId) {
+        debugLog('MBA2o3uihf48hv: Checking if notifications need reset for selected conversation', {
+          selectedConvId,
+          currentRoute,
+          hasUnreadMessages,
+          unreadCount
+        });
+        
+        // When running resetNotifications from navigation, we need to make sure
+        // we're not accumulating extra counts that don't exist in the real state
+        if (hasUnreadMessages || unreadCount > 0) {
+          // Reset notifications for this conversation - call even if hasUnreadMessages is false
+          // to ensure any conversation-specific notifications are cleared
+          resetNotifications && resetNotifications(currentRoute, selectedConvId);
+        }
+      }
+    }
+  };
+  
+  // Add effect to reset conversation notifications when selectedConversationId changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.selectedConversationId) {
+      checkAndResetConversationNotifications();
+    }
+  }, [currentRoute, hasUnreadMessages]); // Removed unreadCount from dependencies to avoid infinite loops
+
+  // Add a websocket-focused effect to ensure notifications are correctly synced
+  useEffect(() => {
+    // Log the current notification state when it changes
+    debugLog('MBA2o3uihf48hv: Navigation notification state update', {
+      unreadCount,
+      hasUnreadMessages,
+      currentRoute,
+      userRole,
+      onMessagesScreen: currentRoute === 'MessageHistory',
+      selectedConversationId: typeof window !== 'undefined' ? window.selectedConversationId : null
+    });
+    
+    // Make sure that hasUnreadMessages and unreadCount are consistent
+    // unreadCount should be > 0 when hasUnreadMessages is true, and vice versa
+    if ((hasUnreadMessages && unreadCount === 0) || (!hasUnreadMessages && unreadCount > 0)) {
+      debugLog('MBA2o3uihf48hv: ⚠️ Inconsistent notification state detected', {
+        hasUnreadMessages,
+        unreadCount,
+        userRole
+      });
+    }
+    
+    // Store unread count for current role in sessionStorage to help with role switching
+    if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+      try {
+        const roleKey = `unreadCount_${userRole}`;
+        window.sessionStorage.setItem(roleKey, unreadCount.toString());
+        debugLog('MBA2o3uihf48hv: Stored unread count for role', {
+          role: userRole,
+          count: unreadCount
+        });
+      } catch (error) {
+        // Ignore storage errors
+      }
+    }
+    
+    // Only run the sync check if we're on the MessageHistory page 
+    // and we have a selected conversation
+    if (currentRoute === 'MessageHistory' && 
+        typeof window !== 'undefined' && 
+        window.selectedConversationId) {
+      
+      // If we have a selected conversation but still show unread messages,
+      // we might need to mark that conversation as read
+      if (unreadCount > 0) {
+        // We should check if the unread messages are for the current conversation
+        checkAndResetConversationNotifications();
+      }
+    }
+  }, [unreadCount, hasUnreadMessages, currentRoute, userRole]);
+
   useEffect(() => {
     const updateCurrentRoute = async () => {
       try {
@@ -292,7 +419,7 @@ const NavigationContent = ({
           
           // Only log if the route is different from current route to reduce spam
           if (urlRoute !== currentRoute) {
-            debugLog('MBA4477: URL route check', { 
+            debugLog('MBA2o3uihf48hv: URL route check', { 
               urlRoute, 
               currentRoute,
               pathname: window.location.pathname
@@ -309,12 +436,23 @@ const NavigationContent = ({
             
             // Only reset notifications when navigating to MessageHistory
             if (urlRoute === 'MessageHistory' && hasUnreadMessages) {
-              resetNotifications && resetNotifications(urlRoute);
+              // Check for a specific selected conversation ID from global variable
+              const selectedConvId = (typeof window !== 'undefined') ? window.selectedConversationId : null;
+              debugLog('MBA2o3uihf48hv: Navigation checking for selected conversation ID from URL', { 
+                selectedConvId, 
+                hasUnreadMessages, 
+                route: urlRoute 
+              });
+              
+              // Pass the selected conversation ID if available
+              resetNotifications && resetNotifications(urlRoute, selectedConvId);
             }
             
-            debugLog('MBA4477: Updated current route from URL', { 
+            debugLog('MBA2o3uihf48hv: Updated current route from URL', { 
               urlRoute, 
-              oldRoute: currentRoute 
+              oldRoute: currentRoute,
+              hasUnreadMessages,
+              unreadCount
             });
             
             return; // Skip checking localStorage if we've already updated from URL
@@ -339,8 +477,24 @@ const NavigationContent = ({
           
           // Only reset notifications when navigating to MessageHistory
           if (route === 'MessageHistory' && hasUnreadMessages) {
-            resetNotifications && resetNotifications(route);
+            // Check for a specific selected conversation ID from global variable
+            const selectedConvId = (typeof window !== 'undefined') ? window.selectedConversationId : null;
+            debugLog('MBA2o3uihf48hv: Navigation checking for selected conversation ID from storage', { 
+              selectedConvId, 
+              hasUnreadMessages, 
+              route 
+            });
+            
+            // Pass the selected conversation ID if available
+            resetNotifications && resetNotifications(route, selectedConvId);
           }
+          
+          debugLog('MBA2o3uihf48hv: Updated current route from storage', {
+            route,
+            oldRoute: currentRoute,
+            hasUnreadMessages,
+            unreadCount
+          });
         }
       } catch (error) {
         console.error('Error updating current route:', error);
@@ -449,6 +603,45 @@ const NavigationContent = ({
     );
   };
   
+  // Component to show notification indicator for the other role
+  const OtherRoleNotificationIndicator = ({ roleToCheck, currentRole, style }) => {
+    // Get the unread count for the role we're checking
+    const roleCount = roleToCheck === 'professional' 
+      ? professionalUnreadCount 
+      : ownerUnreadCount;
+    
+    // Get if this is the currently active role
+    const isCurrentRole = userRole === roleToCheck;
+    
+    // Add debug log to track state updates for notifications
+    useEffect(() => {
+      debugLog('MBA3uiobv59u: OtherRoleNotificationIndicator update:', {
+        roleToCheck,
+        roleCount,
+        isCurrentRole,
+        currentUserRole: userRole,
+        ownerUnreadCount,
+        professionalUnreadCount
+      });
+    }, [roleCount, isCurrentRole, roleToCheck, userRole, ownerUnreadCount, professionalUnreadCount]);
+    
+    // Only show notification if:
+    // 1. This is not the current role (we're checking the other role)
+    // 2. There are unread messages for this role
+    if (isCurrentRole || roleCount === 0) return null;
+    
+    debugLog('MBA3uiobv59u: Rendering notification badge for role:', {
+      roleToCheck,
+      roleCount
+    });
+    
+    return (
+      <View style={[styles.roleNotificationBadge, style]}>
+        <Text style={styles.roleNotificationText}>{roleCount}</Text>
+      </View>
+    );
+  };
+  
   // Include all the other helper functions from the original component
   const animateHamburgerMenu = (toX) => {
     const duration = 300;
@@ -506,6 +699,22 @@ const NavigationContent = ({
     let items = [];
     let logoutItem = null;
     
+    // Get current role notification count directly
+    const currentRoleCount = getCurrentRoleUnreadCount();
+    const hasCurrentRoleUnread = hasCurrentRoleUnreadMessages();
+    
+    // Add logging for notification state when rendering menu
+    debugLog('MBA3uiobv59u: Rendering menu items with notification state:', {
+      hasUnreadMessages,
+      unreadCount,
+      ownerUnreadCount,
+      professionalUnreadCount,
+      currentRoleCount,
+      hasCurrentRoleUnread,
+      userRole,
+      currentRoute
+    });
+    
     if (!isSignedIn) {
       // Signed-out menu items
       items = [
@@ -517,7 +726,7 @@ const NavigationContent = ({
       // Professional menu items in the specified order
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
-        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread },
         { icon: 'briefcase-outline', label: 'Services', route: 'ServiceManager' },
         { icon: 'account-group-outline', label: 'Connections', route: 'Connections' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
@@ -530,7 +739,7 @@ const NavigationContent = ({
       // Pet Owner menu items in the specified order
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
-        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
         { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
@@ -567,14 +776,15 @@ const NavigationContent = ({
           >
             {item.label}
           </Text>
-          {item.notification && (
-            <View style={styles.messageNotificationDot} />
-          )}
-          {item.count > 0 && (
+          {/* Only show notification badge with count when there are unread messages FOR CURRENT ROLE */}
+          {item.route === 'MessageHistory' && currentRoleCount > 0 && (
             <View style={styles.messageNotificationBadge}>
-              <Text style={styles.messageNotificationText}>{item.count}</Text>
+              <Text style={styles.messageNotificationText}>
+                {currentRoleCount}
+              </Text>
             </View>
           )}
+          {/* We've replaced the old dot with the badge above */}
         </TouchableOpacity>
       )),
       logoutItem
@@ -583,6 +793,16 @@ const NavigationContent = ({
   
   const renderMobileMenuItems = () => {
     let items = [];
+    
+    // Get current role notification count directly
+    const currentRoleCount = getCurrentRoleUnreadCount();
+    const hasCurrentRoleUnread = hasCurrentRoleUnreadMessages();
+    
+    debugLog('MBA3uiobv59u: Rendering mobile menu items:', {
+      currentRoleCount,
+      hasCurrentRoleUnread,
+      userRole
+    });
     
     if (!isSignedIn) {
       // Signed-out menu items
@@ -595,7 +815,7 @@ const NavigationContent = ({
       // Professional menu items in the specified order - keep logout in the menu for mobile
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
-        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread, count: currentRoleCount },
         { icon: 'briefcase-outline', label: 'Services', route: 'ServiceManager' },
         { icon: 'account-group-outline', label: 'Connections', route: 'Connections' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
@@ -606,7 +826,7 @@ const NavigationContent = ({
       // Pet Owner menu items in the specified order - keep logout in the menu for mobile
       items = [
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
-        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasUnreadMessages, count: unreadCount },
+        { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread, count: currentRoleCount },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
         { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
@@ -636,6 +856,15 @@ const NavigationContent = ({
                 >
                   Owner
                 </Text>
+                
+                {/* Notification indicator for pet owner role */}
+                {userRole !== 'petOwner' && ownerUnreadCount > 0 && (
+                  <View style={[styles.roleNotificationBadge, { top: -8, right: -8 }]}>
+                    <Text style={styles.roleNotificationText}>
+                      {ownerUnreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -652,6 +881,15 @@ const NavigationContent = ({
                 >
                   Professional
                 </Text>
+                
+                {/* Notification indicator for professional role */}
+                {userRole !== 'professional' && professionalUnreadCount > 0 && (
+                  <View style={[styles.roleNotificationBadge, { top: -8, right: -8 }]}>
+                    <Text style={styles.roleNotificationText}>
+                      {professionalUnreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -681,12 +919,10 @@ const NavigationContent = ({
             ]}>
               {item.label}
             </Text>
-            {item.notification && (
-              <View style={styles.mobileMessageNotificationDot} />
-            )}
-            {item.count > 0 && (
+            {/* Only show notification badge with count when there are unread messages FOR CURRENT ROLE */}
+            {item.route === 'MessageHistory' && currentRoleCount > 0 && (
               <View style={styles.mobileMessageNotificationBadge}>
-                <Text style={styles.mobileMessageNotificationText}>{item.count}</Text>
+                <Text style={styles.mobileMessageNotificationText}>{currentRoleCount}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -751,6 +987,15 @@ const NavigationContent = ({
                   >
                     {isCollapsed ? 'O' : 'Owner'}
                   </Text>
+                  
+                  {/* Notification indicator for pet owner role */}
+                  {userRole !== 'petOwner' && ownerUnreadCount > 0 && (
+                    <View style={[styles.roleNotificationBadge, { top: -8, right: -8 }]}>
+                      <Text style={styles.roleNotificationText}>
+                        {ownerUnreadCount}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -768,6 +1013,15 @@ const NavigationContent = ({
                   >
                     {isCollapsed ? 'P' : 'Professional'}
                   </Text>
+                  
+                  {/* Notification indicator for professional role */}
+                  {userRole !== 'professional' && professionalUnreadCount > 0 && (
+                    <View style={[styles.roleNotificationBadge, { top: -8, right: -8 }]}>
+                      <Text style={styles.roleNotificationText}>
+                        {professionalUnreadCount}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -969,12 +1223,10 @@ const NavigationContent = ({
                   size={24}
                   color={currentRoute === 'MessageHistory' ? theme.colors.secondary : theme.colors.whiteText}
                 />
-                {hasUnreadMessages && (
-                  <View style={styles.mobileMessageNotificationDot} />
-                )}
-                {unreadCount > 0 && (
+                {/* Only show notification badge with count when there are unread messages FOR CURRENT ROLE */}
+                {currentRoleCount > 0 && (
                   <View style={styles.mobileMessageNotificationBadge}>
-                    <Text style={styles.mobileMessageNotificationText}>{unreadCount}</Text>
+                    <Text style={styles.mobileMessageNotificationText}>{currentRoleCount}</Text>
                   </View>
                 )}
               </View>
@@ -1578,6 +1830,36 @@ const styles = StyleSheet.create({
   mobileMessageNotificationText: {
     color: 'white',
     fontSize: 9,
+    fontWeight: 'bold',
+  },
+  roleNotificationIndicator: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.surface,
+    zIndex: 1,
+  },
+  roleNotificationBadge: {
+    position: 'absolute',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    zIndex: 10,
+    top: -8,
+    right: -8,
+  },
+  roleNotificationText: {
+    color: 'white',
+    fontSize: 10,
     fontWeight: 'bold',
   },
   hamburgerMenuContainer: {

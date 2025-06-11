@@ -9,13 +9,22 @@ import { Platform } from 'react-native';
 export const MessageNotificationContext = createContext();
 
 export const MessageNotificationProvider = ({ children }) => {
+  const { isSignedIn, userRole } = useContext(AuthContext);
+  
+  // State for notification badges
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Add role-specific counts for more accurate notification management
+  const [ownerUnreadCount, setOwnerUnreadCount] = useState(0);
+  const [professionalUnreadCount, setProfessionalUnreadCount] = useState(0);
   const [conversationCounts, setConversationCounts] = useState({});
   const [currentRoute, setCurrentRoute] = useState('');
+  const [lastApiResponse, setLastApiResponse] = useState(null);
+  
+  // State for WebSocket management
+  const [websocketConnected, setWebsocketConnected] = useState(false);
   const [websocketInitialized, setWebsocketInitialized] = useState(false);
   const [lastApiCheck, setLastApiCheck] = useState(0);
-  const { isSignedIn } = useContext(AuthContext);
   
   // Use refs to track initialization state and prevent duplicate calls
   const initialCheckDoneRef = useRef(false);
@@ -26,8 +35,10 @@ export const MessageNotificationProvider = ({ children }) => {
   const lastCheckTimeRef = useRef(0);  // Track last time we checked
   const MIN_CHECK_INTERVAL = 5000; // Minimum 5 seconds between API checks
   
-  // Add ref for tracking fallback strategy
-  const websocketTimeoutRef = useRef(null);
+  // Ref to track connection health (separate from connected state)
+  const connectionHealthyRef = useRef(false);
+  // Track WebSocket initialization and reconnect attempts
+  const websocketInitializedRef = useRef(false);
   const websocketRetryAttemptsRef = useRef(0);
   const MAX_WEBSOCKET_RETRIES = 12; // After 12 retries (60 seconds), fall back to API
   const WEBSOCKET_RETRY_INTERVAL = 5000; // 5 second wait between retries
@@ -35,20 +46,18 @@ export const MessageNotificationProvider = ({ children }) => {
   // Add connection status tracking
   const lastHeartbeatReceivedRef = useRef(0);
   const lastHeartbeatSentRef = useRef(0);
-  const heartbeatTimeoutRef = useRef(null);
-  const connectionHealthyRef = useRef(true); // Track if connection is healthy
+  const heartbeatTimeoutRef = useRef(null); // Track if connection is healthy
   const HEARTBEAT_TIMEOUT = 40000; // 40 seconds timeout for heartbeat responses
   
   // Add session-based flag to track if we already made an API call in this session
   const initialApiCallMadeRef = useRef(false);
-
-  // Add cache for the API response
-  const [lastApiResponse, setLastApiResponse] = useState(null);
-  const WEBSOCKET_DATA_LIFETIME = 30000; // Consider WebSocket data valid for 30 seconds
-  const CACHE_LIFETIME = 300000; // Consider API cache valid for 5 minutes (increased from 2)
-
+  // Timeout ref for WebSocket heartbeat check
+  const websocketTimeoutRef = useRef(null);
   // Add a lastApiCheckRef at the top of the component with other refs
   const lastApiCheckRef = useRef(0);
+  
+  // Ref to track user role changes
+  const prevUserRoleRef = useRef(null);
 
   // Function to check if we have unread messages based on conversations
   const checkUnreadMessages = async (force = false) => {
@@ -189,16 +198,58 @@ export const MessageNotificationProvider = ({ children }) => {
       
       debugLog('MBA432wihe21: Unread message count from API:', count);
       
+      // Process conversation data to determine role-specific unread counts
+      let ownerCount = 0;
+      let proCount = 0;
+      
+      // Analyze the conversation_counts to separate by role
+      if (result.conversation_role_map) {
+        // If the API returns a role map, use it directly
+        ownerCount = result.owner_unread_count || 0;
+        proCount = result.professional_unread_count || 0;
+        
+        debugLog('MBA432wihe21: Got role-specific counts from API', {
+          ownerCount,
+          proCount
+        });
+      } else {
+        // Otherwise, we need to infer from what's available
+        // This is a fallback and won't be needed once the API is updated
+        
+        // We'll assume that the API already filters by the current role
+        // So all counts are for the current role
+        if (userRole === 'petOwner') {
+          ownerCount = count;
+        } else {
+          proCount = count;
+        }
+        
+        debugLog('MBA432wihe21: Inferred role-specific counts', {
+          userRole,
+          ownerCount,
+          proCount,
+          totalCount: count
+        });
+      }
+      
       // Update the API response cache
       setLastApiResponse({
         unread_count: count,
         conversation_counts: conversationUnreadCounts,
+        owner_unread_count: ownerCount,
+        professional_unread_count: proCount,
         timestamp: now
       });
       
       // Update state based on API response
       setUnreadCount(count);
-      setHasUnreadMessages(count > 0);
+      setOwnerUnreadCount(ownerCount);
+      setProfessionalUnreadCount(proCount);
+      
+      // Only set hasUnreadMessages based on the current role's count
+      const currentRoleCount = userRole === 'petOwner' ? ownerCount : proCount;
+      setHasUnreadMessages(currentRoleCount > 0);
+      
       setConversationCounts(conversationUnreadCounts);
       setLastApiCheck(now);
       lastCheckTimeRef.current = now;
@@ -241,7 +292,20 @@ export const MessageNotificationProvider = ({ children }) => {
   // Check how many unread messages a specific conversation has
   const getConversationUnreadCount = (conversationId) => {
     if (!conversationId) return 0;
-    return conversationCounts[conversationId] || 0;
+    const count = conversationCounts[conversationId] || 0;
+    
+    // Add logging for debugging unread counts
+    if (count > 0) {
+      debugLog(`MBA2o3uihf48hv: getConversationUnreadCount for ${conversationId}`, {
+        conversationId,
+        count,
+        allCounts: JSON.stringify(conversationCounts),
+        totalUnreadCount: unreadCount,
+        hasUnreadMessages
+      });
+    }
+    
+    return count;
   };
 
   // Check if user is currently on the Messages screen
@@ -249,37 +313,9 @@ export const MessageNotificationProvider = ({ children }) => {
     return currentRoute === 'MessageHistory';
   };
 
-  // Helper to handle new message notifications
-  const handleNewMessageNotification = (conversationId = null) => {
-    // Only update unread count if user is not on messages screen
-    // or if they're on messages screen but not viewing this conversation
-    debugLog(`MBA4321: Adding unread message notification for conversation ${conversationId}`);
-    setHasUnreadMessages(true);
-    setUnreadCount(prevCount => {
-      const newCount = prevCount + 1;
-      debugLog(`MBA4321: Increasing total unread count from ${prevCount} to ${newCount}`);
-      return newCount;
-    });
-    
-    // If we have a conversation ID, update that count too
-    if (conversationId) {
-      setConversationCounts(prevCounts => {
-        const prevConvCount = prevCounts[conversationId] || 0;
-        const newConvCount = prevConvCount + 1;
-        
-        debugLog(`MBA4321: Conversation ${conversationId} unread count: ${prevConvCount} → ${newConvCount}`);
-        
-        return {
-          ...prevCounts,
-          [conversationId]: newConvCount
-        };
-      });
-    }
-  };
-
   // Function to handle incoming new messages
   const onNewMessage = (messageData) => {
-    debugLog('MBA4321: onNewMessage called with data:', messageData);
+    debugLog('MBA3uiobv59u: onNewMessage called with data:', messageData);
     
     // Only create notification if the message is from another user
     if (messageData && messageData.sent_by_other_user) {
@@ -287,30 +323,150 @@ export const MessageNotificationProvider = ({ children }) => {
       
       // Check if user is viewing this specific conversation
       if (isOnMessagesScreen() && conversationId && 
-          String(conversationId) === String(window.selectedConversationId)) {
-        debugLog('MBA4321: User is viewing this specific conversation, not creating notification');
+          typeof window !== 'undefined' && String(conversationId) === String(window.selectedConversationId)) {
+        debugLog('MBA3uiobv59u: User is viewing this conversation, not creating notification');
         return;
       }
       
-      // Log which conversation is getting a new message notification
-      debugLog(`MBA4321: New message from ${messageData.sender_name || 'unknown'} in conversation ${conversationId}`);
+      // Determine which role this message is for
+      const messageRole = messageData.message_role || messageData.conversation_role;
       
-      // Handle notification with conversation ID
-      handleNewMessageNotification(conversationId);
+      // IMPROVED ROLE DETECTION: Check sender role/type and recipient role to better determine
+      // which role the message belongs to
+      let isForOwnerRole = messageRole === 'petOwner' || messageRole === 'owner';
+      let isForProfessionalRole = messageRole === 'professional';
       
-      // Mark that we've received data from WebSocket
-      websocketDataReceivedRef.current = true;
+      // If message doesn't have explicit role, try to infer from other data
+      if (!isForOwnerRole && !isForProfessionalRole) {
+        if (messageData.recipient_role) {
+          // If we have recipient role, use that directly
+          isForOwnerRole = messageData.recipient_role === 'petOwner' || messageData.recipient_role === 'owner';
+          isForProfessionalRole = messageData.recipient_role === 'professional';
+        } else if (messageData.sender_type) {
+          // If sender is professional, message is likely for pet owner and vice versa
+          isForOwnerRole = messageData.sender_type === 'professional';
+          isForProfessionalRole = messageData.sender_type === 'petOwner' || messageData.sender_type === 'owner';
+        }
+      }
       
-      // Also update the API response cache with this new count
-      // Update the cached counts if we have them
-      if (lastApiResponse) {
-        const updatedCounts = { ...lastApiResponse.conversation_counts };
-        updatedCounts[conversationId] = (updatedCounts[conversationId] || 0) + 1;
+      debugLog('MBA3uiobv59u: Message role information:', {
+        conversationId,
+        messageRole,
+        isForOwnerRole,
+        isForProfessionalRole,
+        currentUserRole: userRole,
+        recipientRole: messageData.recipient_role,
+        senderType: messageData.sender_type
+      });
+      
+      // Update total unread count
+      setUnreadCount(prevCount => {
+        const newCount = prevCount + 1;
+        debugLog(`MBA3uiobv59u: Total unread count: ${prevCount} → ${newCount}`);
+        return newCount;
+      });
+      
+      // CRITICAL: Always set hasUnreadMessages to true when receiving a new message
+      // This ensures the Messages tab shows notification regardless of role specifics
+      setHasUnreadMessages(true);
+      debugLog('MBA3uiobv59u: Setting hasUnreadMessages=true for all new messages');
+      
+      // If we've successfully identified a specific role for this message
+      if (isForOwnerRole || isForProfessionalRole) {
+        // Only update the count for the specific role this message is for
+        if (isForOwnerRole) {
+          // This message is for the owner role
+          setOwnerUnreadCount(prevCount => {
+            const newCount = prevCount + 1;
+            debugLog(`MBA3uiobv59u: Owner unread count: ${prevCount} → ${newCount}`);
+            return newCount;
+          });
+        } else if (isForProfessionalRole) {
+          // This message is for the professional role
+          setProfessionalUnreadCount(prevCount => {
+            const newCount = prevCount + 1;
+            debugLog(`MBA3uiobv59u: Professional unread count: ${prevCount} → ${newCount}`);
+            return newCount;
+          });
+        }
+      } else {
+        // Role is still ambiguous even after attempts to infer
+        debugLog('MBA3uiobv59u: Message role still ambiguous, logging all available message data');
         
-        setLastApiResponse({
-          unread_count: lastApiResponse.unread_count + 1,
-          conversation_counts: updatedCounts,
-          timestamp: Date.now()
+        // Full debug log of the entire message data to see what we have available
+        // This should help us find the is_professional field if it exists
+        debugLog('MBA3uiobv59u: FULL MESSAGE DATA:', JSON.stringify(messageData, null, 2));
+        
+        // Check if we have is_professional in the message data
+        const userIsProfessionalInConversation = messageData.is_professional === true;
+        
+        debugLog('MBA3uiobv59u: User professional status in conversation:', {
+          is_professional: messageData.is_professional,
+          userIsProfessionalInConversation
+        });
+        
+        // If we know the user's role in this conversation, update the appropriate count
+        if (typeof messageData.is_professional === 'boolean') {
+          if (userIsProfessionalInConversation) {
+            // User is a professional in this conversation, so message is for professional
+            setProfessionalUnreadCount(prevCount => {
+              const newCount = prevCount + 1;
+              debugLog(`MBA3uiobv59u: Professional unread count (from is_professional): ${prevCount} → ${newCount}`);
+              return newCount;
+            });
+          } else {
+            // User is an owner in this conversation, so message is for owner
+            setOwnerUnreadCount(prevCount => {
+              const newCount = prevCount + 1;
+              debugLog(`MBA3uiobv59u: Owner unread count (from is_professional): ${prevCount} → ${newCount}`);
+              return newCount;
+            });
+          }
+        } else {
+          // If we don't have is_professional, try other methods
+          
+          // For now, as a stopgap measure, update both counts
+          // This ensures notifications appear for both roles
+          // This isn't ideal, but it's better than missing notifications
+          setProfessionalUnreadCount(prevCount => {
+            const newCount = prevCount + 1;
+            debugLog(`MBA3uiobv59u: Professional unread count (fallback): ${prevCount} → ${newCount}`);
+            return newCount;
+          });
+          
+          setOwnerUnreadCount(prevCount => {
+            const newCount = prevCount + 1;
+            debugLog(`MBA3uiobv59u: Owner unread count (fallback): ${prevCount} → ${newCount}`);
+            return newCount;
+          });
+          
+          debugLog('MBA3uiobv59u: WARNING: Updated both counts because is_professional is missing');
+        }
+        
+        // Also log current state for debugging
+        debugLog('MBA3uiobv59u: Current state for reference:', {
+          userRole,
+          hasUnreadMessages,
+          unreadCount,
+          ownerUnreadCount,
+          professionalUnreadCount,
+          conversationId: messageData.conversation_id,
+          is_professional: messageData.is_professional
+        });
+      }
+      
+      // If we have a conversation ID, update that count too
+      if (conversationId) {
+        setConversationCounts(prevCounts => {
+          const prevConvCount = prevCounts[conversationId] || 0;
+          const newConvCount = prevConvCount + 1;
+          
+          debugLog(`MBA3uiobv59u: Conversation ${conversationId} count: ${prevConvCount} → ${newConvCount}`);
+          
+          return {
+            ...prevCounts,
+            [conversationId]: newConvCount
+          };
         });
       }
     }
@@ -325,7 +481,16 @@ export const MessageNotificationProvider = ({ children }) => {
 
   // Mark a specific conversation as read
   const markConversationAsRead = async (conversationId) => {
-    debugLog('MBA4321: Marking conversation as read:', conversationId);
+    debugLog('MBA2o3uihf48hv: Marking conversation as read:', {
+      conversationId,
+      hasUnreadMessages,
+      totalUnreadCount: unreadCount,
+      ownerUnreadCount,
+      professionalUnreadCount,
+      userRole,
+      conversationUnreadCount: conversationCounts[conversationId] || 0,
+      allConversationCounts: JSON.stringify(conversationCounts)
+    });
     
     // Update the global variable to track which conversation is currently selected
     if (typeof window !== 'undefined') {
@@ -336,54 +501,112 @@ export const MessageNotificationProvider = ({ children }) => {
     if (conversationId && conversationCounts[conversationId]) {
       const previousCount = conversationCounts[conversationId] || 0;
       
-      // Update the unread count and conversation counts
-      setUnreadCount(prevCount => {
-        const newCount = Math.max(0, prevCount - previousCount);
-        debugLog(`MBA4321: Reducing total unread count from ${prevCount} to ${newCount} after reading conversation ${conversationId}`);
-        return newCount;
+      debugLog('MBA2o3uihf48hv: Found unread messages to clear', {
+        conversationId,
+        previousCount,
+        currentTotalUnread: unreadCount
       });
+      
+      // IMPORTANT: Force immediate update of unreadCount first before updating state
+      // This helps ensure the UI updates properly
+      const newTotalCount = Math.max(0, unreadCount - previousCount);
+      debugLog(`MBA2o3uihf48hv: DIRECTLY updating total unread count from ${unreadCount} to ${newTotalCount}`);
+      
+      // Update unread count directly first to ensure immediate UI update
+      setUnreadCount(newTotalCount);
+      
+      // If this was the only conversation with unread messages, explicitly set hasUnreadMessages to false
+      if (newTotalCount === 0) {
+        debugLog(`MBA2o3uihf48hv: No more unread messages, setting hasUnreadMessages to false`);
+        setHasUnreadMessages(false);
+      }
       
       // Create new conversation counts object without this conversation
       const newCounts = { ...conversationCounts };
       delete newCounts[conversationId];
       setConversationCounts(newCounts);
       
+      // Calculate new role-specific counts
+      let newOwnerCount = ownerUnreadCount;
+      let newProCount = professionalUnreadCount;
+      
+      // IMPORTANT: Only update the count for the CURRENT role
+      // This fixes the issue where both role counts were being updated when a message was read
+      if (userRole === 'petOwner') {
+        // Only decrement owner count
+        newOwnerCount = Math.max(0, ownerUnreadCount - previousCount);
+        debugLog(`MBA2o3uihf48hv: Updating owner unread count: ${ownerUnreadCount} → ${newOwnerCount}`);
+        setOwnerUnreadCount(newOwnerCount);
+      } else if (userRole === 'professional') {
+        // Only decrement professional count
+        newProCount = Math.max(0, professionalUnreadCount - previousCount);
+        debugLog(`MBA2o3uihf48hv: Updating professional unread count: ${professionalUnreadCount} → ${newProCount}`);
+        setProfessionalUnreadCount(newProCount);
+      }
+      
       // Update API response cache if we have it
       if (lastApiResponse) {
         const updatedCounts = { ...lastApiResponse.conversation_counts };
         delete updatedCounts[conversationId];
         
+        debugLog('MBA2o3uihf48hv: Updated role-specific counts after marking as read', {
+          userRole,
+          previousOwnerCount: ownerUnreadCount,
+          previousProCount: professionalUnreadCount,
+          newOwnerCount,
+          newProCount,
+          conversationId,
+          conversationCount: previousCount
+        });
+        
         setLastApiResponse({
-          unread_count: Math.max(0, lastApiResponse.unread_count - previousCount),
+          unread_count: newTotalCount,
           conversation_counts: updatedCounts,
+          owner_unread_count: newOwnerCount,
+          professional_unread_count: newProCount,
           timestamp: Date.now()
         });
       }
       
       // Update hasUnreadMessages based on whether any conversations still have unread messages
-      const stillHasUnread = Object.keys(newCounts).length > 0;
-      setHasUnreadMessages(stillHasUnread);
-      debugLog(`MBA4321: After marking conversation ${conversationId} as read, still have unread messages: ${stillHasUnread}`);
+      // for the CURRENT role
+      const currentRoleHasUnread = userRole === 'petOwner' ? newOwnerCount > 0 : newProCount > 0;
+      setHasUnreadMessages(currentRoleHasUnread);
+      
+      debugLog(`MBA2o3uihf48hv: After marking conversation ${conversationId} as read:`, {
+        userRole,
+        currentRoleHasUnread,
+        newOwnerCount,
+        newProCount,
+        hasUnreadMessages: currentRoleHasUnread,
+        conversationsRemaining: Object.keys(newCounts).length
+      });
       
       // List remaining unread conversations
-      if (stillHasUnread) {
+      if (Object.keys(newCounts).length > 0) {
         const remainingConvs = Object.keys(newCounts).map(id => `${id}:${newCounts[id]}`).join(', ');
-        debugLog(`MBA4321: Remaining unread conversations: ${remainingConvs}`);
+        debugLog(`MBA2o3uihf48hv: Remaining unread conversations: ${remainingConvs}`);
+      } else {
+        debugLog('MBA2o3uihf48hv: No remaining unread conversations');
       }
+    } else {
+      debugLog('MBA2o3uihf48hv: No unread messages found for this conversation', {
+        conversationId,
+        conversationCounts: JSON.stringify(conversationCounts)
+      });
     }
     
     // The backend automatically marks messages as read when 
     // get_conversation_messages is called, so we don't need to make another API call here
     
-    debugLog('MBA4321: Updated unread state after marking conversation as read');
+    debugLog('MBA2o3uihf48hv: Updated unread state after marking conversation as read');
   };
 
   // Update route information
   const updateRoute = (routeName) => {
-    if (!routeName || routeName === currentRoute) return;
-    
-    debugLog('MBA4321: Updating route to:', routeName);
-    setCurrentRoute(routeName);
+    if (routeName && routeName !== currentRoute) {
+      setCurrentRoute(routeName);
+    }
   };
 
   // Initialize WebSocket connection when signed in - do this once globally
@@ -415,7 +638,7 @@ export const MessageNotificationProvider = ({ children }) => {
           
           // Reset retry attempts and connection state
           websocketRetryAttemptsRef.current = 0;
-          websocketDataReceivedRef.current = false;
+          setWebsocketDataReceivedRef(false);
           connectionHealthyRef.current = false;
           initialApiCallMadeRef.current = false;
         }
@@ -464,7 +687,7 @@ export const MessageNotificationProvider = ({ children }) => {
         connectionHealthyRef.current = false;
         
         // Reset the WebSocket data received flag if connection is unhealthy
-        websocketDataReceivedRef.current = false;
+        setWebsocketDataReceivedRef(false);
         
         // Attempt to reconnect
         websocketManager.reconnectIfNeeded();
@@ -486,12 +709,9 @@ export const MessageNotificationProvider = ({ children }) => {
       }
     };
     
-    // Function to start progressive WebSocket retry with fallback to API
+    // Function to progressively retry WebSocket connection with API fallback
     const startProgressiveWebSocketRetry = () => {
-      // Clear any existing timeout
-      if (websocketTimeoutRef.current) {
-        clearTimeout(websocketTimeoutRef.current);
-      }
+      debugLog('MBA4321: Starting progressive WebSocket retry');
       
       // Reset retry counter if we're starting fresh
       if (initialCheckDoneRef.current) {
@@ -564,25 +784,53 @@ export const MessageNotificationProvider = ({ children }) => {
   useEffect(() => {
     if (!isSignedIn || !websocketInitialized) return;
 
-    debugLog('MBA4321: Setting up WebSocket message handler');
+    debugLog('MBA3uiobv59u: Setting up WebSocket message handlers');
     
-    // Register handlers for relevant event types
-    const messageHandler = websocketManager.registerHandler('message', (data) => {
-      debugLog('MBA4321: Message notification received via WebSocket:', data);
-      
-      // Update heartbeat timestamp since we're receiving messages
-      lastHeartbeatReceivedRef.current = Date.now();
+    // Add explicit handler for new_message events from the server
+    const newMessageHandler = websocketManager.registerHandler('new_message', (data) => {
+      debugLog('MBA3uiobv59u: New message notification received:', data);
+      debugLog('MBA3uiobv59u: Current notification state BEFORE update:', {
+        hasUnreadMessages,
+        unreadCount,
+        ownerUnreadCount,
+        professionalUnreadCount,
+        userRole
+      });
       
       // Mark connection as healthy
       connectionHealthyRef.current = true;
+      lastHeartbeatReceivedRef.current = Date.now();
       
-      // First check if we need to make an initial API call to ensure correct state
-      if (!initialApiCallMadeRef.current) {
-        debugLog('MBA432wihe21: No initial API call made yet, making one now to ensure correct state');
-        makeApiCall();
-        return;
-      }
+      // Mark that we've received data from WebSocket
+      websocketDataReceivedRef.current = true;
       
+      // Process the new message
+      onNewMessage(data);
+
+      // Log state AFTER update (need setTimeout because setState is async)
+      setTimeout(() => {
+        debugLog('MBA3uiobv59u: Notification state AFTER update:', {
+          hasUnreadMessages,
+          unreadCount,
+          ownerUnreadCount,
+          professionalUnreadCount,
+          userRole
+        });
+      }, 100);
+    }, 'new-message-context');
+    
+    // Fallback handler for 'message' event type (keep for backward compatibility)
+    const messageHandler = websocketManager.registerHandler('message', (data) => {
+      debugLog('MBA4321: Message notification received via WebSocket:', data);
+      
+      // Mark connection as healthy
+      connectionHealthyRef.current = true;
+      lastHeartbeatReceivedRef.current = Date.now();
+      
+      // Mark that we've received data from WebSocket
+      websocketDataReceivedRef.current = true;
+      
+      // Process the message
       onNewMessage(data);
     }, 'notification-context');
     
@@ -667,6 +915,7 @@ export const MessageNotificationProvider = ({ children }) => {
     return () => {
       debugLog('MBA4321: Cleaning up WebSocket handlers');
       messageHandler();
+      newMessageHandler();
       unreadUpdateHandler();
       connectionHandler();
       heartbeatHandler();
@@ -807,15 +1056,66 @@ export const MessageNotificationProvider = ({ children }) => {
     return () => {};
   }, [isSignedIn]);
 
+  // Add effect to log changes to role-specific notification counts
+  useEffect(() => {
+    debugLog('MBA3uiobv59u: Notification state changed:', {
+      hasUnreadMessages,
+      unreadCount,
+      ownerUnreadCount,
+      professionalUnreadCount,
+      userRole
+    });
+  }, [hasUnreadMessages, unreadCount, ownerUnreadCount, professionalUnreadCount, userRole]);
+
+  // Update user role from AuthContext
+  useEffect(() => {
+    if (userRole !== prevUserRoleRef.current) {
+      debugLog('MBA3uiobv59u: User role changed in MessageNotificationContext:', {
+        from: prevUserRoleRef.current,
+        to: userRole
+      });
+      
+      // Store previous role to properly transition
+      const previousRole = prevUserRoleRef.current;
+      prevUserRoleRef.current = userRole;
+      
+      // When role changes, update hasUnreadMessages flag based on the new role's count
+      if (userRole === 'petOwner') {
+        // Switching to pet owner role
+        setHasUnreadMessages(ownerUnreadCount > 0);
+        debugLog('MBA3uiobv59u: Updated hasUnreadMessages for pet owner role:', {
+          ownerUnreadCount,
+          hasUnreadMessages: ownerUnreadCount > 0
+        });
+      } else if (userRole === 'professional') {
+        // Switching to professional role
+        setHasUnreadMessages(professionalUnreadCount > 0);
+        debugLog('MBA3uiobv59u: Updated hasUnreadMessages for professional role:', {
+          professionalUnreadCount,
+          hasUnreadMessages: professionalUnreadCount > 0
+        });
+      }
+      
+      // Refresh notifications only if we have a valid role
+      if (userRole) {
+        // Slight delay to ensure role is fully updated
+        setTimeout(() => {
+          checkUnreadMessages(true);
+        }, 50);
+      }
+    }
+  }, [userRole, ownerUnreadCount, professionalUnreadCount]);
+
   // Create a memoized value for the context to reduce rerenders
   const contextValue = {
     hasUnreadMessages,
     unreadCount,
+    ownerUnreadCount, 
+    professionalUnreadCount,
     conversationCounts,
+    currentRoute,
     getConversationUnreadCount,
-    updateRoute,
-    checkUnreadMessages: debouncedCheckUnreadMessages, // Use debounced version
-    onNewMessage,
+    checkUnreadMessages,
     markConversationAsRead,
     resetNotifications: (routeName, conversationId) => {
       // If a route is provided, set it as the current route
@@ -823,9 +1123,18 @@ export const MessageNotificationProvider = ({ children }) => {
         setCurrentRoute(routeName);
       }
       
+      debugLog('MBA2o3uihf48hv: resetNotifications called', {
+        routeName,
+        conversationId,
+        currentRoute,
+        hasUnreadMessages,
+        unreadCount,
+        conversationCountsSize: Object.keys(conversationCounts).length
+      });
+      
       // If a specific conversation ID is provided, only clear that conversation's notifications
       if (conversationId) {
-        debugLog(`MBA4321: Resetting notifications for specific conversation: ${conversationId}`);
+        debugLog(`MBA2o3uihf48hv: Resetting notifications for specific conversation: ${conversationId}`);
         markConversationAsRead(conversationId);
         return;
       }
@@ -835,11 +1144,45 @@ export const MessageNotificationProvider = ({ children }) => {
       
       // Only reset all notifications if explicitly requested with a special flag
       if (routeName === 'RESET_ALL') {
-        debugLog('MBA4321: Explicitly resetting ALL message notifications');
+        debugLog('MBA2o3uihf48hv: Explicitly resetting ALL message notifications');
         setHasUnreadMessages(false);
         setUnreadCount(0);
         setConversationCounts({});
       }
+    },
+    updateRoute,
+    // Helper function to get the count for the current role
+    getCurrentRoleUnreadCount: () => {
+      const count = userRole === 'petOwner' ? ownerUnreadCount : professionalUnreadCount;
+      debugLog('MBA3uiobv59u: getCurrentRoleUnreadCount called:', {
+        userRole,
+        ownerUnreadCount,
+        professionalUnreadCount,
+        returned: count
+      });
+      return count;
+    },
+    // Helper function to get the count for the other role
+    getOtherRoleUnreadCount: () => {
+      const count = userRole === 'petOwner' ? professionalUnreadCount : ownerUnreadCount;
+      debugLog('MBA3uiobv59u: getOtherRoleUnreadCount called:', {
+        userRole,
+        ownerUnreadCount,
+        professionalUnreadCount,
+        returned: count
+      });
+      return count;
+    },
+    // Helper to check if current role has unread messages
+    hasCurrentRoleUnreadMessages: () => {
+      const result = userRole === 'petOwner' ? ownerUnreadCount > 0 : professionalUnreadCount > 0;
+      debugLog('MBA3uiobv59u: hasCurrentRoleUnreadMessages called:', {
+        userRole,
+        ownerUnreadCount,
+        professionalUnreadCount,
+        returned: result
+      });
+      return result;
     }
   };
 

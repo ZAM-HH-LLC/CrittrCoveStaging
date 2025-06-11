@@ -26,6 +26,9 @@ def handle_new_message(sender, instance, created, **kwargs):
         return  # Only handle newly created messages
     
     try:
+        # Log message creation
+        logger.info(f"Handling new message in user_messages signal: ID={instance.message_id}, type={instance.type_of_message}, content='{instance.content}'")
+        
         # Start timing for performance metrics
         start_time = time.time()
         
@@ -39,6 +42,18 @@ def handle_new_message(sender, instance, created, **kwargs):
         # Check if recipient is online based on cache
         is_online = cache.get(f"user_{recipient_user.id}_online", False)
         
+        # Get the role_map from conversation to determine if recipient is professional
+        role_map = conversation.role_map or {}
+        recipient_user_id_str = str(recipient_user.id)
+        
+        # Determine if the conversation is professional for the recipient
+        # This means we need to check if the recipient's role is 'professional'
+        is_professional = False
+        if recipient_user_id_str in role_map:
+            is_professional = role_map[recipient_user_id_str] == 'professional'
+        
+        logger.info(f"Determined is_professional={is_professional} for recipient {recipient_user.id} in conversation {conversation.conversation_id}")
+        
         # Prepare message data for notification
         message_data = {
             'message_id': instance.message_id,
@@ -51,7 +66,8 @@ def handle_new_message(sender, instance, created, **kwargs):
             'type_of_message': instance.type_of_message,
             'is_clickable': instance.is_clickable,
             'metadata': instance.metadata,
-            'sent_by_other_user': True  # From recipient's perspective, this is sent by the other user
+            'sent_by_other_user': True,  # From recipient's perspective, this is sent by the other user
+            'is_professional': is_professional  # Include is_professional flag for the recipient
         }
         
         # Send real-time notification via WebSocket
