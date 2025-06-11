@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
   },
   welcomeSection: {
     padding: 24,
-    paddingTop: 0,
+    // paddingTop: 0,
   },
   welcomeContent: {
     maxWidth: 1200,
