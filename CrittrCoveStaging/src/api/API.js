@@ -1181,6 +1181,10 @@ export const getConversations = async () => {
  * @returns {Promise<Object>} - Object containing messages array, pagination info, and draft data
  */
 export const getConversationMessages = async (conversationId, page = 1) => {
+  if (!conversationId || conversationId === 'undefined' || conversationId === 'null') {
+    debugLog('MBA4321: No conversation ID provided');
+    throw new Error('No conversation ID provided');
+  }
   try {
     debugLog('MBA4321: Fetching messages for conversation:', conversationId, 'page:', page);
     
