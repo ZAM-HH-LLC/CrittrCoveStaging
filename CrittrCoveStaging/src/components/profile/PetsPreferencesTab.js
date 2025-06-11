@@ -185,7 +185,7 @@ const PetsPreferencesTab = ({
       } else if (pet.energyLevel === 'HIGH') {
         displayValue = 'High';
       } else if (typeof pet.energyLevel === 'string') {
-        displayValue = pet.energyLevel; // Fallback to whatever string is there
+        displayValue = pet.energyLevel ? pet.energyLevel : "None selected yet"; // Fallback to whatever string is there
       } else if (pet.energyLevel && typeof pet.energyLevel === 'object') {
         displayValue = 'No Option Selected';
       }
@@ -1570,7 +1570,7 @@ const PetsPreferencesTab = ({
                     multiline
                   />
                 ) : (
-                  <Text style={styles.detailText}>{pet.feedingInstructions || '2 cups of dry food twice daily (morning/evening)'}</Text>
+                  <Text style={styles.detailText}>{pet.feedingInstructions || 'No feeding instructions yet'}</Text>
                 )}
               </View>
               <View style={styles.detailColumn}>
@@ -1585,7 +1585,7 @@ const PetsPreferencesTab = ({
                     multiline
                   />
                 ) : (
-                  <Text style={styles.detailText}>{pet.medicalNotes || 'Hip dysplasia, daily joint supplement in AM meal'}</Text>
+                  <Text style={styles.detailText}>{pet.medicalNotes || 'No medical notes yet'}</Text>
                 )}
               </View>
             </View>
@@ -1602,7 +1602,7 @@ const PetsPreferencesTab = ({
                     multiline
                   />
                 ) : (
-                  <Text style={styles.detailText}>{pet.pottyBreakSchedule || '15 minutes after each meal'}</Text>
+                  <Text style={styles.detailText}>{pet.pottyBreakSchedule || 'No potty break schedule yet'}</Text>
                 )}
               </View>
               <View style={styles.detailColumn}>
@@ -1617,7 +1617,7 @@ const PetsPreferencesTab = ({
                     multiline
                   />
                 ) : (
-                  <Text style={styles.detailText}>{pet.specialCareInstructions || 'Don\'t touch his butt, he will eat your ass'}</Text>
+                  <Text style={styles.detailText}>{pet.specialCareInstructions || 'No special care instructions yet'}</Text>
                 )}
               </View>
             </View>
@@ -1647,7 +1647,7 @@ const PetsPreferencesTab = ({
                                 (editedPetData.energyLevel === null && option === "N/A") || 
                                 editedPetData.energyLevel === option ? styles.selectedOptionText : null
                               ]}>
-                                {option}
+                                {option ? option : "None selected yet"}
                               </Text>
                             </TouchableOpacity>
                           ))}

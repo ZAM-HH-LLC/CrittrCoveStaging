@@ -26,7 +26,7 @@ import TabBar from '../components/TabBar';
 import { userProfile, updateProfileInfo } from '../api/API';
 
 const MyProfile = () => {
-  debugLog('MBA5678: MyProfile component rendering/mounting');
+  debugLog('MBA3ou4bg54ug: MyProfile component rendering/mounting');
   
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
@@ -36,6 +36,13 @@ const MyProfile = () => {
   const styles = createStyles(screenWidth, isCollapsed);
   const [activeTab, setActiveTab] = useState('profile_info');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
+  // Track when profile was last loaded
+  const lastProfileLoadRef = useRef(0);
+  // Flag to prevent multiple concurrent API calls
+  const isLoadingProfileRef = useRef(false);
+  // Track component mounted state
+  const isMountedRef = useRef(true);
   
   // Profile state
   const [profileData, setProfileData] = useState(null);
@@ -62,6 +69,14 @@ const MyProfile = () => {
     completeTutorial,
   } = useContext(TutorialContext);
 
+  // Set mounted flag to false when component unmounts
+  useEffect(() => {
+    return () => {
+      debugLog('MBA3ou4bg54ug: MyProfile component unmounting');
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const loadActiveTab = useCallback(async () => {
     try {
       // First, check URL parameters directly when on web
@@ -70,7 +85,7 @@ const MyProfile = () => {
         const tabFromUrl = urlParams.get('initialTab') || urlParams.get('screen');
         
         if (tabFromUrl && ['profile_info', 'pets_preferences', 'settings_payments', 'services_availability'].includes(tabFromUrl)) {
-          debugLog('MBAuieo2o34nf MyProfile retrieved tab from URL params', { tabFromUrl });
+          debugLog('MBA3ou4bg54ug: Retrieved tab from URL params', { tabFromUrl });
           setActiveTab(tabFromUrl);
           // Store this tab in storage for persistence
           await setStorage('MyProfileActiveTab', tabFromUrl);
@@ -80,20 +95,20 @@ const MyProfile = () => {
       
       // Then check navigation params
       const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-      debugLog('MBAuieo2o34nf MyProfile navigation params', params);
+      debugLog('MBA3ou4bg54ug: Navigation params', params);
       
       if (params?.initialTab) {
-        debugLog('MBAuieo2o34nf MyProfile received initialTab param', { initialTab: params.initialTab });
+        debugLog('MBA3ou4bg54ug: Received initialTab param', { initialTab: params.initialTab });
         setActiveTab(params.initialTab);
         await setStorage('MyProfileActiveTab', params.initialTab);
         return;
       } else if (params?.screen) {
-        debugLog('MBAuieo2o34nf MyProfile received screen param', { screen: params.screen });
+        debugLog('MBA3ou4bg54ug: Received screen param', { screen: params.screen });
         setActiveTab(params.screen);
         await setStorage('MyProfileActiveTab', params.screen);
         return;
       } else if (stepData?.tab) {
-        debugLog('MBAuieo2o34nf MyProfile received tab from stepData', { tab: stepData.tab });
+        debugLog('MBA3ou4bg54ug: Received tab from stepData', { tab: stepData.tab });
         setActiveTab(stepData.tab);
         await setStorage('MyProfileActiveTab', stepData.tab);
         return;
@@ -102,116 +117,144 @@ const MyProfile = () => {
       // If we reach here, attempt to load from storage
       const storedTab = await getStorage('MyProfileActiveTab');
       if (storedTab) {
-        debugLog('MBAuieo2o34nf MyProfile loaded tab from storage', { storedTab });
+        debugLog('MBA3ou4bg54ug: Loaded tab from storage', { storedTab });
         setActiveTab(storedTab);
       }
     } catch (error) {
-      debugLog('MBAuieo2o34nf Error loading active tab', error);
+      debugLog('MBA3ou4bg54ug: Error loading active tab', error);
     }
   }, [navigation, stepData]);
 
-  const checkAndFixPetOwners = useCallback(async () => {
+  // Safely fix pet owners without triggering a profile reload
+  const checkAndFixPetOwners = useCallback(async (pets) => {
+    if (!pets || pets.length === 0) return;
+    
     try {
-      // Check if we have any pets that need fixing
-      if (profileData?.pets && profileData.pets.length > 0) {
-        const petsWithMissingOwners = profileData.pets.filter(pet => {
-          // Try to determine if a pet might have a missing owner
-          // Unfortunately we can't directly check the owner field from frontend
-          // So we look for potential symptoms like 404 errors on editing
-          if (pet.lastUpdateFailed || pet.ownerMissing) {
-            return true;
-          }
-          return false;
-        });
+      const petsWithMissingOwners = pets.filter(pet => 
+        pet.lastUpdateFailed || pet.ownerMissing
+      );
+      
+      if (petsWithMissingOwners.length > 0) {
+        debugLog('MBA3ou4bg54ug: Found pets with potential missing owners:', petsWithMissingOwners.length);
         
-        if (petsWithMissingOwners.length > 0) {
-          debugLog('MBA5432', 'Found pets with potential missing owners:', petsWithMissingOwners);
-          
-          // Try to fix each pet
-          for (const pet of petsWithMissingOwners) {
-            try {
-              const { fixPetOwner } = require('../api/API');
-              const result = await fixPetOwner(pet.id);
-              debugLog('MBA5432', 'Fixed pet owner successfully:', result);
-            } catch (err) {
-              debugLog('MBA5432', 'Failed to fix pet owner:', err);
-            }
+        // Try to fix each pet
+        for (const pet of petsWithMissingOwners) {
+          try {
+            const { fixPetOwner } = require('../api/API');
+            await fixPetOwner(pet.id);
+            debugLog('MBA3ou4bg54ug: Fixed pet owner successfully:', pet.id);
+          } catch (err) {
+            debugLog('MBA3ou4bg54ug: Failed to fix pet owner:', err);
           }
-          
-          // Reload profile data to get updated pets
-          const response = await userProfile();
-          setProfileData(response);
         }
       }
     } catch (error) {
-      debugLog('MBA5432', 'Error checking/fixing pet owners:', error);
+      debugLog('MBA3ou4bg54ug: Error checking/fixing pet owners:', error);
     }
-  }, [profileData]);
+  }, []);
 
   const loadProfileData = useCallback(async () => {
+    // Prevent concurrent API calls
+    if (isLoadingProfileRef.current) {
+      debugLog('MBA3ou4bg54ug: Profile data load already in progress, skipping');
+      return;
+    }
+
+    // Check if we should reload based on time
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastProfileLoadRef.current;
+    if (profileData && timeSinceLastLoad < 5000) {
+      debugLog('MBA3ou4bg54ug: Profile data loaded recently, skipping reload', { 
+        timeSinceLastLoad: Math.round(timeSinceLastLoad / 1000) + 's' 
+      });
+      return;
+    }
+
     try {
-      setLoading(true);
-      // Log the userToken before making the API call
-      const token = await getStorage('userToken');
-      debugLog('MBA5678: userToken before userProfile call:', token);
+      isLoadingProfileRef.current = true;
+      
+      if (isMountedRef.current) setLoading(true);
+      if (isMountedRef.current) setError(null);
+      
+      debugLog('MBA3ou4bg54ug: Starting profile data load');
       const response = await userProfile();
       
-      // Log the profile data received from API
-      debugLog('MBA5080', 'Profile data received from API:', {
-        name: response.name,
-        email: response.email,
-        profile_photo: response.profile_photo
-      });
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid response format from API');
+      }
       
-      // Make sure profile_photo is properly mapped to profilePhoto
+      debugLog('MBA3ou4bg54ug: Profile data loaded successfully');
+      
+      // Process the response
       const processedResponse = {
         ...response,
         profilePhoto: response.profile_photo || null
       };
       
-      setProfileData(processedResponse);
+      // Update the profile data state if the component is still mounted
+      if (isMountedRef.current) {
+        setProfileData(processedResponse);
+        setLoading(false);
+      }
       
-      // Check for pets with missing owners and fix them if needed
-      await checkAndFixPetOwners();
+      // Record successful load time
+      lastProfileLoadRef.current = Date.now();
       
-      setLoading(false);
+      // Process pets if needed (without triggering another profile load)
+      await checkAndFixPetOwners(response.pets);
       
-      // Wait for the tab to be loaded before trying to update active tab from URL
-      setTimeout(() => {
-        loadActiveTab();
-      }, 100);
+      // Load active tab after data is ready
+      if (isMountedRef.current) {
+        setTimeout(() => {
+          loadActiveTab();
+        }, 100);
+      }
     } catch (error) {
-      setError('Failed to load profile data');
-      setLoading(false);
-      debugLog('Failed to load profile data:', error);
+      debugLog('MBA3ou4bg54ug: Failed to load profile data:', error);
+      
+      if (isMountedRef.current) {
+        // Only show error if we don't have existing data
+        if (!profileData) {
+          setError('Failed to load profile data');
+        }
+        setLoading(false);
+      }
+    } finally {
+      isLoadingProfileRef.current = false;
     }
   }, [checkAndFixPetOwners, loadActiveTab]);
 
-  // Get initialTab from navigation params
+  // Initial data load on mount
   useEffect(() => {
+    debugLog('MBA3ou4bg54ug: Initial profile data load');
+    loadProfileData();
+    
+    // Load active tab independently
     loadActiveTab();
-  }, [loadActiveTab]);
+  }, []); // Empty dependency array to run only once on mount
 
-  // Add a new useEffect to handle tab changes from the tutorial
+  // Handle focus events (when returning to this screen)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Reload profile data when screen comes into focus
-      debugLog('MBA54321 MyProfile focus event - reloading profile data');
-      loadProfileData();
+      // Only reload data if sufficient time has passed since the last load
+      const now = Date.now();
+      const timeSinceLastLoad = now - lastProfileLoadRef.current;
+      const shouldReload = !profileData || timeSinceLastLoad > 60000;
       
-      // Existing tab handling code
-      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-      if (params?.screen) {
-        debugLog('MBA54321 MyProfile focus event - setting active tab', { screen: params.screen });
-        setActiveTab(params.screen);
-      } else if (params?.initialTab) {
-        debugLog('MBA54321 MyProfile focus event - setting active tab', { initialTab: params.initialTab });
-        setActiveTab(params.initialTab);
+      if (shouldReload) {
+        debugLog('MBA3ou4bg54ug: Focus event - reloading profile data', {
+          timeSinceLastLoad: Math.round(timeSinceLastLoad / 1000) + 's'
+        });
+        loadProfileData();
+      } else {
+        debugLog('MBA3ou4bg54ug: Focus event - using existing profile data', {
+          timeSinceLastLoad: Math.round(timeSinceLastLoad / 1000) + 's'
+        });
       }
     });
 
     return unsubscribe;
-  }, [navigation, loadProfileData, setActiveTab]);
+  }, [navigation, loadProfileData]);
 
   // Store the active tab whenever it changes
   useEffect(() => {
@@ -226,9 +269,9 @@ const MyProfile = () => {
           window.history.replaceState({}, '', url.toString());
         }
         
-        debugLog('MBAuieo2o34nf Stored active tab', { activeTab });
+        debugLog('MBA3ou4bg54ug: Stored active tab', { activeTab });
       } catch (error) {
-        debugLog('MBAuieo2o34nf Error storing active tab', error);
+        debugLog('MBA3ou4bg54ug: Error storing active tab', error);
       }
     };
     
@@ -237,22 +280,28 @@ const MyProfile = () => {
     }
   }, [activeTab]);
 
-  // Add a new useEffect to handle tab changes from the tutorial
+  // Handle navigation state changes (tab selection from params)
   useEffect(() => {
     const unsubscribe = navigation.addListener('state', () => {
-      const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
-      if (params?.screen) {
-        debugLog('MBA54321 MyProfile state change - setting active tab', { screen: params.screen });
-        setActiveTab(params.screen);
-      } else if (params?.initialTab) {
-        debugLog('MBA54321 MyProfile state change - setting active tab', { initialTab: params.initialTab });
-        setActiveTab(params.initialTab);
+      try {
+        const params = navigation.getState().routes.find(route => route.name === 'MyProfile')?.params;
+        
+        if (params?.screen) {
+          debugLog('MBA3ou4bg54ug: State change - setting active tab', { screen: params.screen });
+          setActiveTab(params.screen);
+        } else if (params?.initialTab) {
+          debugLog('MBA3ou4bg54ug: State change - setting active tab', { initialTab: params.initialTab });
+          setActiveTab(params.initialTab);
+        }
+      } catch (error) {
+        debugLog('MBA3ou4bg54ug: Error handling navigation state change', error);
       }
     });
 
     return unsubscribe;
   }, [navigation]);
 
+  // Handle screen dimension changes
   useEffect(() => {
     const updateLayout = () => {
       setIsMobile(screenWidth <= 900);
@@ -265,7 +314,7 @@ const MyProfile = () => {
     try {
       await logout();
     } catch (err) {
-      debugLog('MBA1234', 'Error during logout:', err);
+      debugLog('MBA3ou4bg54ug: Error during logout:', err);
     }
   };
 
@@ -286,7 +335,7 @@ const MyProfile = () => {
 
   // Handle save completion from child components
   const handleSaveComplete = (updatedProfile) => {
-    debugLog('MBA9876', 'Save completed with updated profile:', updatedProfile);
+    debugLog('MBA3ou4bg54ug: Save completed with updated profile');
     
     // Update the profileData with the saved data
     setProfileData(prev => {
@@ -295,26 +344,11 @@ const MyProfile = () => {
         ...updatedProfile
       };
       
-      // Log the updated profile data for debugging
-      debugLog('MBA9876', 'Updated profile data after save:', {
-        name: newProfileData.name,
-        email: newProfileData.email,
-        address: newProfileData.address,
-        city: newProfileData.city,
-        state: newProfileData.state,
-        zip: newProfileData.zip,
-        country: newProfileData.country,
-        profilePhoto: updatedProfile.profile_photo || newProfileData.profilePhoto,
-        profile_photo: updatedProfile.profile_photo || newProfileData.profile_photo
-      });
-      
       // Ensure profilePhoto is set from either property name
       if (updatedProfile.profile_photo) {
-        debugLog('MBA5080', 'Setting profilePhoto from profile_photo:', updatedProfile.profile_photo);
         newProfileData.profilePhoto = updatedProfile.profile_photo;
         newProfileData.profile_photo = updatedProfile.profile_photo;
       } else if (updatedProfile.profilePhoto) {
-        debugLog('MBA5080', 'Setting profile_photo from profilePhoto:', updatedProfile.profilePhoto);
         newProfileData.profile_photo = updatedProfile.profilePhoto;
         newProfileData.profilePhoto = updatedProfile.profilePhoto;
       }
@@ -326,13 +360,13 @@ const MyProfile = () => {
     setHasUnsavedChanges(false);
     setEditMode({});
     
-    // Show success indicator if needed
-    debugLog('MBA5678', 'Changes saved successfully');
+    // Update last profile load timestamp to prevent unnecessary reloads
+    lastProfileLoadRef.current = Date.now();
   };
 
   // Handle field updates before saving
   const handleUpdateField = (field, value) => {
-    debugLog('MBA9876', `Updating field ${field} locally, will be saved later:`, value);
+    debugLog('MBA3ou4bg54ug: Updating field locally:', field);
     
     // Only update local state, actual save will happen in the child component
     setProfileData(prev => ({
@@ -350,15 +384,11 @@ const MyProfile = () => {
 
   const handleSwitchPlan = (planId) => {
     // TODO: Implement API call to switch plans
-    debugLog('Switching to plan:', planId);
+    debugLog('MBA3ou4bg54ug: Switching to plan:', planId);
   };
 
   const renderActiveTab = () => {
-    debugLog('MBA54321', 'Rendering active tab with profile data:', {
-      activeTab,
-      profileName: profileData?.name,
-      paymentMethods: profileData?.payment_methods
-    });
+    debugLog('MBA3ou4bg54ug: Rendering active tab', { activeTab });
     
     switch (activeTab) {
       case 'profile_info':
@@ -522,7 +552,8 @@ const MyProfile = () => {
     }
   };
 
-  if (loading) {
+  // Show loading indicator if we're loading AND don't have existing data
+  if (loading && !profileData) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#0000ff" />
@@ -530,13 +561,16 @@ const MyProfile = () => {
     );
   }
 
-  if (error) {
+  // Only show error if we have an error AND don't have existing data to display
+  if (error && !profileData) {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>{error}</Text>
       </View>
     );
   }
+  
+  // If loading with existing data, we'll render the UI with the existing data
 
   return (
     <View style={styles.mainContainer}>
@@ -562,17 +596,17 @@ const MyProfile = () => {
                     <TouchableOpacity
                       key={tab.id}
                       style={[styles.tab, activeTab === tab.id && styles.activeTab]}
-                      onPress={async () => {
-                        setActiveTab(tab.id);
-                        // Update URL params without navigation
-                        if (Platform.OS === 'web') {
-                          const url = new URL(window.location.href);
-                          url.searchParams.set('initialTab', tab.id);
-                          window.history.replaceState({}, '', url.toString());
+                      onPress={() => {
+                        if (activeTab !== tab.id) {
+                          debugLog('MBA3ou4bg54ug: Tab clicked - changing to', { tab: tab.id });
+                          setActiveTab(tab.id);
+                          // Update URL params without navigation
+                          if (Platform.OS === 'web') {
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('initialTab', tab.id);
+                            window.history.replaceState({}, '', url.toString());
+                          }
                         }
-                        // Store in storage
-                        await setStorage('MyProfileActiveTab', tab.id);
-                        debugLog('MBAuieo2o34nf Tab clicked - updated storage', { tabId: tab.id });
                       }}
                     >
                       <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>
