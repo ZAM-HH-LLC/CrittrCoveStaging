@@ -2,9 +2,11 @@ import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.conf import settings
+from django.db import transaction
 from clients.models import Client
 from professional_status.models import ProfessionalStatus
 from user_addresses.models import Address, AddressType
+from .email_helpers import send_new_user_notification
 
 logger = logging.getLogger(__name__)
 
@@ -65,4 +67,14 @@ def create_user_related_entries(sender, instance, created, **kwargs):
             logger.error(f"Error creating related entries for user {instance.email}: {str(e)}")
             instance.delete()
             raise 
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def send_admin_notification_on_signup(sender, instance, created, **kwargs):
+    """
+    Signal handler to send an email notification to admin when a new user signs up.
+    This runs in a separate transaction to avoid blocking the registration process.
+    """
+    if created:
+        # Send email asynchronously to avoid delaying the registration response
+        transaction.on_commit(lambda: send_new_user_notification(instance))
         
