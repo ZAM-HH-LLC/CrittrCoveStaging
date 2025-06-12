@@ -112,13 +112,10 @@ const BookingStepModal = ({
           // Check if this is an overnight service
           // First check the service from the response 
           const serviceName = (response.service_details?.service_type || '').toLowerCase();
-          const knownOvernightTerms = ['overnight', 'boarding', 'house sitting', 'pet sitting'];
-          const isOvernightService = response.service_details?.is_overnight === true || 
-                                   knownOvernightTerms.some(term => serviceName.includes(term));
+          const isOvernightService = response.service_details?.is_overnight === true;
           
           debugLog('MBA2j3kbr9hve4: Is overnight service from response:', isOvernightService);
           debugLog('MBA2j3kbr9hve4: Service name:', serviceName);
-          debugLog('MBA2j3kbr9hve4: Known overnight terms match:', knownOvernightTerms.some(term => serviceName.includes(term)));
           debugLog('MBA2j3kbr9hve4: Full service details from response:', response.service_details);
 
           // Update bookingData with the service information to ensure we have the overnight status
@@ -270,17 +267,14 @@ const BookingStepModal = ({
     
     // Check if the service has an overnight property or name contains overnight-related terms
     const serviceName = (service?.service_name || '').toLowerCase();
-    const knownOvernightTerms = ['overnight', 'boarding', 'house sitting', 'pet sitting'];
     
     // Determine if this is an overnight service from the is_overnight flag or name
-    const isOvernight = service?.is_overnight === true || 
-                        knownOvernightTerms.some(term => serviceName.includes(term));
+    const isOvernight = service?.is_overnight === true;
     
     debugLog('MBA2j3kbr9hve4: Service overnight status:', {
       isOvernight,
       serviceData: service,
-      serviceName,
-      matchesOvernightTerms: knownOvernightTerms.some(term => serviceName.includes(term))
+      serviceName
     });
     
     setBookingData(prev => {
