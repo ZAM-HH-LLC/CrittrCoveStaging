@@ -1041,6 +1041,7 @@ const styles = StyleSheet.create({
   servicesContainer: {
     padding: 24,
     paddingTop: 0,
+    paddingBottom: 70,
   },
   sectionHeader: {
     flexDirection: 'row',

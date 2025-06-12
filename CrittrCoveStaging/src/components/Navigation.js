@@ -938,7 +938,7 @@ const NavigationContent = ({
         <View style={styles.sidebarLogoContainer}>
           <TouchableOpacity
             style={styles.logoButton}
-            onPress={() => handleNavigation('Dashboard')}
+            onPress={() => handleNavigation('Home')}
           >
             <Image
               source={require('../../assets/logo.png')}
@@ -1063,7 +1063,7 @@ const NavigationContent = ({
     return (
       <View style={[styles.mobileHeader, { backgroundColor: theme.colors.surfaceContrast }]}>
         <View style={styles.mobileHeaderContent}>
-          <TouchableOpacity onPress={() => handleNavigation(isSignedIn ? 'Dashboard' : 'SearchProfessionalsListing')}>
+          <TouchableOpacity onPress={() => handleNavigation('Home')}>
             <Image
               source={require('../../assets/logo.png')}
               style={[styles.mobileLogo, { width: 120, height: 40, tintColor: theme.colors.primary }]}
@@ -1283,7 +1283,7 @@ const NavigationContent = ({
           )}
           {!isMobile && !isSignedIn && (
             <View style={styles.signedOutHeaderWeb}>
-              <TouchableOpacity onPress={() => handleNavigation('SearchProfessionalsListing')}>
+              <TouchableOpacity onPress={() => handleNavigation('Home')}>
                 <Image
                   source={require('../../assets/logo.png')}
                   style={[styles.webLogo, { tintColor: theme.colors.primary }]}

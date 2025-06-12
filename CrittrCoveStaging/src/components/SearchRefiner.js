@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback, useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, ScrollView, Switch } from 'react-native';
+import React, { useState, useRef, useCallback, useContext, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, ScrollView, Switch, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Dropdown from 'react-native-element-dropdown/src/components/Dropdown';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -81,6 +81,17 @@ const getAllSearchableLocations = () => {
 
 const ALL_SEARCHABLE_LOCATIONS = getAllSearchableLocations();
 
+// Helper function to check if a location is supported
+const isLocationSupported = (text) => {
+  if (!text) return false;
+  
+  const normalizedText = text.toLowerCase();
+  return ALL_SEARCHABLE_LOCATIONS.some(location => 
+    location.display.toLowerCase().includes(normalizedText) || 
+    location.searchText.toLowerCase().includes(normalizedText)
+  );
+};
+
 const generalCategoriesData = GENERAL_CATEGORIES.map(category => ({
   label: category,
   value: category.toLowerCase().replace(/\s+/g, '-')
@@ -103,9 +114,23 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
   const [isSearching, setIsSearching] = useState(false);
   const { screenWidth, isSignedIn } = useContext(AuthContext);
 
+  // Add logging for location state changes
+  useEffect(() => {
+    debugLog('MBA23o4iuv59', 'Location state changed:', location);
+  }, [location]);
+
+  // Add logging for location suggestions changes
+  useEffect(() => {
+    debugLog('MBA23o4iuv59', 'Location suggestions changed:', {
+      count: locationSuggestions.length,
+      suggestions: locationSuggestions
+    });
+  }, [locationSuggestions]);
+
   // Update state when initialFilters change
   React.useEffect(() => {
     if (initialFilters) {
+      debugLog('MBA23o4iuv59', 'Initial filters updated:', initialFilters);
       setLocation(initialFilters.location || '');
       setService(initialFilters.service_query || '');
       setSelectedAnimals(initialFilters.animal_types || []);
@@ -170,6 +195,16 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       paddingHorizontal: theme.spacing.medium,
       backgroundColor: theme.colors.background,
       fontSize: theme.fontSizes.medium,
+      zIndex: 1101,
+    },
+    modalBackdrop: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'transparent',
+      zIndex: 1099,
     },
     suggestionsWrapper: {
       position: 'absolute',
@@ -181,7 +216,7 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: 8,
-      zIndex: 1100,
+      zIndex: 1102,
       shadowColor: "#000",
       shadowOffset: {
         width: 0,
@@ -560,75 +595,183 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       fontWeight: '500',
       fontFamily: theme.fonts.regular.fontFamily,
     },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-start',
+    },
+    modalSuggestionsWrapper: {
+      position: 'absolute',
+      left: theme.spacing.medium,
+      right: theme.spacing.medium,
+      maxHeight: 200,
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      elevation: 3,
+      zIndex: 1200,
+    },
   });
 
   // Create styles using current context values
   const styles = createStyles(isSignedIn, screenWidth);
 
-  // Helper components defined inside main component so they have access to styles
-  const LocationInput = ({ value, onChange, suggestions, onSuggestionSelect }) => {
-    const locationInputRef = useRef(null);
-
-    const debouncedSearch = useCallback(
-      debounce((text) => {
-        if (text.length < 1) {
-          onSuggestionSelect([]);
-          return;
-        }
+  // Create a new simple location input component
+  const LocationInputSimple = ({ value, onChange }) => {
+    const [inputValue, setInputValue] = useState(value);
+    const [suggestions, setSuggestions] = useState([]);
+    const [isFocused, setIsFocused] = useState(false);
+    const inputRef = useRef(null);
+    const suggestionsRef = useRef(null);
+    const containerRef = useRef(null);
+    
+    // Update internal value when prop changes
+    useEffect(() => {
+      debugLog('MBA23o4iuv59', 'Value prop changed:', value);
+      setInputValue(value);
+    }, [value]);
+    
+    // Add click outside handler for web
+    useEffect(() => {
+      if (Platform.OS === 'web') {
+        const handleClickOutside = (event) => {
+          // Check if the click is outside both the input container and suggestions
+          const isOutsideContainer = containerRef.current && !containerRef.current.contains(event.target);
+          
+          debugLog('MBA23o4iuv59', 'Click detected', { 
+            isOutsideContainer,
+            hasSuggestions: suggestions.length > 0,
+            isFocused
+          });
+          
+          if (isOutsideContainer && isFocused) {
+            debugLog('MBA23o4iuv59', 'Click outside detected, closing dropdown');
+            setIsFocused(false);
+            setSuggestions([]);
+          }
+        };
         
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+        };
+      }
+    }, [isFocused, suggestions.length]);
+    
+    // Log component state
+    useEffect(() => {
+      debugLog('MBA23o4iuv59', 'Component state:', { 
+        inputValue, 
+        suggestionsCount: suggestions.length,
+        isFocused
+      });
+    }, [inputValue, suggestions, isFocused]);
+    
+    const handleTextChange = (text) => {
+      debugLog('MBA23o4iuv59', 'Text input changed:', text);
+      setInputValue(text);
+      
+      // Search for locations
+      if (text.length < 1) {
+        // Show all supported locations when input is empty
+        debugLog('MBA23o4iuv59', 'Empty input, showing all supported locations');
+        
+        // Get the first few supported locations to show as suggestions
+        const defaultSuggestions = ALL_SEARCHABLE_LOCATIONS
+          .filter(location => location.type === 'city')  // Only show cities in the default list
+          .slice(0, 5);  // Limit to 5 results
+        
+        setSuggestions(defaultSuggestions);
+      } else {
         // Search through supported locations
         const filteredLocations = ALL_SEARCHABLE_LOCATIONS.filter(location =>
           location.searchText.toLowerCase().includes(text.toLowerCase()) ||
           location.display.toLowerCase().includes(text.toLowerCase())
         ).slice(0, 5); // Limit to 5 results
         
+        debugLog('MBA23o4iuv59', 'Search results:', { 
+          query: text, 
+          resultsCount: filteredLocations.length
+        });
+        
         // If no matches found, show "not supported" message
         if (filteredLocations.length === 0) {
-          onSuggestionSelect([{
+          debugLog('MBA23o4iuv59', 'Location not supported:', text);
+          setSuggestions([{
             display: `We're not available in "${text}" yet - coming soon!`,
             searchText: text,
             type: 'not_supported'
           }]);
         } else {
-          onSuggestionSelect(filteredLocations);
+          setSuggestions(filteredLocations);
         }
-      }, 100), // Reduced from 300ms to 100ms for faster response
-      [onSuggestionSelect]
-    );
+      }
+    };
+    
+    // Direct selection handler without complex state management
+    const selectLocation = (location) => {
+      debugLog('MBA23o4iuv59', 'DIRECT SELECTION of location:', location);
+      
+      if (location.type !== 'not_supported') {
+        // Update both local and parent state immediately
+        const newValue = location.display;
+        setInputValue(newValue);
+        onChange(newValue);
+        debugLog('MBA23o4iuv59', 'Set location value to:', newValue);
+      }
+      
+      // Always clear suggestions and reset focus
+      setSuggestions([]);
+      setIsFocused(false);
+    };
 
     return (
-      <View style={[styles.locationInputWrapper, { zIndex: 2 }]}>
+      <View 
+        style={styles.locationInputWrapper}
+        ref={containerRef}
+      >
         <TextInput
-          ref={locationInputRef}
+          ref={inputRef}
           style={styles.locationInput}
           placeholder="Enter city or zip in Colorado"
-          value={value}
-          onChangeText={(text) => {
-            onChange(text);
-            if (text.length < 1) {
-              onSuggestionSelect([]);
-            } else {
-              debouncedSearch(text);
-            }
-          }}
+          value={inputValue}
+          onChangeText={handleTextChange}
           onFocus={() => {
-            // Re-show suggestions if there's text and we have suggestions
-            if (value.length > 0) {
-              debouncedSearch(value);
+            debugLog('MBA23o4iuv59', 'Input focused');
+            setIsFocused(true);
+            
+            if (inputValue.length > 0) {
+              handleTextChange(inputValue);
+            } else {
+              // Show all supported locations when input is empty
+              debugLog('MBA23o4iuv59', 'Empty input on focus, showing all supported locations');
+              
+              // Get the first few supported locations to show as suggestions
+              const defaultSuggestions = ALL_SEARCHABLE_LOCATIONS
+                .filter(location => location.type === 'city')  // Only show cities in the default list
+                .slice(0, 5);  // Limit to 5 results
+              
+              setSuggestions(defaultSuggestions);
             }
-          }}
-          onBlur={() => {
-            // Delay hiding suggestions to allow for suggestion selection
-            setTimeout(() => {
-              onSuggestionSelect([]);
-            }, 150);
           }}
         />
-        {suggestions.length > 0 && (
-          <View style={styles.suggestionsWrapper}>
+        
+        {suggestions.length > 0 && isFocused && (
+          <View 
+            style={styles.suggestionsWrapper}
+            ref={suggestionsRef}
+          >
             <ScrollView 
               style={styles.suggestionsContainer}
-              keyboardShouldPersistTaps="always"
+              keyboardShouldPersistTaps="handled"
               nestedScrollEnabled={true}
             >
               {suggestions.map((suggestion, index) => (
@@ -638,13 +781,7 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
                     styles.suggestionItem,
                     suggestion.type === 'not_supported' && styles.suggestionItemNotSupported
                   ]}
-                  onPress={() => {
-                    if (suggestion.type !== 'not_supported') {
-                      onChange(suggestion.display);
-                      onSuggestionSelect([]);
-                    }
-                  }}
-                  disabled={suggestion.type === 'not_supported'}
+                  onPress={() => selectLocation(suggestion)}
                 >
                   <Text style={[
                     styles.suggestionText,
@@ -952,12 +1089,10 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       {/* Location Input */}
       <Text style={styles.label}>Location</Text>
       <View style={styles.locationContainer}>
-      <LocationInput
-        value={location}
-        onChange={setLocation}
-        suggestions={locationSuggestions}
-        onSuggestionSelect={setLocationSuggestions}
-      />
+        <LocationInputSimple
+          value={location}
+          onChange={setLocation}
+        />
         {/* <TouchableOpacity style={[styles.useLocationButton, { marginBottom: 16 }]}>
           <MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.text} />
           <Text style={styles.useLocationText}>Use My Location</Text>
