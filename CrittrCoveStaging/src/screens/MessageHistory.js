@@ -897,6 +897,12 @@ const MessageHistory = ({ navigation, route }) => {
           conversationId: lastSelectedConversationRef.current.conversationId
         });
         
+        // Set the flag to indicate this is a resize-triggered selection change
+        if (typeof isResizeTriggeredSelectionRef !== 'undefined') {
+          isResizeTriggeredSelectionRef.current = true;
+          debugLog('MBA24u45vn', 'Marked selection as resize-triggered to prevent redundant fetches');
+        }
+        
         setSelectedConversation(lastSelectedConversationRef.current.conversationId);
         if (lastSelectedConversationRef.current.conversationData) {
           setSelectedConversationData(lastSelectedConversationRef.current.conversationData);
@@ -1178,11 +1184,25 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [selectedConversationData, hasLoadedMessagesRef.current, hasDraft, draftData, isSignedIn]);
 
+  // Ref to track the last time we fetched conversations
+  const lastConversationFetchTimeRef = useRef(0);
+  
+  // Ref to track if a resize event triggered this selection change
+  const isResizeTriggeredSelectionRef = useRef(false);
+  
   // Effect to update selected conversation data when conversations are loaded
   useEffect(() => {
     if (!selectedConversation || !isSignedIn) {
       debugLog('MBA98765 Skipping conversation data update - no conversation or not signed in');
       return;
+    }
+
+    // If this is a resize-triggered selection change, don't trigger another fetch
+    if (isResizeTriggeredSelectionRef.current) {
+      debugLog('MBA24u45vn: Skipping fetch for resize-triggered selection change', {
+        conversationId: selectedConversation
+      });
+      isResizeTriggeredSelectionRef.current = false;
     }
 
     const conversation = conversations.find(c => c.conversation_id === selectedConversation);
@@ -1195,6 +1215,22 @@ const MessageHistory = ({ navigation, route }) => {
       setSelectedConversationData(conversation);
     } else {
       debugLog('MBA98765 Selected conversation not found in conversations list');
+      
+      // Throttle fetch operations on conversation change
+      const now = Date.now();
+      const minTimeBetweenFetches = 1000; // 1 second minimum between fetches
+      
+      if (now - lastConversationFetchTimeRef.current < minTimeBetweenFetches) {
+        debugLog('MBA24u45vn: Throttled conversation fetch - too frequent', {
+          timeSinceLastFetch: now - lastConversationFetchTimeRef.current,
+          conversationId: selectedConversation
+        });
+        return;
+      }
+      
+      // Update the last fetch time
+      lastConversationFetchTimeRef.current = now;
+      
       // If we have a selected conversation but it's not in the list,
       // we should fetch conversations again
       debugLog('MBA24u45vn: Fetching conversations from useEffect in selectedConversation');
