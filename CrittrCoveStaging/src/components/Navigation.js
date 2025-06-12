@@ -737,6 +737,7 @@ const NavigationContent = ({
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
+        { icon: 'account-group-outline', label: 'Become Professional', route: 'ContactUs' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
         { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
       ];
@@ -824,6 +825,7 @@ const NavigationContent = ({
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread, count: currentRoleCount },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
+        { icon: 'account-group-outline', label: 'Become Professional', route: 'ContactUs' },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
         { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
         { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }

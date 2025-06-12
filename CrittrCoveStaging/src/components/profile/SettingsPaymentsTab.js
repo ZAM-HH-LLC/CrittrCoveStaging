@@ -471,6 +471,7 @@ const SettingsPaymentsTab = ({
   const renderNotificationSettings = () => {
     return (
       <>
+        {/* TODO: Uncomment for ios/android code
         <View style={styles.settingItem}>
           <View style={styles.settingContent}>
             <MaterialCommunityIcons name="bell" size={24} color={theme.colors.primary} />
@@ -484,7 +485,7 @@ const SettingsPaymentsTab = ({
             onValueChange={(value) => handleUpdateSetting('push_notifications', value)}
             trackColor={{ false: theme.colors.disabled, true: theme.colors.primary }}
           />
-        </View>
+        </View> */}
 
         <View style={styles.settingItem}>
           <View style={styles.settingContent}>
