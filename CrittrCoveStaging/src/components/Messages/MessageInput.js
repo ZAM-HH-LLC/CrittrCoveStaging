@@ -142,6 +142,7 @@ const MessageInput = ({
       }
       
       setIsUploading(true);
+      debugLog('MBA5511: Message sending started - showing loading indicator');
       
       // Send normal text message if there are no images
       if (selectedImages.length === 0 && messageContent.trim()) {
@@ -182,6 +183,7 @@ const MessageInput = ({
       setMessageContent('');
       setSelectedImages([]);
       setIsUploading(false);
+      debugLog('MBA5511: Message sending complete - hiding loading indicator');
       
       if (textInputRef.current) {
         textInputRef.current.clear();
@@ -197,7 +199,7 @@ const MessageInput = ({
       }
     } catch (error) {
       setIsUploading(false);
-      debugLog('MBA9876: Error in handleSend:', error);
+      debugLog('MBA5511: Error in handleSend, loading indicator stopped:', error);
     }
   }, [messageContent, onSendMessage, resetInputHeight, selectedImages, selectedConversation]);
 
@@ -325,13 +327,20 @@ const MessageInput = ({
                   styles.sendButtonInactive
               ]}
               onPress={handleSend}
-              disabled={!messageContent.trim() && selectedImages.length === 0}
+              disabled={!messageContent.trim() && selectedImages.length === 0 || isUploading}
             >
-              <MaterialCommunityIcons 
-                name="send" 
-                size={20} 
-                color={(messageContent.trim() || selectedImages.length > 0) ? (theme.colors.surfaceContrast || 'white') : theme.colors.surfaceContrast}
-              />
+              {isUploading ? (
+                <ActivityIndicator 
+                  size="small" 
+                  color={theme.colors.surfaceContrast || 'white'} 
+                />
+              ) : (
+                <MaterialCommunityIcons 
+                  name="send" 
+                  size={20} 
+                  color={(messageContent.trim() || selectedImages.length > 0) ? (theme.colors.surfaceContrast || 'white') : theme.colors.surfaceContrast}
+                />
+              )}
             </TouchableOpacity>
           </View>
         </View>
