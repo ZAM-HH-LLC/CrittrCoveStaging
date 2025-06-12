@@ -229,6 +229,7 @@ const MessageHistory = ({ navigation, route }) => {
       hasLoadedMessagesRef.current = false;
       lastViewedConversationRef.current = null;
       
+      debugLog('MBA24u45vn: Refetching conversations for the new role');
       // Refetch conversations for the new role
       fetchConversations();
     }
@@ -846,8 +847,78 @@ const MessageHistory = ({ navigation, route }) => {
     return () => clearTimeout(timer);
   }, [reconnect]);
   
+    // Add a ref to track if initialization is in progress
+  const isInitializingRef = useRef(false);
+  
+  // Add a ref to track the last window width to detect resize events
+  const lastWindowWidthRef = useRef(typeof window !== 'undefined' ? window.innerWidth : 0);
+  
+  // Track the last execution time to avoid excessive initialization
+  const lastInitTimeRef = useRef(0);
+  
+  // Keep track of the currently selected conversation to preserve during resizes
+  const lastSelectedConversationRef = useRef(null);
+  
+  // Effect to preserve selected conversation during resizes
+  useEffect(() => {
+    // Store current selection when it changes
+    if (selectedConversation) {
+      lastSelectedConversationRef.current = {
+        conversationId: selectedConversation,
+        conversationData: selectedConversationData
+      };
+    }
+  }, [selectedConversation, selectedConversationData]);
+  
   // MAIN INITIALIZATION - Keep only one, safer initialization effect  
   useEffect(() => {
+    // Check if this is likely a resize event
+    const currentWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const isResizeEvent = lastWindowWidthRef.current !== 0 && 
+                          lastWindowWidthRef.current !== currentWindowWidth;
+    
+    // Update the window width reference for next time
+    if (typeof window !== 'undefined') {
+      lastWindowWidthRef.current = window.innerWidth;
+    }
+    
+    // For resize events, just ensure we preserve the selected conversation
+    if (isResizeEvent) {
+      debugLog('MBA24u45vn', 'Detected resize event, preserving conversation', {
+        oldWidth: lastWindowWidthRef.current,
+        newWidth: currentWindowWidth,
+        hasSelectedConversation: !!selectedConversation,
+        hasStoredConversation: !!lastSelectedConversationRef.current
+      });
+      
+      // If we've lost our selected conversation but have one stored, restore it
+      if (!selectedConversation && lastSelectedConversationRef.current?.conversationId) {
+        debugLog('MBA24u45vn', 'Restoring conversation after resize', {
+          conversationId: lastSelectedConversationRef.current.conversationId
+        });
+        
+        setSelectedConversation(lastSelectedConversationRef.current.conversationId);
+        if (lastSelectedConversationRef.current.conversationData) {
+          setSelectedConversationData(lastSelectedConversationRef.current.conversationData);
+        }
+      }
+      
+      // Skip full initialization for resize events
+      return;
+    }
+    
+    // Prevent running multiple initializations in a short time period
+    const now = Date.now();
+    const minTimeBetweenInits = 1000; // 1 second minimum between initializations
+    
+    if (now - lastInitTimeRef.current < minTimeBetweenInits) {
+      debugLog('MBA24u45vn', 'Initialization throttled - too frequent', {
+        timeSinceLastInit: now - lastInitTimeRef.current,
+        minRequiredTime: minTimeBetweenInits
+      });
+      return;
+    }
+    
     // Only run if not signed in (cleaning up) or first time signed in (initializing)
     if (!isSignedIn || loading) {
       debugLog('MBA1111 MessageHistory: User not signed in, skipping initialization');
@@ -860,83 +931,119 @@ const MessageHistory = ({ navigation, route }) => {
     const hasNoConversationsAfterSignIn = !initialLoadRef.current && conversations.length === 0;
     const needsInitialization = isFirstTime || hasNoConversationsAfterSignIn;
     
+    // Skip if we're already initialized
     if (!needsInitialization) {
-      debugLog('MBA1111 MessageHistory: Already initialized with conversations, skipping re-init');
       return;
     }
+    
+    // Skip if initialization is already in progress
+    if (isInitializingRef.current) {
+      debugLog('MBA24u45vn', 'Initialization already in progress, skipping duplicate call');
+      return;
+    }
+    
+    // Update the last initialization time
+    lastInitTimeRef.current = now;
 
     debugLog('MBA1111 MessageHistory: Starting initialization for signed in user');
     
     const initializeData = async () => {
-      try {
-        // Mark as initialized IMMEDIATELY to prevent race conditions
-        initialLoadRef.current = false;
-        
-        // Only reset states if we don't already have conversations loaded
-        if (conversations.length === 0) {
-          setConversations([]);
-          setMessages([]);
-          setSelectedConversation(null);
-          setSelectedConversationData(null);
-          setIsLoadingConversations(true);
-          setIsLoadingMessages(false);
-          setCurrentPage(1);
-          setHasMore(true);
-          lastViewedConversationRef.current = null;
-        }
+      // Mark initialization as in progress
+      isInitializingRef.current = true;
+    try {
+      // Mark as initialized IMMEDIATELY to prevent race conditions
+      initialLoadRef.current = false;
+      
+      // Add debug logging for route params in initializeData
+      if (route.params?.conversationId) {
+        debugLog('MBA24u45vn', 'Processing route params in initializeData', {
+          conversationId: route.params.conversationId,
+          otherUserName: route.params.otherUserName,
+          currentTime: Date.now()
+        });
+      }
+      
+      // Only reset states if we don't already have conversations loaded
+      if (conversations.length === 0) {
+        setConversations([]);
+        setMessages([]);
+        setSelectedConversation(null);
+        setSelectedConversationData(null);
+        setIsLoadingConversations(true);
+        setIsLoadingMessages(false);
+        setCurrentPage(1);
+        setHasMore(true);
+        lastViewedConversationRef.current = null;
+      }
 
-        // Handle URL parameters on web
+                // Handle URL parameters on web
         if (Platform.OS === 'web') {
           const currentUrl = new URL(window.location.href);
-          const urlConversationId = currentUrl.searchParams.get('conversationId');
+          // Only process URLs with valid conversationIds - 'null' is not valid
+          const rawUrlConversationId = currentUrl.searchParams.get('conversationId');
+          const urlConversationId = (rawUrlConversationId && rawUrlConversationId !== 'null') 
+                                    ? rawUrlConversationId : null;
           
           debugLog('MBA24u45vn', 'Checking URL parameters on initialization', {
             url: window.location.href,
+            rawUrlConversationId,
             urlConversationId,
             hasSelectedConversation: !!selectedConversation,
             timestamp: Date.now()
           });
           
-          // Clear URL parameters
+          // Clear URL parameters - do this once regardless of valid conversationId
           if (currentUrl.searchParams.has('conversationId')) {
-            currentUrl.searchParams.delete('conversationId');
-            window.history.replaceState({}, '', currentUrl.toString());
-            debugLog('MBA24u45vn', 'Cleared URL parameters on initial load');
-          }
-
-          // If we have a conversation ID in URL, we'll use that instead of auto-selecting
-          if (urlConversationId) {
-            debugLog('MBA24u45vn', 'Found conversation ID in URL', {
-              conversationId: urlConversationId,
-              timestamp: Date.now()
+            // Store parameters we need before clearing
+            const paramsToStore = {
+              conversationId: urlConversationId
+            };
+            
+            // Clear all URL parameters to prevent repeated processing
+            [...currentUrl.searchParams.keys()].forEach(key => {
+              currentUrl.searchParams.delete(key);
             });
             
-            const conversationsData = await fetchConversations();
+            // Update history to remove params from URL
+            window.history.replaceState({}, '', currentUrl.toString());
+            debugLog('MBA24u45vn', 'Cleared URL parameters to prevent reprocessing');
             
-            // Find the conversation in the data
-            const conversation = conversationsData.find(c => c.conversation_id === urlConversationId);
-            
-            if (conversation) {
-              debugLog('MBA24u45vn', 'Found conversation from URL in data', {
-                conversation_id: conversation.conversation_id,
-                other_user_name: conversation.other_user_name,
-                has_profile_pic: !!conversation.profile_picture
-              });
-              
-              // Set the selected conversation
-              setSelectedConversation(urlConversationId);
-              setSelectedConversationData(conversation);
-              
-              // Fetch messages for this conversation
-              fetchMessages(urlConversationId);
-            } else {
-              debugLog('MBA24u45vn', 'Conversation from URL NOT found in data', {
+            // If we have a valid conversation ID from URL, process it
+            if (urlConversationId) {
+              debugLog('MBA24u45vn', 'Processing valid conversation ID from URL', {
                 conversationId: urlConversationId,
-                conversationsCount: conversationsData.length
+                timestamp: Date.now()
               });
+              
+              debugLog('MBA24u45vn: Fetching conversations for URL conversation ID');
+              
+              const conversationsData = await fetchConversations();
+              
+              // Find the conversation in the data
+              const conversation = conversationsData.find(c => c.conversation_id === urlConversationId);
+              
+              if (conversation) {
+                debugLog('MBA24u45vn', 'Found conversation from URL in data', {
+                  conversation_id: conversation.conversation_id,
+                  other_user_name: conversation.other_user_name,
+                  has_profile_pic: !!conversation.profile_picture
+                });
+                
+                // Set the selected conversation
+                setSelectedConversation(urlConversationId);
+                setSelectedConversationData(conversation);
+                
+                // Fetch messages for this conversation
+                fetchMessages(urlConversationId);
+              } else {
+                debugLog('MBA24u45vn', 'Conversation from URL NOT found in data', {
+                  conversationId: urlConversationId,
+                  conversationsCount: conversationsData.length
+                });
+              }
+              
+              return;
             }
-            
-            return;
           }
         }
 
@@ -950,6 +1057,7 @@ const MessageHistory = ({ navigation, route }) => {
             debugLog('MBA9999: Will open booking creation after data loads');
           }
           
+          debugLog('MBA24u45vn: Fetching conversations from initializeData in route.params?.conversationId');
           const conversationsData = await fetchConversations();
           setSelectedConversation(route.params.conversationId);
           
@@ -964,7 +1072,7 @@ const MessageHistory = ({ navigation, route }) => {
         }
 
         // Normal initialization - fetch conversations once
-        debugLog('MBA1111 About to fetch conversations for initialization');
+        debugLog('MBA24u45vn About to fetch conversations for normal initialization');
         const conversationsData = await fetchConversations();
         
         // Filter conversations by role
@@ -1000,6 +1108,8 @@ const MessageHistory = ({ navigation, route }) => {
       } finally {
         setIsInitialLoad(false);
         isHandlingRouteParamsRef.current = false;
+        // Reset initialization in progress flag
+        isInitializingRef.current = false;
       }
     };
 
@@ -1087,6 +1197,7 @@ const MessageHistory = ({ navigation, route }) => {
       debugLog('MBA98765 Selected conversation not found in conversations list');
       // If we have a selected conversation but it's not in the list,
       // we should fetch conversations again
+      debugLog('MBA24u45vn: Fetching conversations from useEffect in selectedConversation');
       fetchConversations();
     }
   }, [selectedConversation, conversations, isSignedIn]);
@@ -1316,6 +1427,16 @@ const MessageHistory = ({ navigation, route }) => {
       });
       
       const data = await getConversations();
+      
+      // Check if there's a new conversation from route params that we should look for
+      if (route.params?.conversationId) {
+        const newConversation = data.find(c => c.conversation_id === route.params.conversationId);
+        debugLog('MBA24u45vn', 'Checking for new conversation in API response', {
+          conversationId: route.params.conversationId,
+          found: !!newConversation,
+          total_conversations: data.length
+        });
+      }
       
       if (data && Array.isArray(data)) {
         debugLog('MBA24u45vn', 'Conversations API response received', {
@@ -1756,7 +1877,7 @@ const MessageHistory = ({ navigation, route }) => {
     }
     
     if (!selectedConversationData) {
-      console.log('MBA98765 No conversation data found, refreshing conversations');
+      debugLog('MBA24u45vn: No conversation data found, Fetching conversations from handleCreateBooking');
       await fetchConversations();
       const updatedConversation = conversations.find(conv => conv.conversation_id === selectedConversation);
       if (!updatedConversation) {
@@ -1764,9 +1885,9 @@ const MessageHistory = ({ navigation, route }) => {
         return;
       }
       setSelectedConversationData(updatedConversation);
-      if (is_DEBUG) {
-        console.log('MBA98765 Updated conversation data:', updatedConversation);
-      }
+      debugLog('MBA24u45vn: Conversation data found in handleCreateBooking', {
+        updatedConversation
+      });
     }
 
     // Check if current user is the professional by checking their role in the conversation
@@ -2909,6 +3030,7 @@ const MessageHistory = ({ navigation, route }) => {
     setMessages([]);
     
     // Fetch conversations to update the list after going back
+    debugLog('MBA24u45vn: Fetching conversations from handleBack');
     fetchConversations();
     
     // Add a timeout to reset the flag as a safety mechanism
@@ -3215,6 +3337,7 @@ const MessageHistory = ({ navigation, route }) => {
           }
         }
         
+        debugLog('MBA24u45vn: Fetching conversations from initializeData');
         // Fetch conversations
         const conversationsData = await fetchConversations();
         
@@ -4060,6 +4183,85 @@ const MessageHistory = ({ navigation, route }) => {
       };
     }
   }, []);
+  
+  // A ref to track if we've already processed a specific navigation timestamp
+  const processedNavigationTimestampsRef = useRef(new Set());
+  
+  // Just after useState declarations, add one debug log for route params
+  useEffect(() => {
+    if (route.params?.conversationId) {
+      debugLog('MBA24u45vn', 'Route params detected', {
+        conversationId: route.params.conversationId,
+        otherUserName: route.params.otherUserName,
+        timestamp: route.params._timestamp,
+        has_fullConversationData: !!route.params.fullConversationData
+      });
+      
+      // Only process this useEffect if:
+      // 1. We have a recent timestamp (likely from ProfessionalServicesModal)
+      // 2. We have fullConversationData (confirms it's from ProfessionalServicesModal)
+      // 3. We haven't already processed this exact timestamp
+      // 4. This isn't a screen resize event
+      const hasRecentTimestamp = route.params._timestamp && 
+                               (Date.now() - route.params._timestamp < 10000);
+      const isFromProfessionalModal = !!route.params.fullConversationData;
+      const hasProcessedThisTimestamp = route.params._timestamp && 
+                                      processedNavigationTimestampsRef.current.has(route.params._timestamp);
+      
+      // Check if this is a screen resize event
+      // Screen resize typically changes isMobile param but keeps the same timestamp
+      const isScreenResizeEvent = route.params.isMobile !== undefined && 
+                                !hasRecentTimestamp;
+      
+      debugLog('MBA24u45vn', 'Checking if we should fetch based on navigation source', {
+        hasRecentTimestamp,
+        isFromProfessionalModal,
+        hasProcessedThisTimestamp,
+        isScreenResizeEvent,
+        currentTimestamp: Date.now(),
+        navigationTimestamp: route.params._timestamp,
+        isMobile: route.params.isMobile
+      });
+      
+      // Only trigger fetch for new navigations from ProfessionalServicesModal
+      // Skip if this is a screen resize event
+      if (hasRecentTimestamp && isFromProfessionalModal && !hasProcessedThisTimestamp && 
+          !isScreenResizeEvent && !isFetchingConversationsRef.current) {
+        debugLog('MBA24u45vn', 'Triggering fetch based on navigation from ProfessionalServicesModal', {
+          conversationId: route.params.conversationId,
+          currentConversation: selectedConversation,
+          timestamp: Date.now()
+        });
+        
+        // Mark this timestamp as processed to prevent duplicate processing
+        if (route.params._timestamp) {
+          processedNavigationTimestampsRef.current.add(route.params._timestamp);
+          
+          // Clean up old timestamps to prevent memory leaks
+          setTimeout(() => {
+            processedNavigationTimestampsRef.current.delete(route.params._timestamp);
+          }, 10000);
+        }
+        
+        // Set the selected conversation first
+        setSelectedConversation(route.params.conversationId);
+        
+        // Fetch conversations to update the list
+        fetchConversations().then(data => {
+          if (data && Array.isArray(data)) {
+            debugLog('MBA24u45vn', 'Conversations fetched from ProfessionalServicesModal navigation', {
+              conversationCount: data.length,
+              conversationId: route.params.conversationId,
+              found: !!data.find(c => c.conversation_id === route.params.conversationId)
+            });
+            
+            // Fetch messages for this conversation
+            fetchMessages(route.params.conversationId);
+          }
+        });
+      }
+    }
+  }, [route.params]);
   
   return (
     <View style={[

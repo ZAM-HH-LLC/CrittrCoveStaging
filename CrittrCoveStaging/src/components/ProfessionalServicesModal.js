@@ -177,7 +177,7 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
 
     // Check if user is signed in before making API call
     if (!isSignedIn) {
-      debugLog('MBA3456', 'User not signed in, redirecting to login');
+      debugLog('MBA24u45vn', 'User not signed in, redirecting to login');
       
       // Close the modal first
       onClose();
@@ -189,11 +189,21 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
 
     setIsCreatingConversation(true);
     try {
+      // Log navigation state before creating conversation
+      debugLog('MBA24u45vn', 'Navigation state before creating conversation', {
+        current_route: navigation.getState()?.routes?.[navigation.getState()?.index]?.name,
+        current_params: JSON.stringify(navigation.getState()?.routes?.[navigation.getState()?.index]?.params || {}),
+        route_count: navigation.getState()?.routes?.length,
+        current_index: navigation.getState()?.index,
+        timestamp: Date.now()
+      });
+      
       debugLog('MBA24u45vn', 'Creating conversation with professional - START', {
         professional_id: professional.professional_id,
         professional_name: professional.name,
         from_screen: navigation.getState()?.routes?.[navigation.getState()?.index]?.name || 'unknown',
-        previous_screen: navigation.getState()?.routes?.[navigation.getState()?.index - 1]?.name || 'unknown'
+        previous_screen: navigation.getState()?.routes?.[navigation.getState()?.index - 1]?.name || 'unknown',
+        timestamp: Date.now()
       });
       
       const response = await createConversation(professional.professional_id);
@@ -203,7 +213,8 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
         other_user_name: response.other_user_name,
         status: response.status,
         is_professional: response.is_professional,
-        full_response: JSON.stringify(response)
+        full_response: JSON.stringify(response),
+        timestamp: Date.now()
       });
       
       // Get current navigation state for logging
@@ -214,19 +225,49 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
         from_route: currentRoute,
         current_params: JSON.stringify(currentParams),
         conversation_id: response.conversation_id,
-        navigation_timestamp: Date.now()
+        navigation_timestamp: Date.now(),
+        navigation_state: JSON.stringify(navigation.getState())
       });
       
       // Close the modal first
       onClose();
       
-      // Navigate to MessageHistory with the conversation ID
-      navigation.navigate('MessageHistory', { 
+      // Add a small delay to ensure backend has processed the conversation
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Create navigation params with exact conversation data to help MessageHistory
+      const navigationParams = { 
         conversationId: response.conversation_id,
         otherUserName: professional.name,
-        // Add a timestamp to ensure the route params change triggers the effect
+        otherUserProfilePic: professional.profile_picture || null,
+        isProfessional: false,
+        fullConversationData: JSON.stringify(response),
         _timestamp: Date.now()
+      };
+      
+      debugLog('MBA24u45vn', 'Navigation params prepared', {
+        params: JSON.stringify(navigationParams),
+        timestamp: Date.now()
       });
+      
+      // Navigate to MessageHistory with the conversation ID
+      navigation.navigate('MessageHistory', navigationParams);
+      
+      debugLog('MBA24u45vn', 'Navigation to MessageHistory completed', {
+        conversation_id: response.conversation_id,
+        timestamp: Date.now()
+      });
+      
+      // Log navigation state after navigation
+      setTimeout(() => {
+        debugLog('MBA24u45vn', 'Navigation state after navigation (with timeout)', {
+          current_route: navigation.getState()?.routes?.[navigation.getState()?.index]?.name,
+          current_params: JSON.stringify(navigation.getState()?.routes?.[navigation.getState()?.index]?.params || {}),
+          route_count: navigation.getState()?.routes?.length,
+          current_index: navigation.getState()?.index,
+          timestamp: Date.now()
+        });
+      }, 100);
     } catch (err) {
       debugLog('MBA3456', 'Error creating conversation:', err);
       

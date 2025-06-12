@@ -1074,6 +1074,12 @@ const NavigationContent = ({
               onPress={toggleMenu}
             >
               <AnimatedHamburgerMenu size={24} color={theme.colors.text} />
+              {/* Add notification badge to hamburger menu for mobile */}
+              {isSignedIn && unreadCount > 0 && (
+                <View style={styles.hamburgerNotificationBadge}>
+                  <Text style={styles.hamburgerNotificationText}>{unreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1863,6 +1869,7 @@ const styles = StyleSheet.create({
     height: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   signedOutOptions: {
     flexDirection: 'row',
@@ -1925,5 +1932,25 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceContrast,
     borderBottomRightRadius: 24,
+  },
+  hamburgerNotificationBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: theme.colors.error,
+    borderWidth: 1,
+    borderColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    zIndex: 10,
+  },
+  hamburgerNotificationText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
