@@ -22,22 +22,34 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
     }
   };
 
-  // Get profile picture source - use default if no URL provided
-  const getProfilePictureSource = () => {
+  // Render either profile picture or fallback icon
+  const renderProfileImage = () => {
     if (professional.profile_picture_url) {
-      return { uri: getMediaUrl(professional.profile_picture_url) };
+      return (
+        <Image 
+          source={{ uri: getMediaUrl(professional.profile_picture_url) }}
+          style={styles.profileImage}
+        />
+      );
     }
-    return require('../../assets/default-profile.png');
+    
+    // Return fallback icon inside a circular view with the same dimensions
+    return (
+      <View style={[styles.profileImage, styles.fallbackIconContainer]}>
+        <MaterialCommunityIcons 
+          name="account" 
+          size={50} 
+          color={theme.colors.textSecondary} 
+        />
+      </View>
+    );
   };
 
   return (
     <TouchableOpacity style={styles.listItem} onPress={handlePress}>
       <View style={styles.cardContent}>
         <View style={styles.leftSection}>
-          <Image 
-            source={getProfilePictureSource()} 
-            style={styles.profileImage}
-          />
+          {renderProfileImage()}
         </View>
         
         <View style={styles.mainContent}>
@@ -83,10 +95,20 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
         
         {professional.bestReview && (
           <View style={styles.bestReviewContainer}>
-            <Image 
-              source={require('../../assets/default-profile.png')}
-              style={styles.reviewerImage}
-            />
+            {professional.reviewer_picture_url ? (
+              <Image 
+                source={{ uri: getMediaUrl(professional.reviewer_picture_url) }}
+                style={styles.reviewerImage}
+              />
+            ) : (
+              <View style={[styles.reviewerImage, styles.fallbackReviewerIconContainer]}>
+                <MaterialCommunityIcons 
+                  name="account" 
+                  size={20} 
+                  color={theme.colors.textSecondary} 
+                />
+              </View>
+            )}
             <View style={styles.bestReviewTextContainer}>
               <Text style={styles.bestReview} numberOfLines={2}>
                 "{professional.bestReview}"
@@ -474,6 +496,17 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.medium,
     fontWeight: '600',
     color: theme.colors.whiteText,
+  },
+  fallbackIconContainer: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fallbackReviewerIconContainer: {
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

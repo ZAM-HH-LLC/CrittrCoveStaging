@@ -1466,7 +1466,7 @@ const PetsPreferencesTab = ({
                           style={styles.editInput}
                           value={editedPetData.type || ''}
                           onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
-                          placeholder="Enter type"
+                          placeholder="Enter type - ex: Dog"
                           placeholderTextColor={theme.colors.placeholder}
                         />
                       </View>

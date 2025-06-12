@@ -282,10 +282,10 @@ export default function SignUp() {
       
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         Alert.alert('Success', 'Account created successfully!', [
-          { text: 'OK', onPress: () => navigation.navigate('MyProfile') }
+          { text: 'OK', onPress: () => navigation.navigate('Dashboard') }
         ]);
       } else {
-        navigation.navigate('MyProfile');
+        navigation.navigate('Dashboard');
       }
     } catch (error) {
       debugLog('MBA12345 Error during signup process', error.response?.data || error.message);

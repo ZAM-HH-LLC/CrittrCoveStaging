@@ -17,6 +17,30 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
+class AddPetSerializer(PetSerializer):
+    """
+    Special serializer for adding pets that ensures boolean fields are null when not provided
+    """
+    def to_representation(self, instance):
+        """
+        Override to_representation to ensure boolean fields are always null when not in request
+        """
+        data = super().to_representation(instance)
+        
+        # List of boolean fields that should be null when not explicitly set
+        boolean_fields = [
+            'friendly_with_children', 'friendly_with_cats', 'friendly_with_dogs',
+            'spayed_neutered', 'house_trained', 'microchipped', 'can_be_left_alone'
+        ]
+        
+        # For each boolean field, check if it was in the initial data
+        for field in boolean_fields:
+            # If the field wasn't in the initial data, set it to null in the response
+            if field not in getattr(self, 'initial_data', {}):
+                data[field] = None
+        
+        return data
+
 class PetViewSet(viewsets.ModelViewSet):
     queryset = Pet.objects.all()
     serializer_class = PetSerializer
@@ -27,6 +51,11 @@ class PetViewSet(viewsets.ModelViewSet):
         Filter pets to return only those belonging to the current user
         """
         user = self.request.user
+        
+        # Special case for add-pet to ensure we don't filter out pets with no owner
+        if self.action == 'add_pet':
+            return Pet.objects.all()
+            
         return Pet.objects.filter(owner=user)
 
     def list(self, request, *args, **kwargs):
@@ -181,8 +210,18 @@ class PetViewSet(viewsets.ModelViewSet):
             # Set the owner to the current user
             data['owner'] = request.user.pk
             
-            # Create a pet with the basic data
-            serializer = self.get_serializer(data=data)
+            # Explicitly set boolean fields to null if not provided
+            boolean_fields = [
+                'friendly_with_children', 'friendly_with_cats', 'friendly_with_dogs',
+                'spayed_neutered', 'house_trained', 'microchipped', 'can_be_left_alone'
+            ]
+            
+            for field in boolean_fields:
+                if field not in data:
+                    data[field] = None
+            
+            # Use our special serializer for adding pets
+            serializer = AddPetSerializer(data=data)
             
             if serializer.is_valid():
                 # Save the pet
@@ -232,12 +271,28 @@ class PetViewSet(viewsets.ModelViewSet):
                     except Exception as e:
                         logger.error(f"Error processing crop for new pet: {str(e)}")
                 
+                # Double-check that boolean fields are null in the database
+                # This is a safety measure in case the serializer didn't handle it correctly
+                pet_updated = False
+                for field in boolean_fields:
+                    if field not in request.data and getattr(pet, field) is False:
+                        setattr(pet, field, None)
+                        pet_updated = True
+                
+                if pet_updated:
+                    pet.save()
+                
                 # Get updated serializer with photo
-                serializer = self.get_serializer(pet)
+                serializer = AddPetSerializer(pet, context={'request': request})
                 
                 # Add pet_id to the response data explicitly 
                 response_data = serializer.data
                 response_data['pet_id'] = pet.pet_id
+                
+                # Manually set boolean fields to null in the response if they weren't in the request
+                for field in boolean_fields:
+                    if field not in request.data:
+                        response_data[field] = None
                 
                 # Return the created pet data with explicit pet_id
                 return Response(
