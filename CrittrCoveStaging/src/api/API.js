@@ -1345,6 +1345,253 @@ export const uploadMessageImage = async (conversationId, imageData) => {
 };
 
 /**
+ * Compress an image to reduce its size before upload
+ * @param {string} imageUri - The URI of the image to compress
+ * @param {number} maxWidth - Maximum width of the compressed image (default: 1024)
+ * @param {number} quality - Quality of the compressed image (0-1, default: 0.7)
+ * @returns {Promise<string>} - Base64 string of the compressed image
+ */
+export const compressImage = async (imageUri, maxWidth = 1024, quality = 0.7) => {
+  try {
+    debugLog('MBA5511: Attempting to compress image:', {
+      uriType: typeof imageUri,
+      isBase64: typeof imageUri === 'string' && imageUri.startsWith('data:image'),
+      platform: Platform.OS
+    });
+    
+    // If we already have a base64 string, process it directly
+    if (typeof imageUri === 'string' && imageUri.startsWith('data:image')) {
+      // For base64 data URLs, use web-based compression if on web platform
+      if (Platform.OS === 'web') {
+        return compressWebBase64Image(imageUri, maxWidth, quality);
+      }
+      // On native, just return as is since we don't have image manipulation
+      return imageUri;
+    }
+    
+    // For mobile image URIs, we currently don't have a direct way to compress
+    // without expo-image-manipulator, so we'll just return the original URI
+    if (Platform.OS !== 'web' && imageUri) {
+      // In a production app, you'd want to implement native compression here
+      // using available libraries
+      debugLog('MBA5511: Native image compression not implemented - using original image');
+      return imageUri;
+    }
+    
+    // For web environment
+    if (Platform.OS === 'web') {
+      return compressWebImage(imageUri, maxWidth, quality);
+    }
+    
+    // Return original if we can't compress
+    return imageUri;
+  } catch (error) {
+    debugLog('MBA5511: Error compressing image:', error);
+    // Return original image if compression fails
+    return imageUri;
+  }
+};
+
+/**
+ * Helper function to compress a web image
+ * @param {string} imageUri - Image URI or URL
+ * @param {number} maxWidth - Maximum width
+ * @param {number} quality - Compression quality (0-1)
+ * @returns {Promise<string>} - Compressed image as data URL
+ */
+const compressWebImage = (imageUri, maxWidth, quality) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous'; // Help with CORS issues
+    img.src = imageUri;
+    
+    img.onload = () => {
+      try {
+        // Calculate new dimensions
+        let width = img.width;
+        let height = img.height;
+        
+        // For very large images, use more aggressive resizing
+        if (width > 3000 || height > 3000) {
+          // Extra compression for extremely large images
+          maxWidth = Math.min(maxWidth, 600);
+          quality = Math.min(quality, 0.4);
+          debugLog('MBA5511: Extra compression applied for very large image', {
+            originalWidth: width,
+            originalHeight: height,
+            newMaxWidth: maxWidth,
+            newQuality: quality
+          });
+        }
+        
+        if (width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = maxWidth;
+          height = height * ratio;
+        }
+        
+        // Skip compression for small images
+        if (width < maxWidth && (width * height < 250000)) { // less than ~0.25MP
+          debugLog('MBA5511: Image already small enough, skipping compression');
+          resolve(imageUri);
+          return;
+        }
+        
+        // Create canvas with appropriate size
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw image to canvas with resizing
+        const ctx = canvas.getContext('2d');
+        
+        // For better quality, use a 2-step process for large downsampling
+        if (img.width > width * 2) {
+          // Create an intermediate canvas at half size
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          const tempWidth = Math.min(img.width, width * 2);
+          const tempHeight = (tempWidth / img.width) * img.height;
+          
+          tempCanvas.width = tempWidth;
+          tempCanvas.height = tempHeight;
+          
+          // First downsample
+          tempCtx.drawImage(img, 0, 0, tempWidth, tempHeight);
+          
+          // Then final resize
+          ctx.drawImage(tempCanvas, 0, 0, width, height);
+        } else {
+          // Direct resize for smaller downsampling
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        
+        // Convert to base64 with the specified quality
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        
+        debugLog('MBA5511: Image compressed successfully', {
+          originalDimensions: `${img.width}x${img.height}`,
+          newDimensions: `${width}x${height}`,
+          quality: quality,
+          sizeReduction: imageUri.length > 0 ? 
+            ((1 - (compressedDataUrl.length / imageUri.length)) * 100).toFixed(2) + '%' : 
+            'unknown'
+        });
+        
+        resolve(compressedDataUrl);
+      } catch (err) {
+        debugLog('MBA5511: Error in canvas compression:', err);
+        resolve(imageUri); // Fall back to original
+      }
+    };
+    
+    img.onerror = (error) => {
+      debugLog('MBA5511: Image loading error:', error);
+      resolve(imageUri); // Fall back to original
+    };
+  });
+};
+
+/**
+ * Helper function to compress a base64 image on web
+ * @param {string} base64Data - Base64 image data URL
+ * @param {number} maxWidth - Maximum width
+ * @param {number} quality - Compression quality (0-1)
+ * @returns {Promise<string>} - Compressed image as data URL
+ */
+const compressWebBase64Image = (base64Data, maxWidth, quality) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = base64Data;
+    
+    img.onload = () => {
+      try {
+        // Calculate new dimensions
+        let width = img.width;
+        let height = img.height;
+        
+        // For very large images, use more aggressive resizing
+        if (width > 3000 || height > 3000) {
+          // Extra compression for extremely large images
+          maxWidth = Math.min(maxWidth, 600);
+          quality = Math.min(quality, 0.4);
+          debugLog('MBA5511: Extra compression applied for very large image', {
+            originalWidth: width,
+            originalHeight: height,
+            newMaxWidth: maxWidth,
+            newQuality: quality
+          });
+        }
+        
+        if (width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = maxWidth;
+          height = height * ratio;
+        }
+        
+        // Skip compression for small images
+        if (width < maxWidth && (width * height < 250000)) { // less than ~0.25MP
+          debugLog('MBA5511: Base64 image already small enough, skipping compression');
+          resolve(base64Data);
+          return;
+        }
+        
+        // Create canvas with appropriate size
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw image to canvas with resizing
+        const ctx = canvas.getContext('2d');
+        
+        // For better quality, use a 2-step process for large downsampling
+        if (img.width > width * 2) {
+          // Create an intermediate canvas at half size
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          const tempWidth = Math.min(img.width, width * 2);
+          const tempHeight = (tempWidth / img.width) * img.height;
+          
+          tempCanvas.width = tempWidth;
+          tempCanvas.height = tempHeight;
+          
+          // First downsample
+          tempCtx.drawImage(img, 0, 0, tempWidth, tempHeight);
+          
+          // Then final resize
+          ctx.drawImage(tempCanvas, 0, 0, width, height);
+        } else {
+          // Direct resize for smaller downsampling
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        
+        // Convert to base64 with the specified quality
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        
+        debugLog('MBA5511: Base64 image compressed successfully', {
+          originalDimensions: `${img.width}x${img.height}`,
+          newDimensions: `${width}x${height}`,
+          quality: quality,
+          sizeReduction: base64Data.length > 0 ? 
+            ((1 - (compressedDataUrl.length / base64Data.length)) * 100).toFixed(2) + '%' : 
+            'unknown'
+        });
+        
+        resolve(compressedDataUrl);
+      } catch (err) {
+        debugLog('MBA5511: Error in canvas compression:', err);
+        resolve(base64Data); // Fall back to original
+      }
+    };
+    
+    img.onerror = (error) => {
+      debugLog('MBA5511: Base64 image loading error:', error);
+      resolve(base64Data); // Fall back to original
+    };
+  });
+};
+
+/**
  * Upload and send images in a single message using a direct approach with FormData
  * @param {string|number} conversationId - The conversation ID
  * @param {Array<File|Blob|string>} images - Array of image files, blobs, or base64 strings
@@ -1363,18 +1610,60 @@ export const uploadAndSendImageMessage = async (conversationId, images, caption 
       throw new Error('No images provided for upload');
     }
     
-    // Prepare images array for sending
-    const processedImages = images.map(image => {
-      if (image.base64) {
-        return `data:image/jpeg;base64,${image.base64}`;
-      } else if (image.uri) {
-        return image.uri;
-      } else {
-        return image;
+    // Determine total image size to set compression level
+    const totalEstimatedSize = images.reduce((sum, img) => {
+      if (img.base64) {
+        // base64 size is roughly 4/3 of the raw data
+        return sum + (img.base64.length * 0.75);
+      } else if (img.size) {
+        return sum + img.size;
       }
+      // Assume 1MB if unknown
+      return sum + 1000000;
+    }, 0);
+    
+    // Set compression parameters based on total size
+    let maxWidth = 1024;  // Default for small images
+    let quality = 0.7;    // Default quality
+    
+    // Adjust based on total size
+    if (totalEstimatedSize > 4 * 1024 * 1024) {
+      // For large uploads (>4MB), use aggressive compression
+      maxWidth = 800;
+      quality = 0.5;
+    } else if (totalEstimatedSize > 2 * 1024 * 1024) {
+      // For medium uploads (>2MB), use moderate compression
+      maxWidth = 1024;
+      quality = 0.6;
+    }
+    
+    debugLog('MBA5511: Compression settings:', {
+      totalEstimatedSizeMB: (totalEstimatedSize / (1024 * 1024)).toFixed(2) + 'MB',
+      maxWidth,
+      quality
     });
     
-    // Send a single request with all images as base64 strings
+    // Prepare images array for sending, with compression
+    const processedImages = await Promise.all(images.map(async (image) => {
+      let imageSource;
+      
+      if (image.base64) {
+        imageSource = `data:image/jpeg;base64,${image.base64}`;
+      } else if (image.uri) {
+        imageSource = image.uri;
+      } else {
+        imageSource = image;
+      }
+      
+      // Compress the image before sending
+      return await compressImage(imageSource, maxWidth, quality);
+    }));
+    
+    debugLog('MBA5511: Images compressed and ready for upload', {
+      imageCount: processedImages.length
+    });
+    
+    // Send a single request with all compressed images
     const response = await axios.post(
       `${API_BASE_URL}/api/messages/v1/upload_and_send/`,
       {

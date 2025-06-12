@@ -151,6 +151,32 @@ const MessageInput = ({
       // Send image message with or without caption
       else if (selectedImages.length > 0 && selectedConversation) {
         try {
+          // Check image sizes before attempting to upload
+          const totalSize = selectedImages.reduce((sum, img) => {
+            // For base64 images, estimate size
+            if (img.base64) {
+              // base64 size is roughly 4/3 of the raw data
+              return sum + (img.base64.length * 0.75);
+            }
+            // For files with size property
+            else if (img.size) {
+              return sum + img.size;
+            }
+            // Default estimation
+            return sum + 1000000; // Assume 1MB if unknown
+          }, 0);
+          
+          debugLog('MBA5511: Total estimated image size before compression:', {
+            totalSizeBytes: totalSize,
+            totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2) + 'MB',
+            imageCount: selectedImages.length
+          });
+          
+          // Warn if total size is large
+          if (totalSize > 4 * 1024 * 1024) { // 4MB warning threshold
+            debugLog('MBA5511: Large image upload detected, compression will be applied');
+          }
+          
           // Use the direct uploadAndSend function that handles everything in one call
           // and returns a ready-to-display message object
           const messageObject = await uploadAndSendImageMessage(
@@ -173,7 +199,24 @@ const MessageInput = ({
           });
         } catch (error) {
           debugLog('MBA5511: Failed to send image message', error);
-          Alert.alert('Error', 'Failed to upload images. Please try again.');
+          
+          // More descriptive error message based on the error
+          let errorMessage = 'Failed to upload images. Please try again.';
+          
+          if (error.message && error.message.includes('Network Error')) {
+            errorMessage = 'Network error occurred. Please check your connection and try again.';
+          }
+          
+          if (error.response) {
+            // Server responded with an error
+            if (error.response.status === 413) {
+              errorMessage = 'The image is too large to upload. Please select a smaller image or use fewer images.';
+            } else if (error.response.data && error.response.data.error) {
+              errorMessage = error.response.data.error;
+            }
+          }
+          
+          Alert.alert('Error', errorMessage);
           setIsUploading(false);
           return;
         }
