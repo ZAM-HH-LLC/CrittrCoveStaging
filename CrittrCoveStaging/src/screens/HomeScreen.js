@@ -604,7 +604,7 @@ export default function HomeScreen({ navigation }) {
           <ServiceCard
             icon="paw"
             title="All Animals Welcome"
-            description="From common pets to exotic animals, we connect you with professionals experienced in caring for any type of animal companion."
+            description="From everyday pets to exotic companions, CrittrCove is a marketplace where you can find independent professionals offerring care for a wide variety of animals."
             color={theme.colors.mainColors.senary}
           />
           <ServiceCard
@@ -615,8 +615,8 @@ export default function HomeScreen({ navigation }) {
           />
           <ServiceCard
             icon="shield-check"
-            title="Verified Professionals"
-            description="All professionals are thoroughly vetted and must maintain active insurance coverage to provide services through our platform."
+            title="Verified Badges"
+            description="All professionals are allowed on the platform, and clients can see their verified badges to ensure they are who they say they are."
             color={theme.colors.mainColors.main}
           />
           <ServiceCard
