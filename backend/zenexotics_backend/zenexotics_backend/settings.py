@@ -143,6 +143,7 @@ INSTALLED_APPS = [
     'review_moderation',
     'client_reviews',
     'professional_reviews',
+    'reviews',  # New consolidated reviews app
     
     # Communication apps
     'user_messages',

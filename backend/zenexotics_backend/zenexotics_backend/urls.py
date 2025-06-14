@@ -71,6 +71,7 @@ urlpatterns = [
         path('booking_drafts/', include('booking_drafts.urls')),
         
         # Review Management
+        path('reviews/', include('reviews.urls')),
         path('review-moderation/', include('review_moderation.urls')),
         path('client-reviews/', include('client_reviews.urls')),
         path('professional-reviews/', include('professional_reviews.urls')),

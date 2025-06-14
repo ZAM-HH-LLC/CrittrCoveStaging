@@ -48,6 +48,8 @@ CURSOR PROJECT GUIDELINES
 4. Add any constants that may be used multiple times to the constants.py. 
 5. Never modify code in <app_name>/views.py or <app_name>/urls.py unless explicitly told to do so.
 6. NEVER try to run the backend server yourself in your responses to me. DO NOT USE THE "runserver" COMMAND.
+7. When trying to run makemigrations/migrate, be sure to activate the virtual environment first.
+8. ALWAYS use pip3 or python3 to run commands, NEVER run pip or python. ALWAYS active the venv first. 
 
 ---
 
