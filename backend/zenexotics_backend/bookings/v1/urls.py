@@ -13,5 +13,6 @@ urlpatterns = [
     path('<int:booking_id>/update/', views.UpdateBookingView.as_view(), name='booking-update'),
     path('<int:booking_id>/approve/', views.ApproveBookingView.as_view(), name='booking-approve'),
     path('<int:booking_id>/request-changes/', views.RequestBookingChangesView.as_view(), name='booking-request-changes'),
+    path('<int:booking_id>/mark_completed/', views.MarkBookingCompletedView.as_view(), name='booking-mark-completed'),
     path('connections/', views.ConnectionsView.as_view(), name='connections'),
 ]

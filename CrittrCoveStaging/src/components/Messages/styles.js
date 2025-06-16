@@ -171,6 +171,11 @@ export const createMessageStyles = (screenWidth, isCollapsed = false) => StyleSh
     width: '100%',
     paddingBottom: 16,
   },
+  fullWidthMessage: {
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+  },
   textInput: {
     flex: 1,
     backgroundColor: theme.colors.background,

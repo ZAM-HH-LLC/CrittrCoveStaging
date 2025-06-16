@@ -1714,3 +1714,26 @@ export const sendImageMessage = async (conversationId, images, caption = '') => 
   return uploadAndSendImageMessage(conversationId, images, caption);
 };
 
+/**
+ * Mark a booking as completed
+ * @param {string|number} bookingId - ID of the booking to mark as completed
+ * @returns {Promise<Object>} - Response from the API
+ */
+export const markBookingCompleted = async (bookingId) => {
+  try {
+    debugLog('MBA8675309: Marking booking as completed:', bookingId);
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/api/bookings/v1/${bookingId}/mark_completed/`,
+      {} // Empty body since we don't need to send any data
+    );
+    
+    debugLog('MBA8675309: Booking marked as completed successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA8675309: Error marking booking as completed:', error);
+    debugLog('MBA8675309: Error details:', error.response?.data || error.message);
+    throw error;
+  }
+};
+

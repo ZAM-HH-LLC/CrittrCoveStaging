@@ -2128,4 +2128,214 @@ class BookingDetailView(APIView):
                 {"error": "Failed to fetch booking details"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class MarkBookingCompletedView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, booking_id):
+        """
+        Mark a booking as completed.
+        
+        This endpoint:
+        1. Validates professional access to the booking
+        2. Verifies the booking is in "Confirmed" status
+        3. Updates the booking status to "Completed"
+        4. Updates all occurrences to "COMPLETED" status
+        5. Creates review request messages for both client and professional
+        6. Returns success response with updated booking status
+        """
+        logger.info(f"MBA8675309: Starting MarkBookingCompletedView.post for booking {booking_id}")
+        sid = transaction.savepoint()  # Create savepoint for rollback
+        
+        try:
+            # Get the booking and verify professional access
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            
+            # Check if user is a professional
+            try:
+                professional = Professional.objects.get(user=request.user)
+            except Professional.DoesNotExist:
+                logger.error(f"MBA8675309: User {request.user.id} is not a professional")
+                return Response(
+                    {"error": "Only professionals can mark bookings as completed"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Verify this is the professional's booking
+            if booking.professional != professional:
+                logger.error(f"MBA8675309: Professional {professional.professional_id} does not own booking {booking_id}")
+                return Response(
+                    {"error": "Not authorized to mark this booking as completed"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Verify booking is in "Confirmed" status
+            if booking.status != BookingStates.CONFIRMED:
+                logger.error(f"MBA8675309: Booking {booking_id} is not in Confirmed status. Current status: {booking.status}")
+                return Response(
+                    {"error": "Only confirmed bookings can be marked as completed"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get all occurrences for this booking
+            occurrences = BookingOccurrence.objects.filter(booking=booking).order_by('-end_time')
+            
+            if not occurrences.exists():
+                logger.error(f"MBA8675309: No occurrences found for booking {booking_id}")
+                return Response(
+                    {"error": "Cannot mark booking as completed - no occurrences found"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get the latest occurrence's end time
+            latest_occurrence = occurrences.first()
+            current_time = timezone.now()
+            
+            # Check if the latest occurrence has ended
+            # Create a datetime object from the latest occurrence's date and time for comparison
+            latest_occurrence_datetime = datetime.combine(
+                latest_occurrence.end_date, 
+                latest_occurrence.end_time
+            ).replace(tzinfo=pytz.UTC)
+            
+            if latest_occurrence_datetime > current_time:
+                logger.error(f"MBA8675309: Latest occurrence for booking {booking_id} has not ended yet. End time: {latest_occurrence_datetime}")
+                return Response(
+                    {"error": "Cannot mark booking as completed - all occurrences must have ended"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"MBA8675309: Verified all occurrences have ended for booking {booking_id}")
+            
+            # Get client for messaging
+            client = booking.client
+            
+            # Store previous status for logging
+            previous_status = booking.status
+            
+            # Update booking status to "Completed"
+            booking.status = BookingStates.COMPLETED
+            booking.completed_at = timezone.now()
+            booking.completed_by = request.user
+            booking.save()
+            logger.info(f"MBA8675309: Updated booking {booking_id} status to {booking.status}")
+            
+            # Update all occurrences to "COMPLETED" status
+            occurrences = BookingOccurrence.objects.filter(booking=booking)
+            for occurrence in occurrences:
+                occurrence.status = 'COMPLETED'
+                occurrence.save()
+            logger.info(f"MBA8675309: Updated {occurrences.count()} occurrences to COMPLETED status")
+            
+            # Find or create conversation between professional and client
+            conversation = Conversation.objects.filter(
+                (Q(participant1=request.user) & Q(participant2=client.user)) |
+                (Q(participant1=client.user) & Q(participant2=request.user))
+            ).first()
+            
+            if not conversation:
+                logger.error(f"MBA8675309: No conversation found between professional {professional.professional_id} and client {client.id}")
+                # Create a new conversation if none exists
+                conversation = Conversation.objects.create(
+                    participant1=request.user,
+                    participant2=client.user,
+                    role_map={
+                        f"user_{request.user.id}": "professional",
+                        f"user_{client.user.id}": "client"
+                    }
+                )
+                logger.info(f"MBA8675309: Created new conversation {conversation.conversation_id}")
+            
+            # Get booking summary for cost information
+            booking_summary = BookingSummary.objects.filter(booking=booking).first()
+            cost_data = {
+                'total_client_cost': str(booking_summary.total_client_cost) if booking_summary else "0.00",
+                'total_sitter_payout': str(booking_summary.total_sitter_payout) if booking_summary else "0.00"
+            }
+            
+            # Create a single review request message with both client and professional review data
+            # Import the UserMessage model
+            from user_messages.models import UserMessage
+            
+            # We need to make sure 'request_review' is a valid message type
+            # Since we can't modify the choices at runtime, we'll use 'booking_confirmed' as the type instead
+            # This will still work with our frontend logic
+            
+            review_request = UserMessage.objects.create(
+                conversation=conversation,
+                sender=request.user,  # Use the professional as the sender
+                content="Booking Completed",
+                type_of_message='booking_confirmed',  # Using an existing message type
+                is_clickable=True,
+                status='sent',
+                booking=booking,
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'service_type': booking.service_id.service_name if booking.service_id else "Unknown Service",
+                    'booking_status': BookingStates.get_display_state(booking.status),
+                    'completed_at': timezone.now().isoformat(),  # Use isoformat for datetime
+                    'cost_summary': cost_data,
+                    'is_review_request': True,  # Special flag to identify review request messages
+                    'client_review': {
+                        'review_type': 'client_review',
+                        'reviewer_id': client.user.id,
+                        'reviewee_id': professional.user.id,
+                    },
+                    'professional_review': {
+                        'review_type': 'professional_review',
+                        'reviewer_id': professional.user.id,
+                        'reviewee_id': client.user.id,
+                    }
+                }
+            )
+            logger.info(f"MBA8675309: Created review request message {review_request.message_id}")
+            
+            # Update conversation's last message and time
+            conversation.last_message = "Booking Completed - Please leave a review"
+            conversation.last_message_time = timezone.now()
+            conversation.save()
+            logger.info(f"MBA8675309: Updated conversation {conversation.conversation_id} with last_message='{conversation.last_message}'")
+            
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='BOOKING_MARKED_COMPLETED',
+                target_type='BOOKING',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'previous_status': previous_status,
+                    'new_status': booking.status,
+                    'completed_at': timezone.now().isoformat()
+                }
+            )
+            
+            # Commit the transaction
+            transaction.savepoint_commit(sid)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Booking marked as completed successfully',
+                'booking_status': BookingStates.get_display_state(booking.status),
+                'conversation_id': conversation.conversation_id
+            })
+            
+        except Exception as e:
+            transaction.savepoint_rollback(sid)
+            logger.error(f"MBA8675309: Error marking booking as completed: {str(e)}")
+            logger.error(f"MBA8675309: Full traceback: {traceback.format_exc()}")
+            
+            # Log the error
+            ErrorLog.objects.create(
+                user=request.user,
+                error_message=str(e),
+                endpoint=f'/api/bookings/v1/{booking_id}/mark_completed/',
+                metadata={'booking_id': booking_id}
+            )
+            
+            return Response(
+                {"error": "An error occurred while marking the booking as completed"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         

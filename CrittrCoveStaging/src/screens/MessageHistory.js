@@ -33,6 +33,7 @@ import { createMessageStyles } from '../components/Messages/styles';
 import ClientPetsModal from '../components/ClientPetsModal';
 import { formatMessageTime, shouldShowTimestamp } from '../components/Messages/messageTimeUtils';
 import MessageTimestamp from '../components/Messages/MessageTimestamp';
+import ReviewRequestCard from '../components/ReviewRequestCard';
 
 const MessageHistory = ({ navigation, route }) => {
   // IMPORTANT: React hooks rules require that hooks are called in the same order
@@ -2104,6 +2105,54 @@ const MessageHistory = ({ navigation, route }) => {
       .filter(m => m.type_of_message === 'booking_confirmed')
       .map(m => m.metadata?.booking_id)
       .filter(Boolean);
+      
+    // Track bookings that have been completed
+    const completedBookingIds = messages
+      .filter(m => 
+        (m.type_of_message === 'booking_confirmed' && m.metadata?.is_review_request) ||
+        (m.type_of_message === 'request_review')
+      )
+      .map(m => m.metadata?.booking_id)
+      .filter(Boolean);
+      
+    // Check if the current message's booking has been completed
+    const isBookingCompleted = item.metadata?.booking_id && 
+      completedBookingIds.includes(item.metadata.booking_id);
+      
+    // Handle review request messages - check for both request_review and booking_confirmed with review metadata
+    if (item.type_of_message === 'request_review' || 
+        (item.type_of_message === 'booking_confirmed' && 
+         (item.metadata?.is_review_request || item.metadata?.client_review || item.metadata?.professional_review))) {
+      debugLog('MBA8675309: Rendering review request message:', {
+        messageId: item.message_id,
+        content: item.content,
+        metadata: item.metadata,
+        bookingId: item.metadata?.booking_id,
+        isProfessional: selectedConversationData?.is_professional,
+        sender: item.sender
+      });
+      
+      // For review request messages, we don't show a timestamp since it spans the full width
+      return (
+        <View style={styles.fullWidthMessage}>
+          <ReviewRequestCard
+            data={{
+              ...item.metadata,
+              booking_id: item.metadata?.booking_id,
+              service_type: item.metadata?.service_type,
+            }}
+            isProfessional={selectedConversationData?.is_professional}
+            onPress={(action) => {
+              // Only handle the leave review action since view details now opens the modal directly
+              if (action === 'leaveReview') {
+                // Handle review action
+                Alert.alert('Review', 'Review functionality will be implemented soon');
+              }
+            }}
+          />
+        </View>
+      );
+    }
     
     // Get previous message (newer in the timeline since the list is inverted)
     const prevMessage = index < messages.length - 1 ? messages[index + 1] : null;
@@ -2322,6 +2371,7 @@ const MessageHistory = ({ navigation, route }) => {
             isNewestMessage={isNewestMessage}
             messageCreatedAt={messageCreatedAt}
             isAfterConfirmation={isUpdateToConfirmedBooking}
+            isBookingCompleted={isBookingCompleted}
           />
         </View>
       );
@@ -2437,6 +2487,7 @@ const MessageHistory = ({ navigation, route }) => {
             isNewestMessage={isNewestChangeRequest} // Use enhanced newest message check
             messageCreatedAt={messageCreatedAt}
             isAfterConfirmation={isRelatedToUpdate} // Flag for change requests after an update
+            isBookingCompleted={isBookingCompleted}
           />
         </View>
       );
@@ -2509,6 +2560,17 @@ const MessageHistory = ({ navigation, route }) => {
               handleEditDraft(bookingId);
             } : undefined}
             hasNewerApprovalRequests={hasNewerApprovalRequests}
+            isBookingCompleted={isBookingCompleted}
+            onMarkCompletedSuccess={(response) => {
+              debugLog('MBA8675309: Booking marked as completed successfully:', response);
+              Alert.alert('Success', 'Booking marked as completed successfully');
+              // Refresh messages to update the UI
+              fetchMessages(selectedConversation, 1);
+            }}
+            onMarkCompletedError={(error) => {
+              debugLog('MBA8675309: Error marking booking as completed:', error);
+              Alert.alert('Error', error || 'Failed to mark booking as completed');
+            }}
           />
         </View>
       );

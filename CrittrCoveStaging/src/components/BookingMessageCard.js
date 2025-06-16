@@ -2,11 +2,12 @@ import React, { useContext, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { approveBooking } from '../api/API';
+import { approveBooking, markBookingCompleted } from '../api/API';
 import { formatDateTimeRangeFromUTC, convertTo24Hour } from '../utils/time_utils';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import moment from 'moment-timezone';
 import BookingApprovalModal from './BookingApprovalModal';
+import Toast from './Toast';
 
 // A simplified version of checkDSTChange that only relies on moment-timezone
 const checkDSTChange = (startDate, startTime, endDate, endTime, timezone) => {
@@ -38,13 +39,20 @@ const BookingMessageCard = ({
   isNewestMessage = false, // Flag to indicate if this is the newest message for this booking
   messageCreatedAt, // Timestamp of when the message was created
   hasNewerApprovalRequests = false, // Flag to indicate if this booking_confirmed message has newer approval requests
-  isAfterConfirmation = false // Flag to indicate if this approval message comes after a booking confirmation
+  isAfterConfirmation = false, // Flag to indicate if this approval message comes after a booking confirmation
+  onMarkCompletedSuccess, // Callback when booking is marked as completed successfully
+  onMarkCompletedError, // Callback when marking booking as completed fails
+  isBookingCompleted = false // Flag to indicate if the booking has been completed
 }) => {
   const { timeSettings } = useContext(AuthContext);
   const userTimezone = timeSettings?.timezone || 'US/Mountain';
   const [approvalModalVisible, setApprovalModalVisible] = useState(false);
   const [safeInitialData, setSafeInitialData] = useState(null);
   const [showAllDates, setShowAllDates] = useState(false); // New state for expanded/collapsed dates
+  const [isMarkingCompleted, setIsMarkingCompleted] = useState(false); // State for marking completed process
+  const [toastVisible, setToastVisible] = useState(false); // State for toast visibility
+  const [toastMessage, setToastMessage] = useState(''); // State for toast message
+  const [toastType, setToastType] = useState('error'); // State for toast type
   
   // Create safe data on component load
   useEffect(() => {
@@ -75,6 +83,7 @@ const BookingMessageCard = ({
   const isChangeRequestForConfirmedBooking = isChangeRequest && isConfirmed;
   
   // Determine if we should show the overlay based on message type and recency
+  // - Show "Booking Completed" if the booking is completed
   // - Show "Booking Confirmed" on all earlier messages for confirmed bookings EXCEPT
   //   for approval messages that come after a booking confirmation
   // - Show "Changes Requested" on approval messages if there's a change request AND this isn't the newest message
@@ -83,6 +92,8 @@ const BookingMessageCard = ({
   //   for the same booking ID (NOT on the approval request itself)
   // - Show "Booking Updated" on booking update messages if they have newer request changes
   const shouldShowOverlay = 
+    // Show "Booking Completed" if the booking is completed
+    isBookingCompleted ||
     // Show "Booking Confirmed" on earlier messages, but NOT on approval messages that come after a confirmation
     // AND not on request_changes messages that are the newest message
     (isConfirmed && !isBookingConfirmed && type !== 'approval' && !isAfterConfirmation && !(isChangeRequest && isNewestMessage)) || 
@@ -99,6 +110,9 @@ const BookingMessageCard = ({
   
   // What overlay text to show
   const getOverlayText = () => {
+    // For completed bookings, show "Booking Completed"
+    if (isBookingCompleted) return 'Booking Completed';
+    
     // For booking_confirmed messages with newer approval requests, show "Booking Updated"
     if (isBookingConfirmed && hasNewerApprovalRequests) return 'Booking Updated';
     
@@ -402,6 +416,43 @@ const BookingMessageCard = ({
     setShowAllDates(!showAllDates);
   };
 
+  // Handle marking booking as completed
+  const handleMarkCompleted = async () => {
+    try {
+      setIsMarkingCompleted(true);
+      debugLog('MBA8675309: Marking booking as completed:', data.booking_id);
+      
+      const response = await markBookingCompleted(data.booking_id);
+      
+      debugLog('MBA8675309: Booking marked as completed successfully:', response);
+      
+      // Call the success callback if provided
+      if (onMarkCompletedSuccess) {
+        onMarkCompletedSuccess(response);
+      }
+    } catch (error) {
+      debugLog('MBA8675309: Error marking booking as completed:', error);
+      
+      // Extract error message from response
+      let errorMessage = 'Failed to mark booking as completed';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      // Show toast with error message
+      setToastMessage(errorMessage);
+      setToastType('error');
+      setToastVisible(true);
+      
+      // Call the error callback if provided
+      if (onMarkCompletedError) {
+        onMarkCompletedError(error);
+      }
+    } finally {
+      setIsMarkingCompleted(false);
+    }
+  };
+
   // Determine if we need to show the "Show More" button
   const occurrences = data.occurrences || [];
   const hasMoreDates = occurrences.length > 3;
@@ -484,8 +535,8 @@ const BookingMessageCard = ({
               </TouchableOpacity>
               
               {/* Buttons are separate from the clickable card content */}
-              <View style={styles.buttonContainer}>
-                {/* View Details button */}
+              <View style={[styles.buttonContainer, isProfessional ? { flexDirection: 'column', gap: 8 } : {}]}>
+                {/* View Details button - always enabled */}
                 <TouchableOpacity
                   style={[styles.detailsButton, { flex: 1 }]}
                   onPress={handleOpenApprovalModal}
@@ -493,13 +544,41 @@ const BookingMessageCard = ({
                   <Text style={styles.detailsButtonText}>View Details</Text>
                 </TouchableOpacity>
                 
-                {/* Edit Details button for professionals */}
+                {/* Edit Details button for professionals - disabled if booking is completed */}
                 {isProfessional && onEditDraft && (
                   <TouchableOpacity 
-                    style={[styles.editButton, { flex: 1 }]}
+                    style={[
+                      styles.editButton, 
+                      { flex: 1 }
+                    ]}
                     onPress={onEditDraft}
+                    disabled={isBookingCompleted}
                   >
-                    <Text style={styles.editButtonText}>Edit Details</Text>
+                    <Text style={[
+                      styles.editButtonText
+                    ]}>
+                      Edit Details
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* Mark as Completed button for professionals - disabled if booking is completed */}
+                {isProfessional && isBookingConfirmed && isConfirmed && (
+                  <TouchableOpacity 
+                    style={[
+                      styles.completeButton, 
+                      { flex: 1 },
+                      isMarkingCompleted ? styles.disabledButton : {}
+                    ]}
+                    onPress={handleMarkCompleted}
+                    disabled={isBookingCompleted || isMarkingCompleted}
+                  >
+                    <Text style={[
+                      styles.completeButtonText,
+                      isMarkingCompleted ? styles.disabledButtonText : {}
+                    ]}>
+                      {isMarkingCompleted ? 'Marking...' : 'Mark as Completed'}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -672,6 +751,15 @@ const BookingMessageCard = ({
           isBookingConfirmed || isConfirmed ? "Booking Details" : 
           "Booking Approval Request"
         }
+      />
+
+      {/* Toast component for error messages */}
+      <Toast 
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onDismiss={() => setToastVisible(false)}
+        duration={7000}
       />
     </View>
   );
@@ -878,6 +966,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
     opacity: 0.6,
   },
+  disabledButtonText: {
+    color: theme.colors.placeHolderText,
+  },
   statusOverlay: {
     position: 'absolute',
     top: 0,
@@ -973,6 +1064,21 @@ const styles = StyleSheet.create({
     right: 0,
     height: 4,
     backgroundColor: theme.colors.success,
+  },
+  completeButton: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: theme.colors.success,
+    borderWidth: 1,
+    borderColor: theme.colors.success,
+  },
+  completeButtonText: {
+    color: 'black',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 
