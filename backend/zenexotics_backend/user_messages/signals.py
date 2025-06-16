@@ -23,125 +23,126 @@ def send_delayed_email(message_id):
     Function to send an email notification after a delay,
     but only if the message is still unread.
     """
-    try:
-        # Get the message
+    if not settings.IS_DEVELOPMENT:
         try:
-            message = UserMessage.objects.get(message_id=message_id)
-        except UserMessage.DoesNotExist:
-            logger.error(f"Message with ID {message_id} not found for delayed email notification")
-            return
-        
-        # If message has been read, don't send notification
-        if message.status == 'read':
-            logger.info(f"Message {message_id} already read, skipping email notification")
-            return
-            
-        # Get the conversation and participants
-        conversation = message.conversation
-        sender_user = message.sender
-        
-        # Determine the recipient (the other participant)
-        recipient_user = conversation.participant2 if conversation.participant1 == sender_user else conversation.participant1
-        
-        # Check if user has email notifications enabled
-        try:
-            user_settings = UserSettings.objects.get(user=recipient_user)
-            if not user_settings.email_updates:
-                logger.info(f"User {recipient_user.id} has email notifications disabled")
+            # Get the message
+            try:
+                message = UserMessage.objects.get(message_id=message_id)
+            except UserMessage.DoesNotExist:
+                logger.error(f"Message with ID {message_id} not found for delayed email notification")
                 return
-        except UserSettings.DoesNotExist:
-            # Default to sending if setting doesn't exist
-            pass
+            
+            # If message has been read, don't send notification
+            if message.status == 'read':
+                logger.info(f"Message {message_id} already read, skipping email notification")
+                return
+                
+            # Get the conversation and participants
+            conversation = message.conversation
+            sender_user = message.sender
+            
+            # Determine the recipient (the other participant)
+            recipient_user = conversation.participant2 if conversation.participant1 == sender_user else conversation.participant1
+            
+            # Check if user has email notifications enabled
+            try:
+                user_settings = UserSettings.objects.get(user=recipient_user)
+                if not user_settings.email_updates:
+                    logger.info(f"User {recipient_user.id} has email notifications disabled")
+                    return
+            except UserSettings.DoesNotExist:
+                # Default to sending if setting doesn't exist
+                pass
+            
+            logger.info(f"Sending delayed email notification to user {recipient_user.id} (message ID: {message_id})")
+            
+            email_start_time = time.time()
+            
+            # Enhanced headers for better deliverability
+            message_id_str = f"{message.message_id}.{int(time.time())}@crittrcove.com"
+            headers = {
+                'Message-ID': f'<{message_id_str}>',
+                'References': f'<conv-{conversation.conversation_id}@crittrcove.com>',
+                'In-Reply-To': f'<conv-{conversation.conversation_id}@crittrcove.com>',
+                'List-Unsubscribe': f'<{settings.FRONTEND_BASE_URL}/settings/notifications>',
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                'X-Entity-Ref-ID': str(message.message_id),
+                'X-Mail-Type': 'notification',
+                'X-Campaign-Type': 'transactional',
+                'Feedback-ID': f'{message.message_id}:user_message:crittrcove',
+                'X-Auto-Response-Suppress': 'All',
+                'Auto-Submitted': 'auto-generated',
+                'X-Message-Type': message.type_of_message,
+                'X-Message-Info': 'user_notification',
+                'X-Message-ID': message_id_str,
+                'Precedence': 'transactional'
+            }
+            
+            # Keep subject line personal but clear
+            subject = f"Message from {sender_user.name} on CrittrCove"
+            
+            # Create a message preview (first 100 chars)
+            message_preview = message.content[:100] + ('...' if len(message.content) > 100 else '')
+            
+            # Format date for email
+            email_date = timezone.now().strftime("%B %d, %Y at %I:%M %p")
+            
+            # Create HTML email message
+            html_message = f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>CrittrCove Message from {sender_user.name}</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; padding: 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 20px; text-align: center; background-color: #e7f2f2;">
+                            <h1 style="color: #008080; margin-top: 0;">CrittrCove</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 30px 20px;">
+                            <h1 style="margin-top: 0; color: #333333; font-size: 24px;">Hi {recipient_user.name},</h1>
+                            <p>You've received a {message.type_of_message.lower()} from {sender_user.name} on {email_date}.</p>
+                            
+                            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                                <p style="margin: 0; font-style: italic;">"{message_preview}"</p>
+                            </div>
+                            
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="{settings.FRONTEND_BASE_URL}/messages?conversationId={conversation.conversation_id}" 
+                                style="display: inline-block; background-color: #008080; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">
+                                View Full Message
+                                </a>
+                            </div>
+                            
+                            <p>If you're having trouble with the button above, you can also copy and paste this link into your browser:</p>
+                            <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 14px;">
+                                {settings.FRONTEND_BASE_URL}/messages?conversationId={conversation.conversation_id}
+                            </p>
+                            
+                            <p>We hope you enjoy using CrittrCove for all your pet care needs!</p>
+                            
+                            <p>Best regards,<br>The CrittrCove Team</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 20px; text-align: center; background-color: #f5f5f5; font-size: 12px;">
+                            <p>You're receiving this email because you have an account on CrittrCove and have enabled message notifications.</p>
+                            <p><a href="{settings.FRONTEND_BASE_URL}/settings/notifications" style="color: #008080; text-decoration: underline;">Manage your notification preferences</a> | <a href="{settings.FRONTEND_BASE_URL}" style="color: #008080; text-decoration: underline;">Visit CrittrCove</a></p>
+                            <p>CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103</p>
+                            <p>&copy; 2025 CrittrCove. All rights reserved.</p>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+            """
         
-        logger.info(f"Sending delayed email notification to user {recipient_user.id} (message ID: {message_id})")
-        
-        email_start_time = time.time()
-        
-        # Enhanced headers for better deliverability
-        message_id_str = f"{message.message_id}.{int(time.time())}@crittrcove.com"
-        headers = {
-            'Message-ID': f'<{message_id_str}>',
-            'References': f'<conv-{conversation.conversation_id}@crittrcove.com>',
-            'In-Reply-To': f'<conv-{conversation.conversation_id}@crittrcove.com>',
-            'List-Unsubscribe': f'<{settings.FRONTEND_BASE_URL}/settings/notifications>',
-            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-            'X-Entity-Ref-ID': str(message.message_id),
-            'X-Mail-Type': 'notification',
-            'X-Campaign-Type': 'transactional',
-            'Feedback-ID': f'{message.message_id}:user_message:crittrcove',
-            'X-Auto-Response-Suppress': 'All',
-            'Auto-Submitted': 'auto-generated',
-            'X-Message-Type': message.type_of_message,
-            'X-Message-Info': 'user_notification',
-            'X-Message-ID': message_id_str,
-            'Precedence': 'transactional'
-        }
-        
-        # Keep subject line personal but clear
-        subject = f"Message from {sender_user.name} on CrittrCove"
-        
-        # Create a message preview (first 100 chars)
-        message_preview = message.content[:100] + ('...' if len(message.content) > 100 else '')
-        
-        # Format date for email
-        email_date = timezone.now().strftime("%B %d, %Y at %I:%M %p")
-        
-        # Create HTML email message
-        html_message = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>CrittrCove Message from {sender_user.name}</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; padding: 0;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 20px; text-align: center; background-color: #e7f2f2;">
-                        <h1 style="color: #008080; margin-top: 0;">CrittrCove</h1>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding: 30px 20px;">
-                        <h1 style="margin-top: 0; color: #333333; font-size: 24px;">Hi {recipient_user.name},</h1>
-                        <p>You've received a {message.type_of_message.lower()} from {sender_user.name} on {email_date}.</p>
-                        
-                        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                            <p style="margin: 0; font-style: italic;">"{message_preview}"</p>
-                        </div>
-                        
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="{settings.FRONTEND_BASE_URL}/messages?conversationId={conversation.conversation_id}" 
-                               style="display: inline-block; background-color: #008080; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">
-                               View Full Message
-                            </a>
-                        </div>
-                        
-                        <p>If you're having trouble with the button above, you can also copy and paste this link into your browser:</p>
-                        <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 14px;">
-                            {settings.FRONTEND_BASE_URL}/messages?conversationId={conversation.conversation_id}
-                        </p>
-                        
-                        <p>We hope you enjoy using CrittrCove for all your pet care needs!</p>
-                        
-                        <p>Best regards,<br>The CrittrCove Team</p>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding: 20px; text-align: center; background-color: #f5f5f5; font-size: 12px;">
-                        <p>You're receiving this email because you have an account on CrittrCove and have enabled message notifications.</p>
-                        <p><a href="{settings.FRONTEND_BASE_URL}/settings/notifications" style="color: #008080; text-decoration: underline;">Manage your notification preferences</a> | <a href="{settings.FRONTEND_BASE_URL}" style="color: #008080; text-decoration: underline;">Visit CrittrCove</a></p>
-                        <p>CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103</p>
-                        <p>&copy; 2025 CrittrCove. All rights reserved.</p>
-                    </td>
-                </tr>
-            </table>
-        </body>
-        </html>
-        """
-        
-        plain_message = f"""
+            plain_message = f"""
 Hi {recipient_user.name},
 
 You've received a {message.type_of_message.lower()} from {sender_user.name} on {email_date}.
@@ -161,44 +162,46 @@ You're receiving this email because you have an account on CrittrCove and have e
 Manage your notification preferences: {settings.FRONTEND_BASE_URL}/settings/notifications
 CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103
 © 2025 CrittrCove. All rights reserved.
-        """
+            """
         
-        # Handle reply-to properly
-        reply_email = settings.DEFAULT_FROM_EMAIL
-        if hasattr(settings, 'NOTIFICATIONS_REPLY_TO'):
-            reply_email = settings.NOTIFICATIONS_REPLY_TO
-        
-        # Use EmailMessage for more control over headers
-        email_message = EmailMultiAlternatives(
-            subject=subject,
-            body=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[recipient_user.email],
-            reply_to=[reply_email],
-            headers=headers
-        )
-        email_message.attach_alternative(html_message, "text/html")
-        
-        # Set alternative content type properly
-        email_message.mixed_subtype = 'related'
-        email_message.alternatives = [(html_message, 'text/html')]
-        
-        email_message.send(fail_silently=False)
-        
-        # Log email metric
-        email_latency = (time.time() - email_start_time) * 1000  # in milliseconds
-        MessageMetrics.objects.create(
-            message=message,
-            recipient=recipient_user,
-            delivery_status='email_sent',
-            delivery_latency=email_latency,
-            is_recipient_online=False  # We don't check online status for delayed emails
-        )
-        
-        logger.info(f"Sent delayed email notification to {recipient_user.email} for message {message.message_id}")
-    except Exception as e:
-        logger.error(f"Error sending delayed email: {str(e)}")
-        logger.exception("Full email sending error details:")
+            # Handle reply-to properly
+            reply_email = settings.DEFAULT_FROM_EMAIL
+            if hasattr(settings, 'NOTIFICATIONS_REPLY_TO'):
+                reply_email = settings.NOTIFICATIONS_REPLY_TO
+            
+            # Use EmailMessage for more control over headers
+            email_message = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient_user.email],
+                reply_to=[reply_email],
+                headers=headers
+            )
+            email_message.attach_alternative(html_message, "text/html")
+            
+            # Set alternative content type properly
+            email_message.mixed_subtype = 'related'
+            email_message.alternatives = [(html_message, 'text/html')]
+            
+            email_message.send(fail_silently=False)
+            
+            # Log email metric
+            email_latency = (time.time() - email_start_time) * 1000  # in milliseconds
+            MessageMetrics.objects.create(
+                message=message,
+                recipient=recipient_user,
+                delivery_status='email_sent',
+                delivery_latency=email_latency,
+                is_recipient_online=False  # We don't check online status for delayed emails
+            )
+            
+            logger.info(f"Sent delayed email notification to {recipient_user.email} for message {message.message_id}")
+        except Exception as e:
+            logger.error(f"Error sending delayed email: {str(e)}")
+            logger.exception("Full email sending error details:")
+    else:
+        logger.info(f"Skipping delayed email notification for message because we are in development mode")
 
 @receiver(post_save, sender=UserMessage)
 def handle_new_message(sender, instance, created, **kwargs):
