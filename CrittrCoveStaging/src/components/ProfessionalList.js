@@ -16,6 +16,17 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
     });
   }
   
+  // Debug log for review data
+  if (professional.reviews) {
+    debugLog("MBA4001: Professional reviews data", {
+      professional_name: professional.name,
+      has_reviews: professional.reviews.average_rating > 0,
+      average_rating: professional.reviews.average_rating,
+      review_count: professional.reviews.review_count,
+      has_review_text: !!professional.reviews.latest_highest_review_text
+    });
+  }
+  
   const handlePress = () => {
     if (onPress) {
       onPress();
@@ -45,6 +56,9 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
     );
   };
 
+  // Check if we should display reviews
+  const hasReviews = professional.reviews && professional.reviews.average_rating > 0;
+
   return (
     <TouchableOpacity style={styles.listItem} onPress={handlePress}>
       <View style={styles.cardContent}>
@@ -55,9 +69,10 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
         <View style={styles.mainContent}>
           <View style={styles.header}>
             <View style={styles.nameSection}>
+              {/* TODO: styling naming is messed up here, we should fix it. */}
               <Text style={styles.name}>{index + 1}. {professional.primary_service?.service_name || 'Various Services'}</Text>
-              <Text style={styles.location}>{professional.location}</Text>
-              <Text style={styles.distance}>{professional.name}</Text>
+              <Text style={styles.location}>{professional.name}</Text>
+              <Text style={styles.distance}>{professional.location}</Text>
             </View>
             
             <View style={styles.priceSection}>
@@ -76,31 +91,25 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
         </View>
       </View>
 
-      {/* TODO: Comment out reviews section until we implement reviews */}
-      {/* 
-      <View style={styles.reviewSection}>
-        <View style={styles.ratingContainer}>
-          <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
-          <Text style={styles.ratingText}>{professional.rating}</Text>
-          <Text style={styles.dot}> • </Text>
-          <Text style={styles.reviews}>{professional.reviewCount} reviews</Text>
-          {professional.repeat_owners && (
-            <>
-              <Text style={styles.dot}> • </Text>
-              <MaterialCommunityIcons name="sync" size={16} color={theme.colors.text} />
-              <Text style={styles.repeatOwners}> {professional.repeat_owners} repeat owners</Text>
-            </>
-          )}
-        </View>
-        
-        {professional.bestReview && (
-          <View style={styles.bestReviewContainer}>
-            {professional.reviewer_picture_url ? (
-              <Image 
-                source={{ uri: getMediaUrl(professional.reviewer_picture_url) }}
-                style={styles.reviewerImage}
-              />
-            ) : (
+      {hasReviews && (
+        <View style={styles.reviewSection}>
+          <View style={styles.ratingContainer}>
+            <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
+            <Text style={styles.ratingText}>{professional.reviews.average_rating.toFixed(1)}</Text>
+            <Text style={styles.dot}> • </Text>
+            <Text style={styles.reviews}>{professional.reviews.review_count} reviews</Text>
+            {professional.repeat_owners && (
+              <>
+                <Text style={styles.dot}> • </Text>
+                <MaterialCommunityIcons name="sync" size={16} color={theme.colors.text} />
+                <Text style={styles.repeatOwners}> {professional.repeat_owners} repeat clients</Text>
+              </>
+            )}
+          </View>
+          
+          {professional.reviews.latest_highest_review_text && (
+            <View style={styles.bestReviewContainer}>
+              {/* TODO: In the future, this will be replaced with latest_highest_review_author_profile_pic */}
               <View style={[styles.reviewerImage, styles.fallbackReviewerIconContainer]}>
                 <MaterialCommunityIcons 
                   name="account" 
@@ -108,17 +117,16 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
                   color={theme.colors.textSecondary} 
                 />
               </View>
-            )}
-            <View style={styles.bestReviewTextContainer}>
-              <Text style={styles.bestReview} numberOfLines={2}>
-                "{professional.bestReview}"
-                <Text style={styles.readMore}> Read more</Text>
-              </Text>
+              <View style={styles.bestReviewTextContainer}>
+                <Text style={styles.bestReview} numberOfLines={2}>
+                  "{professional.reviews.latest_highest_review_text}"
+                  <Text style={styles.readMore}> Read more</Text>
+                </Text>
+              </View>
             </View>
-          </View>
-        )}
-      </View>
-      */}
+          )}
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -216,7 +224,7 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
   const renderHeader = () => (
     <View style={[styles.header, {borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingBottom: theme.spacing.medium}]}>
       <View style={styles.headerContent}>
-        <Text style={styles.headerTitle}>Pet Care Professionals</Text>
+        <Text style={[styles.headerTitle, {paddingTop: theme.spacing.medium}]}>Pet Care Professionals</Text>
         <View style={styles.filterChips}>
           {filters?.categories?.map((filter, index) => (
             <View key={index} style={styles.filterChip}>
@@ -225,7 +233,7 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
           ))}
         </View>
       </View>
-      <View style={styles.headerButtons}>
+      <View style={[styles.headerButtons, {paddingTop: 8}]}>
         <TouchableOpacity style={styles.filterButton} onPress={onFilterPress}>
           <MaterialCommunityIcons name="filter" size={24} color={theme.colors.text} />
         </TouchableOpacity>
@@ -306,15 +314,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: theme.spacing.medium,
     paddingTop: theme.spacing.medium,
-    paddingBottom: theme.spacing.medium,
+    paddingBottom: theme.spacing.small,
   },
   leftSection: {
     marginRight: theme.spacing.medium,
+    justifyContent: 'center',
   },
   profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
   mainContent: {
     flex: 1,
@@ -367,8 +376,9 @@ const styles = StyleSheet.create({
   reviewSection: {
     paddingHorizontal: theme.spacing.medium,
     paddingVertical: theme.spacing.small,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
+    marginTop: 0,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -421,8 +431,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingHorizontal: theme.spacing.medium,
-    paddingTop: theme.spacing.medium,
+    paddingRight: theme.spacing.small,
+    // paddingTop: theme.spacing.medium,
     backgroundColor: theme.colors.surfaceContrast,
     
   },

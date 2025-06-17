@@ -20,7 +20,8 @@ from geopy.distance import geodesic
 import requests
 import random
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db.models import Case, When, Value, IntegerField
+from django.db.models import Case, When, Value, IntegerField, Avg
+from reviews.models import ClientReview
 
 # Configure logging to print to console
 logger = logging.getLogger(__name__)
@@ -359,6 +360,36 @@ def search_professionals(request):
                 if coord_lat is None or coord_lng is None:
                     continue  # Skip this professional if coordinates are invalid
                 
+                # Get review data for this professional
+                reviews = ClientReview.objects.filter(
+                    professional=professional,
+                    status='APPROVED',
+                    review_visible=True
+                )
+                
+                # Calculate average rating and count
+                avg_rating = reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
+                review_count = reviews.count()
+                
+                # Format the average rating (5.0 if >= 4.995, otherwise round to 2 decimal places)
+                formatted_avg_rating = 5.0 if avg_rating >= 4.995 else round(avg_rating, 2)
+                
+                # Get the latest highest-rated review text
+                latest_review_text = None
+                latest_review_author = None
+                
+                if review_count > 0:
+                    # First try to get the latest 5-star review
+                    highest_rating = 5
+                    while highest_rating > 0 and latest_review_text is None:
+                        highest_reviews = reviews.filter(rating=highest_rating).order_by('-created_at')
+                        if highest_reviews.exists():
+                            latest_review = highest_reviews.first()
+                            latest_review_text = latest_review.review_text
+                            latest_review_author = latest_review.client.user.name if latest_review.client and latest_review.client.user else None
+                            break
+                        highest_rating -= 1
+                
                 result = {
                     'professional_id': professional.professional_id,
                     'name': professional.user.name,
@@ -376,7 +407,13 @@ def search_professionals(request):
                         'is_overnight': best_service.is_overnight
                     },
                     'match_type': match_type,
-                    'distance': prof_data['distance']
+                    'distance': prof_data['distance'],
+                    'reviews': {
+                        'average_rating': formatted_avg_rating,
+                        'review_count': review_count,
+                        'latest_highest_review_text': latest_review_text,
+                        'latest_highest_review_author': latest_review_author
+                    }
                 }
                 results.append(result)
         

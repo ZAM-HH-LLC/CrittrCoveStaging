@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Dimensions, Alert } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Dimensions, Alert, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { getProfessionalServicesDetailed, createConversation } from '../api/API';
+import { getProfessionalServicesDetailed, createConversation, getUserReviews } from '../api/API';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { getMediaUrl } from '../config/config';
+import ReviewsModal from './ReviewsModal';
 
 const ProfessionalServicesModal = ({ visible, onClose, professional, primaryService }) => {
   const navigation = useNavigation();
@@ -18,6 +20,11 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [reviews, setReviews] = useState([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
   
   const { width: screenWidth } = Dimensions.get('window');
   const isMobile = screenWidth <= 768;
@@ -26,6 +33,7 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
   useEffect(() => {
     if (visible && professional?.professional_id) {
       fetchServices();
+      fetchReviews();
     }
   }, [visible, professional?.professional_id]);
 
@@ -59,6 +67,42 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
     }
   };
 
+  const fetchReviews = async () => {
+    if (!professional?.professional_id) return;
+    
+    setLoadingReviews(true);
+    try {
+      const professionalId = professional.professional_id.toString();
+      debugLog('MBA4001', 'Fetching reviews for professional:', professionalId);
+      const reviewsData = await getUserReviews(null, professionalId, false);
+      debugLog('MBA4001', 'Reviews fetched successfully:', reviewsData);
+      
+      // Check if the response has the expected structure
+      if (reviewsData && typeof reviewsData === 'object') {
+        setReviews(reviewsData.reviews || []);
+        setAverageRating(reviewsData.average_rating || 0);
+        setReviewCount(reviewsData.review_count || 0);
+        
+        if (reviewsData.detail) {
+          debugLog('MBA4001', 'Review fetch message:', reviewsData.detail);
+        }
+      } else {
+        debugLog('MBA4001', 'Unexpected reviews data format:', reviewsData);
+        setReviews([]);
+        setAverageRating(0);
+        setReviewCount(0);
+      }
+    } catch (err) {
+      debugLog('MBA4001', 'Error fetching professional reviews:', err);
+      // Don't set an error state here, as we don't want to block the UI
+      setReviews([]);
+      setAverageRating(0);
+      setReviewCount(0);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
   const handleClose = () => {
     setSelectedService(null);
     setServices([]);
@@ -67,6 +111,9 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
     setMobileView('services');
     setShowErrorModal(false);
     setErrorMessage('');
+    setReviews([]);
+    setAverageRating(0);
+    setReviewCount(0);
     onClose();
   };
 
@@ -285,243 +332,290 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
     }
   };
 
-  return (
-    <Modal
-      visible={visible}
-      onRequestClose={handleClose}
-      animationType="slide"
-      transparent={true}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContainer, isSmallMobile && styles.modalContainerSmallMobile]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.professionalName}>{professional?.name}</Text>
-              <Text style={styles.professionalLocation}>{professional?.location}</Text>
-            </View>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
+  const handleOpenReviewsModal = () => {
+    setShowReviewsModal(true);
+  };
 
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.loadingText}>Loading services...</Text>
-            </View>
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchServices}>
-                <Text style={styles.retryText}>Retry</Text>
+  const handleCloseReviewsModal = () => {
+    setShowReviewsModal(false);
+  };
+
+  return (
+    <>
+      <Modal
+        visible={visible}
+        onRequestClose={handleClose}
+        animationType="slide"
+        transparent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, isSmallMobile && styles.modalContainerSmallMobile]}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                {professional?.profile_picture_url ? (
+                  <Image 
+                    source={{ uri: getMediaUrl(professional.profile_picture_url) }} 
+                    style={styles.professionalProfilePhoto} 
+                  />
+                ) : (
+                  <View style={styles.professionalProfilePhotoPlaceholder}>
+                    <MaterialCommunityIcons name="account" size={24} color={theme.colors.placeholder} />
+                  </View>
+                )}
+                <View style={styles.headerTextContainer}>
+                  <Text style={styles.professionalName}>{professional?.name}</Text>
+                  <View style={styles.headerLocationContainer}>
+                    {reviewCount > 0 ? (
+                      <TouchableOpacity 
+                        style={styles.reviewBadge}
+                        onPress={handleOpenReviewsModal}
+                      >
+                        <MaterialCommunityIcons name="star" size={16} color={theme.colors.warning} />
+                        <Text style={styles.reviewBadgeText}>{averageRating.toFixed(2)} • {reviewCount} {reviewCount === 1 ? 'Review' : 'Reviews'}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.noReviewsText}>No reviews yet</Text>
+                    )}
+                    {/* <Text style={styles.professionalLocation}>•</Text> */}
+                    <Text style={styles.professionalLocation}>• {professional?.location}</Text>
+                  </View>
+                </View>
+              </View>
+              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-          ) : (
-            <View style={[styles.content, isMobile && styles.contentMobile]}>
-              {/* Mobile: Services List View */}
-              {isMobile && mobileView === 'services' && (
-                <View style={styles.mobileServicesView}>
-                  <Text style={styles.sectionTitle}>Services</Text>
-                  <ScrollView style={styles.servicesScrollView}>
-                    {services.map((service) => (
-                      <TouchableOpacity
-                        key={service.service_id}
-                        style={styles.mobileServiceItem}
-                        onPress={() => handleServiceSelect(service)}
-                      >
-                        <View style={styles.mobileServiceContent}>
-                          <Text style={styles.mobileServiceName}>
-                            {service.service_name}
-                          </Text>
-                          <Text style={styles.mobileServicePrice}>
-                            ${service.base_rate}/{service.unit_of_time}
-                          </Text>
-                        </View>
-                        <MaterialCommunityIcons 
-                          name="chevron-right" 
-                          size={24} 
-                          color={theme.colors.textSecondary} 
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
 
-              {/* Mobile: Service Details View */}
-              {isMobile && mobileView === 'details' && selectedService && (
-                <View style={styles.mobileDetailsView}>
-                  <View style={styles.mobileDetailsHeader}>
-                    <TouchableOpacity 
-                      style={styles.backButton}
-                      onPress={handleBackToServices}
-                    >
-                      <MaterialCommunityIcons 
-                        name="arrow-left" 
-                        size={24} 
-                        color={theme.colors.primary} 
-                      />
-                    </TouchableOpacity>
-                    <Text style={styles.mobileDetailsTitle}>{selectedService.service_name}</Text>
-                  </View>
-                  <ScrollView style={styles.mobileDetailsScrollView}>
-                    {renderServiceDetails(selectedService)}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Desktop: Two-panel layout */}
-              {!isMobile && (
-                <>
-                  {/* Services List (Left Side) */}
-                  <View style={styles.servicesList}>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading services...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={fetchServices}>
+                  <Text style={styles.retryText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={[styles.content, isMobile && styles.contentMobile]}>
+                {/* Mobile: Services List View */}
+                {isMobile && mobileView === 'services' && (
+                  <View style={styles.mobileServicesView}>
                     <Text style={styles.sectionTitle}>Services</Text>
                     <ScrollView style={styles.servicesScrollView}>
                       {services.map((service) => (
                         <TouchableOpacity
                           key={service.service_id}
-                          style={[
-                            styles.serviceItem,
-                            selectedService?.service_id === service.service_id && styles.serviceItemSelected
-                          ]}
+                          style={styles.mobileServiceItem}
                           onPress={() => handleServiceSelect(service)}
                         >
-                          <Text style={[
-                            styles.serviceName,
-                            selectedService?.service_id === service.service_id && styles.serviceNameSelected
-                          ]}>
-                            {service.service_name}
-                          </Text>
-                          <Text style={[
-                            styles.servicePrice,
-                            selectedService?.service_id === service.service_id && styles.servicePriceSelected
-                          ]}>
-                            ${service.base_rate}/{service.unit_of_time}
-                          </Text>
+                          <View style={styles.mobileServiceContent}>
+                            <Text style={styles.mobileServiceName}>
+                              {service.service_name}
+                            </Text>
+                            <Text style={styles.mobileServicePrice}>
+                              ${service.base_rate}/{service.unit_of_time}
+                            </Text>
+                          </View>
+                          <MaterialCommunityIcons 
+                            name="chevron-right" 
+                            size={24} 
+                            color={theme.colors.textSecondary} 
+                          />
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
                   </View>
-
-                  {/* Service Details (Right Side) */}
-                  <View style={styles.serviceDetails}>
-                    {selectedService ? (
-                      <ScrollView style={styles.detailsScrollView}>
-                        <Text style={styles.detailsTitle}>{selectedService.service_name}</Text>
-                        {renderServiceDetails(selectedService)}
-                      </ScrollView>
-                    ) : (
-                      <View style={styles.noSelectionContainer}>
-                        <Text style={styles.noSelectionText}>Select a service to view details</Text>
-                      </View>
-                    )}
-                  </View>
-                </>
-              )}
-            </View>
-          )}
-
-          {/* Contact Button */}
-          {!loading && !error && (
-            <View style={styles.footer}>
-              <TouchableOpacity 
-                style={[styles.contactButton, isCreatingConversation && styles.contactButtonDisabled]} 
-                onPress={handleCreateConversation}
-                disabled={isCreatingConversation}
-              >
-                {isCreatingConversation ? (
-                  <View style={styles.contactButtonContent}>
-                    <ActivityIndicator size="small" color={theme.colors.whiteText} />
-                    <Text style={[styles.contactButtonText, { marginLeft: 8 }]}>Creating conversation...</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.contactButtonText}>Contact {professional?.name}</Text>
                 )}
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </View>
 
-      {/* Separate Modal for Tooltip */}
-      <Modal
-        visible={showTooltip !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowTooltip(null)}
-      >
-        <TouchableOpacity 
-          style={styles.tooltipModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowTooltip(null)}
-        >
-          <View style={styles.tooltipModalContent}>
-            <View style={styles.tooltipHeader}>
-              <Text style={styles.tooltipTitle}>
-                {services.find(s => s.additional_rates?.find(r => r.rate_id === showTooltip))?.additional_rates?.find(r => r.rate_id === showTooltip)?.title || 'Rate Info'}
-              </Text>
-              <TouchableOpacity 
-                style={styles.tooltipCloseButton}
-                onPress={() => setShowTooltip(null)}
-              >
-                <MaterialCommunityIcons 
-                  name="close" 
-                  size={18} 
-                  color={theme.colors.text} 
-                />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.tooltipText}>
-              {services.find(s => s.additional_rates?.find(r => r.rate_id === showTooltip))?.additional_rates?.find(r => r.rate_id === showTooltip)?.description || ''}
-            </Text>
+                {/* Mobile: Service Details View */}
+                {isMobile && mobileView === 'details' && selectedService && (
+                  <View style={styles.mobileDetailsView}>
+                    <View style={styles.mobileDetailsHeader}>
+                      <TouchableOpacity 
+                        style={styles.backButton}
+                        onPress={handleBackToServices}
+                      >
+                        <MaterialCommunityIcons 
+                          name="arrow-left" 
+                          size={24} 
+                          color={theme.colors.primary} 
+                        />
+                      </TouchableOpacity>
+                      <Text style={styles.mobileDetailsTitle}>{selectedService.service_name}</Text>
+                    </View>
+                    <ScrollView style={styles.mobileDetailsScrollView}>
+                      {renderServiceDetails(selectedService)}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Desktop: Two-panel layout */}
+                {!isMobile && (
+                  <>
+                    {/* Services List (Left Side) */}
+                    <View style={styles.servicesList}>
+                      <Text style={styles.sectionTitle}>Services</Text>
+                      <ScrollView style={styles.servicesScrollView}>
+                        {services.map((service) => (
+                          <TouchableOpacity
+                            key={service.service_id}
+                            style={[
+                              styles.serviceItem,
+                              selectedService?.service_id === service.service_id && styles.serviceItemSelected
+                            ]}
+                            onPress={() => handleServiceSelect(service)}
+                          >
+                            <Text style={[
+                              styles.serviceName,
+                              selectedService?.service_id === service.service_id && styles.serviceNameSelected
+                            ]}>
+                              {service.service_name}
+                            </Text>
+                            <Text style={[
+                              styles.servicePrice,
+                              selectedService?.service_id === service.service_id && styles.servicePriceSelected
+                            ]}>
+                              ${service.base_rate}/{service.unit_of_time}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    {/* Service Details (Right Side) */}
+                    <View style={styles.serviceDetails}>
+                      {selectedService ? (
+                        <ScrollView style={styles.detailsScrollView}>
+                          <Text style={styles.detailsTitle}>{selectedService.service_name}</Text>
+                          {renderServiceDetails(selectedService)}
+                        </ScrollView>
+                      ) : (
+                        <View style={styles.noSelectionContainer}>
+                          <Text style={styles.noSelectionText}>Select a service to view details</Text>
+                        </View>
+                      )}
+                    </View>
+                  </>
+                )}
+              </View>
+            )}
+
+            {/* Contact Button */}
+            {!loading && !error && (
+              <View style={styles.footer}>
+                <TouchableOpacity 
+                  style={[styles.contactButton, isCreatingConversation && styles.contactButtonDisabled]} 
+                  onPress={handleCreateConversation}
+                  disabled={isCreatingConversation}
+                >
+                  {isCreatingConversation ? (
+                    <View style={styles.contactButtonContent}>
+                      <ActivityIndicator size="small" color={theme.colors.whiteText} />
+                      <Text style={[styles.contactButtonText, { marginLeft: 8 }]}>Creating conversation...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.contactButtonText}>Contact {professional?.name}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </View>
 
-      {/* Error Modal */}
-      <Modal
-        visible={showErrorModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowErrorModal(false)}
-      >
-        <TouchableOpacity 
-          style={styles.tooltipModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowErrorModal(false)}
+        {/* Separate Modal for Tooltip */}
+        <Modal
+          visible={showTooltip !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowTooltip(null)}
         >
           <TouchableOpacity 
-            style={styles.errorModalContent}
+            style={styles.tooltipModalOverlay}
             activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
+            onPress={() => setShowTooltip(null)}
           >
-            <View style={styles.errorModalHeader}>
-              <Text style={styles.errorModalTitle}>Error</Text>
+            <View style={styles.tooltipModalContent}>
+              <View style={styles.tooltipHeader}>
+                <Text style={styles.tooltipTitle}>
+                  {services.find(s => s.additional_rates?.find(r => r.rate_id === showTooltip))?.additional_rates?.find(r => r.rate_id === showTooltip)?.title || 'Rate Info'}
+                </Text>
+                <TouchableOpacity 
+                  style={styles.tooltipCloseButton}
+                  onPress={() => setShowTooltip(null)}
+                >
+                  <MaterialCommunityIcons 
+                    name="close" 
+                    size={18} 
+                    color={theme.colors.text} 
+                  />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.tooltipText}>
+                {services.find(s => s.additional_rates?.find(r => r.rate_id === showTooltip))?.additional_rates?.find(r => r.rate_id === showTooltip)?.description || ''}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Error Modal */}
+        <Modal
+          visible={showErrorModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowErrorModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.tooltipModalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowErrorModal(false)}
+          >
+            <TouchableOpacity 
+              style={styles.errorModalContent}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.errorModalHeader}>
+                <Text style={styles.errorModalTitle}>Error</Text>
+                <TouchableOpacity 
+                  style={styles.errorModalCloseButton}
+                  onPress={() => setShowErrorModal(false)}
+                >
+                  <MaterialCommunityIcons 
+                    name="close" 
+                    size={20} 
+                    color={theme.colors.text} 
+                  />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.errorModalText}>
+                {errorMessage}
+              </Text>
               <TouchableOpacity 
-                style={styles.errorModalCloseButton}
+                style={styles.errorModalOkButton}
                 onPress={() => setShowErrorModal(false)}
               >
-                <MaterialCommunityIcons 
-                  name="close" 
-                  size={20} 
-                  color={theme.colors.text} 
-                />
+                <Text style={styles.errorModalOkText}>OK</Text>
               </TouchableOpacity>
-            </View>
-            <Text style={styles.errorModalText}>
-              {errorMessage}
-            </Text>
-            <TouchableOpacity 
-              style={styles.errorModalOkButton}
-              onPress={() => setShowErrorModal(false)}
-            >
-              <Text style={styles.errorModalOkText}>OK</Text>
             </TouchableOpacity>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </Modal>
       </Modal>
-    </Modal>
+
+      {/* Reviews Modal */}
+      <ReviewsModal
+        visible={showReviewsModal}
+        onClose={handleCloseReviewsModal}
+        reviews={reviews}
+        averageRating={averageRating}
+        reviewCount={reviewCount}
+        userName={professional?.name}
+        forProfessional={true}
+      />
+    </>
   );
 };
 
@@ -558,6 +652,11 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   professionalName: {
     fontSize: 20,
@@ -569,6 +668,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textSecondary,
     marginTop: 4,
+    marginRight: 8,
+  },
+  headerLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  reviewBadge: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    // backgroundColor: theme.colors.background,
+    paddingTop: 4,
+    paddingRight: 4,
+    borderRadius: 12,
+  },
+  reviewBadgeText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    marginLeft: 4,
+    fontWeight: '500',
   },
   closeButton: {
     padding: 8,
@@ -899,6 +1020,28 @@ const styles = StyleSheet.create({
     color: theme.colors.whiteText,
     fontSize: 16,
     fontWeight: '600',
+  },
+  professionalProfilePhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 15,
+  },
+  professionalProfilePhotoPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginRight: 15,
+  },
+  noReviewsText: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginLeft: 4,
   },
 });
 

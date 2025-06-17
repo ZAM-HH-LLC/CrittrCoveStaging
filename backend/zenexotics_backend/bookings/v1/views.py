@@ -2436,7 +2436,7 @@ class SubmitBookingReviewView(APIView):
                     client=booking.client,
                     rating=rating,
                     review_text=review_text,
-                    status='PENDING',
+                    status='APPROVED',
                     review_visible=False,
                     review_posted=True,
                     post_deadline=post_deadline
@@ -2449,7 +2449,7 @@ class SubmitBookingReviewView(APIView):
                     client=booking.client,
                     rating=rating,
                     review_text=review_text,
-                    status='PENDING',
+                    status='APPROVED',
                     review_visible=False,
                     review_posted=True,
                     post_deadline=post_deadline

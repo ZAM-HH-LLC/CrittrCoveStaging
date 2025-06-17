@@ -8,9 +8,43 @@ from reviews.models import ProfessionalReview, ClientReview
 from django.db.models import Avg, Max
 from conversations.utils import get_user_from_conversation
 from booking_occurrences.models import BookingOccurrence
+from django.contrib.auth import get_user_model
+from professionals.models import Professional
+import json
+from datetime import datetime
 
+User = get_user_model()
 logger = logging.getLogger(__name__)
 
+# Helper function to safely log objects that might contain datetime objects
+def safe_log(message, obj):
+    try:
+        # Try to log the object directly
+        logger.info(f"{message}: {obj}")
+    except TypeError:
+        # If that fails, try to convert datetime objects to strings
+        try:
+            if isinstance(obj, dict):
+                safe_obj = {}
+                for k, v in obj.items():
+                    if isinstance(v, datetime):
+                        safe_obj[k] = v.isoformat()
+                    else:
+                        safe_obj[k] = v
+                logger.info(f"{message}: {safe_obj}")
+            elif isinstance(obj, list):
+                safe_obj = []
+                for item in obj:
+                    if isinstance(item, datetime):
+                        safe_obj.append(item.isoformat())
+                    else:
+                        safe_obj.append(item)
+                logger.info(f"{message}: {safe_obj}")
+            else:
+                logger.info(f"{message}: [Object not serializable]")
+        except Exception as e:
+            logger.error(f"Error in safe_log: {str(e)}")
+            logger.info(f"{message}: [Object logging failed]")
 
 # This is called from two places:
 # 1. From the ClientPetsModal component 
@@ -32,7 +66,7 @@ class GetUserReviewsView(APIView):
         is_professional_param = request.query_params.get('is_professional', '0')
         professional_id = request.query_params.get('professional_id')
 
-        logger.info(f"MBA32i4ofn4: is_professional_param: {is_professional_param}")
+        logger.info(f"MBA32i4ofn4: Request params - conversation_id: {conversation_id}, professional_id: {professional_id}, is_professional_param: {is_professional_param}")
         
         # Convert string parameter to boolean
         is_professional_flag = is_professional_param in ['1', 'true', 'True']
@@ -42,20 +76,54 @@ class GetUserReviewsView(APIView):
         try:
             # Get the target user from the conversation
             if not conversation_id:
-                logger.info(f"MBA32i4ofn4: no conversation_id provided, returning professional reviews")
+                logger.info(f"MBA32i4ofn4: no conversation_id provided, using professional_id: {professional_id}")
                 if not professional_id:
+                    logger.warning("MBA32i4ofn4: Neither conversation_id nor professional_id provided")
                     return Response(
                         {"detail": "professional_id or conversation_id is required"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                target_user = User.objects.get(id=professional_id)
+                try:
+                    # Get the Professional object first
+                    professional = Professional.objects.get(professional_id=professional_id)
+                    # Then get the associated User
+                    target_user = professional.user
+                    logger.info(f"MBA32i4ofn4: Found professional {professional_id} with user {target_user.id}")
+                except Professional.DoesNotExist:
+                    logger.error(f"MBA32i4ofn4: Professional with ID {professional_id} not found")
+                    return Response(
+                        {
+                            "detail": f"Professional with ID {professional_id} not found",
+                            "reviews": [],
+                            "average_rating": 0,
+                            "review_count": 0
+                        },
+                        status=status.HTTP_200_OK  # Return 200 with empty data instead of 404
+                    )
+                except Exception as e:
+                    logger.error(f"MBA32i4ofn4: Error getting professional with ID {professional_id}: {str(e)}")
+                    return Response(
+                        {
+                            "detail": f"Error retrieving professional: {str(e)}",
+                            "reviews": [],
+                            "average_rating": 0,
+                            "review_count": 0
+                        },
+                        status=status.HTTP_200_OK  # Return 200 with empty data instead of 500
+                    )
             else:
                 target_user = get_user_from_conversation(conversation_id, not is_professional_flag)
             
             if not target_user:
+                logger.warning(f"MBA32i4ofn4: Could not find {'professional' if not is_professional_flag else 'client'} in conversation")
                 return Response(
-                    {"detail": f"Could not find {'professional' if not is_professional_flag else 'client'} in conversation"},
-                    status=status.HTTP_404_NOT_FOUND
+                    {
+                        "detail": f"Could not find {'professional' if not is_professional_flag else 'client'} in conversation",
+                        "reviews": [],
+                        "average_rating": 0,
+                        "review_count": 0
+                    },
+                    status=status.HTTP_200_OK  # Return 200 with empty data instead of 404
                 )
             
             logger.info(f"MBA32i4ofn4: target_user: {target_user.id} ({target_user.email})")
@@ -70,7 +138,7 @@ class GetUserReviewsView(APIView):
                     review_visible=True
                 ).select_related('client', 'client__user', 'booking', 'booking__service_id')
 
-                logger.info(f"MBA32i4ofn4: clientreviews: {reviews}")
+                safe_log("MBA32i4ofn4: clientreviews", reviews)
                 
                 # Calculate average rating
                 avg_rating = reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
@@ -110,7 +178,7 @@ class GetUserReviewsView(APIView):
                         'reviewer_profile_picture': reviewer_profile_picture
                     })
 
-                logger.info(f"MBA32i4ofn4: reviews_data: {reviews_data}")
+                safe_log("MBA32i4ofn4: reviews_data", reviews_data)
             else:
                 # If viewing as professional, get client reviews from the professional reviews table about the client
                 # The target_user is the client
@@ -120,7 +188,7 @@ class GetUserReviewsView(APIView):
                     review_visible=True
                 ).select_related('professional', 'professional__user', 'booking', 'booking__service_id')
 
-                logger.info(f"MBA32i4ofn4: pro reviews: {reviews}")
+                safe_log("MBA32i4ofn4: pro reviews", reviews)
                 
                 # Calculate average rating
                 avg_rating = reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
@@ -160,7 +228,7 @@ class GetUserReviewsView(APIView):
                         'reviewer_profile_picture': reviewer_profile_picture
                     })
 
-                logger.info(f"MBA32i4ofn4: reviews_data: {reviews_data}")
+                safe_log("MBA32i4ofn4: reviews_data", reviews_data)
             
             return Response({
                 'reviews': reviews_data,
@@ -171,6 +239,11 @@ class GetUserReviewsView(APIView):
         except Exception as e:
             logger.error(f"MBA32i4ofn4: Error getting reviews: {str(e)}")
             return Response(
-                {"detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {
+                    "detail": "Error retrieving reviews",
+                    "reviews": [],
+                    "average_rating": 0,
+                    "review_count": 0
+                },
+                status=status.HTTP_200_OK  # Return 200 with empty data instead of 500
             )
