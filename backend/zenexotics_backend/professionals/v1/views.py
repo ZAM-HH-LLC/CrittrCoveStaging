@@ -376,7 +376,7 @@ def search_professionals(request):
                 
                 # Get the latest highest-rated review text
                 latest_review_text = None
-                latest_review_author = None
+                latest_review_author_profile_pic = None
                 
                 if review_count > 0:
                     # First try to get the latest 5-star review
@@ -386,7 +386,11 @@ def search_professionals(request):
                         if highest_reviews.exists():
                             latest_review = highest_reviews.first()
                             latest_review_text = latest_review.review_text
-                            latest_review_author = latest_review.client.user.name if latest_review.client and latest_review.client.user else None
+                            
+                            # Get the profile picture URL of the client who wrote the review
+                            if latest_review.client and latest_review.client.user and hasattr(latest_review.client.user, 'profile_picture') and latest_review.client.user.profile_picture:
+                                latest_review_author_profile_pic = str(latest_review.client.user.profile_picture.url) if hasattr(latest_review.client.user.profile_picture, 'url') else None
+                            
                             break
                         highest_rating -= 1
                 
@@ -412,7 +416,7 @@ def search_professionals(request):
                         'average_rating': formatted_avg_rating,
                         'review_count': review_count,
                         'latest_highest_review_text': latest_review_text,
-                        'latest_highest_review_author': latest_review_author
+                        'latest_review_author_profile_pic': latest_review_author_profile_pic
                     }
                 }
                 results.append(result)

@@ -23,7 +23,11 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
       has_reviews: professional.reviews.average_rating > 0,
       average_rating: professional.reviews.average_rating,
       review_count: professional.reviews.review_count,
-      has_review_text: !!professional.reviews.latest_highest_review_text
+      has_review_text: !!professional.reviews.latest_highest_review_text,
+      has_author_profile_pic: !!professional.reviews.latest_review_author_profile_pic,
+      has_reviewer_profile_pic: !!professional.reviews.reviewer_profile_picture,
+      author_pic_url: professional.reviews.latest_review_author_profile_pic || 'none',
+      reviewer_pic_url: professional.reviews.reviewer_profile_picture || 'none'
     });
   }
   
@@ -61,7 +65,7 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
 
   return (
     <TouchableOpacity style={styles.listItem} onPress={handlePress}>
-      <View style={styles.cardContent}>
+      <View style={[styles.cardContent, {paddingBottom: !hasReviews ? theme.spacing.medium : 0}]}>
         <View style={styles.leftSection}>
           {renderProfileImage()}
         </View>
@@ -95,28 +99,27 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
         <View style={styles.reviewSection}>
           <View style={styles.ratingContainer}>
             <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
-            <Text style={styles.ratingText}>{professional.reviews.average_rating.toFixed(1)}</Text>
+            <Text style={styles.ratingText}>{professional.reviews.average_rating.toFixed(2)}</Text>
             <Text style={styles.dot}> • </Text>
             <Text style={styles.reviews}>{professional.reviews.review_count} reviews</Text>
-            {professional.repeat_owners && (
-              <>
-                <Text style={styles.dot}> • </Text>
-                <MaterialCommunityIcons name="sync" size={16} color={theme.colors.text} />
-                <Text style={styles.repeatOwners}> {professional.repeat_owners} repeat clients</Text>
-              </>
-            )}
           </View>
           
           {professional.reviews.latest_highest_review_text && (
             <View style={styles.bestReviewContainer}>
-              {/* TODO: In the future, this will be replaced with latest_highest_review_author_profile_pic */}
-              <View style={[styles.reviewerImage, styles.fallbackReviewerIconContainer]}>
-                <MaterialCommunityIcons 
-                  name="account" 
-                  size={20} 
-                  color={theme.colors.textSecondary} 
+              {(professional.reviews.latest_review_author_profile_pic) ? (
+                <Image 
+                  source={{ uri: getMediaUrl(professional.reviews.latest_review_author_profile_pic) }}
+                  style={styles.reviewerImage}
                 />
-              </View>
+              ) : (
+                <View style={[styles.reviewerImage, styles.fallbackReviewerIconContainer]}>
+                  <MaterialCommunityIcons 
+                    name="account" 
+                    size={20} 
+                    color={theme.colors.textSecondary} 
+                  />
+                </View>
+              )}
               <View style={styles.bestReviewTextContainer}>
                 <Text style={styles.bestReview} numberOfLines={2}>
                   "{professional.reviews.latest_highest_review_text}"
@@ -314,7 +317,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: theme.spacing.medium,
     paddingTop: theme.spacing.medium,
-    paddingBottom: theme.spacing.small,
   },
   leftSection: {
     marginRight: theme.spacing.medium,
@@ -375,7 +377,8 @@ const styles = StyleSheet.create({
   },
   reviewSection: {
     paddingHorizontal: theme.spacing.medium,
-    paddingVertical: theme.spacing.small,
+    paddingTop: theme.spacing.small,
+    paddingBottom: theme.spacing.medium,
     borderTopWidth: 0,
     borderTopColor: 'transparent',
     marginTop: 0,

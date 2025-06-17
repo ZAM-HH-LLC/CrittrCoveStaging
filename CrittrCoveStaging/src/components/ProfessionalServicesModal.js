@@ -83,6 +83,14 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
         setAverageRating(reviewsData.average_rating || 0);
         setReviewCount(reviewsData.review_count || 0);
         
+        // Log information about reviewer profile pictures
+        if (reviewsData.reviews && reviewsData.reviews.length > 0) {
+          debugLog('MBA4001', 'First review has profile picture:', {
+            has_profile_pic: !!reviewsData.reviews[0].reviewer_profile_picture,
+            profile_pic_url: reviewsData.reviews[0].reviewer_profile_picture || 'none'
+          });
+        }
+        
         if (reviewsData.detail) {
           debugLog('MBA4001', 'Review fetch message:', reviewsData.detail);
         }
