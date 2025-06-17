@@ -1,14 +1,6 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import ClientReviewViewSet, ProfessionalReviewViewSet, ReviewRequestViewSet
+from core.url_factory import create_versioned_urls
 
 app_name = 'reviews'
 
-router = DefaultRouter()
-router.register(r'client-reviews', ClientReviewViewSet)
-router.register(r'professional-reviews', ProfessionalReviewViewSet)
-router.register(r'requests', ReviewRequestViewSet)
-
-urlpatterns = [
-    path('v1/', include(router.urls)),
-] 
+# Create URLs using the factory
+router, urlpatterns = create_versioned_urls(app_name)

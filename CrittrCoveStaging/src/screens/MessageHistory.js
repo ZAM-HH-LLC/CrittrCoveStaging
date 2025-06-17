@@ -3641,9 +3641,9 @@ const MessageHistory = ({ navigation, route }) => {
     });
   }, [screenWidth]);
 
-  // Add a function to handle View Pets button click
+  // Add a function to handle View Profile button click
   const handleViewPets = () => {
-    debugLog('MBA3456', 'View Pets button clicked', {
+    debugLog('MBA3456', 'View Profile button clicked', {
       conversation_id: selectedConversationData?.conversation_id,
       other_user_name: selectedConversationData?.other_user_name
     });

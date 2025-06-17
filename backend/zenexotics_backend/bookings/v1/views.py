@@ -40,6 +40,7 @@ from django.utils import timezone
 from user_messages.models import UserMessage
 from conversations.v1.views import find_or_create_conversation
 from django.core.paginator import Paginator, EmptyPage
+from reviews.models import ProfessionalReview, ClientReview, ReviewRequest
 
 logger = logging.getLogger(__name__)
 
@@ -2336,6 +2337,197 @@ class MarkBookingCompletedView(APIView):
             
             return Response(
                 {"error": "An error occurred while marking the booking as completed"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class SubmitBookingReviewView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, booking_id):
+        """
+        Submit a review for a booking.
+        
+        This endpoint:
+        1. Validates user access to the booking
+        2. Creates a review record using the appropriate model (ProfessionalReview or ClientReview)
+        3. Updates the corresponding ReviewRequest if it exists
+        4. Returns success response
+        """
+        logger.info(f"MBA8675309: Starting SubmitBookingReviewView.post for booking {booking_id}")
+        sid = transaction.savepoint()  # Create savepoint for rollback
+        
+        try:
+            # Get the booking
+            booking = get_object_or_404(Booking, booking_id=booking_id)
+            
+            # Validate the user has access to this booking
+            is_professional = False
+            if booking.professional and booking.professional.user == request.user:
+                is_professional = True
+            elif booking.client and booking.client.user == request.user:
+                is_professional = False
+            else:
+                logger.error(f"MBA8675309: User {request.user.id} does not have access to booking {booking_id}")
+                return Response(
+                    {"error": "Not authorized to review this booking"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Verify booking is in "Completed" status
+            if booking.status != BookingStates.COMPLETED:
+                logger.error(f"MBA8675309: Booking {booking_id} is not in Completed status. Current status: {booking.status}")
+                return Response(
+                    {"error": "Only completed bookings can be reviewed"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get review data from request
+            rating = request.data.get('rating')
+            review_text = request.data.get('review_text', '')
+            is_professional_review = request.data.get('is_professional_review', is_professional)
+            
+            # Validate rating
+            try:
+                rating = int(rating)
+                if rating < 1 or rating > 5:
+                    raise ValueError("Rating must be between 1 and 5")
+            except (ValueError, TypeError):
+                logger.error(f"MBA8675309: Invalid rating value: {rating}")
+                return Response(
+                    {"error": "Rating must be an integer between 1 and 5"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Import the review models
+            from reviews.models import ProfessionalReview, ClientReview, ReviewRequest
+            
+            # Check if a review already exists
+            if is_professional_review:
+                existing_review = ProfessionalReview.objects.filter(
+                    booking=booking,
+                    professional=booking.professional,
+                    client=booking.client
+                ).first()
+                review_type = 'PROFESSIONAL'
+            else:
+                existing_review = ClientReview.objects.filter(
+                    booking=booking,
+                    professional=booking.professional,
+                    client=booking.client
+                ).first()
+                review_type = 'CLIENT'
+            
+            if existing_review:
+                logger.info(f"MBA8675309: Review already exists for booking {booking_id}")
+                return Response(
+                    {"error": "You have already submitted a review for this booking"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Set post deadline to 14 days from now
+            post_deadline = timezone.now() + timedelta(days=14)
+            
+            # Create the review using the appropriate model
+            if is_professional_review:
+                review = ProfessionalReview.objects.create(
+                    booking=booking,
+                    professional=booking.professional,
+                    client=booking.client,
+                    rating=rating,
+                    review_text=review_text,
+                    status='PENDING',
+                    review_visible=False,
+                    review_posted=True,
+                    post_deadline=post_deadline
+                )
+                logger.info(f"MBA8675309: Created professional review {review.review_id} for booking {booking_id}")
+            else:
+                review = ClientReview.objects.create(
+                    booking=booking,
+                    professional=booking.professional,
+                    client=booking.client,
+                    rating=rating,
+                    review_text=review_text,
+                    status='PENDING',
+                    review_visible=False,
+                    review_posted=True,
+                    post_deadline=post_deadline
+                )
+                logger.info(f"MBA8675309: Created client review {review.review_id} for booking {booking_id}")
+            
+            # Check if both reviews are now submitted
+            if is_professional_review:
+                other_review = ClientReview.objects.filter(
+                    booking=booking,
+                    professional=booking.professional,
+                    client=booking.client
+                ).first()
+            else:
+                other_review = ProfessionalReview.objects.filter(
+                    booking=booking,
+                    professional=booking.professional,
+                    client=booking.client
+                ).first()
+            
+            if other_review:
+                # Make both reviews visible
+                review.review_visible = True
+                other_review.review_visible = True
+                review.save()
+                other_review.save()
+                logger.info(f"MBA8675309: Both reviews submitted, making them visible")
+            
+            # Update the corresponding ReviewRequest if it exists
+            review_request = ReviewRequest.objects.filter(
+                booking=booking,
+                user=request.user,
+                review_type=review_type
+            ).first()
+            
+            if review_request:
+                review_request.mark_completed()
+                logger.info(f"MBA8675309: Marked review request {review_request.request_id} as completed")
+            
+            # Log the interaction
+            InteractionLog.objects.create(
+                user=request.user,
+                action='REVIEW_SUBMITTED',
+                target_type='BOOKING',
+                target_id=str(booking.booking_id),
+                metadata={
+                    'booking_id': booking.booking_id,
+                    'review_id': review.review_id,
+                    'rating': rating,
+                    'is_professional_review': is_professional_review
+                }
+            )
+            
+            # Commit the transaction
+            transaction.savepoint_commit(sid)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Review submitted successfully',
+                'review_id': review.review_id,
+                'is_visible': review.review_visible
+            })
+            
+        except Exception as e:
+            transaction.savepoint_rollback(sid)
+            logger.error(f"MBA8675309: Error submitting review: {str(e)}")
+            logger.error(f"MBA8675309: Full traceback: {traceback.format_exc()}")
+            
+            # Log the error
+            ErrorLog.objects.create(
+                user=request.user,
+                error_message=str(e),
+                endpoint=f'/api/bookings/v1/{booking_id}/review/',
+                metadata={'booking_id': booking_id}
+            )
+            
+            return Response(
+                {"error": "An error occurred while submitting the review"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         

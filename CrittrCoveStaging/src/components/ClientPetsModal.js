@@ -2,16 +2,22 @@ import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Dimensions, Alert, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { getClientPets } from '../api/API';
+import { getClientPets, getUserReviews } from '../api/API';
 import { getMediaUrl } from '../config/config';
-import { AuthContext, debugLog } from '../context/AuthContext';
+import { AuthContext, debugLog, is_professional } from '../context/AuthContext';
+import ReviewsModal from './ReviewsModal';
 
 const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCreateBooking, otherUserProfilePhoto }) => {
   const [pets, setPets] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
   const [selectedPet, setSelectedPet] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mobileView, setMobileView] = useState('pets'); // 'pets' or 'details'
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const { userRole } = useContext(AuthContext);
   
   const { width: screenWidth } = Dimensions.get('window');
   const isMobile = screenWidth <= 768;
@@ -21,6 +27,7 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
     if (visible && conversation?.id) {
       debugLog('MBA3456', 'ClientPetsModal became visible with conversation ID:', conversation.id);
       fetchPets();
+      fetchReviews();
     }
   }, [visible, conversation?.id]);
 
@@ -42,10 +49,31 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
       setLoading(false);
     }
   };
+  
+  const fetchReviews = async () => {
+    try {
+      debugLog('MBA387c439h', 'Fetching reviews for conversation:', conversation.id);
+      // We need to pass true if the current user is a professional, false if they're a client
+      const isProfessional = userRole === 'professional';
+      debugLog('MBA387c439h', 'Current user isProfessional:', isProfessional);
+      
+      const reviewsData = await getUserReviews(conversation.id, null, isProfessional);
+      debugLog('MBA387c439h', 'Successfully fetched reviews:', reviewsData);
+      setReviews(reviewsData.reviews || []);
+      setAverageRating(reviewsData.average_rating || 0);
+      setReviewCount(reviewsData.review_count || 0);
+    } catch (err) {
+      debugLog('MBA387c439h', 'Error fetching user reviews:', err.response?.data || err.message);
+      // Don't set error state here to avoid blocking pet display
+    }
+  };
 
   const handleClose = () => {
     setSelectedPet(null);
     setPets([]);
+    setReviews([]);
+    setAverageRating(0);
+    setReviewCount(0);
     setError(null);
     setMobileView('pets');
     onClose();
@@ -67,6 +95,14 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
     handleClose();
     // Call the provided callback
     onCreateBooking && onCreateBooking();
+  };
+
+  const handleOpenReviewsModal = () => {
+    setShowReviewsModal(true);
+  };
+
+  const handleCloseReviewsModal = () => {
+    setShowReviewsModal(false);
   };
 
   const renderPetDetails = (pet) => (
@@ -274,130 +310,75 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
   );
 
   return (
-    <Modal
-      visible={visible}
-      onRequestClose={handleClose}
-      animationType="slide"
-      transparent={true}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContainer, isSmallMobile && styles.modalContainerSmallMobile]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              {otherUserProfilePhoto ? (
-                <Image source={{ uri: getMediaUrl(otherUserProfilePhoto) }} style={styles.clientProfilePhoto} />
-              ) : (
-                <View style={styles.clientProfilePhotoPlaceholder}>
-                  <MaterialCommunityIcons name="account" size={24} color={theme.colors.placeholder} />
+    <>
+      <Modal
+        visible={visible}
+        onRequestClose={handleClose}
+        animationType="slide"
+        transparent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, isSmallMobile && styles.modalContainerSmallMobile]}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                {otherUserProfilePhoto ? (
+                  <Image source={{ uri: getMediaUrl(otherUserProfilePhoto) }} style={styles.clientProfilePhoto} />
+                ) : (
+                  <View style={styles.clientProfilePhotoPlaceholder}>
+                    <MaterialCommunityIcons name="account" size={24} color={theme.colors.placeholder} />
+                  </View>
+                )}
+                <View style={styles.headerTextContainer}>
+                  <Text style={styles.clientName}>{otherUserName || 'Client'}</Text>
+                  <View style={styles.clientSubtitleContainer}>
+                    {reviewCount > 0 ? (
+                      <TouchableOpacity 
+                        style={styles.reviewBadge}
+                        onPress={handleOpenReviewsModal}
+                      >
+                        <MaterialCommunityIcons name="star" size={16} color={theme.colors.warning} />
+                        <Text style={styles.reviewBadgeText}>{averageRating} • {reviewCount} {reviewCount === 1 ? 'Review' : 'Reviews'}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.reviewBadgeText}>No reviews yet</Text>
+                    )}
+                  </View>
                 </View>
-              )}
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.clientName}>{otherUserName || 'Client'}</Text>
-                <Text style={styles.clientSubtitle}>Your Client's Pets</Text>
               </View>
-            </View>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.loadingText}>Loading pets...</Text>
-            </View>
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchPets}>
-                <Text style={styles.retryText}>Retry</Text>
+              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-          ) : pets.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <View style={[styles.content, isMobile && styles.contentMobile]}>
-              {/* Mobile: Pets List View */}
-              {isMobile && mobileView === 'pets' && (
-                <View style={styles.mobilePetsView}>
-                  <Text style={styles.sectionTitle}>Pets</Text>
-                  <ScrollView style={styles.petsScrollView}>
-                    {pets.map((pet) => (
-                      <TouchableOpacity
-                        key={pet.pet_id}
-                        style={styles.mobilePetItem}
-                        onPress={() => handlePetSelect(pet)}
-                      >
-                        <View style={styles.mobilePetContent}>
-                          <View style={styles.petListImageContainer}>
-                            {pet.profile_photo ? (
-                              <Image source={{ uri: getMediaUrl(pet.profile_photo) }} style={styles.petListImage} />
-                            ) : (
-                              <View style={styles.petListImagePlaceholder}>
-                                <MaterialCommunityIcons name="paw" size={16} color={theme.colors.placeholder} />
-                              </View>
-                            )}
-                          </View>
-                          <View style={styles.petTextContainer}>
-                            <Text style={styles.mobilePetName}>
-                              {pet.name.charAt(0).toUpperCase() + pet.name.slice(1).toLowerCase()}
-                            </Text>
-                            <Text style={styles.mobilePetType}>
-                              {pet.species.charAt(0).toUpperCase() + pet.species.slice(1).toLowerCase()}
-                            </Text>
-                          </View>
-                        </View>
-                        <MaterialCommunityIcons 
-                          name="chevron-right" 
-                          size={24} 
-                          color={theme.colors.textSecondary} 
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
 
-              {/* Mobile: Pet Details View */}
-              {isMobile && mobileView === 'details' && selectedPet && (
-                <View style={styles.mobileDetailsView}>
-                  <View style={styles.mobileDetailsHeader}>
-                    <TouchableOpacity 
-                      style={styles.backButton}
-                      onPress={handleBackToPets}
-                    >
-                      <MaterialCommunityIcons 
-                        name="arrow-left" 
-                        size={24} 
-                        color={theme.colors.primary} 
-                      />
-                    </TouchableOpacity>
-                    <Text style={styles.mobileDetailsTitle}>{selectedPet.name.charAt(0).toUpperCase() + selectedPet.name.slice(1).toLowerCase()}</Text>
-                  </View>
-                  <ScrollView style={styles.mobileDetailsScrollView}>
-                    {renderPetDetails(selectedPet)}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Desktop: Two-panel layout */}
-              {!isMobile && (
-                <>
-                  {/* Pets List (Left Side) */}
-                  <View style={styles.petsList}>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading pets...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={fetchPets}>
+                  <Text style={styles.retryText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : pets.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <View style={[styles.content, isMobile && styles.contentMobile]}>
+                {/* Mobile: Pets List View */}
+                {isMobile && mobileView === 'pets' && (
+                  <View style={styles.mobilePetsView}>
                     <Text style={styles.sectionTitle}>Pets</Text>
                     <ScrollView style={styles.petsScrollView}>
                       {pets.map((pet) => (
                         <TouchableOpacity
                           key={pet.pet_id}
-                          style={[
-                            styles.petItem,
-                            selectedPet?.pet_id === pet.pet_id && styles.petItemSelected
-                          ]}
+                          style={styles.mobilePetItem}
                           onPress={() => handlePetSelect(pet)}
                         >
-                          <View style={styles.petItemContent}>
+                          <View style={styles.mobilePetContent}>
                             <View style={styles.petListImageContainer}>
                               {pet.profile_photo ? (
                                 <Image source={{ uri: getMediaUrl(pet.profile_photo) }} style={styles.petListImage} />
@@ -408,57 +389,137 @@ const ClientPetsModal = ({ visible, onClose, conversation, otherUserName, onCrea
                               )}
                             </View>
                             <View style={styles.petTextContainer}>
-                              <Text style={[
-                                styles.petName,
-                                selectedPet?.pet_id === pet.pet_id && styles.petNameSelected
-                              ]}>
+                              <Text style={styles.mobilePetName}>
                                 {pet.name.charAt(0).toUpperCase() + pet.name.slice(1).toLowerCase()}
                               </Text>
-                              <Text style={[
-                                styles.petType,
-                                selectedPet?.pet_id === pet.pet_id && styles.petTypeSelected
-                              ]}>
+                              <Text style={styles.mobilePetType}>
                                 {pet.species.charAt(0).toUpperCase() + pet.species.slice(1).toLowerCase()}
                               </Text>
                             </View>
                           </View>
+                          <MaterialCommunityIcons 
+                            name="chevron-right" 
+                            size={24} 
+                            color={theme.colors.textSecondary} 
+                          />
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
                   </View>
+                )}
 
-                  {/* Pet Details (Right Side) */}
-                  <View style={styles.petDetails}>
-                    {selectedPet ? (
-                      <ScrollView style={styles.detailsScrollView}>
-                        <Text style={styles.detailsTitle}>{selectedPet.name.charAt(0).toUpperCase() + selectedPet.name.slice(1).toLowerCase()}</Text>
-                        {renderPetDetails(selectedPet)}
-                      </ScrollView>
-                    ) : (
-                      <View style={styles.noSelectionContainer}>
-                        <Text style={styles.noSelectionText}>Select a pet to view details</Text>
-                      </View>
-                    )}
+                {/* Mobile: Pet Details View */}
+                {isMobile && mobileView === 'details' && selectedPet && (
+                  <View style={styles.mobileDetailsView}>
+                    <View style={styles.mobileDetailsHeader}>
+                      <TouchableOpacity 
+                        style={styles.backButton}
+                        onPress={handleBackToPets}
+                      >
+                        <MaterialCommunityIcons 
+                          name="arrow-left" 
+                          size={24} 
+                          color={theme.colors.primary} 
+                        />
+                      </TouchableOpacity>
+                      <Text style={styles.mobileDetailsTitle}>{selectedPet.name.charAt(0).toUpperCase() + selectedPet.name.slice(1).toLowerCase()}</Text>
+                    </View>
+                    <ScrollView style={styles.mobileDetailsScrollView}>
+                      {renderPetDetails(selectedPet)}
+                    </ScrollView>
                   </View>
-                </>
-              )}
-            </View>
-          )}
+                )}
 
-          {/* Create Booking Button */}
-          {!loading && !error && (
-            <View style={styles.footer}>
-              <TouchableOpacity 
-                style={styles.createBookingButton}
-                onPress={handleCreateBooking}
-              >
-                <Text style={styles.createBookingButtonText}>Create Booking</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                {/* Desktop: Two-panel layout */}
+                {!isMobile && (
+                  <>
+                    {/* Pets List (Left Side) */}
+                    <View style={styles.petsList}>
+                      <Text style={styles.sectionTitle}>Pets</Text>
+                      <ScrollView style={styles.petsScrollView}>
+                        {pets.map((pet) => (
+                          <TouchableOpacity
+                            key={pet.pet_id}
+                            style={[
+                              styles.petItem,
+                              selectedPet?.pet_id === pet.pet_id && styles.petItemSelected
+                            ]}
+                            onPress={() => handlePetSelect(pet)}
+                          >
+                            <View style={styles.petItemContent}>
+                              <View style={styles.petListImageContainer}>
+                                {pet.profile_photo ? (
+                                  <Image source={{ uri: getMediaUrl(pet.profile_photo) }} style={styles.petListImage} />
+                                ) : (
+                                  <View style={styles.petListImagePlaceholder}>
+                                    <MaterialCommunityIcons name="paw" size={16} color={theme.colors.placeholder} />
+                                  </View>
+                                )}
+                              </View>
+                              <View style={styles.petTextContainer}>
+                                <Text style={[
+                                  styles.petName,
+                                  selectedPet?.pet_id === pet.pet_id && styles.petNameSelected
+                                ]}>
+                                  {pet.name.charAt(0).toUpperCase() + pet.name.slice(1).toLowerCase()}
+                                </Text>
+                                <Text style={[
+                                  styles.petType,
+                                  selectedPet?.pet_id === pet.pet_id && styles.petTypeSelected
+                                ]}>
+                                  {pet.species.charAt(0).toUpperCase() + pet.species.slice(1).toLowerCase()}
+                                </Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    {/* Pet Details (Right Side) */}
+                    <View style={styles.petDetails}>
+                      {selectedPet ? (
+                        <ScrollView style={styles.detailsScrollView}>
+                          <Text style={styles.detailsTitle}>{selectedPet.name.charAt(0).toUpperCase() + selectedPet.name.slice(1).toLowerCase()}</Text>
+                          {renderPetDetails(selectedPet)}
+                        </ScrollView>
+                      ) : (
+                        <View style={styles.noSelectionContainer}>
+                          <Text style={styles.noSelectionText}>Select a pet to view details</Text>
+                        </View>
+                      )}
+                    </View>
+                  </>
+                )}
+              </View>
+            )}
+
+            {/* Create Booking Button */}
+            {!loading && !error && (
+              <View style={styles.footer}>
+                <TouchableOpacity 
+                  style={styles.createBookingButton}
+                  onPress={handleCreateBooking}
+                >
+                  <Text style={styles.createBookingButtonText}>Create Booking</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+      
+      {/* Reviews Modal - Outside the main modal to prevent nesting issues */}
+      <ReviewsModal
+        visible={showReviewsModal}
+        onClose={handleCloseReviewsModal}
+        reviews={reviews}
+        averageRating={averageRating}
+        reviewCount={reviewCount}
+        userName={otherUserName}
+        forProfessional={false}
+      />
+    </>
   );
 };
 
@@ -549,10 +610,27 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontFamily: theme.fonts.header.fontFamily,
   },
+  clientSubtitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   clientSubtitle: {
     fontSize: 14,
     color: theme.colors.textSecondary,
-    marginTop: 4,
+  },
+  reviewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  reviewBadgeText: {
+    fontSize: 16,
+    color: theme.colors.text,
+    marginLeft: 4,
+    fontWeight: '500',
   },
   closeButton: {
     padding: 8,
@@ -791,6 +869,62 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  reviewSection: {
+    marginBottom: 20,
+  },
+  reviewSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  ratingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  reviewCountText: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+  },
+  reviewsScrollView: {
+    flex: 1,
+  },
+  reviewCard: {
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewerName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  reviewRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  reviewText: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
   },
 });
 

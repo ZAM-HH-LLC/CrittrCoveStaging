@@ -1737,3 +1737,69 @@ export const markBookingCompleted = async (bookingId) => {
   }
 };
 
+/**
+ * Submit a review for a booking
+ * @param {object} reviewData - The review data
+ * @param {string|number} reviewData.bookingId - ID of the booking to review
+ * @param {number} reviewData.rating - Star rating (1-5)
+ * @param {string} reviewData.reviewText - Review text content
+ * @param {boolean} reviewData.isProfessional - Whether the reviewer is a professional
+ * @returns {Promise<Object>} - Response from the API
+ */
+export const submitBookingReview = async (reviewData) => {
+  try {
+    debugLog('MBA8675309: Submitting booking review:', reviewData);
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/api/bookings/v1/${reviewData.bookingId}/review/`,
+      {
+        rating: reviewData.rating,
+        review_text: reviewData.reviewText,
+        is_professional_review: reviewData.isProfessional
+      }
+    );
+    
+    debugLog('MBA8675309: Review submitted successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA8675309: Error submitting review:', error);
+    debugLog('MBA8675309: Error details:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Get reviews for a user based on conversation ID
+ * 
+ * @param {string|number} conversationId - The ID of the conversation
+ * @param {boolean} isProfessional - Whether the current user is a professional (true) or client (false)
+ * @returns {Promise<Object>} - Object containing reviews, average rating, and review count
+ */
+export const getUserReviews = async (conversationId = null, professionalId = null, isProfessional = false) => {
+  try {
+    debugLog('MBA387c439h', 'Fetching user reviews for conversation:', conversationId, 'isProfessional:', isProfessional);
+    
+    // Make sure conversationId is provided
+    if (!conversationId) {
+      debugLog('MBA387c439h', 'No conversation_id provided to getUserReviews');
+      if (!professionalId) {
+        throw new Error('No conversation_id or professional_id provided');
+      }
+    }
+    
+    const response = await axios.get(`${API_BASE_URL}/api/reviews/v1/get-user-reviews/`, {
+      params: {
+        conversation_id: conversationId,
+        professional_id: professionalId,
+        is_professional: isProfessional ? 1 : 0
+      }
+    });
+    
+    debugLog('MBA387c439h', 'User reviews fetched successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA387c439h', 'Error fetching user reviews:', error.response?.data || error.message);
+    throw error;
+  }
+};
+

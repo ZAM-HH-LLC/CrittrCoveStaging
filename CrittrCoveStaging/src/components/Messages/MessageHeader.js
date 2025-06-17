@@ -131,7 +131,7 @@ const MessageHeader = ({
                   color={theme.colors.primary} 
                 />
                 <Text style={styles.headerDropdownText}>
-                  View Pets
+                  View Profile
                 </Text>
               </TouchableOpacity>
               
@@ -224,7 +224,7 @@ const MessageHeader = ({
                 color={theme.colors.primary} 
               />
               <Text style={styles.headerDropdownText}>
-                View Pets
+                View Profile
               </Text>
             </TouchableOpacity>
             

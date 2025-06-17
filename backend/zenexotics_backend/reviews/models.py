@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
+from django.conf import settings
+from bookings.models import Booking
 
 
 class BaseReview(models.Model):
@@ -20,7 +22,7 @@ class BaseReview(models.Model):
     rating = models.IntegerField()
     review_text = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='APPROVED')
     moderated_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='%(class)s_moderated')
     moderation_reason = models.TextField(null=True, blank=True)
     review_visible = models.BooleanField(default=False)

@@ -4,6 +4,8 @@ import { theme } from '../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../context/AuthContext';
 import BookingApprovalModal from './BookingApprovalModal';
+import ReviewModal from './ReviewModal';
+import { submitBookingReview } from '../api/API';
 
 /**
  * A card component for review requests that spans the full width of the message list
@@ -19,6 +21,9 @@ const ReviewRequestCard = ({
   // State for the approval modal
   const [approvalModalVisible, setApprovalModalVisible] = useState(false);
   const [safeInitialData, setSafeInitialData] = useState(null);
+  
+  // State for the review modal
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
   // Determine the message content based on the user role
   const getReviewMessage = () => {
@@ -48,6 +53,30 @@ const ReviewRequestCard = ({
     };
     setSafeInitialData(preparedData);
     setApprovalModalVisible(true);
+  };
+  
+  // Handle opening the review modal
+  const handleOpenReviewModal = () => {
+    setReviewModalVisible(true);
+  };
+  
+  // Handle submitting a review
+  const handleSubmitReview = async (reviewData) => {
+    try {
+      const response = await submitBookingReview(reviewData);
+      debugLog('MBA8675309: Review submitted successfully:', response);
+
+      
+      // If there's a callback from the parent component
+      if (onPress) {
+        onPress('reviewSubmitted', response);
+      }
+      
+      return response;
+    } catch (error) {
+      debugLog('MBA8675309: Error submitting review:', error);
+      throw error;
+    }
   };
 
   return (
@@ -96,7 +125,7 @@ const ReviewRequestCard = ({
             
             <TouchableOpacity 
               style={styles.reviewButton}
-              onPress={() => onPress('leaveReview')}
+              onPress={handleOpenReviewModal}
             >
               <Text style={styles.reviewButtonText}>Leave a Review</Text>
             </TouchableOpacity>
@@ -114,6 +143,15 @@ const ReviewRequestCard = ({
         isReadOnly={true}  // Always read-only for completed bookings
         hideButtons={true}  // Hide approval buttons
         modalTitle="Booking Details"
+      />
+      
+      {/* Review Modal */}
+      <ReviewModal
+        visible={reviewModalVisible}
+        onClose={() => setReviewModalVisible(false)}
+        isProfessional={isProfessional}
+        bookingId={data.booking_id}
+        onSubmitReview={handleSubmitReview}
       />
     </View>
   );

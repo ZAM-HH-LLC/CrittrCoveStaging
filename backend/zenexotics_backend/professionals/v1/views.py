@@ -345,8 +345,6 @@ def search_professionals(request):
                     location_parts.append(address.city)
                 if address.state:
                     location_parts.append(address.state)
-                if address.zip:
-                    location_parts.append(address.zip)
                 location_str = ', '.join(location_parts)
                 
                 # Get profile picture URL
