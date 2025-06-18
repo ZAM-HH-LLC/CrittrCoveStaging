@@ -62,6 +62,7 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
 
   // Check if we should display reviews
   const hasReviews = professional.reviews && professional.reviews.average_rating > 0;
+  const hasBadges = professional.badges?.is_background_checked || professional.badges?.is_insured || professional.badges?.is_elite_pro;
 
   return (
     <TouchableOpacity style={styles.listItem} onPress={handlePress}>
@@ -95,37 +96,41 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
         </View>
       </View>
 
-      <View style={[styles.reviewSection]}>
-        {hasReviews && (
-          <View style={styles.ratingContainer}>
-            <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
-            <Text style={styles.ratingText}>{professional.reviews.average_rating.toFixed(2)}</Text>
-            <Text style={styles.dot}> • </Text>
-            <Text style={styles.reviews}>{professional.reviews.review_count} reviews</Text>
-          </View>
-        )}
-        
-        <View style={styles.badgesContainer}>
-          {professional.badges?.is_background_checked && (
-            <View style={[styles.badge, styles.backgroundCheckedBadge]}>
-              <MaterialCommunityIcons name="shield-check" size={14} color="#9C27B0" />
-              <Text style={[styles.badgeText, styles.backgroundCheckedBadgeText]}>Background Checked</Text>
+      {(hasReviews || hasBadges) && (
+        <View style={[styles.reviewSection]}>
+          {hasReviews && (
+            <View style={[styles.ratingContainer, {marginBottom: hasBadges ? theme.spacing.small : 0}]}>
+              <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
+              <Text style={styles.ratingText}>{professional.reviews.average_rating.toFixed(2)}</Text>
+              <Text style={styles.dot}> • </Text>
+              <Text style={styles.reviews}>{professional.reviews.review_count} reviews</Text>
             </View>
           )}
-          {professional.badges?.is_insured && (
-            <View style={[styles.badge, styles.insuredBadge]}>
-              <MaterialCommunityIcons name="security" size={14} color="#0784C6" />
-              <Text style={[styles.badgeText, styles.insuredBadgeText]}>Insured</Text>
-            </View>
-          )}
-          {professional.badges?.is_elite_pro && (
-            <View style={[styles.badge, styles.eliteProBadge]}>
-              <MaterialCommunityIcons name="medal" size={14} color="#4CAF50" />
-              <Text style={[styles.badgeText, styles.eliteProBadgeText]}>Elite Pro</Text>
+          
+          {hasBadges && (
+            <View style={styles.badgesContainer}>
+              {professional.badges?.is_background_checked && (
+                <View style={[styles.badge, styles.backgroundCheckedBadge]}>
+                  <MaterialCommunityIcons name="shield-check" size={14} color="#9C27B0" />
+                  <Text style={[styles.badgeText, styles.backgroundCheckedBadgeText]}>Background Checked</Text>
+                </View>
+              )}
+              {professional.badges?.is_insured && (
+                <View style={[styles.badge, styles.insuredBadge]}>
+                  <MaterialCommunityIcons name="security" size={14} color="#0784C6" />
+                  <Text style={[styles.badgeText, styles.insuredBadgeText]}>Insured</Text>
+                </View>
+              )}
+              {professional.badges?.is_elite_pro && (
+                <View style={[styles.badge, styles.eliteProBadge]}>
+                  <MaterialCommunityIcons name="medal" size={14} color="#4CAF50" />
+                  <Text style={[styles.badgeText, styles.eliteProBadgeText]}>Elite Pro</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
-      </View>
+      )}
     </TouchableOpacity>
   );
 };
