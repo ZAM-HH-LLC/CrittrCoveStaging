@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator, Platform, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator, Platform, Keyboard, Linking } from 'react-native';
 import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
@@ -314,7 +314,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
                     <MaterialCommunityIcons 
                       name="check-circle" 
                       size={16} 
-                      color={theme.colors.success} 
+                      color={theme.colors.mainColors.tertiary} 
                     />
                     <Text style={styles.selectedAddressText}>
                       Address validated and ready to save
@@ -355,6 +355,147 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
   );
 };
 
+// Add new modal components after EditOverlay
+const VerificationModal = ({ visible, onClose, title, type, onProceed }) => {
+  const getModalContent = () => {
+    switch (type) {
+      case 'background_check':
+        return {
+          icon: 'shield-check',
+          description: 'Get background checked to increase trust with pet owners and unlock premium features.',
+          steps: [
+            'Contact our support team via email',
+            'We\'ll send you a secure link to our background check partner',
+            'Complete the background check process (typically 2-3 business days)',
+            'Once verified, your profile will display a "Background Verified" badge'
+          ],
+          benefits: [
+            'Increased booking requests',
+            'Higher trust rating from pet owners',
+            'Access to premium client matches',
+            'Priority listing in search results'
+          ]
+        };
+      case 'insurance':
+        return {
+          icon: 'shield-account',
+          description: 'Get insured to provide additional protection for you and the pets you care for.',
+          steps: [
+            'Contact our support team via email',
+            'We\'ll connect you with our insurance partner or have you provide proof of insurance',
+            'Complete the insurance application process or we will alert you when we have verified your private insurance',
+            'Once approved, your profile will display an "Insured" badge'
+          ],
+          benefits: [
+            'Protection against accidents and liability',
+            'Increased confidence from pet owners',
+            'Access to higher-value bookings',
+            'Professional credibility enhancement'
+          ]
+        };
+      case 'elite_pro':
+        return {
+          icon: 'star-circle',
+          description: 'Congratulations! You\'ve earned Elite Pro status with 10+ bookings and a 5-star average rating.',
+          steps: [
+            'You\'ve completed 10+ successful bookings',
+            'You\'ve maintained a 5-star average rating',
+            'Your Elite Pro badge is now active on your profile'
+          ],
+          benefits: [
+            'Exclusive Elite Pro badge on your profile',
+            'Priority placement in search results',
+            'Access to premium booking opportunities',
+            'Special recognition in the community'
+          ]
+        };
+      default:
+        return { icon: 'help', description: '', steps: [], benefits: [] };
+    }
+  };
+
+  const content = getModalContent();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.verificationModalOverlay}>
+        <View style={styles.verificationModalContent}>
+          <View style={styles.verificationModalHeader}>
+            <View style={styles.verificationIconContainer}>
+              <MaterialCommunityIcons 
+                name={content.icon} 
+                size={40} 
+                color={theme.colors.primary} 
+              />
+            </View>
+            <Text style={styles.verificationModalTitle}>{title}</Text>
+            <TouchableOpacity 
+              style={styles.verificationModalClose}
+              onPress={onClose}
+            >
+              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.verificationModalScroll}>
+            <Text style={styles.verificationDescription}>
+              {content.description}
+            </Text>
+            
+                         <View style={styles.verificationModalSection}>
+               <Text style={styles.verificationModalSectionTitle}>Process Steps:</Text>
+              {content.steps.map((step, index) => (
+                <View key={index} style={styles.verificationStep}>
+                  <View style={styles.verificationStepNumber}>
+                    <Text style={styles.verificationStepNumberText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.verificationStepText}>{step}</Text>
+                </View>
+              ))}
+            </View>
+
+                         <View style={styles.verificationModalSection}>
+               <Text style={styles.verificationModalSectionTitle}>Benefits:</Text>
+              {content.benefits.map((benefit, index) => (
+                <View key={index} style={styles.verificationBenefit}>
+                  <MaterialCommunityIcons 
+                    name="check-circle" 
+                    size={16} 
+                    color={theme.colors.mainColors.tertiary} 
+                  />
+                  <Text style={styles.verificationBenefitText}>{benefit}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+
+          <View style={styles.verificationModalButtons}>
+            <TouchableOpacity 
+              style={styles.verificationModalCancelButton} 
+              onPress={onClose}
+            >
+              <Text style={styles.verificationModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.verificationModalProceedButton} 
+              onPress={onProceed}
+            >
+              <Text style={styles.verificationModalProceedText}>
+                {type === 'elite_pro' ? 'Got It!' : 'Contact Support'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 const ProfileInfoTab = ({
   profilePhoto,
   email,
@@ -384,6 +525,7 @@ const ProfileInfoTab = ({
   insurance = { type: 'none', card: null },
   onNavigateToTab,
   name,
+  navigation,
 }) => {
   const { name: authName } = useContext(AuthContext);
   
@@ -394,6 +536,10 @@ const ProfileInfoTab = ({
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [selectedInsurance, setSelectedInsurance] = useState(insurance);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Add state for verification modals
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationModalType, setVerificationModalType] = useState(null);
   
   // Add state for photo cropper
   const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -1118,95 +1264,197 @@ const ProfileInfoTab = ({
     }
   };
 
-  const renderFacilitiesSection = () => {
-    // TODO: Remove the !isProfessional once we have a way to edit facilities
-    if (isProfessional || !isProfessional) return null;
-
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Home & Facilities</Text>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={() => onNavigateToTab('pets_preferences')}
-          >
-            <View style={styles.editButtonContent}>
-              <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-              <Text style={styles.editButtonText}>Edit Facilities</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.facilitiesGrid}>
-          {[
-            { icon: 'home', title: 'Housing Type', value: 'Private House' },
-            { icon: 'tree', title: 'Outdoor Space', value: 'Fenced Yard' },
-            { icon: 'shield-check', title: 'Security', value: '24/7 Monitoring' }
-          ].map((facility, index) => (
-            <View 
-              key={facility.title} 
-              style={[
-                styles.facilityItem,
-                { backgroundColor: index % 2 === 0 ? 
-                  theme.colors.proDashboard.secondary : 
-                  theme.colors.proDashboard.tertiary 
-                }
-              ]}
-            >
-              <MaterialCommunityIcons name={facility.icon} size={24} color={theme.colors.text} />
-              <View style={styles.facilityContent}>
-                <Text style={styles.facilityTitle}>{facility.title}</Text>
-                <Text style={styles.facilityValue}>{facility.value}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
+  // Add verification button handlers
+  const handleVerificationButton = (type) => {
+    debugLog('MBA9901', `Opening verification modal for type: ${type}`);
+    setVerificationModalType(type);
+    setShowVerificationModal(true);
   };
 
-  const renderInsuranceSection = () => {
-    if (!isProfessional) return null;
+  const handleVerificationProceed = () => {
+    if (verificationModalType === 'elite_pro') {
+      // Just close the modal for Elite Pro - it's informational
+      setShowVerificationModal(false);
+      setVerificationModalType(null);
+    } else {
+      // Close modal and navigate to ContactUs for background check and insurance
+      setShowVerificationModal(false);
+      setVerificationModalType(null);
+      
+      // Navigate to ContactUs screen
+      if (navigation) {
+        debugLog('MBA9901', 'Navigating to ContactUs screen for verification');
+        navigation.navigate('ContactUs');
+      } else {
+        // Fallback: show toast with instructions if navigation isn't available
+        debugLog('MBA9901', 'No navigation available, showing toast');
+        showToast({
+          message: 'Please contact us at support@crittrcove.com to begin the verification process',
+          type: 'info',
+          duration: 5000
+        });
+      }
+    }
+  };
+
+  // Check if user qualifies for Elite Pro status
+  const checkEliteProStatus = () => {
+    // Mock data for now - in real implementation, this would come from props
+    const totalBookings = reviews?.length || 0;
+    const averageRating = rating || 0;
+    
+    return totalBookings >= 10 && averageRating >= 5.0;
+  };
+
+  // Handle donate button press
+  const handleDonatePress = () => {
+    debugLog('MBA9902', 'Opening donate link');
+    // TODO: Replace this URL with your actual Stripe payment link once created
+    // To create: Go to Stripe Dashboard > Products > Add Product > Create Payment Link
+    // Set it as a donation with "Customer chooses price" option enabled
+    const donateUrl = 'https://buy.stripe.com/YOUR_PAYMENT_LINK_HERE';
+    
+    Linking.openURL(donateUrl).catch((err) => {
+      debugLog('MBA9902', 'Error opening donate link:', err);
+      showToast({
+        message: 'Unable to open donation page. Please try again later.',
+        type: 'error',
+        duration: 3000
+      });
+    });
+  };
+
+  // Render verification and support section
+  const renderVerificationAndSupport = () => {
+    const isElitePro = checkEliteProStatus();
 
     return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Insurance</Text>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={() => handleEdit('insurance', JSON.stringify(selectedInsurance))}
-          >
-            <View style={styles.editButtonContent}>
-              <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.primary} />
-              <Text style={styles.editButtonText}>Edit Insurance</Text>
+      <View style={[styles.section, isMobile && styles.mobileVerificationSection]}>
+        {/* Professional Verification Section */}
+        {isProfessional && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Professional Verification</Text>
             </View>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.insuranceContent}>
-          {selectedInsurance.type === 'custom' && selectedInsurance.card ? (
-            <View style={styles.customInsuranceCard}>
-              <Image 
-                source={{ uri: selectedInsurance.card }} 
-                style={styles.insuranceCardImage}
-              />
-              <Text style={styles.insuranceCardText}>Custom Insurance Card</Text>
+            <Text style={styles.verificationSectionSubtitle}>
+              Enhance your profile with professional credentials
+            </Text>
+            
+            <View style={styles.verificationButtonsContainer}>
+              {/* Background Check Button */}
+              <TouchableOpacity 
+                style={styles.verificationButton}
+                onPress={() => handleVerificationButton('background_check')}
+              >
+                <View style={styles.verificationButtonIcon}>
+                  <MaterialCommunityIcons 
+                    name="shield-check" 
+                    size={24} 
+                    color={theme.colors.primary} 
+                  />
+                </View>
+                <View style={styles.verificationButtonContent}>
+                  <Text style={styles.verificationButtonTitle}>Background Verified</Text>
+                  <Text style={styles.verificationButtonSubtitle}>Increase client trust</Text>
+                </View>
+                <MaterialCommunityIcons 
+                  name="chevron-right" 
+                  size={20} 
+                  color={theme.colors.text} 
+                />
+              </TouchableOpacity>
+
+              {/* Insurance Button */}
+              <TouchableOpacity 
+                style={styles.verificationButton}
+                onPress={() => handleVerificationButton('insurance')}
+              >
+                <View style={styles.verificationButtonIcon}>
+                  <MaterialCommunityIcons 
+                    name="shield-account" 
+                    size={24} 
+                    color={theme.colors.primary} 
+                  />
+                </View>
+                <View style={styles.verificationButtonContent}>
+                  <Text style={styles.verificationButtonTitle}>Insured Professional</Text>
+                  <Text style={styles.verificationButtonSubtitle}>Additional protection</Text>
+                </View>
+                <MaterialCommunityIcons 
+                  name="chevron-right" 
+                  size={20} 
+                  color={theme.colors.text} 
+                />
+              </TouchableOpacity>
+
+              {/* Elite Pro Button */}
+              <TouchableOpacity 
+                style={[
+                  styles.verificationButton,
+                  isElitePro && styles.verificationButtonElite
+                ]}
+                onPress={() => handleVerificationButton('elite_pro')}
+                disabled={!isElitePro}
+              >
+                <View style={styles.verificationButtonIcon}>
+                  <MaterialCommunityIcons 
+                    name="star-circle" 
+                    size={24} 
+                    color={isElitePro ? theme.colors.warning : theme.colors.placeHolderText} 
+                  />
+                </View>
+                <View style={styles.verificationButtonContent}>
+                  <Text style={[
+                    styles.verificationButtonTitle,
+                    isElitePro && styles.verificationButtonTitleElite
+                  ]}>
+                    Elite Pro Status
+                  </Text>
+                  <Text style={[
+                    styles.verificationButtonSubtitle,
+                    isElitePro && styles.verificationButtonSubtitleElite
+                  ]}>
+                    {isElitePro ? 'Congratulations! You\'re Elite!' : '10+ bookings, 5-star average rating required'}
+                  </Text>
+                </View>
+                <MaterialCommunityIcons 
+                  name={isElitePro ? "crown" : "chevron-right"} 
+                  size={20} 
+                  color={isElitePro ? theme.colors.warning : theme.colors.placeHolderText} 
+                />
+              </TouchableOpacity>
             </View>
-          ) : (
-            <View style={styles.insuranceOption}>
-              <MaterialCommunityIcons 
-                name={selectedInsurance.type === 'none' ? 'shield-off' : 'shield-check'} 
-                size={24} 
-                color={theme.colors.primary} 
-              />
-              <View style={styles.insuranceOptionContent}>
-                <Text style={styles.insuranceOptionTitle}>
-                  {INSURANCE_OPTIONS.find(opt => opt.id === selectedInsurance.type)?.label || 'No Insurance'}
-                </Text>
-                <Text style={styles.insuranceOptionDescription}>
-                  {INSURANCE_OPTIONS.find(opt => opt.id === selectedInsurance.type)?.description || 'No insurance selected'}
-                </Text>
-              </View>
+          </>
+        )}
+
+        {/* Support Section */}
+        <View style={[styles.donateSection, isProfessional && styles.donateSectionWithVerification]}>
+          {!isProfessional && (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Support CrittrCove</Text>
             </View>
           )}
+          <TouchableOpacity 
+            style={styles.donateButton}
+            onPress={handleDonatePress}
+          >
+            <View style={styles.donateButtonIcon}>
+              <MaterialCommunityIcons 
+                name="heart" 
+                size={24} 
+                color={theme.colors.background} 
+              />
+            </View>
+            <View style={styles.donateButtonContent}>
+              <Text style={styles.donateButtonTitle}>Support CrittrCove</Text>
+              <Text style={styles.donateButtonSubtitle}>Help us keep costs low for everyone</Text>
+            </View>
+            <MaterialCommunityIcons 
+              name="open-in-new" 
+              size={20} 
+              color={theme.colors.background} 
+            />
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -1233,7 +1481,7 @@ const ProfileInfoTab = ({
                   />
                 ) : (
                   <View style={[styles.profilePhoto, styles.profilePhotoPlaceholder]}>
-                    <MaterialCommunityIcons name="camera-plus" size={40} color={theme.colors.placeholder} />
+                    <MaterialCommunityIcons name="camera-plus" size={40} color={theme.colors.placeHolderText} />
                   </View>
                 )}
                 <View style={styles.cameraButton}>
@@ -1296,13 +1544,16 @@ const ProfileInfoTab = ({
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Mobile: Show verification and support section here */}
+              {isMobile && renderVerificationAndSupport()}
             </View>
           </View>
 
           {/* Right Side Sections */}
           <View style={[styles.sectionsContainer, { paddingBottom: isMobile ? 150 : 0 }, !isMobile && styles.sectionsContainerDesktop]}>
             {/* About Me Section */}
-            <View style={styles.section}>
+            <View style={[styles.section, { marginBottom: isMobile ? 0 : 16 }]}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>{isProfessional ? 'Professional Bio' : 'About Me'}</Text>
                 <TouchableOpacity 
@@ -1316,6 +1567,9 @@ const ProfileInfoTab = ({
                 {displayValues.bio || 'Tell us about yourself...'}
               </Text>
             </View>
+
+            {/* Desktop: Show verification and support section here */}
+            {!isMobile && renderVerificationAndSupport()}
 
             {/* Show either Home & Facilities (for owners) or Insurance (for professionals) */}
             {/* TODO: UNCOMMONT THIS SECTION after mvp launch and implementation of facilities and insurance */}
@@ -1361,6 +1615,22 @@ const ProfileInfoTab = ({
         }}
         onSave={handleSaveCroppedImage}
         isUploading={isSaving}
+      />
+
+      {/* Verification Modal */}
+      <VerificationModal
+        visible={showVerificationModal}
+        onClose={() => {
+          setShowVerificationModal(false);
+          setVerificationModalType(null);
+        }}
+        title={
+          verificationModalType === 'background_check' ? 'Background Verification' :
+          verificationModalType === 'insurance' ? 'Insurance Verification' :
+          verificationModalType === 'elite_pro' ? 'Elite Pro Status' : ''
+        }
+        type={verificationModalType}
+        onProceed={handleVerificationProceed}
       />
 
       <EditOverlay
@@ -1738,14 +2008,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     padding: 12,
-    backgroundColor: theme.colors.success + '10',
+    backgroundColor: theme.colors.mainColors.tertiary + '10',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.colors.success + '30',
+    borderColor: theme.colors.mainColors.tertiary + '30',
   },
   selectedAddressText: {
     fontSize: 14,
-    color: theme.colors.success,
+    color: theme.colors.mainColors.tertiary,
     fontWeight: '500',
   },
   addressForm: {
@@ -1948,6 +2218,256 @@ const styles = StyleSheet.create({
   sectionText: {
     fontSize: 16,
     color: theme.colors.text,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+
+  verificationSectionSubtitle: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+    marginBottom: 16,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  verificationButtonsContainer: {
+    gap: 12,
+  },
+  verificationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  verificationButtonElite: {
+    backgroundColor: theme.colors.warning + '10',
+    borderColor: theme.colors.warning + '30',
+  },
+  verificationButtonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.primary + '10',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  verificationButtonContent: {
+    flex: 1,
+  },
+  verificationButtonTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 2,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  verificationButtonTitleElite: {
+    color: theme.colors.warning,
+  },
+  verificationButtonSubtitle: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  verificationButtonSubtitleElite: {
+    color: theme.colors.warning,
+  },
+  
+  // Verification modal styles
+  verificationModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  verificationModalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+  },
+  verificationModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  verificationIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: theme.colors.primary + '10',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verificationModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.colors.text,
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: theme.fonts?.header?.fontFamily,
+  },
+  verificationModalClose: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verificationModalScroll: {
+    maxHeight: 400,
+  },
+     verificationDescription: {
+     fontSize: 16,
+     color: theme.colors.text,
+     lineHeight: 24,
+     padding: 20,
+     textAlign: 'center',
+     fontFamily: theme.fonts?.regular?.fontFamily,
+   },
+   verificationModalSection: {
+     padding: 20,
+     paddingTop: 0,
+   },
+   verificationModalSectionTitle: {
+     fontSize: 18,
+     fontWeight: '600',
+     color: theme.colors.text,
+     marginBottom: 12,
+     fontFamily: theme.fonts?.header?.fontFamily,
+   },
+  verificationStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  verificationStepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  verificationStepNumberText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.background,
+  },
+  verificationStepText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    flex: 1,
+    lineHeight: 20,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  verificationBenefit: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  verificationBenefitText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    flex: 1,
+    marginLeft: 8,
+    lineHeight: 20,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  verificationModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  verificationModalCancelButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  verificationModalCancelText: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  verificationModalProceedButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: theme.colors.primary,
+  },
+  verificationModalProceedText: {
+    color: theme.colors.background,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+
+  // Mobile verification section styles
+  mobileVerificationSection: {
+    backgroundColor: 'transparent',
+    marginTop: 16,
+    padding: 0,
+    borderRadius: 0,
+  },
+
+  // Donate section styles
+  donateSection: {
+    marginTop: 16,
+  },
+  donateSectionWithVerification: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  donateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.mainColors.tertiary,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: theme.colors.mainColors.tertiary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  donateButtonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  donateButtonContent: {
+    flex: 1,
+  },
+  donateButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.background,
+    marginBottom: 2,
+    fontFamily: theme.fonts?.header?.fontFamily,
+  },
+  donateButtonSubtitle: {
+    fontSize: 12,
+    color: theme.colors.background,
+    opacity: 0.9,
     fontFamily: theme.fonts?.regular?.fontFamily,
   },
 });

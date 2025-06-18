@@ -425,6 +425,7 @@ const MyProfile = () => {
             isProfessional={userRole === 'professional'}
             insurance={profileData?.insurance}
             onNavigateToTab={setActiveTab}
+            navigation={navigation}
           />
         );
       case 'services_availability':
