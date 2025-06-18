@@ -190,6 +190,10 @@ def search_professionals(request):
         radius_miles = data.get('radius_miles', 30)
         page = data.get('page', 1)
         page_size = data.get('page_size', 20)
+        # Badge filters
+        filter_background_checked = data.get('filter_background_checked', False)
+        filter_insured = data.get('filter_insured', False)
+        filter_elite_pro = data.get('filter_elite_pro', False)
         
         logger.debug(f"Search parameters: {data}")
         logger.debug(f"Current user: {request.user if request.user.is_authenticated else 'Anonymous'}")
@@ -200,6 +204,14 @@ def search_professionals(request):
             service__is_active=True,
             service__searchable=True
         ).distinct()
+        
+        # Apply badge filters
+        if filter_background_checked:
+            professionals_query = professionals_query.filter(is_background_checked=True)
+        if filter_insured:
+            professionals_query = professionals_query.filter(is_insured=True)
+        if filter_elite_pro:
+            professionals_query = professionals_query.filter(is_elite_pro=True)
         
         logger.debug(f"Found {professionals_query.count()} professionals with approved services")
         

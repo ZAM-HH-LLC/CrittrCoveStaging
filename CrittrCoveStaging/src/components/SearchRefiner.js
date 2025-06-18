@@ -108,6 +108,9 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
   const [endDate, setEndDate] = useState(new Date());
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [insuredOnly, setInsuredOnly] = useState(false);
+  const [filterBackgroundChecked, setFilterBackgroundChecked] = useState(initialFilters?.filter_background_checked || false);
+  const [filterInsured, setFilterInsured] = useState(initialFilters?.filter_insured || false);
+  const [filterElitePro, setFilterElitePro] = useState(initialFilters?.filter_elite_pro || false);
   const [showOtherAnimalInput, setShowOtherAnimalInput] = useState(false);
   const [otherAnimalSearch, setOtherAnimalSearch] = useState('');
   const [otherAnimalSuggestions, setOtherAnimalSuggestions] = useState([]);
@@ -136,6 +139,9 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       setSelectedAnimals(initialFilters.animal_types || []);
       setOvernightService(initialFilters.overnight_service || false);
       setPriceRange(initialFilters.price_max || 200);
+      setFilterBackgroundChecked(initialFilters.filter_background_checked || false);
+      setFilterInsured(initialFilters.filter_insured || false);
+      setFilterElitePro(initialFilters.filter_elite_pro || false);
     }
   }, [initialFilters]);
 
@@ -447,10 +453,22 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       justifyContent: 'center',
       backgroundColor: theme.colors.surface,
     },
+    checkboxChecked: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
     checkboxLabel: {
       flex: 1,
       fontSize: theme.fontSizes.medium,
       color: theme.colors.text,
+    },
+    badgeFilterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.small,
+    },
+    badgeIcon: {
+      marginRight: 4,
     },
     headerButtons: {
       flexDirection: 'row',
@@ -960,7 +978,10 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
         location,
         service,
         overnightService,
-        priceRange
+        priceRange,
+        filterBackgroundChecked,
+        filterInsured,
+        filterElitePro
       });
 
       // Prepare search parameters
@@ -973,7 +994,10 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
         price_max: priceRange,
         radius_miles: 30,
         page: 1,
-        page_size: 20
+        page_size: 20,
+        filter_background_checked: filterBackgroundChecked,
+        filter_insured: filterInsured,
+        filter_elite_pro: filterElitePro
       };
 
       // Call the search API
@@ -1132,6 +1156,55 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
           step={1}
         />
         <Text style={styles.priceLabel}>${Math.round(priceRange)}</Text>
+      </View>
+
+      {/* Badge Filters */}
+      <Text style={styles.label}>Professional Credentials</Text>
+      <View style={styles.checkboxContainer}>
+        <View style={styles.checkboxRow}>
+          <TouchableOpacity 
+            style={[styles.checkbox, filterBackgroundChecked && styles.checkboxChecked]} 
+            onPress={() => setFilterBackgroundChecked(!filterBackgroundChecked)}
+          >
+            {filterBackgroundChecked && <MaterialCommunityIcons name="check" size={16} color={theme.colors.whiteText} />}
+          </TouchableOpacity>
+          <View style={styles.checkboxLabelContainer}>
+            <View style={styles.badgeFilterRow}>
+              <MaterialCommunityIcons name="shield-check" size={16} color="#9C27B0" style={styles.badgeIcon} />
+              <Text style={styles.checkboxLabel}>Background Checked Only</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.checkboxRow}>
+          <TouchableOpacity 
+            style={[styles.checkbox, filterInsured && styles.checkboxChecked]} 
+            onPress={() => setFilterInsured(!filterInsured)}
+          >
+            {filterInsured && <MaterialCommunityIcons name="check" size={16} color={theme.colors.whiteText} />}
+          </TouchableOpacity>
+          <View style={styles.checkboxLabelContainer}>
+            <View style={styles.badgeFilterRow}>
+              <MaterialCommunityIcons name="security" size={16} color="#0784C6" style={styles.badgeIcon} />
+              <Text style={styles.checkboxLabel}>Insured Only</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.checkboxRow}>
+          <TouchableOpacity 
+            style={[styles.checkbox, filterElitePro && styles.checkboxChecked]} 
+            onPress={() => setFilterElitePro(!filterElitePro)}
+          >
+            {filterElitePro && <MaterialCommunityIcons name="check" size={16} color={theme.colors.whiteText} />}
+          </TouchableOpacity>
+          <View style={styles.checkboxLabelContainer}>
+            <View style={styles.badgeFilterRow}>
+              <MaterialCommunityIcons name="medal" size={16} color="#4CAF50" style={styles.badgeIcon} />
+              <Text style={styles.checkboxLabel}>Elite Pro Only</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* TODO: Add back after MVP launch 

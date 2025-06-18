@@ -103,6 +103,17 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       categories.push(`Under $${searchParams.price_max}`);
     }
     
+    // Add badge filters
+    if (searchParams.filter_background_checked) {
+      categories.push('Background Checked');
+    }
+    if (searchParams.filter_insured) {
+      categories.push('Insured');
+    }
+    if (searchParams.filter_elite_pro) {
+      categories.push('Elite Pro');
+    }
+    
     // Limit to 4 filters max to avoid overflow
     const finalCategories = categories.length > 4 
       ? [...categories.slice(0, 3), `+${categories.length - 3} more`]
