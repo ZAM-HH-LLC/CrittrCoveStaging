@@ -417,6 +417,11 @@ def search_professionals(request):
                         'review_count': review_count,
                         'latest_highest_review_text': latest_review_text,
                         'latest_review_author_profile_pic': latest_review_author_profile_pic
+                    },
+                    'badges': {
+                        'is_background_checked': professional.is_background_checked,
+                        'is_insured': professional.is_insured,
+                        'is_elite_pro': professional.is_elite_pro
                     }
                 }
                 results.append(result)

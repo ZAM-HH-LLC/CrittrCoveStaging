@@ -65,7 +65,7 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
 
   return (
     <TouchableOpacity style={styles.listItem} onPress={handlePress}>
-      <View style={[styles.cardContent, {paddingBottom: !hasReviews ? theme.spacing.medium : 0}]}>
+      <View style={styles.cardContent}>
         <View style={styles.leftSection}>
           {renderProfileImage()}
         </View>
@@ -95,41 +95,37 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
         </View>
       </View>
 
-      {hasReviews && (
-        <View style={styles.reviewSection}>
+      <View style={[styles.reviewSection]}>
+        {hasReviews && (
           <View style={styles.ratingContainer}>
             <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
             <Text style={styles.ratingText}>{professional.reviews.average_rating.toFixed(2)}</Text>
             <Text style={styles.dot}> • </Text>
             <Text style={styles.reviews}>{professional.reviews.review_count} reviews</Text>
           </View>
-          
-          {professional.reviews.latest_highest_review_text && (
-            <View style={styles.bestReviewContainer}>
-              {(professional.reviews.latest_review_author_profile_pic) ? (
-                <Image 
-                  source={{ uri: getMediaUrl(professional.reviews.latest_review_author_profile_pic) }}
-                  style={styles.reviewerImage}
-                />
-              ) : (
-                <View style={[styles.reviewerImage, styles.fallbackReviewerIconContainer]}>
-                  <MaterialCommunityIcons 
-                    name="account" 
-                    size={20} 
-                    color={theme.colors.textSecondary} 
-                  />
-                </View>
-              )}
-              <View style={styles.bestReviewTextContainer}>
-                <Text style={styles.bestReview} numberOfLines={2}>
-                  "{professional.reviews.latest_highest_review_text}"
-                  <Text style={styles.readMore}> Read more</Text>
-                </Text>
-              </View>
+        )}
+        
+        <View style={styles.badgesContainer}>
+          {professional.badges?.is_background_checked && (
+            <View style={[styles.badge, styles.backgroundCheckedBadge]}>
+              <MaterialCommunityIcons name="shield-check" size={14} color="#9C27B0" />
+              <Text style={[styles.badgeText, styles.backgroundCheckedBadgeText]}>Background Checked</Text>
+            </View>
+          )}
+          {professional.badges?.is_insured && (
+            <View style={[styles.badge, styles.insuredBadge]}>
+              <MaterialCommunityIcons name="security" size={14} color="#0784C6" />
+              <Text style={[styles.badgeText, styles.insuredBadgeText]}>Insured</Text>
+            </View>
+          )}
+          {professional.badges?.is_elite_pro && (
+            <View style={[styles.badge, styles.eliteProBadge]}>
+              <MaterialCommunityIcons name="medal" size={14} color="#4CAF50" />
+              <Text style={[styles.badgeText, styles.eliteProBadgeText]}>Elite Pro</Text>
             </View>
           )}
         </View>
-      )}
+      </View>
     </TouchableOpacity>
   );
 };
@@ -317,6 +313,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: theme.spacing.medium,
     paddingTop: theme.spacing.medium,
+    paddingBottom: theme.spacing.medium,
   },
   leftSection: {
     marginRight: theme.spacing.medium,
@@ -377,7 +374,6 @@ const styles = StyleSheet.create({
   },
   reviewSection: {
     paddingHorizontal: theme.spacing.medium,
-    paddingTop: theme.spacing.small,
     paddingBottom: theme.spacing.medium,
     borderTopWidth: 0,
     borderTopColor: 'transparent',
@@ -445,7 +441,7 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flex: 1,
-    marginRight: theme.spacing.medium,
+    marginHorizontal: theme.spacing.medium,
   },
   headerTitle: {
     fontSize: theme.fontSizes.large,
@@ -520,6 +516,49 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  badgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.small,
+    marginTop: theme.spacing.small,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 16,
+    backgroundColor: theme.colors.background,
+  },
+  badgeText: {
+    fontSize: 12,
+    color: theme.colors.text,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  backgroundCheckedBadge: {
+    borderColor: '#9C27B0',
+    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+  },
+  backgroundCheckedBadgeText: {
+    color: '#9C27B0',
+  },
+  insuredBadge: {
+    borderColor: '#0784C6',
+    backgroundColor: 'rgba(7, 132, 198, 0.1)',
+  },
+  insuredBadgeText: {
+    color: '#0784C6',
+  },
+  eliteProBadge: {
+    borderColor: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  },
+  eliteProBadgeText: {
+    color: '#4CAF50',
   },
 });
 

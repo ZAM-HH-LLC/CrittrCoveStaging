@@ -6,6 +6,7 @@ import { getProfessionalServicesDetailed, createConversation, getUserReviews } f
 import { AuthContext, debugLog } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { getMediaUrl } from '../config/config';
+import { formatFromUTC } from '../utils/time_utils';
 import ReviewsModal from './ReviewsModal';
 
 const ProfessionalServicesModal = ({ visible, onClose, professional, primaryService }) => {
@@ -25,6 +26,7 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
   const [reviewCount, setReviewCount] = useState(0);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('services'); // 'services' or 'reviews'
   
   const { width: screenWidth } = Dimensions.get('window');
   const isMobile = screenWidth <= 768;
@@ -122,6 +124,7 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
     setReviews([]);
     setAverageRating(0);
     setReviewCount(0);
+    setActiveTab('services');
     onClose();
   };
 
@@ -143,6 +146,57 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
     if (types.length === 1) return types[0];
     if (types.length === 2) return `${types[0]} & ${types[1]}`;
     return `${types[0]}, ${types[1]} & ${types.length - 2} more`;
+  };
+
+  // Format date for review display
+  const formatReviewDate = (dateString) => {
+    try {
+      return formatFromUTC(dateString);
+    } catch (error) {
+      debugLog('MBA6789', 'Error formatting review date:', error);
+      return dateString;
+    }
+  };
+
+  // Render stars based on rating
+  const renderStars = (rating) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <MaterialCommunityIcons
+          key={i}
+          name={i <= rating ? "star" : "star-outline"}
+          size={16}
+          color={theme.colors.warning}
+          style={styles.starIcon}
+        />
+      );
+    }
+    return <View style={styles.starsContainer}>{stars}</View>;
+  };
+
+  // Render profile picture or default icon
+  const renderProfilePicture = (profilePicture) => {
+    if (profilePicture) {
+      const imageUrl = getMediaUrl(profilePicture);
+      return (
+        <Image 
+          source={{ uri: imageUrl }} 
+          style={styles.reviewProfileImage} 
+          resizeMode="cover"
+        />
+      );
+    } else {
+      return (
+        <View style={styles.defaultReviewProfileImage}>
+          <MaterialCommunityIcons 
+            name="account" 
+            size={32} 
+            color={theme.colors.surface} 
+          />
+        </View>
+      );
+    }
   };
 
   const renderAdditionalRates = (rates) => {
@@ -223,6 +277,56 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
       {renderAdditionalRates(service.additional_rates)}
     </>
   );
+
+  const renderReviews = () => {
+    if (loadingReviews) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading reviews...</Text>
+        </View>
+      );
+    }
+
+    if (reviews.length === 0) {
+      return (
+        <View style={styles.emptyStateContainer}>
+          <MaterialCommunityIcons name="star-outline" size={60} color={theme.colors.placeholder} />
+          <Text style={styles.emptyStateText}>No reviews yet</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.reviewsList} contentContainerStyle={styles.reviewsContent}>
+        {[...reviews].sort((a, b) => b.rating - a.rating).map((review) => (
+          <View key={review.id} style={styles.reviewCard}>
+            <View style={styles.reviewUserInfo}>
+              <View style={styles.profileContainer}>
+                {renderProfilePicture(review.reviewer_profile_picture)}
+              </View>
+              <View style={styles.reviewUserDetails}>
+                <View style={styles.nameAndStarsRow}>
+                  <Text style={styles.reviewerName}>{review.client_name || 'Anonymous'}</Text>
+                  {renderStars(review.rating)}
+                </View>
+                <View style={styles.serviceRow}>
+                  <MaterialCommunityIcons name="briefcase-outline" size={14} color={theme.colors.textSecondary} style={styles.calendarIcon} />
+                  <Text style={styles.serviceName}>{review.service_name || 'No Service Found'}</Text>
+                  <Text style={styles.serviceName}>•</Text>
+                  <MaterialCommunityIcons name="calendar" size={14} color={theme.colors.textSecondary} style={styles.calendarIcon} />
+                  <Text style={styles.serviceInfoText}>
+                    {review.last_occurrence_end_date || review.created_at}
+                  </Text>
+                </View>
+                <Text style={styles.reviewText}>{review.review_text || 'No comments provided.'}</Text>
+              </View>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
 
   const handleCreateConversation = async () => {
     if (!professional?.professional_id) {
@@ -360,39 +464,70 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
           <View style={[styles.modalContainer, isSmallMobile && styles.modalContainerSmallMobile]}>
             {/* Header */}
             <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                {professional?.profile_picture_url ? (
-                  <Image 
-                    source={{ uri: getMediaUrl(professional.profile_picture_url) }} 
-                    style={styles.professionalProfilePhoto} 
-                  />
-                ) : (
-                  <View style={styles.professionalProfilePhotoPlaceholder}>
-                    <MaterialCommunityIcons name="account" size={24} color={theme.colors.placeholder} />
-                  </View>
-                )}
-                <View style={styles.headerTextContainer}>
-                  <Text style={styles.professionalName}>{professional?.name}</Text>
-                  <View style={styles.headerLocationContainer}>
-                    {reviewCount > 0 ? (
-                      <TouchableOpacity 
-                        style={styles.reviewBadge}
-                        onPress={handleOpenReviewsModal}
-                      >
-                        <MaterialCommunityIcons name="star" size={16} color={theme.colors.warning} />
-                        <Text style={styles.reviewBadgeText}>{averageRating.toFixed(2)} • {reviewCount} {reviewCount === 1 ? 'Review' : 'Reviews'}</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <Text style={styles.noReviewsText}>No reviews yet</Text>
-                    )}
-                    {/* <Text style={styles.professionalLocation}>•</Text> */}
-                    <Text style={styles.professionalLocation}>• {professional?.location}</Text>
+              <View style={styles.headerTop}>
+                <View style={styles.headerLeft}>
+                  {professional?.profile_picture_url ? (
+                    <Image 
+                      source={{ uri: getMediaUrl(professional.profile_picture_url) }} 
+                      style={styles.professionalProfilePhoto} 
+                    />
+                  ) : (
+                    <View style={styles.professionalProfilePhotoPlaceholder}>
+                      <MaterialCommunityIcons name="account" size={24} color={theme.colors.placeholder} />
+                    </View>
+                  )}
+                  <View style={styles.headerTextContainer}>
+                    <Text style={styles.professionalName}>{professional?.name}</Text>
+                    <View style={styles.headerLocationContainer}>
+                      {reviewCount > 0 ? (
+                        <TouchableOpacity 
+                          style={styles.reviewBadge}
+                          onPress={handleOpenReviewsModal}
+                        >
+                          <MaterialCommunityIcons name="star" size={16} color={theme.colors.warning} />
+                          <Text style={styles.reviewBadgeText}>{averageRating.toFixed(2)} • {reviewCount} {reviewCount === 1 ? 'Review' : 'Reviews'}</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.noReviewsText}>No reviews yet</Text>
+                      )}
+                      {/* <Text style={styles.professionalLocation}>•</Text> */}
+                      <Text style={styles.professionalLocation}>• {professional?.location}</Text>
+                    </View>
                   </View>
                 </View>
+                
+                <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
+              
+              {/* Professional Badges */}
+              <View style={styles.headerBadgesContainer}>
+                                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.headerBadgesScrollContent}
+                  >
+                    {professional?.badges?.is_background_checked && (
+                      <View style={[styles.headerBadge, styles.headerBackgroundCheckedBadge]}>
+                        <MaterialCommunityIcons name="shield-check" size={12} color="#9C27B0" />
+                        <Text style={[styles.headerBadgeText, styles.headerBackgroundCheckedBadgeText]}>Background Checked</Text>
+                      </View>
+                    )}
+                    {professional?.badges?.is_insured && (
+                      <View style={[styles.headerBadge, styles.headerInsuredBadge]}>
+                        <MaterialCommunityIcons name="security" size={12} color="#0784C6" />
+                        <Text style={[styles.headerBadgeText, styles.headerInsuredBadgeText]}>Insured</Text>
+                      </View>
+                    )}
+                    {professional?.badges?.is_elite_pro && (
+                      <View style={[styles.headerBadge, styles.headerEliteProBadge]}>
+                        <MaterialCommunityIcons name="medal" size={12} color="#4CAF50" />
+                        <Text style={[styles.headerBadgeText, styles.headerEliteProBadgeText]}>Elite Pro</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+              </View>
             </View>
 
             {loading ? (
@@ -409,33 +544,59 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
               </View>
             ) : (
               <View style={[styles.content, isMobile && styles.contentMobile]}>
-                {/* Mobile: Services List View */}
+                {/* Mobile: Tabs and Content */}
                 {isMobile && mobileView === 'services' && (
-                  <View style={styles.mobileServicesView}>
-                    <Text style={styles.sectionTitle}>Services</Text>
-                    <ScrollView style={styles.servicesScrollView}>
-                      {services.map((service) => (
-                        <TouchableOpacity
-                          key={service.service_id}
-                          style={styles.mobileServiceItem}
-                          onPress={() => handleServiceSelect(service)}
-                        >
-                          <View style={styles.mobileServiceContent}>
-                            <Text style={styles.mobileServiceName}>
-                              {service.service_name}
-                            </Text>
-                            <Text style={styles.mobileServicePrice}>
-                              ${service.base_rate}/{service.unit_of_time}
-                            </Text>
-                          </View>
-                          <MaterialCommunityIcons 
-                            name="chevron-right" 
-                            size={24} 
-                            color={theme.colors.textSecondary} 
-                          />
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                  <View style={styles.mobileMainView}>
+                    {/* Tab Headers */}
+                    <View style={styles.tabContainer}>
+                      <TouchableOpacity
+                        style={[styles.tab, activeTab === 'services' && styles.activeTab]}
+                        onPress={() => setActiveTab('services')}
+                      >
+                        <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>
+                          Services
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
+                        onPress={() => setActiveTab('reviews')}
+                      >
+                        <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>
+                          Reviews {reviewCount > 0 && `(${reviewCount})`}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Tab Content */}
+                    {activeTab === 'services' ? (
+                      <ScrollView style={styles.servicesScrollView}>
+                        {services.map((service) => (
+                          <TouchableOpacity
+                            key={service.service_id}
+                            style={styles.mobileServiceItem}
+                            onPress={() => handleServiceSelect(service)}
+                          >
+                            <View style={styles.mobileServiceContent}>
+                              <Text style={styles.mobileServiceName}>
+                                {service.service_name}
+                              </Text>
+                              <Text style={styles.mobileServicePrice}>
+                                ${service.base_rate}/{service.unit_of_time}
+                              </Text>
+                            </View>
+                            <MaterialCommunityIcons 
+                              name="chevron-right" 
+                              size={24} 
+                              color={theme.colors.textSecondary} 
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    ) : (
+                      <View style={styles.reviewsTabContent}>
+                        {renderReviews()}
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -464,49 +625,77 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
                 {/* Desktop: Two-panel layout */}
                 {!isMobile && (
                   <>
-                    {/* Services List (Left Side) */}
+                    {/* Left Side with Tabs */}
                     <View style={styles.servicesList}>
-                      <Text style={styles.sectionTitle}>Services</Text>
-                      <ScrollView style={styles.servicesScrollView}>
-                        {services.map((service) => (
-                          <TouchableOpacity
-                            key={service.service_id}
-                            style={[
-                              styles.serviceItem,
-                              selectedService?.service_id === service.service_id && styles.serviceItemSelected
-                            ]}
-                            onPress={() => handleServiceSelect(service)}
-                          >
-                            <Text style={[
-                              styles.serviceName,
-                              selectedService?.service_id === service.service_id && styles.serviceNameSelected
-                            ]}>
-                              {service.service_name}
-                            </Text>
-                            <Text style={[
-                              styles.servicePrice,
-                              selectedService?.service_id === service.service_id && styles.servicePriceSelected
-                            ]}>
-                              ${service.base_rate}/{service.unit_of_time}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
+                      {/* Tab Headers */}
+                      <View style={styles.tabContainer}>
+                        <TouchableOpacity
+                          style={[styles.tab, activeTab === 'services' && styles.activeTab]}
+                          onPress={() => setActiveTab('services')}
+                        >
+                          <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>
+                            Services
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
+                          onPress={() => setActiveTab('reviews')}
+                        >
+                          <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>
+                            Reviews {reviewCount > 0 && `(${reviewCount})`}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
 
-                    {/* Service Details (Right Side) */}
-                    <View style={styles.serviceDetails}>
-                      {selectedService ? (
-                        <ScrollView style={styles.detailsScrollView}>
-                          <Text style={styles.detailsTitle}>{selectedService.service_name}</Text>
-                          {renderServiceDetails(selectedService)}
+                      {/* Tab Content */}
+                      {activeTab === 'services' ? (
+                        <ScrollView style={styles.servicesScrollView}>
+                          {services.map((service) => (
+                            <TouchableOpacity
+                              key={service.service_id}
+                              style={[
+                                styles.serviceItem,
+                                selectedService?.service_id === service.service_id && styles.serviceItemSelected
+                              ]}
+                              onPress={() => handleServiceSelect(service)}
+                            >
+                              <Text style={[
+                                styles.serviceName,
+                                selectedService?.service_id === service.service_id && styles.serviceNameSelected
+                              ]}>
+                                {service.service_name}
+                              </Text>
+                              <Text style={[
+                                styles.servicePrice,
+                                selectedService?.service_id === service.service_id && styles.servicePriceSelected
+                              ]}>
+                                ${service.base_rate}/{service.unit_of_time}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
                         </ScrollView>
                       ) : (
-                        <View style={styles.noSelectionContainer}>
-                          <Text style={styles.noSelectionText}>Select a service to view details</Text>
+                        <View style={styles.reviewsTabContent}>
+                          {renderReviews()}
                         </View>
                       )}
                     </View>
+
+                    {/* Service Details (Right Side) - Only show when Services tab is active */}
+                    {activeTab === 'services' && (
+                      <View style={styles.serviceDetails}>
+                        {selectedService ? (
+                          <ScrollView style={styles.detailsScrollView}>
+                            <Text style={styles.detailsTitle}>{selectedService.service_name}</Text>
+                            {renderServiceDetails(selectedService)}
+                          </ScrollView>
+                        ) : (
+                          <View style={styles.noSelectionContainer}>
+                            <Text style={styles.noSelectionText}>Select a service to view details</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </>
                 )}
               </View>
@@ -651,12 +840,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerLeft: {
     flex: 1,
@@ -737,7 +928,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   // Mobile styles
-  mobileServicesView: {
+  mobileMainView: {
     flex: 1,
     padding: 20,
   },
@@ -1050,6 +1241,159 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textSecondary,
     marginLeft: 4,
+  },
+  // Tab styles
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    marginBottom: 16,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: theme.colors.primary,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+  },
+  activeTabText: {
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  // Reviews styles
+  reviewsTabContent: {
+    flex: 1,
+  },
+  reviewsList: {
+    flex: 1,
+  },
+  reviewsContent: {
+    paddingBottom: 16,
+  },
+  reviewCard: {
+    padding: 16,
+    backgroundColor: theme.colors.background,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  reviewUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  profileContainer: {
+    marginRight: 16,
+  },
+  reviewProfileImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  defaultReviewProfileImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewUserDetails: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  nameAndStarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  reviewerName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginRight: 8,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+  },
+  starIcon: {
+    marginRight: 2,
+  },
+  serviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  serviceName: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  calendarIcon: {
+    marginRight: 4,
+  },
+  serviceInfoText: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+  },
+  reviewText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  // Header badges styles
+  headerBadgesContainer: {
+    marginTop: 16,
+  },
+  headerBadgesScrollContent: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  headerBadgeText: {
+    fontSize: 10,
+    marginLeft: 3,
+    fontWeight: '500',
+  },
+  headerBackgroundCheckedBadge: {
+    borderColor: '#9C27B0',
+    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+  },
+  headerBackgroundCheckedBadgeText: {
+    color: '#9C27B0',
+  },
+  headerInsuredBadge: {
+    borderColor: '#0784C6',
+    backgroundColor: 'rgba(7, 132, 198, 0.1)',
+  },
+  headerInsuredBadgeText: {
+    color: '#0784C6',
+  },
+  headerEliteProBadge: {
+    borderColor: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  },
+  headerEliteProBadgeText: {
+    color: '#4CAF50',
   },
 });
 

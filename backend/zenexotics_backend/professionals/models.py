@@ -11,6 +11,8 @@ class Professional(models.Model):
     )
     bio = models.TextField(blank=True)
     is_insured = models.BooleanField(default=False)
+    is_background_checked = models.BooleanField(default=False)
+    is_elite_pro = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
