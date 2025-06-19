@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator, Platform, Keyboard, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Modal, Alert, ScrollView, ActivityIndicator, Platform, Keyboard } from 'react-native';
 import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
@@ -13,6 +13,7 @@ import axios from 'axios';
 import { API_BASE_URL, getMediaUrl } from '../../config/config';
 import ProfilePhotoCropper from './ProfilePhotoCropper';
 import { processImageWithCrop, prepareImageForUpload } from '../../utils/imageCropUtils';
+import SupportButton from '../SupportButton';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -364,7 +365,7 @@ const VerificationModal = ({ visible, onClose, title, type, onProceed }) => {
           icon: 'shield-check',
           description: 'Get background checked to increase trust with pet owners and unlock premium features.',
           steps: [
-            'Contact our support team via email',
+            'Contact our support team via the contact button below',
             'We\'ll send you a secure link to our background check partner',
             'Complete the background check process (typically 2-3 business days)',
             'Once verified, your profile will display a "Background Verified" badge'
@@ -381,7 +382,7 @@ const VerificationModal = ({ visible, onClose, title, type, onProceed }) => {
           icon: 'shield-account',
           description: 'Get insured to provide additional protection for you and the pets you care for.',
           steps: [
-            'Contact our support team via email',
+            'Contact our support team via the contact button below',
             'We\'ll connect you with our insurance partner or have you provide proof of insurance',
             'Complete the insurance application process or we will alert you when we have verified your private insurance',
             'Once approved, your profile will display an "Insured" badge'
@@ -1306,23 +1307,7 @@ const ProfileInfoTab = ({
     return totalBookings >= 10 && averageRating >= 5.0;
   };
 
-  // Handle donate button press
-  const handleDonatePress = () => {
-    debugLog('MBA9902', 'Opening donate link');
-    // TODO: Replace this URL with your actual Stripe payment link once created
-    // To create: Go to Stripe Dashboard > Products > Add Product > Create Payment Link
-    // Set it as a donation with "Customer chooses price" option enabled
-    const donateUrl = 'https://buy.stripe.com/YOUR_PAYMENT_LINK_HERE';
-    
-    Linking.openURL(donateUrl).catch((err) => {
-      debugLog('MBA9902', 'Error opening donate link:', err);
-      showToast({
-        message: 'Unable to open donation page. Please try again later.',
-        type: 'error',
-        duration: 3000
-      });
-    });
-  };
+
 
   // Render verification and support section
   const renderVerificationAndSupport = () => {
@@ -1428,34 +1413,10 @@ const ProfileInfoTab = ({
         )}
 
         {/* Support Section */}
-        <View style={[styles.donateSection, isProfessional && styles.donateSectionWithVerification]}>
-          {!isProfessional && (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Support CrittrCove</Text>
-            </View>
-          )}
-          <TouchableOpacity 
-            style={styles.donateButton}
-            onPress={handleDonatePress}
-          >
-            <View style={styles.donateButtonIcon}>
-              <MaterialCommunityIcons 
-                name="heart" 
-                size={24} 
-                color={theme.colors.background} 
-              />
-            </View>
-            <View style={styles.donateButtonContent}>
-              <Text style={styles.donateButtonTitle}>Support CrittrCove</Text>
-              <Text style={styles.donateButtonSubtitle}>Help us keep costs low for everyone</Text>
-            </View>
-            <MaterialCommunityIcons 
-              name="open-in-new" 
-              size={20} 
-              color={theme.colors.background} 
-            />
-          </TouchableOpacity>
-        </View>
+        <SupportButton 
+          style={[isProfessional && styles.donateSectionWithVerification]}
+          showTitle={!isProfessional}
+        />
       </View>
     );
   };
@@ -2424,51 +2385,11 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
 
-  // Donate section styles
-  donateSection: {
-    marginTop: 16,
-  },
+  // Support section styles
   donateSectionWithVerification: {
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-  },
-  donateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.mainColors.tertiary,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: theme.colors.mainColors.tertiary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  donateButtonIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  donateButtonContent: {
-    flex: 1,
-  },
-  donateButtonTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.background,
-    marginBottom: 2,
-    fontFamily: theme.fonts?.header?.fontFamily,
-  },
-  donateButtonSubtitle: {
-    fontSize: 12,
-    color: theme.colors.background,
-    opacity: 0.9,
-    fontFamily: theme.fonts?.regular?.fontFamily,
   },
 });
 
