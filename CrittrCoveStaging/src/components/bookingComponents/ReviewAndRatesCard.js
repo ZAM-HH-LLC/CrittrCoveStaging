@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext, debugLog } from '../../context/AuthContext';
 import { formatDateTimeRangeFromUTC, formatFromUTC, FORMAT_TYPES } from '../../utils/time_utils';
 import { updateBookingDraftRates } from '../../api/API';
+import SupportButton from '../SupportButton';
 
 const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditControls = true, isProfessional = true }) => {
   const { timeSettings } = useContext(AuthContext);
@@ -1731,6 +1732,13 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {renderBookingBreakdown()}
       {renderTotalAmount()}
+      
+      {/* Support CrittrCove Button */}
+      <SupportButton 
+        size="compact"
+        showTitle={false}
+        style={{ marginTop: 16 }}
+      />
     </ScrollView>
   );
 };
