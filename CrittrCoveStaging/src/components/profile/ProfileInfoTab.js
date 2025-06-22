@@ -14,6 +14,7 @@ import { API_BASE_URL, getMediaUrl } from '../../config/config';
 import ProfilePhotoCropper from './ProfilePhotoCropper';
 import { processImageWithCrop, prepareImageForUpload } from '../../utils/imageCropUtils';
 import SupportButton from '../SupportButton';
+import { sanitizeInput, validateEmail, validateName } from '../../validation/validation';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -82,6 +83,7 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
   const [currentAddressValue, setCurrentAddressValue] = useState('');
   const [insuranceStep, setInsuranceStep] = useState(1); // 1: Choose type, 2: Upload/Select insurance
   const [insuranceType, setInsuranceType] = useState(null); // 'own' or 'platform'
+  const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
     if (visible) {
@@ -96,10 +98,86 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
       } else {
         setLocalValue(value || '');
       }
+      // Clear any validation errors when modal opens
+      setValidationError('');
     }
   }, [visible]); // Only depend on visibility changing - nothing else
 
+  const handleTextInputChange = (text) => {
+    debugLog('MBA1234', 'Profile text input change:', { title, text });
+    
+    // Don't apply real-time sanitization during typing - this interferes with user experience
+    // Only block extremely dangerous content in real-time
+    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(text);
+    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(text);
+    
+    if (hasScriptTags || hasSqlInjection) {
+      debugLog('MBA1234', 'Dangerous content detected and blocked in real-time:', text);
+      setValidationError('Invalid content detected in input');
+      return;
+    }
+    
+    // Determine the input type based on the title for validation (not sanitization)
+    let inputType = 'general';
+    let maxLength = 1000;
+    
+    if (title.toLowerCase().includes('name')) {
+      inputType = 'name';
+      maxLength = 50;
+    } else if (title.toLowerCase().includes('email')) {
+      inputType = 'email';
+      maxLength = 254;
+    } else if (title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) {
+      inputType = 'description';
+      maxLength = isMultiline ? 1000 : 500;
+    }
+    
+    // Perform field-specific validation on the original text (not sanitized)
+    if (title.toLowerCase().includes('email') && text.length > 0) {
+      // For email, we can validate format without sanitizing during typing
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(text)) {
+        setValidationError('Please enter a valid email address');
+      } else {
+        setValidationError('');
+      }
+    } else if (title.toLowerCase().includes('name') && text.length > 0) {
+      // For names, check basic requirements without removing content
+      if (text.length < 2) {
+        setValidationError('Name must be at least 2 characters long');
+      } else {
+        setValidationError('');
+      }
+    } else if ((title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) && text.length > 0) {
+      if (text.length < 10) {
+        setValidationError('Description must be at least 10 characters long');
+      } else if (text.length > maxLength) {
+        setValidationError(`Description must be no more than ${maxLength} characters long`);
+      } else {
+        setValidationError('');
+      }
+    } else {
+      setValidationError('');
+    }
+    
+    // Set the original text (not sanitized) - sanitization will happen at save time
+    setLocalValue(text);
+  };
+
   const handleSave = () => {
+    // Check for validation errors before saving
+    if (validationError) {
+      debugLog('MBA1234', 'Cannot save due to validation error:', validationError);
+      Alert.alert('Validation Error', validationError);
+      return;
+    }
+    
+    // Additional validation for required fields
+    if (!isInsurance && !isLocation && localValue.trim() === '') {
+      Alert.alert('Required Field', 'This field cannot be empty.');
+      return;
+    }
+    
     if (isInsurance) {
       onSave(localInsurance);
     } else if (isLocation) {
@@ -112,7 +190,30 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
       debugLog('MBA8901', 'Saving location with selected address:', selectedAddress);
       onSave(selectedAddress);
     } else {
-      onSave(localValue);
+      // Sanitize the value before saving based on field type
+      let inputType = 'general';
+      let maxLength = 1000;
+      
+      if (title.toLowerCase().includes('name')) {
+        inputType = 'name';
+        maxLength = 50;
+      } else if (title.toLowerCase().includes('email')) {
+        inputType = 'email';
+        maxLength = 254;
+      } else if (title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) {
+        inputType = 'description';
+        maxLength = isMultiline ? 1000 : 500;
+      }
+      
+      const sanitizedValue = sanitizeInput(localValue, inputType, { maxLength });
+      
+      // Final validation before saving
+      debugLog('MBA1234', 'Saving profile field with sanitized value:', {
+        original: localValue,
+        sanitized: sanitizedValue,
+        type: inputType
+      });
+      onSave(sanitizedValue);
     }
     onClose();
   };
@@ -324,14 +425,34 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
                 )}
               </View>
             ) : (
-              <TextInput
-                style={[styles.modalInput, isMultiline && styles.multilineInput]}
-                value={localValue}
-                onChangeText={setLocalValue}
-                multiline={isMultiline}
-                numberOfLines={isMultiline ? 4 : 1}
-                autoFocus
-              />
+              <View>
+                <TextInput
+                  style={[
+                    styles.modalInput, 
+                    isMultiline && styles.multilineInput,
+                    validationError ? styles.modalInputError : null
+                  ]}
+                  value={localValue}
+                  onChangeText={handleTextInputChange}
+                  multiline={isMultiline}
+                  numberOfLines={isMultiline ? 4 : 1}
+                  autoFocus
+                  maxLength={
+                    title.toLowerCase().includes('name') ? 50 :
+                    title.toLowerCase().includes('email') ? 254 :
+                    (title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) ? 1000 :
+                    500
+                  }
+                />
+                {validationError ? (
+                  <Text style={styles.modalInputErrorText}>{validationError}</Text>
+                ) : null}
+                {(title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) && (
+                  <Text style={styles.modalInputCharacterCount}>
+                    {localValue.length}/{isMultiline ? 1000 : 500}
+                  </Text>
+                )}
+              </View>
             )
           )}
           
@@ -342,10 +463,10 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
             <TouchableOpacity 
               style={[
                 styles.modalSaveButton,
-                isLocation && !selectedAddress && styles.modalSaveButtonDisabled
+                (isLocation && !selectedAddress) || validationError ? styles.modalSaveButtonDisabled : null
               ]} 
               onPress={handleSave}
-              disabled={isLocation && !selectedAddress}
+              disabled={(isLocation && !selectedAddress) || validationError}
             >
               <Text style={styles.modalSaveText}>Save</Text>
             </TouchableOpacity>
@@ -2004,6 +2125,23 @@ const styles = StyleSheet.create({
   },
   modalSaveButtonDisabled: {
     opacity: 0.5,
+  },
+  modalInputError: {
+    borderColor: theme.colors.error,
+    borderWidth: 1,
+  },
+  modalInputErrorText: {
+    color: theme.colors.error,
+    fontSize: 12,
+    marginTop: 4,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  modalInputCharacterCount: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'right',
+    fontFamily: theme.fonts?.regular?.fontFamily,
   },
   insuranceContent: {
     gap: 16,

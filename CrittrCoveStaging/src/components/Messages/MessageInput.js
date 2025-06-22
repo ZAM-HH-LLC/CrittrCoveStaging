@@ -5,6 +5,7 @@ import { theme } from '../../styles/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadAndSendImageMessage } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
+import { validateMessage, sanitizeInput } from '../../validation/validation';
 
 const MessageInput = ({ 
   onSendMessage, 
@@ -141,12 +142,34 @@ const MessageInput = ({
         return;
       }
       
+      // Validate and sanitize message content if there's text
+      let validatedMessage = '';
+      if (messageContent.trim()) {
+        const validation = validateMessage(messageContent, { 
+          maxLength: 5000, 
+          allowEmpty: selectedImages.length > 0 // Allow empty if we have images
+        });
+        
+        if (!validation.isValid) {
+          debugLog('MBA5511: Message validation failed:', validation.message);
+          Alert.alert('Invalid Message', validation.message);
+          return;
+        }
+        
+        validatedMessage = validation.sanitizedInput;
+        debugLog('MBA5511: Message validated and sanitized', {
+          original: messageContent,
+          sanitized: validatedMessage,
+          lengthDiff: messageContent.length - validatedMessage.length
+        });
+      }
+      
       setIsUploading(true);
       debugLog('MBA5511: Message sending started - showing loading indicator');
       
       // Send normal text message if there are no images
-      if (selectedImages.length === 0 && messageContent.trim()) {
-        await onSendMessage(messageContent.trim(), []);
+      if (selectedImages.length === 0 && validatedMessage) {
+        await onSendMessage(validatedMessage, []);
       } 
       // Send image message with or without caption
       else if (selectedImages.length > 0 && selectedConversation) {
@@ -182,7 +205,7 @@ const MessageInput = ({
           const messageObject = await uploadAndSendImageMessage(
             selectedConversation, 
             selectedImages, 
-            messageContent.trim()
+            validatedMessage // Use the validated and sanitized message
           );
           
           // Add the message to the message list immediately
@@ -193,8 +216,8 @@ const MessageInput = ({
           debugLog('MBA5511: Image message sent and added to UI:', {
             messageId: messageObject.message_id,
             imageCount: selectedImages.length,
-            hasCaption: !!messageContent.trim(),
-            captionText: messageContent.trim(),
+            hasCaption: !!validatedMessage,
+            captionText: validatedMessage,
             messageObjectContent: messageObject.content
           });
         } catch (error) {
@@ -261,6 +284,19 @@ const MessageInput = ({
   }, []);
 
   const handleChange = useCallback((text) => {
+    // Don't apply real-time sanitization during typing - this interferes with user experience
+    // Sanitization will happen at send time in handleSend function
+    
+    // Only block extremely dangerous content in real-time
+    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(text);
+    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(text);
+    
+    if (hasScriptTags || hasSqlInjection) {
+      debugLog('MBA5511: Dangerous content detected and blocked in real-time:', text);
+      return; // Don't update the input if it contains dangerous content
+    }
+    
+    // Allow normal typing with spaces, punctuation, etc.
     setMessageContent(text);
     if (Platform.OS === 'web') {
       adjustHeight();

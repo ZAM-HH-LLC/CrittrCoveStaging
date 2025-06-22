@@ -14,6 +14,7 @@ import {
 import { theme } from '../../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../../context/AuthContext';
+import { sanitizeInput, validateName } from '../../validation/validation';
 
 const GENERAL_CATEGORIES = [
   {
@@ -198,6 +199,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
   const [customAnimalInput, setCustomAnimalInput] = useState('');
   const [customAnimalCategory, setCustomAnimalCategory] = useState('');
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  const [customAnimalError, setCustomAnimalError] = useState('');
   const isMobile = Platform.OS !== 'web';
 
   useEffect(() => {
@@ -317,8 +319,53 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     });
   };
 
+  const handleCustomAnimalInputChange = (text) => {
+    debugLog('MBA1234', 'Custom animal input change:', text);
+    
+    // Sanitize the input using the universal sanitizer
+    const sanitized = sanitizeInput(text, 'name', { maxLength: 30 });
+    
+    // Validate the sanitized input
+    const validation = validateName(sanitized);
+    if (!validation.isValid && sanitized.length > 0) {
+      setCustomAnimalError(validation.message);
+    } else {
+      setCustomAnimalError('');
+    }
+    
+    setCustomAnimalInput(sanitized);
+  };
+
   const handleAddCustomAnimal = () => {
-    if (!customAnimalInput.trim()) return;
+    if (!customAnimalInput.trim()) {
+      setCustomAnimalError('Animal name is required');
+      return;
+    }
+
+    // Final validation before adding
+    const validation = validateName(customAnimalInput);
+    if (!validation.isValid) {
+      setCustomAnimalError(validation.message);
+      return;
+    }
+
+    // Additional business logic validation
+    if (customAnimalInput.trim().length < 2) {
+      setCustomAnimalError('Animal name must be at least 2 characters long');
+      return;
+    }
+
+    // Check if animal already exists
+    const animalExists = serviceData.animalTypes.some(animal => 
+      animal.name.toLowerCase() === customAnimalInput.trim().toLowerCase()
+    );
+    
+    if (animalExists) {
+      setCustomAnimalError('This animal type is already added');
+      return;
+    }
+
+    debugLog('MBA1234', 'Adding custom animal with validated input:', customAnimalInput.trim());
 
     // Find the category name for the custom animal
     let categoryName = 'Other';
@@ -358,6 +405,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     }
     
     setCustomAnimalInput('');
+    setCustomAnimalError('');
     // Don't hide the form anymore since it's always visible
   };
 
@@ -521,6 +569,10 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       gap: 8,
       marginBottom: 12,
     },
+    textInputContainer: {
+      flex: 1,
+      marginRight: 12,
+    },
     textInput: {
       flex: 1,
       height: 48,
@@ -529,8 +581,12 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       borderRadius: 8,
       paddingHorizontal: 12,
       backgroundColor: theme.colors.surface,
+      fontSize: 16,
       color: theme.colors.text,
       fontFamily: theme.fonts.regular.fontFamily,
+    },
+    textInputError: {
+      borderColor: theme.colors.error,
     },
     pickerContainer: {
       flex: 1,
@@ -557,6 +613,13 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       fontSize: 16,
       fontWeight: '600',
       fontFamily: theme.fonts.regular.fontFamily,
+    },
+    addButtonDisabled: {
+      backgroundColor: theme.colors.border,
+      opacity: 0.6,
+    },
+    addButtonTextDisabled: {
+      color: theme.colors.textSecondary,
     },
     selectedAnimalsSection: {
       marginTop: 24,
@@ -599,6 +662,12 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
     },
     removeAnimalButton: {
       padding: 2,
+    },
+    errorText: {
+      color: theme.colors.error,
+      fontSize: 12,
+      marginTop: 4,
+      fontFamily: theme.fonts.regular.fontFamily,
     },
   });
 
@@ -684,13 +753,19 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       <View style={styles.customInputContainer}>
         <Text style={styles.customInputTitle}>Add a Custom Animal Type</Text>
         <View style={styles.inputRow}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Animal Type (e.g. Hamster)"
-            value={customAnimalInput}
-            onChangeText={setCustomAnimalInput}
-            placeholderTextColor={theme.colors.placeHolderText}
-          />
+          <View style={styles.textInputContainer}>
+            <TextInput
+              style={[styles.textInput, customAnimalError ? styles.textInputError : null]}
+              placeholder="Animal Type (e.g. Hamster)"
+              value={customAnimalInput}
+              onChangeText={handleCustomAnimalInputChange}
+              placeholderTextColor={theme.colors.placeHolderText}
+              maxLength={30}
+            />
+            {customAnimalError ? (
+              <Text style={styles.errorText}>{customAnimalError}</Text>
+            ) : null}
+          </View>
           <View style={styles.pickerContainer}>
             {Platform.OS === 'ios' || Platform.OS === 'android' ? (
               <Picker
@@ -722,11 +797,17 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
           </View>
         </View>
         <TouchableOpacity 
-          style={styles.addButton}
+          style={[
+            styles.addButton,
+            (!customAnimalInput.trim() || customAnimalError) ? styles.addButtonDisabled : null
+          ]}
           onPress={handleAddCustomAnimal}
-          disabled={!customAnimalInput.trim()}
+          disabled={!customAnimalInput.trim() || customAnimalError}
         >
-          <Text style={styles.addButtonText}>Add Animal</Text>
+          <Text style={[
+            styles.addButtonText,
+            (!customAnimalInput.trim() || customAnimalError) ? styles.addButtonTextDisabled : null
+          ]}>Add Animal</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

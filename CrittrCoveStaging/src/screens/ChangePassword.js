@@ -2,15 +2,18 @@ import React, { useState, useContext, useEffect } from 'react';
 import { View, StyleSheet, Platform, SafeAreaView, TouchableOpacity, StatusBar, Text, TextInput, ActivityIndicator, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import CustomButton from '../components/CustomButton';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { changePassword } from '../api/API';
+import { validatePassword, validatePasswordMatch, sanitizeInput } from '../validation/validation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-const ChangePassword = ({ navigation }) => {
+const ChangePassword = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -22,6 +25,13 @@ const ChangePassword = ({ navigation }) => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { isSignedIn, screenWidth: contextScreenWidth, isCollapsed } = useContext(AuthContext);
   const [token, setToken] = useState(null);
+  
+  // Validation error states
+  const [currentPasswordError, setCurrentPasswordError] = useState('');
+  const [newPasswordError, setNewPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  
+  const navigation = useNavigation();
 
   useEffect(() => {
     const getToken = async () => {
@@ -31,41 +41,134 @@ const ChangePassword = ({ navigation }) => {
     getToken();
   }, []);
 
-  const handleChangePassword = async () => {
-    setError('');
-    setSuccess('');
-
-    if (newPassword !== confirmPassword) {
-      setError('New passwords do not match');
+  // Enhanced input handlers with real-time sanitization
+  const handleCurrentPasswordChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'password');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 50 && text.length > 8) {
+      debugLog('MBA1234: Potentially malicious current password input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
       return;
     }
+    
+    setCurrentPassword(sanitizedText);
+    setCurrentPasswordError('');
+    setError('');
+    setSuccess('');
+  };
 
-    if (!isSignedIn || !token) {
-      setError('You are not authenticated. Please log in again.');
+  const handleNewPasswordChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'password');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 50 && text.length > 8) {
+      debugLog('MBA1234: Potentially malicious new password input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setNewPassword(sanitizedText);
+    setNewPasswordError('');
+    setError('');
+    setSuccess('');
+  };
+
+  const handleConfirmPasswordChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'password');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 50 && text.length > 8) {
+      debugLog('MBA1234: Potentially malicious confirm password input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setConfirmPassword(sanitizedText);
+    setConfirmPasswordError('');
+    setError('');
+    setSuccess('');
+  };
+
+  const validateForm = () => {
+    let isValid = true;
+    
+    // Validate current password (basic check)
+    if (!currentPassword.trim()) {
+      setCurrentPasswordError('Current password is required');
+      isValid = false;
+    }
+    
+    // Validate new password
+    const newPasswordValidation = validatePassword(newPassword);
+    setNewPasswordError(newPasswordValidation.message);
+    if (!newPasswordValidation.isValid) isValid = false;
+    
+    // Validate password match
+    const passwordMatchValidation = validatePasswordMatch(newPassword, confirmPassword);
+    setConfirmPasswordError(passwordMatchValidation.message);
+    if (!passwordMatchValidation.isValid) isValid = false;
+    
+    return isValid;
+  };
+
+  const handleChangePassword = async () => {
+    // Validate form before proceeding
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/users/change-password/`,
-        {
-          current_password: currentPassword,
-          new_password: newPassword,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+    setError('');
+    setSuccess('');
 
-      if (response.status === 200) {
-        setSuccess('Password changed successfully');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-      }
+    try {
+      // Sanitize inputs before sending to API
+      const sanitizedCurrentPassword = sanitizeInput(currentPassword, 'password');
+      const sanitizedNewPassword = sanitizeInput(newPassword, 'password');
+      
+      debugLog('MBA1234: Password change request with sanitized inputs');
+      
+      await changePassword(sanitizedCurrentPassword, sanitizedNewPassword);
+      setSuccess('Password changed successfully!');
+      
+      // Clear form after successful change
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      
+      // Navigate back after a short delay
+      setTimeout(() => {
+        navigation.navigate('MyProfile', { initialTab: 'settings_payments' });
+      }, 2000);
+      
     } catch (error) {
-      setError(error.response?.data?.error || 'Failed to change password');
+      debugLog('MBA1234: Error changing password:', error);
+      
+      let errorMessage = 'Failed to change password. Please try again.';
+      if (error.response && error.response.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -91,10 +194,10 @@ const ChangePassword = ({ navigation }) => {
             
             <View style={styles.inputContainer}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, currentPasswordError ? styles.errorInput : null]}
                 placeholder="Current Password"
                 value={currentPassword}
-                onChangeText={setCurrentPassword}
+                onChangeText={handleCurrentPasswordChange}
                 secureTextEntry={!showCurrentPassword}
                 placeholderTextColor={theme.colors.placeHolderText}
               />
@@ -108,14 +211,15 @@ const ChangePassword = ({ navigation }) => {
                   color={theme.colors.placeHolderText}
                 />
               </TouchableOpacity>
+              {currentPasswordError ? <Text style={styles.errorText}>{currentPasswordError}</Text> : null}
             </View>
 
             <View style={styles.inputContainer}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, newPasswordError ? styles.errorInput : null]}
                 placeholder="New Password"
                 value={newPassword}
-                onChangeText={setNewPassword}
+                onChangeText={handleNewPasswordChange}
                 secureTextEntry={!showNewPassword}
                 placeholderTextColor={theme.colors.placeHolderText}
               />
@@ -129,14 +233,15 @@ const ChangePassword = ({ navigation }) => {
                   color={theme.colors.placeHolderText}
                 />
               </TouchableOpacity>
+              {newPasswordError ? <Text style={styles.errorText}>{newPasswordError}</Text> : null}
             </View>
 
             <View style={styles.inputContainer}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, confirmPasswordError ? styles.errorInput : null]}
                 placeholder="Confirm New Password"
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={handleConfirmPasswordChange}
                 secureTextEntry={!showConfirmPassword}
                 placeholderTextColor={theme.colors.placeHolderText}
               />
@@ -150,6 +255,7 @@ const ChangePassword = ({ navigation }) => {
                   color={theme.colors.placeHolderText}
                 />
               </TouchableOpacity>
+              {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -161,7 +267,7 @@ const ChangePassword = ({ navigation }) => {
               disabled={loading}
               style={styles.button}
             />
-
+            
             {loading && <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />}
 
             <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>

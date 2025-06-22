@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { theme } from '../../styles/theme';
 import { debugLog } from '../../context/AuthContext';
+import { sanitizeInput } from '../../validation/validation';
 
 const MAX_SERVICE_NAME_LENGTH = 30;
 const MAX_DESCRIPTION_LENGTH = 300;
@@ -17,49 +18,46 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
   const [nameError, setNameError] = useState('');
   const [descriptionError, setDescriptionError] = useState('');
 
-  const validateInput = (text, isName = true) => {
-    // Allow only letters, numbers, spaces and & symbol
-    const validRegex = /^[a-zA-Z0-9\s&\.\-\,!]*$/;
-    
-    if (!validRegex.test(text)) {
-      if (isName) {
-        setNameError('Service name can only contain letters, numbers, spaces, &, and !');
-      } else {
-        setDescriptionError('Description can only contain letters, numbers, spaces, periods, commas, dashes, &, and !');
-      }
-      return false;
-    }
-    
-    if (isName) {
-      setNameError('');
-    } else {
-      setDescriptionError('');
-    }
-    return true;
-  };
-
   const handleServiceNameChange = (text) => {
-    // Limit to MAX_SERVICE_NAME_LENGTH characters
-    const truncatedText = text.slice(0, MAX_SERVICE_NAME_LENGTH);
+    debugLog('MBA1234', 'Service name input change:', text);
     
-    if (validateInput(truncatedText, true)) {
-      setServiceData(prev => ({
-        ...prev,
-        serviceName: truncatedText
-      }));
+    // Sanitize the input using the universal sanitizer
+    const sanitized = sanitizeInput(text, 'name', { maxLength: MAX_SERVICE_NAME_LENGTH });
+    
+    // Business logic validation
+    if (sanitized.length > 0 && sanitized.length < 3) {
+      setNameError('Service name must be at least 3 characters long');
+    } else if (sanitized.length > MAX_SERVICE_NAME_LENGTH) {
+      setNameError(`Service name must be no more than ${MAX_SERVICE_NAME_LENGTH} characters long`);
+    } else {
+      setNameError('');
     }
+    
+    setServiceData(prev => ({
+      ...prev,
+      serviceName: sanitized
+    }));
   };
 
   const handleDescriptionChange = (text) => {
-    // Limit to MAX_DESCRIPTION_LENGTH characters
-    const truncatedText = text.slice(0, MAX_DESCRIPTION_LENGTH);
+    debugLog('MBA1234', 'Service description input change:', text);
     
-    if (validateInput(truncatedText, false)) {
-      setServiceData(prev => ({
-        ...prev,
-        serviceDescription: truncatedText
-      }));
+    // Sanitize the input using the universal sanitizer
+    const sanitized = sanitizeInput(text, 'description', { maxLength: MAX_DESCRIPTION_LENGTH });
+    
+    // Business logic validation
+    if (sanitized.length > 0 && sanitized.length < 10) {
+      setDescriptionError('Service description must be at least 10 characters long');
+    } else if (sanitized.length > MAX_DESCRIPTION_LENGTH) {
+      setDescriptionError(`Service description must be no more than ${MAX_DESCRIPTION_LENGTH} characters long`);
+    } else {
+      setDescriptionError('');
     }
+    
+    setServiceData(prev => ({
+      ...prev,
+      serviceDescription: sanitized
+    }));
   };
 
   const handleOvernightToggle = (value) => {
@@ -76,7 +74,7 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Service Name</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, nameError ? styles.inputError : null]}
           value={serviceData.serviceName}
           onChangeText={handleServiceNameChange}
           placeholder="e.g. Premium Pet Grooming"
@@ -92,7 +90,7 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Service Description</Text>
         <TextInput
-          style={[styles.input, styles.textArea]}
+          style={[styles.input, styles.textArea, descriptionError ? styles.inputError : null]}
           value={serviceData.serviceDescription}
           onChangeText={handleDescriptionChange}
           placeholder="Describe your service in detail..."
@@ -155,6 +153,9 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     backgroundColor: theme.colors.surface,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  inputError: {
+    borderColor: theme.colors.error,
   },
   textArea: {
     height: 120,

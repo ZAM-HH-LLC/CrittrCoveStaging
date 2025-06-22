@@ -12,6 +12,7 @@ import { calculateAge } from '../../data/calculations';
 import * as ImagePicker from 'expo-image-picker';
 import ProfilePhotoCropper from './ProfilePhotoCropper';
 import { processImageWithCrop, prepareImageForUpload } from '../../utils/imageCropUtils';
+import { sanitizeInput, validateName, validatePhoneNumber } from '../../validation/validation';
 
 const PetsPreferencesTab = ({
   pets = [],
@@ -83,6 +84,10 @@ const PetsPreferencesTab = ({
   const [showPetPhotoCropper, setShowPetPhotoCropper] = useState(false);
   const [currentEditingPetId, setCurrentEditingPetId] = useState(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  
+  // Add validation state
+  const [validationErrors, setValidationErrors] = useState({});
+  const [contactValidationErrors, setContactValidationErrors] = useState({});
 
   // Add window resize listener
   useEffect(() => {
@@ -468,26 +473,58 @@ const PetsPreferencesTab = ({
         return null; // For N/A or undefined
       };
       
+      // Sanitize the pet data before saving
+      const sanitizedPetData = {
+        name: sanitizeInput(petData.name || '', 'name', { maxLength: 50 }),
+        breed: sanitizeInput(petData.breed || '', 'name', { maxLength: 50 }),
+        type: sanitizeInput(petData.type || '', 'name', { maxLength: 50 }),
+        feedingInstructions: sanitizeInput(petData.feedingInstructions || '', 'description', { maxLength: 500 }),
+        medicalNotes: sanitizeInput(petData.medicalNotes || '', 'description', { maxLength: 500 }),
+        pottyBreakSchedule: sanitizeInput(petData.pottyBreakSchedule || '', 'description', { maxLength: 500 }),
+        specialCareInstructions: sanitizeInput(petData.specialCareInstructions || '', 'description', { maxLength: 500 }),
+        medications: sanitizeInput(petData.medications || '', 'description', { maxLength: 500 }),
+        vetName: sanitizeInput(petData.vetName || '', 'general', { maxLength: 100 }),
+        vetAddress: sanitizeInput(petData.vetAddress || '', 'description', { maxLength: 200 }),
+        insuranceProvider: sanitizeInput(petData.insuranceProvider || '', 'general', { maxLength: 100 }),
+        // These fields don't need sanitization as they're controlled inputs
+        birthday: petData.birthday,
+        adoptionDate: petData.adoptionDate,
+        weight: petData.weight,
+        microchipId: petData.microchipId,
+        sex: petData.sex,
+        allergies: petData.allergies,
+        vaccinations: petData.vaccinations,
+        vetPhone: petData.vetPhone, // Already sanitized in phone validation
+      };
+      
+      debugLog("MBA456", "SAVE PET - Sanitized pet data:", {
+        originalName: petData.name,
+        sanitizedName: sanitizedPetData.name,
+        originalBreed: petData.breed,
+        sanitizedBreed: sanitizedPetData.breed
+      });
+      
       // Format the pet data for the API
       let petToSave = {
-        name: petData.name || '',
-        breed: petData.breed || '',
-        birthday: petData.birthday ? formatDateForBackend(petData.birthday) : null,
-        adoption_date: petData.adoptionDate ? formatDateForBackend(petData.adoptionDate) : null,
-        weight: petData.weight || null,
-        feeding_schedule: petData.feedingInstructions || '',
-        medication_notes: petData.medicalNotes || '',
-        potty_break_schedule: petData.pottyBreakSchedule || '',
-        special_care_instructions: petData.specialCareInstructions || '',
-        species: petData.type || '',
-        microchip_id: petData.microchipId || '',
-        sex: petData.sex || null,
-        medications: petData.medications || '',
-        allergies: petData.allergies || '',
-        vaccinations: petData.vaccinations || '',
-        vet_name: petData.vetName || '',
-        vet_phone: petData.vetPhone || '',
-        insurance_provider: petData.insuranceProvider || '',
+        name: sanitizedPetData.name,
+        breed: sanitizedPetData.breed,
+        birthday: sanitizedPetData.birthday ? formatDateForBackend(sanitizedPetData.birthday) : null,
+        adoption_date: sanitizedPetData.adoptionDate ? formatDateForBackend(sanitizedPetData.adoptionDate) : null,
+        weight: sanitizedPetData.weight || null,
+        feeding_schedule: sanitizedPetData.feedingInstructions,
+        medication_notes: sanitizedPetData.medicalNotes,
+        potty_break_schedule: sanitizedPetData.pottyBreakSchedule,
+        special_care_instructions: sanitizedPetData.specialCareInstructions,
+        species: sanitizedPetData.type,
+        microchip_id: sanitizedPetData.microchipId || '',
+        sex: sanitizedPetData.sex || null,
+        medications: sanitizedPetData.medications,
+        allergies: sanitizedPetData.allergies || '',
+        vaccinations: sanitizedPetData.vaccinations || '',
+        vet_name: sanitizedPetData.vetName,
+        vet_address: sanitizedPetData.vetAddress || '',
+        vet_phone: sanitizedPetData.vetPhone || '',
+        insurance_provider: sanitizedPetData.insuranceProvider,
         // Use the correct field names for the backend
         spayed_neutered: convertYesNoToBoolean(petData.spayedNeutered),
         house_trained: convertYesNoToBoolean(petData.houseTrained),
@@ -594,6 +631,7 @@ const PetsPreferencesTab = ({
             // These are used directly from the edited data
             weight: petData.weight || '',
             vetName: petData.vetName || '',
+            vetAddress: petData.vetAddress || '',
             vetPhone: petData.vetPhone || '',
             insuranceProvider: petData.insuranceProvider || '',
             sex: petData.sex || '',
@@ -701,6 +739,7 @@ const PetsPreferencesTab = ({
             specialCareInstructions: updatedPet.special_care_instructions || updatedPet.specialCareInstructions,
             // Map vet info fields
             vetName: updatedPet.vet_name || '',
+            vetAddress: updatedPet.vet_address || '',
             vetPhone: updatedPet.vet_phone || '',
             insuranceProvider: updatedPet.insurance_provider || '',
             // Format compatibility fields for UI (true/false/null to Yes/No/N/A)
@@ -718,6 +757,8 @@ const PetsPreferencesTab = ({
                          updatedPet.microchipped === false ? "No" : "N/A",
             canBeLeftAlone: updatedPet.can_be_left_alone === true ? "Yes" : 
                            updatedPet.can_be_left_alone === false ? "No" : "N/A",
+            // Map energy level from backend to frontend
+            energyLevel: updatedPet.energy_level || '',
             // Format dates correctly
             birthday: updatedPet.birthday ? formatDateFromBackend(updatedPet.birthday) : null,
             adoptionDate: updatedPet.adoption_date ? formatDateFromBackend(updatedPet.adoption_date) : null,
@@ -796,11 +837,183 @@ const PetsPreferencesTab = ({
     });
   };
   
+  const formatPhoneNumber = (phoneNumber) => {
+    // Format phone number as XXX-XXX-XXXX
+    const cleaned = phoneNumber.replace(/\D/g, '');
+    
+    if (cleaned.length >= 6) {
+      return `${cleaned.substring(0, 3)}-${cleaned.substring(3, 6)}-${cleaned.substring(6, 10)}`;
+    } else if (cleaned.length >= 3) {
+      return `${cleaned.substring(0, 3)}-${cleaned.substring(3)}`;
+    } else {
+      return cleaned;
+    }
+  };
+
+  const validatePetInput = (field, value, petId) => {
+    debugLog('MBA1234', 'Validating pet input:', { field, value, petId });
+    
+    let sanitized = value;
+    let error = '';
+    
+    // Skip validation for dropdown/boolean fields
+    if (['childrenFriendly', 'catFriendly', 'dogFriendly', 'spayedNeutered', 'houseTrained', 'microchipped', 'canBeLeftAlone', 'energyLevel', 'sex', 'type'].includes(field)) {
+      return { sanitized, error };
+    }
+    
+    // First check for dangerous content that should always be blocked
+    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
+    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
+    
+    if (hasScriptTags || hasSqlInjection) {
+      debugLog('MBA1234', 'Dangerous content detected and blocked:', { field, value });
+      return { sanitized: '', error: 'Invalid content detected and removed' };
+    }
+    
+    // Sanitize based on field type
+    if (field === 'name') {
+      sanitized = sanitizeInput(value, 'name', { maxLength: 50 });
+      
+      // Check for malicious content
+      const originalLength = value.length;
+      const sanitizedLength = sanitized.length;
+      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
+      
+      if (removalPercentage > 30 && originalLength > 3) {
+        debugLog('MBA1234', 'Malicious content detected in pet name:', { originalLength, sanitizedLength, removalPercentage });
+        error = 'Invalid characters detected in pet name';
+      } else {
+        const nameValidation = validateName(sanitized);
+        if (!nameValidation.isValid && sanitized.length > 0) {
+          error = nameValidation.message;
+        } else if (sanitized.length > 0 && sanitized.length < 2) {
+          error = 'Pet name must be at least 2 characters long';
+        }
+      }
+    } else if (field === 'breed' || field === 'color') {
+      sanitized = sanitizeInput(value, 'name', { maxLength: 50 });
+      
+      // Check for malicious content
+      const originalLength = value.length;
+      const sanitizedLength = sanitized.length;
+      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
+      
+      if (removalPercentage > 30 && originalLength > 3) {
+        debugLog('MBA1234', `Malicious content detected in pet ${field}:`, { originalLength, sanitizedLength, removalPercentage });
+        error = `Invalid characters detected in pet ${field}`;
+      } else if (sanitized.length > 0 && sanitized.length < 2) {
+        error = `Pet ${field} must be at least 2 characters long`;
+      }
+    } else if (['specialInstructions', 'medicalConditions', 'feedingInstructions', 'medicalNotes', 'pottyBreakSchedule', 'specialCareInstructions', 'medications'].includes(field)) {
+      sanitized = sanitizeInput(value, 'description', { maxLength: 500 });
+      
+      // Check for malicious content
+      const originalLength = value.length;
+      const sanitizedLength = sanitized.length;
+      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
+      
+      if (removalPercentage > 30 && originalLength > 10) {
+        debugLog('MBA1234', `Malicious content detected in pet ${field}:`, { originalLength, sanitizedLength, removalPercentage });
+        error = `Invalid characters detected in ${field}`;
+      } else if (sanitized.length > 500) {
+        error = `${field} must be no more than 500 characters long`;
+      }
+    } else if (field === 'weight') {
+      sanitized = sanitizeInput(value, 'amount');
+      
+      if (sanitized && sanitized.length > 0) {
+        const weightValue = parseFloat(sanitized);
+        if (isNaN(weightValue)) {
+          error = 'Weight must be a valid number';
+        } else if (weightValue <= 0) {
+          error = 'Weight must be greater than 0';
+        } else if (weightValue > 500) {
+          error = 'Weight cannot exceed 500 lbs';
+        }
+      }
+    } else if (['vetName', 'insuranceProvider'].includes(field)) {
+      sanitized = sanitizeInput(value, 'general', { maxLength: 100 });
+      
+      // Check for malicious content
+      const originalLength = value.length;
+      const sanitizedLength = sanitized.length;
+      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
+      
+      if (removalPercentage > 30 && originalLength > 3) {
+        debugLog('MBA1234', `Malicious content detected in ${field}:`, { originalLength, sanitizedLength, removalPercentage });
+        error = `Invalid characters detected in ${field}`;
+      }
+    } else if (['vetAddress'].includes(field)) {
+      sanitized = sanitizeInput(value, 'description', { maxLength: 200 });
+      
+      // Check for malicious content
+      const originalLength = value.length;
+      const sanitizedLength = sanitized.length;
+      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
+      
+      if (removalPercentage > 30 && originalLength > 5) {
+        debugLog('MBA1234', `Malicious content detected in ${field}:`, { originalLength, sanitizedLength, removalPercentage });
+        error = `Invalid characters detected in ${field}`;
+      }
+    } else if (field === 'vetPhone') {
+      // For vet phone, be more restrictive - only allow numbers and format as XXX-XXX-XXXX
+      const numbersOnly = value.replace(/\D/g, ''); // Remove all non-digits
+      
+      if (numbersOnly.length > 10) {
+        // Don't allow more than 10 digits
+        sanitized = formatPhoneNumber(numbersOnly.substring(0, 10));
+        error = 'Phone number cannot exceed 10 digits';
+      } else if (numbersOnly.length > 0) {
+        sanitized = formatPhoneNumber(numbersOnly);
+        
+        if (numbersOnly.length === 10) {
+          // Validate complete phone number
+          const phoneValidation = validatePhoneNumber(sanitized);
+          if (!phoneValidation.isValid) {
+            error = phoneValidation.message;
+          }
+        } else if (numbersOnly.length < 10 && numbersOnly.length > 0) {
+          // Allow partial entry but show it's incomplete
+          // Don't set error for partial entry to allow typing
+        }
+      } else {
+        sanitized = '';
+      }
+    } else {
+      // General text field sanitization
+      sanitized = sanitizeInput(value, 'general', { maxLength: 200 });
+    }
+    
+    // Update validation errors
+    setValidationErrors(prevErrors => {
+      const petErrors = prevErrors[petId] || {};
+      const newPetErrors = { ...petErrors };
+      
+      if (error) {
+        newPetErrors[field] = error;
+      } else {
+        delete newPetErrors[field];
+      }
+      
+      const cleanedErrors = Object.keys(newPetErrors).length > 0 ? newPetErrors : undefined;
+      const newErrors = { ...prevErrors };
+      
+      if (cleanedErrors) {
+        newErrors[petId] = cleanedErrors;
+      } else {
+        delete newErrors[petId];
+      }
+      
+      return newErrors;
+    });
+    
+    return { sanitized, error };
+  };
+
   const handleEditChange = (petId, field, value) => {
-    // Special handling for compatibility fields where we need to convert from UI string to internal boolean/null representation
-    if (['childrenFriendly', 'catFriendly', 'dogFriendly', 'spayedNeutered', 'houseTrained', 'microchipped', 'canBeLeftAlone'].includes(field)) {
+    // For compatibility fields, no need to validate
+    if (['childrenFriendly', 'catFriendly', 'dogFriendly', 'spayedNeutered', 'houseTrained', 'microchipped', 'canBeLeftAlone', 'energyLevel', 'sex', 'type'].includes(field)) {
       // Store the direct selected value ("Yes", "No", "N/A") in the edit state
-      // This makes it easier to highlight the selected button in the UI
       setEditedPetsData(prev => ({
         ...prev,
         [petId]: {
@@ -836,12 +1049,33 @@ const PetsPreferencesTab = ({
         }));
       }
     } else {
-      // For non-compatibility fields, just store the value directly
+      // For text fields, only block extremely dangerous content in real-time
+      const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
+      const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
+      
+      if (hasScriptTags || hasSqlInjection) {
+        debugLog('MBA1234', 'Dangerous content detected and blocked in pet input:', { field, value });
+        return; // Don't update the input if it contains dangerous content
+      }
+      
+      // For phone fields, apply formatting
+      let processedValue = value;
+      if (field === 'vetPhone') {
+        const numbersOnly = value.replace(/\D/g, '');
+        if (numbersOnly.length <= 10) {
+          processedValue = formatPhoneNumber(numbersOnly);
+        } else {
+          // Don't allow more than 10 digits
+          processedValue = formatPhoneNumber(numbersOnly.substring(0, 10));
+        }
+      }
+      
+      // Store the value (with formatting for phone numbers, original for everything else)
       setEditedPetsData(prev => ({
         ...prev,
         [petId]: {
           ...(prev[petId] || {}),
-          [field]: value
+          [field]: processedValue
         }
       }));
     }
@@ -1980,6 +2214,7 @@ const PetsPreferencesTab = ({
                           placeholder="Enter vet phone"
                           placeholderTextColor={theme.colors.placeholder}
                           keyboardType="phone-pad"
+                          maxLength={12}
                         />
                       ) : (
                         <Text style={styles.vetInfoText}>{pet.vetPhone || 'None'}</Text>
@@ -2083,23 +2318,151 @@ const PetsPreferencesTab = ({
     );
   };
 
+  const validateContactInput = (field, value, type) => {
+    debugLog('MBA1234', 'Validating contact input:', { field, value, type });
+    
+    let sanitized = value;
+    let error = '';
+    
+    if (field === 'name') {
+      sanitized = sanitizeInput(value, 'name', { maxLength: 50 });
+      
+      // Check for malicious content
+      const originalLength = value.length;
+      const sanitizedLength = sanitized.length;
+      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
+      
+      if (removalPercentage > 30 && originalLength > 3) {
+        debugLog('MBA1234', `Malicious content detected in ${type} name:`, { originalLength, sanitizedLength, removalPercentage });
+        error = `Invalid characters detected in ${type} name`;
+      } else {
+        const nameValidation = validateName(sanitized);
+        if (!nameValidation.isValid && sanitized.length > 0) {
+          error = nameValidation.message;
+        } else if (sanitized.length > 0 && sanitized.length < 2) {
+          error = `${type} name must be at least 2 characters long`;
+        }
+      }
+    } else if (field === 'phone') {
+      // For contact phone, be more restrictive - only allow numbers and format as XXX-XXX-XXXX
+      const numbersOnly = value.replace(/\D/g, ''); // Remove all non-digits
+      
+      if (numbersOnly.length > 10) {
+        // Don't allow more than 10 digits
+        sanitized = formatPhoneNumber(numbersOnly.substring(0, 10));
+        error = 'Phone number cannot exceed 10 digits';
+      } else if (numbersOnly.length > 0) {
+        sanitized = formatPhoneNumber(numbersOnly);
+        
+        if (numbersOnly.length === 10) {
+          // Validate complete phone number
+          const phoneValidation = validatePhoneNumber(sanitized);
+          if (!phoneValidation.isValid) {
+            error = phoneValidation.message;
+          }
+        } else if (numbersOnly.length < 10 && numbersOnly.length > 0) {
+          // Allow partial entry but show it's incomplete
+          // Don't set error for partial entry to allow typing
+        }
+      } else {
+        sanitized = '';
+      }
+    }
+    
+    return { sanitized, error };
+  };
+
+  const handleContactInputChange = (field, value, type) => {
+    // First check for dangerous content that should always be blocked
+    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
+    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
+    
+    if (hasScriptTags || hasSqlInjection) {
+      debugLog('MBA1234', 'Dangerous content detected and blocked in contact input:', { field, value, type });
+      return; // Don't update the input if it contains dangerous content
+    }
+    
+    const { sanitized, error } = validateContactInput(field, value, type);
+    
+    // Update validation errors
+    setContactValidationErrors(prevErrors => {
+      const newErrors = { ...prevErrors };
+      const errorKey = `${type}_${field}`;
+      
+      if (error) {
+        newErrors[errorKey] = error;
+      } else {
+        delete newErrors[errorKey];
+      }
+      
+      return newErrors;
+    });
+    
+    // Update the input state with sanitized value for proper formatting
+    if (type === 'emergency') {
+      setNewEmergencyContact(prev => ({
+        ...prev,
+        [field]: sanitized
+      }));
+    } else if (type === 'household') {
+      setNewHouseholdMember(prev => ({
+        ...prev,
+        [field]: sanitized
+      }));
+    }
+  };
+
   const handleAddEmergencyContact = () => {
+    // Validate inputs before adding
+    const nameError = contactValidationErrors.emergency_name;
+    const phoneError = contactValidationErrors.emergency_phone;
+    
+    if (nameError || phoneError) {
+      debugLog('MBA1234', 'Cannot add emergency contact due to validation errors:', { nameError, phoneError });
+      return;
+    }
+    
     if (newEmergencyContact.name && newEmergencyContact.phone) {
       debugLog("MBA123", "Adding emergency contact", newEmergencyContact);
       const updatedContacts = [...(preferences.emergencyContacts || []), newEmergencyContact];
       onUpdatePreferences('emergencyContacts', updatedContacts);
       setNewEmergencyContact({ name: '', phone: '' });
       setIsAddingEmergencyContact(false);
+      
+      // Clear validation errors
+      setContactValidationErrors(prevErrors => {
+        const newErrors = { ...prevErrors };
+        delete newErrors.emergency_name;
+        delete newErrors.emergency_phone;
+        return newErrors;
+      });
     }
   };
 
   const handleAddHouseholdMember = () => {
+    // Validate inputs before adding
+    const nameError = contactValidationErrors.household_name;
+    const phoneError = contactValidationErrors.household_phone;
+    
+    if (nameError || phoneError) {
+      debugLog('MBA1234', 'Cannot add household member due to validation errors:', { nameError, phoneError });
+      return;
+    }
+    
     if (newHouseholdMember.name && newHouseholdMember.phone) {
       debugLog("MBA123", "Adding household member", newHouseholdMember);
       const updatedMembers = [...(preferences.authorizedHouseholdMembers || []), newHouseholdMember];
       onUpdatePreferences('authorizedHouseholdMembers', updatedMembers);
       setNewHouseholdMember({ name: '', phone: '' });
       setIsAddingHouseholdMember(false);
+      
+      // Clear validation errors
+      setContactValidationErrors(prevErrors => {
+        const newErrors = { ...prevErrors };
+        delete newErrors.household_name;
+        delete newErrors.household_phone;
+        return newErrors;
+      });
     }
   };
 
@@ -2150,22 +2513,44 @@ const PetsPreferencesTab = ({
         
         {isAddingEmergencyContact && (
           <View style={styles.addContactForm}>
-            <TextInput
-              style={styles.input}
-              placeholder="Contact Name"
-              value={newEmergencyContact.name}
-              onChangeText={(text) => setNewEmergencyContact({...newEmergencyContact, name: text})}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Phone Number"
-              value={newEmergencyContact.phone}
-              onChangeText={(text) => setNewEmergencyContact({...newEmergencyContact, phone: text})}
-              keyboardType="phone-pad"
-            />
+            <View>
+              <TextInput
+                style={[
+                  styles.input,
+                  contactValidationErrors.emergency_name ? styles.inputError : null
+                ]}
+                placeholder="Contact Name"
+                value={newEmergencyContact.name}
+                onChangeText={(text) => handleContactInputChange('name', text, 'emergency')}
+                maxLength={50}
+              />
+              {contactValidationErrors.emergency_name ? (
+                <Text style={styles.errorText}>{contactValidationErrors.emergency_name}</Text>
+              ) : null}
+            </View>
+            <View>
+              <TextInput
+                style={[
+                  styles.input,
+                  contactValidationErrors.emergency_phone ? styles.inputError : null
+                ]}
+                placeholder="719-510-6342"
+                value={newEmergencyContact.phone}
+                onChangeText={(text) => handleContactInputChange('phone', text, 'emergency')}
+                keyboardType="phone-pad"
+                maxLength={12}
+              />
+              {contactValidationErrors.emergency_phone ? (
+                <Text style={styles.errorText}>{contactValidationErrors.emergency_phone}</Text>
+              ) : null}
+            </View>
             <TouchableOpacity 
-              style={styles.submitButton}
+              style={[
+                styles.submitButton,
+                (contactValidationErrors.emergency_name || contactValidationErrors.emergency_phone || !newEmergencyContact.name.trim() || !newEmergencyContact.phone.trim()) ? styles.submitButtonDisabled : null
+              ]}
               onPress={handleAddEmergencyContact}
+              disabled={contactValidationErrors.emergency_name || contactValidationErrors.emergency_phone || !newEmergencyContact.name.trim() || !newEmergencyContact.phone.trim()}
             >
               <Text style={styles.submitButtonText}>Save Contact</Text>
             </TouchableOpacity>
@@ -2221,22 +2606,44 @@ const PetsPreferencesTab = ({
         
         {isAddingHouseholdMember && (
           <View style={styles.addContactForm}>
-            <TextInput
-              style={styles.input}
-              placeholder="Member Name"
-              value={newHouseholdMember.name}
-              onChangeText={(text) => setNewHouseholdMember({...newHouseholdMember, name: text})}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Phone Number"
-              value={newHouseholdMember.phone}
-              onChangeText={(text) => setNewHouseholdMember({...newHouseholdMember, phone: text})}
-              keyboardType="phone-pad"
-            />
+            <View>
+              <TextInput
+                style={[
+                  styles.input,
+                  contactValidationErrors.household_name ? styles.inputError : null
+                ]}
+                placeholder="Member Name"
+                value={newHouseholdMember.name}
+                onChangeText={(text) => handleContactInputChange('name', text, 'household')}
+                maxLength={50}
+              />
+              {contactValidationErrors.household_name ? (
+                <Text style={styles.errorText}>{contactValidationErrors.household_name}</Text>
+              ) : null}
+            </View>
+            <View>
+              <TextInput
+                style={[
+                  styles.input,
+                  contactValidationErrors.household_phone ? styles.inputError : null
+                ]}
+                placeholder="719-510-6342"
+                value={newHouseholdMember.phone}
+                onChangeText={(text) => handleContactInputChange('phone', text, 'household')}
+                keyboardType="phone-pad"
+                maxLength={12}
+              />
+              {contactValidationErrors.household_phone ? (
+                <Text style={styles.errorText}>{contactValidationErrors.household_phone}</Text>
+              ) : null}
+            </View>
             <TouchableOpacity 
-              style={styles.submitButton}
+              style={[
+                styles.submitButton,
+                (contactValidationErrors.household_name || contactValidationErrors.household_phone || !newHouseholdMember.name.trim() || !newHouseholdMember.phone.trim()) ? styles.submitButtonDisabled : null
+              ]}
               onPress={handleAddHouseholdMember}
+              disabled={contactValidationErrors.household_name || contactValidationErrors.household_phone || !newHouseholdMember.name.trim() || !newHouseholdMember.phone.trim()}
             >
               <Text style={styles.submitButtonText}>Save Member</Text>
             </TouchableOpacity>
@@ -2742,6 +3149,7 @@ const PetsPreferencesTab = ({
         specialCareInstructions: realPetData.special_care_instructions || realPetData.specialCareInstructions || '',
         // Map vet info fields
         vetName: realPetData.vet_name || '',
+        vetAddress: realPetData.vet_address || '',
         vetPhone: realPetData.vet_phone || '',
         insuranceProvider: realPetData.insurance_provider || '',
         // Format compatibility fields for UI (true/false/null to Yes/No/N/A)
@@ -2786,6 +3194,30 @@ const PetsPreferencesTab = ({
         name: editedData.name || formattedPetData.name,
         breed: editedData.breed || formattedPetData.breed,
         type: editedData.type || formattedPetData.type,
+        // Preserve user's compatibility field selections
+        childrenFriendly: editedData.childrenFriendly || formattedPetData.childrenFriendly,
+        catFriendly: editedData.catFriendly || formattedPetData.catFriendly,
+        dogFriendly: editedData.dogFriendly || formattedPetData.dogFriendly,
+        houseTrained: editedData.houseTrained || formattedPetData.houseTrained,
+        spayedNeutered: editedData.spayedNeutered || formattedPetData.spayedNeutered,
+        microchipped: editedData.microchipped || formattedPetData.microchipped,
+        canBeLeftAlone: editedData.canBeLeftAlone || formattedPetData.canBeLeftAlone,
+        // Preserve user's energy level selection
+        energyLevel: editedData.energyLevel || formattedPetData.energyLevel,
+        // Preserve other user-edited fields
+        sex: editedData.sex || formattedPetData.sex,
+        weight: editedData.weight || formattedPetData.weight,
+        feedingInstructions: editedData.feedingInstructions || formattedPetData.feedingInstructions,
+        medicalNotes: editedData.medicalNotes || formattedPetData.medicalNotes,
+        pottyBreakSchedule: editedData.pottyBreakSchedule || formattedPetData.pottyBreakSchedule,
+        specialCareInstructions: editedData.specialCareInstructions || formattedPetData.specialCareInstructions,
+        medications: editedData.medications || formattedPetData.medications,
+        vetName: editedData.vetName || formattedPetData.vetName,
+        vetAddress: editedData.vetAddress || formattedPetData.vetAddress,
+        vetPhone: editedData.vetPhone || formattedPetData.vetPhone,
+        insuranceProvider: editedData.insuranceProvider || formattedPetData.insuranceProvider,
+        birthday: editedData.birthday || formattedPetData.birthday,
+        adoptionDate: editedData.adoptionDate || formattedPetData.adoptionDate,
       };
       
       // Clean up the edited data for the temp pet
@@ -3926,6 +4358,19 @@ const styles = StyleSheet.create({
   dropdownItemTextSelected: {
     color: theme.colors.primary,
     fontWeight: '600',
+  },
+  inputError: {
+    borderColor: theme.colors.error,
+    borderWidth: 1,
+  },
+  errorText: {
+    color: theme.colors.error,
+    fontSize: 12,
+    marginTop: 4,
+    fontFamily: theme.fonts?.regular?.fontFamily,
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
   },
 });
 

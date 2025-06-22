@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigateToFrom } from '../components/Navigation';
 import { getUserConnections, inviteClient } from '../api/API';
 import { supportsHover } from '../utils/deviceUtils';
+import { sanitizeInput, validateEmail } from '../validation/validation';
 
 const Connections = () => {
   const navigation = useNavigation();
@@ -37,6 +38,7 @@ const Connections = () => {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [isInviteButtonHovered, setIsInviteButtonHovered] = useState(false);
   const [isCreateServiceButtonHovered, setIsCreateServiceButtonHovered] = useState(false);
+  const [emailValidationError, setEmailValidationError] = useState('');
 
   // Check if device supports hover
   const deviceSupportsHover = supportsHover();
@@ -268,12 +270,51 @@ const Connections = () => {
     });
   };
 
+  const validateInviteEmail = (email) => {
+    debugLog('MBA1234', 'Validating invite email:', email);
+    
+    if (!email || email.trim() === '') {
+      setEmailValidationError('');
+      return { isValid: true, sanitized: '' }; // Allow empty email initially
+    }
+    
+    // Sanitize the email
+    const sanitized = sanitizeInput(email, 'email', { maxLength: 254 });
+    
+    // Check for malicious content
+    const originalLength = email.length;
+    const sanitizedLength = sanitized.length;
+    const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
+    
+    if (removalPercentage > 30 && originalLength > 5) {
+      debugLog('MBA1234', 'Malicious content detected in invite email:', { originalLength, sanitizedLength, removalPercentage });
+      setEmailValidationError('Invalid characters detected in email');
+      return { isValid: false, sanitized };
+    }
+    
+    // Validate email format
+    const emailValidation = validateEmail(sanitized);
+    if (!emailValidation.isValid) {
+      setEmailValidationError(emailValidation.message);
+      return { isValid: false, sanitized };
+    }
+    
+    setEmailValidationError('');
+    return { isValid: true, sanitized };
+  };
+
+  const handleEmailInputChange = (email) => {
+    const { sanitized } = validateInviteEmail(email);
+    setInviteEmail(sanitized);
+  };
+
   const handleInviteClient = () => {
     debugLog('MBA4321 Opening invite client modal');
     setInviteEmail('');
     setGeneratedLink('');
     setInviteError('');
     setInviteSuccess('');
+    setEmailValidationError('');
     setInvitationType('email');
     setShowInviteModal(true);
   };
@@ -283,9 +324,17 @@ const Connections = () => {
     setInviteSuccess('');
     
     if (invitationType === 'email') {
-      if (!inviteEmail || !inviteEmail.includes('@')) {
-        setInviteError('Please enter a valid email address');
-        debugLog('MBA4321 Invalid email format:', inviteEmail);
+      // Validate email before sending
+      const { isValid } = validateInviteEmail(inviteEmail);
+      if (!isValid || emailValidationError) {
+        setInviteError(emailValidationError || 'Please enter a valid email address');
+        debugLog('MBA1234 Invalid email format:', { inviteEmail, emailValidationError });
+        return;
+      }
+      
+      if (!inviteEmail || !inviteEmail.trim()) {
+        setInviteError('Please enter an email address');
+        debugLog('MBA1234 Empty email:', inviteEmail);
         return;
       }
     }
@@ -724,6 +773,7 @@ const Connections = () => {
                     setInvitationType('email');
                     setInviteError('');
                     setInviteSuccess('');
+                    setEmailValidationError('');
                   }}
                 >
                   <MaterialCommunityIcons 
@@ -750,6 +800,7 @@ const Connections = () => {
                     setInvitationType('link');
                     setInviteError('');
                     setInviteSuccess('');
+                    setEmailValidationError('');
                   }}
                 >
                   <MaterialCommunityIcons 
@@ -772,13 +823,20 @@ const Connections = () => {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Client's Email Address</Text>
                   <TextInput
-                    style={styles.emailInput}
+                    style={[
+                      styles.emailInput,
+                      emailValidationError ? styles.emailInputError : null
+                    ]}
                     placeholder="client@example.com"
                     value={inviteEmail}
-                    onChangeText={setInviteEmail}
+                    onChangeText={handleEmailInputChange}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    maxLength={254}
                   />
+                  {emailValidationError ? (
+                    <Text style={styles.validationErrorText}>{emailValidationError}</Text>
+                  ) : null}
                 </View>
               ) : generatedLink ? (
                 <View style={styles.linkContainer}>
@@ -823,11 +881,11 @@ const Connections = () => {
                   <TouchableOpacity
                     style={[
                       styles.sendInviteButton,
-                      (invitationType === 'email' && (!inviteEmail || !inviteEmail.includes('@'))) && styles.disabledButton,
+                      (invitationType === 'email' && (!inviteEmail || emailValidationError)) && styles.disabledButton,
                       isInviting && styles.disabledButton
                     ]}
                     onPress={handleSendInvite}
-                    disabled={isInviting || (invitationType === 'email' && (!inviteEmail || !inviteEmail.includes('@')))}
+                    disabled={isInviting || (invitationType === 'email' && (!inviteEmail || emailValidationError))}
                   >
                     {isInviting ? (
                       <ActivityIndicator size="small" color={theme.colors.surface} />
@@ -1228,6 +1286,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  emailInputError: {
+    borderColor: theme.colors.error,
+    borderWidth: 2,
+  },
+  validationErrorText: {
+    color: theme.colors.error,
+    fontSize: 12,
+    marginTop: 4,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   linkContainer: {

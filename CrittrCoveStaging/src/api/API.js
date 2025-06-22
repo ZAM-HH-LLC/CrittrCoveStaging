@@ -428,6 +428,32 @@ export const updateProfileInfo = async (profileData) => {
 };
 
 /**
+ * Change user password
+ * @param {string} currentPassword - The user's current password
+ * @param {string} newPassword - The new password to set
+ * @returns {Promise<Object>} - Response from the backend
+ */
+export const changePassword = async (currentPassword, newPassword) => {
+  try {
+    debugLog('MBA1234', 'Initiating password change request');
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/api/users/v1/change-password/`,
+      {
+        current_password: currentPassword,
+        new_password: newPassword,
+      }
+    );
+    
+    debugLog('MBA1234', 'Password change successful');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA1234', 'Error changing password:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
  * Upload a profile picture for the user
  * @param {FormData} formData - FormData containing the profile_picture file
  * @returns {Promise<Object>} - Object containing the profile_photo URL

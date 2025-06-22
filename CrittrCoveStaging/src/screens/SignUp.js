@@ -6,7 +6,7 @@ import { theme } from '../styles/theme';
 import CustomButton from '../components/CustomButton';
 import { API_BASE_URL } from '../config/config';
 import { AuthContext, debugLog } from '../context/AuthContext'; // Import AuthContext
-import { validateEmail, validateName, validatePassword, validatePasswordMatch } from '../validation/validation';
+import { validateEmail, validateName, validatePassword, validatePasswordMatch, sanitizeInput } from '../validation/validation';
 import { verifyInvitation } from '../api/API';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -179,22 +179,22 @@ export default function SignUp() {
       isValid = false;
     }
     
-    // Validate first name
+    // Validate first name with sanitization
     const firstNameValidation = validateName(firstName);
     setFirstNameError(firstNameValidation.message);
     if (!firstNameValidation.isValid) isValid = false;
     
-    // Validate last name
+    // Validate last name with sanitization
     const lastNameValidation = validateName(lastName);
     setLastNameError(lastNameValidation.message);
     if (!lastNameValidation.isValid) isValid = false;
     
-    // Validate email
+    // Validate email with sanitization
     const emailValidation = validateEmail(email);
     setEmailError(emailValidation.message);
     if (!emailValidation.isValid) isValid = false;
     
-    // Validate password
+    // Validate password with sanitization
     const passwordValidation = validatePassword(password);
     setPasswordError(passwordValidation.message);
     if (!passwordValidation.isValid) isValid = false;
@@ -217,6 +217,25 @@ export default function SignUp() {
     try {
       debugLog('MBA12345 Starting user registration process');
       
+      // Sanitize all inputs before sending to backend
+      const sanitizedFirstName = sanitizeInput(firstName, 'name');
+      const sanitizedLastName = sanitizeInput(lastName, 'name');
+      const sanitizedEmail = sanitizeInput(email, 'email');
+      const sanitizedPassword = sanitizeInput(password, 'password');
+      const sanitizedLocation = sanitizeInput(location, 'general');
+      
+      debugLog('MBA12345 Input sanitization completed', {
+        originalFirstName: firstName,
+        sanitizedFirstName,
+        originalLastName: lastName,
+        sanitizedLastName,
+        originalEmail: email,
+        sanitizedEmail,
+        originalLocation: location,
+        sanitizedLocation,
+        passwordChanged: password !== sanitizedPassword
+      });
+      
       // Get user's timezone and time format preferences
       let userTimezone = 'UTC';
       try {
@@ -232,6 +251,17 @@ export default function SignUp() {
       const useMilitaryTime = false; // Default to non-military time
       
       debugLog('MBA12345 User timezone and preferences', { userTimezone, useMilitaryTime });
+      
+      // Updated data structure with sanitized inputs
+      const userData = {
+        name: `${sanitizedFirstName.trim().charAt(0).toUpperCase() + sanitizedFirstName.trim().slice(1).toLowerCase()} ${sanitizedLastName.trim().charAt(0).toUpperCase() + sanitizedLastName.trim().slice(1).toLowerCase()}`, // Combine first and last name with first letter capitalized and all other letters lowercase
+        email: sanitizedEmail.trim().toLowerCase(),
+        password: sanitizedPassword,
+        password2: confirmPassword, // Note: We don't sanitize confirm password as it needs to match exactly
+        phone_number: '', // Add empty phone number for now
+        location: inviteVerified ? 'Colorado Springs' : sanitizedLocation, // Use default location for invited users
+        ...(inviteToken && { invitation_token: inviteToken }) // Only include invitation_token if it exists
+      };
       
       // Prepare user data with time settings and invitation token
       const registrationData = {
@@ -263,8 +293,8 @@ export default function SignUp() {
       debugLog('MBA12345 Attempting to log in with new credentials');
       
       const loginResponse = await directAxios.post('/api/token/', {
-        email: email.toLowerCase(),
-        password: password,
+        email: sanitizedEmail.trim().toLowerCase(),
+        password: sanitizedPassword,
       });
       
       debugLog('MBA12345 Login successful, received tokens');
@@ -318,6 +348,108 @@ export default function SignUp() {
     }
   };
 
+  // Enhanced input handlers with real-time sanitization
+  const handleFirstNameChange = (text) => {
+    // Apply real-time sanitization for names
+    const sanitizedText = sanitizeInput(text, 'name');
+    
+    // Check if sanitization removed too much content (potential attack)
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 30 && text.length > 3) {
+      debugLog('MBA1234: Potentially malicious first name input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return; // Don't update if too much was removed
+    }
+    
+    setFirstName(sanitizedText);
+    setFirstNameError('');
+  };
+
+  const handleLastNameChange = (text) => {
+    // Apply real-time sanitization for names
+    const sanitizedText = sanitizeInput(text, 'name');
+    
+    // Check if sanitization removed too much content (potential attack)
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 30 && text.length > 3) {
+      debugLog('MBA1234: Potentially malicious last name input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return; // Don't update if too much was removed
+    }
+    
+    setLastName(sanitizedText);
+    setLastNameError('');
+  };
+
+  const handleEmailChange = (text) => {
+    // Apply real-time sanitization for emails
+    const sanitizedText = sanitizeInput(text, 'email');
+    
+    // For emails, we're more strict about changes since they have a specific format
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 20 && text.length > 5) {
+      debugLog('MBA1234: Potentially malicious email input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return; // Don't update if too much was removed
+    }
+    
+    setEmail(sanitizedText);
+    setEmailError('');
+  };
+
+  const handlePasswordChange = (text) => {
+    // For passwords, we're more lenient with sanitization during typing
+    // Full validation happens on form submission
+    const sanitizedText = sanitizeInput(text, 'password');
+    
+    // Only block if obvious malicious content
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 50 && text.length > 8) {
+      debugLog('MBA1234: Potentially malicious password input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return; // Don't update if too much was removed
+    }
+    
+    setPassword(sanitizedText);
+    setPasswordError('');
+  };
+
+  const handleConfirmPasswordChange = (text) => {
+    // For confirm password, we don't sanitize as much since it needs to match exactly
+    // But we still prevent obvious XSS attempts
+    const sanitizedText = sanitizeInput(text, 'password');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 50 && text.length > 8) {
+      debugLog('MBA1234: Potentially malicious confirm password input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return; // Don't update if too much was removed
+    }
+    
+    setConfirmPassword(sanitizedText);
+    setConfirmPasswordError('');
+  };
+
   // Navigate to the sign in page
   const navigateToSignIn = () => {
     navigation.navigate('SignIn');
@@ -335,17 +467,6 @@ export default function SignUp() {
     setLocation(selectedLocation);
     setShowLocationDropdown(false);
     setLocationError('');
-  };
-
-  // Updated data structure to match new backend expectations
-  const userData = {
-    name: `${firstName.trim().charAt(0).toUpperCase() + firstName.trim().slice(1).toLowerCase()} ${lastName.trim().charAt(0).toUpperCase() + lastName.trim().slice(1).toLowerCase()}`, // Combine first and last name with first letter capitalized and all other letters lowercase
-    email: email.trim().toLowerCase(),
-    password: password,
-    password2: confirmPassword, // Add confirmation password
-    phone_number: '', // Add empty phone number for now
-    location: inviteVerified ? 'Colorado Springs' : location, // Use default location for invited users
-    ...(inviteToken && { invitation_token: inviteToken }) // Only include invitation_token if it exists
   };
 
   return (
@@ -432,10 +553,7 @@ export default function SignUp() {
                   style={[styles.input, firstNameError ? styles.errorInput : null]}
                   placeholder="First Name"
                   value={firstName}
-                  onChangeText={(text) => {
-                    setFirstName(text);
-                    setFirstNameError('');
-                  }}
+                  onChangeText={handleFirstNameChange}
                 />
                 {firstNameError ? <Text style={styles.errorText}>{firstNameError}</Text> : null}
               </View>
@@ -445,10 +563,7 @@ export default function SignUp() {
                   style={[styles.input, lastNameError ? styles.errorInput : null]}
                   placeholder="Last Name"
                   value={lastName}
-                  onChangeText={(text) => {
-                    setLastName(text);
-                    setLastNameError('');
-                  }}
+                  onChangeText={handleLastNameChange}
                 />
                 {lastNameError ? <Text style={styles.errorText}>{lastNameError}</Text> : null}
               </View>
@@ -458,10 +573,7 @@ export default function SignUp() {
                   style={[styles.input, emailError ? styles.errorInput : null]}
                   placeholder="Email"
                   value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    setEmailError('');
-                  }}
+                  onChangeText={handleEmailChange}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   editable={true}
@@ -474,10 +586,7 @@ export default function SignUp() {
                   style={[styles.input, passwordError ? styles.errorInput : null]}
                   placeholder="Password"
                   value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    setPasswordError('');
-                  }}
+                  onChangeText={handlePasswordChange}
                   secureTextEntry
                 />
                 {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
@@ -488,10 +597,7 @@ export default function SignUp() {
                   style={[styles.input, confirmPasswordError ? styles.errorInput : null]}
                   placeholder="Confirm Password"
                   value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    setConfirmPasswordError('');
-                  }}
+                  onChangeText={handleConfirmPasswordChange}
                   secureTextEntry
                 />
                 {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}

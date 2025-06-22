@@ -5,8 +5,9 @@ import CrossPlatformView from '../components/CrossPlatformView';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import { useForm, ValidationError } from '@formspree/react';
+import { validateEmail, validateName, validateMessage, sanitizeInput } from '../validation/validation';
 
 const ContactUs = () => {
   const navigation = useNavigation();
@@ -17,27 +18,128 @@ const ContactUs = () => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // Validation error states
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [messageError, setMessageError] = useState('');
 
   // Calculate responsive widths
   const isMobile = screenWidth < 900;
   const contentWidth = isMobile ? '90%' : '600px';
   const maxContentWidth = isMobile ? '100%' : '800px';
 
+  // Enhanced input handlers with real-time sanitization
+  const handleNameChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'name');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 30 && text.length > 3) {
+      debugLog('MBA1234: Potentially malicious name input detected in ContactUs:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setName(sanitizedText);
+    setNameError('');
+    setSuccessMessage('');
+  };
+
+  const handleEmailChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'email');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 20 && text.length > 5) {
+      debugLog('MBA1234: Potentially malicious email input detected in ContactUs:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setEmail(sanitizedText);
+    setEmailError('');
+    setSuccessMessage('');
+  };
+
+  const handleMessageChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'message', { maxLength: 2000 });
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 30 && text.length > 10) {
+      debugLog('MBA1234: Potentially malicious message input detected in ContactUs:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setMessage(sanitizedText);
+    setMessageError('');
+    setSuccessMessage('');
+  };
+
+  const validateForm = () => {
+    let isValid = true;
+    
+    // Validate name
+    const nameValidation = validateName(name);
+    setNameError(nameValidation.message);
+    if (!nameValidation.isValid) isValid = false;
+    
+    // Validate email
+    const emailValidation = validateEmail(email);
+    setEmailError(emailValidation.message);
+    if (!emailValidation.isValid) isValid = false;
+    
+    // Validate message
+    const messageValidation = validateMessage(message, { 
+      maxLength: 2000, 
+      minLength: 10,
+      allowEmpty: false 
+    });
+    setMessageError(messageValidation.message);
+    if (!messageValidation.isValid) isValid = false;
+    
+    return isValid;
+  };
+
   const handleSubmit = async () => {
-    if (!name || !email || !message) {
-      setSuccessMessage('Please fill in all fields');
+    // Validate form before proceeding
+    if (!validateForm()) {
       return;
     }
 
     setIsSubmitting(true);
     setSuccessMessage('');
     
-    // Use backend API in production mode
     try {
+      // Sanitize all inputs before sending to backend
+      const sanitizedName = sanitizeInput(name, 'name');
+      const sanitizedEmail = sanitizeInput(email, 'email');
+      const sanitizedMessage = sanitizeInput(message, 'message', { maxLength: 2000 });
+      
+      debugLog('MBA1234: Contact form submission with sanitized inputs', {
+        originalName: name,
+        sanitizedName,
+        originalEmail: email,
+        sanitizedEmail,
+        originalMessage: message,
+        sanitizedMessage
+      });
+      
       const response = await axios.post(`${API_BASE_URL}/api/users/v1/contact/`, {
-        name,
-        email,
-        message
+        name: sanitizedName,
+        email: sanitizedEmail,
+        message: sanitizedMessage
       });
 
       if (response.status === 200) {
@@ -45,12 +147,21 @@ const ContactUs = () => {
         setName('');
         setEmail('');
         setMessage('');
+        setNameError('');
+        setEmailError('');
+        setMessageError('');
       } else {
         throw new Error('Failed to send message');
       }
     } catch (error) {
-      setSuccessMessage(error.response?.data?.error || 'Failed to send message. Please try again later.');
-      console.error(error);
+      debugLog('MBA1234: Error sending contact form:', error);
+      
+      let errorMessage = 'Failed to send message. Please try again later.';
+      if (error.response && error.response.data && error.response.data.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      setSuccessMessage(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -98,47 +209,48 @@ const ContactUs = () => {
           <Text style={styles.subtitle}>Get in touch with our support team</Text>
           
           <TextInput
-            style={styles.input}
+            style={[styles.input, nameError ? styles.errorInput : null]}
             placeholder="Your Name"
             value={name}
-            onChangeText={setName}
+            onChangeText={handleNameChange}
             name="name"
           />
-          <ValidationError prefix="Name" field="name" errors={state.errors} />
+          {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+          
           <TextInput
-            style={styles.input}
+            style={[styles.input, emailError ? styles.errorInput : null]}
             placeholder="Your Email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={handleEmailChange}
             keyboardType="email-address"
             name="email"
             autoCapitalize="none"
           />
-          <ValidationError prefix="Email" field="email" errors={state.errors} />
+          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
           
           <TextInput
-            style={[styles.input, styles.messageInput]}
-            placeholder="Your Message"
+            style={[styles.input, styles.messageInput, messageError ? styles.errorInput : null]}
+            placeholder="Your Message (minimum 10 characters)"
             value={message}
-            onChangeText={setMessage}
+            onChangeText={handleMessageChange}
             multiline
             name="message"
           />
-          <ValidationError prefix="Message" field="message" errors={state.errors} />
+          {messageError ? <Text style={styles.errorText}>{messageError}</Text> : null}
           
           {successMessage ? (
-            <Text style={styles.successMessage}>
+            <Text style={[styles.successMessage, successMessage.includes('Failed') && styles.errorMessage]}>
               {successMessage}
             </Text>
           ) : null}
           
-          <TouchableOpacity 
-            style={[styles.button, isSubmitting && styles.disabledButton]} 
+          <TouchableOpacity
+            style={[styles.submitButton, isSubmitting && styles.disabledButton]}
             onPress={handleSubmit}
-            disabled={isSubmitting || (state.submitting)}
+            disabled={isSubmitting}
           >
-            <Text style={styles.buttonText}>
-              {isSubmitting || (state.submitting) ? 'Sending...' : 'Send Message'}
+            <Text style={styles.submitButtonText}>
+              {isSubmitting ? 'Sending...' : 'Send Message'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -222,6 +334,34 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.7,
+  },
+  errorInput: {
+    borderColor: theme.colors.error,
+    borderWidth: 1,
+  },
+  errorText: {
+    color: theme.colors.error,
+    textAlign: 'center',
+    marginBottom: 10,
+    fontSize: theme.fontSizes.medium,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  submitButton: {
+    backgroundColor: theme.colors.primary,
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 10,
+  },
+  submitButtonText: {
+    color: theme.colors.whiteText,
+    fontSize: theme.fontSizes.mediumLarge,
+    fontWeight: 'bold',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  errorMessage: {
+    color: theme.colors.error,
   },
 });
 

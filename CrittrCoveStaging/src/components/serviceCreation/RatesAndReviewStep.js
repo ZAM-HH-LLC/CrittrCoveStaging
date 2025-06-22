@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { TIME_UNIT_MAPPING, BACKEND_TO_FRONTEND_TIME_UNIT } from '../../data/mockData';
 import { debugLog } from '../../context/AuthContext';
+import { sanitizeInput } from '../../validation/validation';
 
 const TIME_UNITS = Object.keys(TIME_UNIT_MAPPING);
 const ANIMAL_THRESHOLDS = ['1', '2', '3', '4', '5'];
@@ -33,6 +34,14 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
     rate: '',
     description: ''
   });
+  
+  // Error states for validation
+  const [baseRateError, setBaseRateError] = useState('');
+  const [additionalRateError, setAdditionalRateError] = useState('');
+  const [holidayRateError, setHolidayRateError] = useState('');
+  const [customRateTitleError, setCustomRateTitleError] = useState('');
+  const [customRateAmountError, setCustomRateAmountError] = useState('');
+  const [customRateDescriptionError, setCustomRateDescriptionError] = useState('');
 
   // Filter available time units based on isOvernight flag
   const availableTimeUnits = serviceData.isOvernight ? 
@@ -191,36 +200,41 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
     if (showThresholdDropdown) setShowThresholdDropdown(false);
   };
 
-  const formatNumericInput = (text) => {
-    // Remove any non-numeric characters except decimal point
-    let numericValue = text.replace(/[^0-9.]/g, '');
+  // Enhanced numeric input formatter with validation
+  const formatNumericInput = (text, fieldType = 'amount') => {
+    debugLog('MBA1234', `Formatting numeric input for ${fieldType}:`, text);
     
-    // Ensure only one decimal point
-    const parts = numericValue.split('.');
-    if (parts.length > 2) {
-      numericValue = parts[0] + '.' + parts.slice(1).join('');
+    // Don't apply real-time sanitization during typing - this interferes with user experience
+    // Only block extremely dangerous content in real-time
+    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(text);
+    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(text);
+    
+    if (hasScriptTags || hasSqlInjection) {
+      debugLog('MBA1234', `Dangerous content detected in ${fieldType}:`, text);
+      return null; // Return null to indicate invalid input
     }
     
-    // Limit to 7 digits before decimal place
-    if (parts[0] && parts[0].length > 7) {
-      numericValue = parts[0].slice(0, 7) + (parts[1] ? '.' + parts[1] : '');
-    }
-    
-    // Limit to 2 decimal places
-    if (parts[1]?.length > 2) {
-      numericValue = parts[0] + '.' + parts[1].slice(0, 2);
-    }
-
-    return numericValue;
+    return text;
   };
 
   const handleBaseRateChange = (text) => {
-    const numericValue = formatNumericInput(text);
+    const processed = formatNumericInput(text, 'base rate');
+    
+    if (processed === null) {
+      setBaseRateError('Invalid characters detected in base rate');
+      return;
+    }
+    
+    // Clear error when user starts typing normally
+    if (baseRateError) {
+      setBaseRateError('');
+    }
+    
     setServiceData(prev => ({
       ...prev,
       rates: {
         ...prev.rates,
-        base_rate: numericValue
+        base_rate: processed
       }
     }));
   };
@@ -243,12 +257,23 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
   };
 
   const handleAdditionalAnimalRateChange = (text) => {
-    const numericValue = formatNumericInput(text);
+    const processed = formatNumericInput(text, 'additional animal rate');
+    
+    if (processed === null) {
+      setAdditionalRateError('Invalid characters detected in additional animal rate');
+      return;
+    }
+    
+    // Clear error when user starts typing normally
+    if (additionalRateError) {
+      setAdditionalRateError('');
+    }
+    
     setServiceData(prev => ({
       ...prev,
       rates: {
         ...prev.rates,
-        additionalAnimalRate: numericValue
+        additionalAnimalRate: processed
       }
     }));
   };
@@ -265,12 +290,23 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
   };
 
   const handleHolidayRateChange = (text) => {
-    const numericValue = formatNumericInput(text);
+    const processed = formatNumericInput(text, 'holiday rate');
+    
+    if (processed === null) {
+      setHolidayRateError('Invalid characters detected in holiday rate');
+      return;
+    }
+    
+    // Clear error when user starts typing normally
+    if (holidayRateError) {
+      setHolidayRateError('');
+    }
+    
     setServiceData(prev => ({
       ...prev,
       rates: {
         ...prev.rates,
-        holidayRate: numericValue
+        holidayRate: processed
       }
     }));
   };
@@ -285,6 +321,8 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
         isPercent: isPercent
       }
     }));
+    // Clear any existing error when switching types
+    setHolidayRateError('');
   };
 
   // Calculate the dollar amount for percentage holiday rate
@@ -308,13 +346,68 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
   };
 
   const handleCustomRateChange = (field, value) => {
+    debugLog('MBA1234', `Custom rate ${field} change:`, value);
+    
     if (field === 'rate') {
-      value = formatNumericInput(value);
+      const processed = formatNumericInput(value, 'custom rate amount');
+      
+      if (processed === null) {
+        setCustomRateAmountError('Invalid characters detected in rate amount');
+        return;
+      }
+      
+      // Clear error when user starts typing normally
+      if (customRateAmountError) {
+        setCustomRateAmountError('');
+      }
+      
+      setNewCustomRate(prev => ({
+        ...prev,
+        [field]: processed
+      }));
+    } else if (field === 'title') {
+      // Don't apply real-time sanitization during typing
+      // Only block extremely dangerous content in real-time
+      const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
+      const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
+      
+      if (hasScriptTags || hasSqlInjection) {
+        debugLog('MBA1234', 'Dangerous content detected in custom rate title:', value);
+        setCustomRateTitleError('Invalid characters detected in title');
+        return;
+      }
+      
+      // Clear error when user starts typing normally
+      if (customRateTitleError) {
+        setCustomRateTitleError('');
+      }
+      
+      setNewCustomRate(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    } else if (field === 'description') {
+      // Don't apply real-time sanitization during typing
+      // Only block extremely dangerous content in real-time
+      const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
+      const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
+      
+      if (hasScriptTags || hasSqlInjection) {
+        debugLog('MBA1234', 'Dangerous content detected in custom rate description:', value);
+        setCustomRateDescriptionError('Invalid characters detected in description');
+        return;
+      }
+      
+      // Clear error when user starts typing normally
+      if (customRateDescriptionError) {
+        setCustomRateDescriptionError('');
+      }
+      
+      setNewCustomRate(prev => ({
+        ...prev,
+        [field]: value
+      }));
     }
-    setNewCustomRate(prev => ({
-      ...prev,
-      [field]: value
-    }));
   };
 
   const handleAddCustomRate = () => {
@@ -322,17 +415,29 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
       debugLog('MBAno34othg0v', 'Opening custom rate form');
       setCustomChargeVisible(true);
       setIsEditingExistingRate(false);
+      // Clear any existing errors
+      setCustomRateTitleError('');
+      setCustomRateAmountError('');
+      setCustomRateDescriptionError('');
+      return;
+    }
+
+    // Check for validation errors
+    if (customRateTitleError || customRateAmountError || customRateDescriptionError) {
+      debugLog('MBA1234', 'Cannot save custom rate due to validation errors');
       return;
     }
 
     // Check for title
     if (!newCustomRate.title.trim()) {
+      setCustomRateTitleError('Title is required');
       debugLog('MBAno34othg0v', 'Missing custom rate title');
       return;
     }
     
     // Check for rate value
     if (!newCustomRate.rate) {
+      setCustomRateAmountError('Rate amount is required');
       debugLog('MBAno34othg0v', 'Missing custom rate value');
       return;
     }
@@ -340,16 +445,24 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
     // Validate rate value
     const rateValue = parseFloat(newCustomRate.rate);
     if (isNaN(rateValue) || rateValue <= 0) {
+      setCustomRateAmountError('Rate amount must be a valid number greater than $0');
       debugLog('MBAno34othg0v', 'Invalid rate value:', newCustomRate.rate);
       return;
     }
 
     debugLog('MBAno34othg0v', 'Saving custom rate successfully:', newCustomRate);
     
-    // Save the custom rate to the service data
+    // Sanitize the data before saving
+    const sanitizedRate = {
+      title: sanitizeInput(newCustomRate.title, 'name', { maxLength: 50 }).trim(),
+      rate: newCustomRate.rate, // Rate is already numeric, no need to sanitize
+      description: sanitizeInput(newCustomRate.description, 'description', { maxLength: 200 }).trim()
+    };
+    
+    // Save the sanitized custom rate to the service data
     setServiceData(prev => ({
       ...prev,
-      additionalRates: [...(prev.additionalRates || []), newCustomRate]
+      additionalRates: [...(prev.additionalRates || []), sanitizedRate]
     }));
     
     // Reset the form state
@@ -358,6 +471,11 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
       rate: '',
       description: ''
     });
+    
+    // Clear errors
+    setCustomRateTitleError('');
+    setCustomRateAmountError('');
+    setCustomRateDescriptionError('');
     
     // Close the form
     setCustomChargeVisible(false);
@@ -462,7 +580,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
         <View style={[styles.rateContainer, { zIndex: 3 }]}>
           <Text style={styles.label}>Base Rate <Text style={{ color: theme.colors.placeHolderText }}>(Required)</Text></Text>
           <View style={styles.rateInputGroup}>
-            <View style={[styles.currencyInputContainer, { flex: 1 }]}>
+            <View style={[styles.currencyInputContainer, { flex: 1 }, baseRateError ? styles.inputError : null]}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
                 style={styles.currencyInput}
@@ -511,12 +629,13 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
               )}
             </View>
           </View>
+          {baseRateError ? <Text style={styles.errorText}>{baseRateError}</Text> : null}
         </View>
 
         <View style={[styles.rateContainer, { zIndex: 2 }]}>
           <Text style={styles.label}>Additional Animal Rate <Text style={{ color: theme.colors.placeHolderText }}>(Optional)</Text></Text>
           <View style={styles.rateInputGroup}>
-            <View style={[styles.currencyInputContainer, { flex: 1 }]}>
+            <View style={[styles.currencyInputContainer, { flex: 1 }, additionalRateError ? styles.inputError : null]}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
                 style={styles.currencyInput}
@@ -553,6 +672,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
               )}
             </View>
           </View>
+          {additionalRateError ? <Text style={styles.errorText}>{additionalRateError}</Text> : null}
         </View>
 
         {/* Holiday Rate Section - Commented out for MVP
@@ -678,13 +798,15 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
                 {isEditingExistingRate ? 'Edit Custom Rate' : 'New Custom Rate'}
               </Text>
               <TextInput
-                style={styles.customRateInput}
+                style={[styles.customRateInput, customRateTitleError ? styles.inputError : null]}
                 placeholder="Charge Title"
                 value={newCustomRate.title}
                 onChangeText={(text) => handleCustomRateChange('title', text)}
                 placeholderTextColor={theme.colors.placeHolderText}
+                maxLength={50}
               />
-              <View style={styles.currencyInputContainer}>
+              {customRateTitleError ? <Text style={styles.errorText}>{customRateTitleError}</Text> : null}
+              <View style={[styles.currencyInputContainer, customRateAmountError ? styles.inputError : null]}>
                 <Text style={styles.currencySymbol}>$</Text>
                 <TextInput
                   style={styles.currencyInput}
@@ -695,15 +817,18 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
                   placeholderTextColor={theme.colors.placeHolderText}
                 />
               </View>
+              {customRateAmountError ? <Text style={styles.errorText}>{customRateAmountError}</Text> : null}
               <TextInput
-                style={[styles.customRateInput, styles.textArea]}
+                style={[styles.customRateInput, styles.textArea, customRateDescriptionError ? styles.inputError : null]}
                 placeholder="Description"
                 value={newCustomRate.description}
                 onChangeText={(text) => handleCustomRateChange('description', text)}
                 placeholderTextColor={theme.colors.placeHolderText}
                 multiline={true}
                 numberOfLines={3}
+                maxLength={200}
               />
+              {customRateDescriptionError ? <Text style={styles.errorText}>{customRateDescriptionError}</Text> : null}
               <View style={styles.customRateButtonContainer}>
                 <TouchableOpacity
                   style={styles.cancelRateButton}
@@ -1148,6 +1273,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     opacity: 0.8,
     borderColor: theme.colors.modernBorder,
+  },
+  inputError: {
+    borderColor: theme.colors.error,
+  },
+  errorText: {
+    color: theme.colors.error,
+    fontSize: 12,
+    marginTop: 4,
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
 

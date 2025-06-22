@@ -32,17 +32,21 @@ const ServiceManagerScreen = () => {
 
   const fetchServices = async () => {
     try {
-      setIsLoading(true);
-      const data = await getProfessionalServices();
-      if (is_DEBUG) console.log('MBA7890: Fetched services:', data);
-      setServices(data);
+      if (userRole === 'professional') {
+        setIsLoading(true);
+        const data = await getProfessionalServices();
+        if (is_DEBUG) console.log('MBA7890: Fetched services:', data);
+        setServices(data);
+      }
     } catch (error) {
       console.error('MBA7890: Error fetching services:', error);
-      showToast({
-        message: 'Failed to load services',
-        type: 'error',
-        duration: 3000
-      });
+      if (userRole === 'professional') {
+        showToast({
+          message: 'Failed to load services',
+          type: 'error',
+          duration: 3000
+        });
+      }
     } finally {
       setIsLoading(false);
     }

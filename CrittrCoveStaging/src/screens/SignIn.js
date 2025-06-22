@@ -7,7 +7,7 @@ import CustomButton from '../components/CustomButton';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/config';
 import { navigateToFrom } from '../components/Navigation';
-import { validateEmail, validatePassword } from '../validation/validation';
+import { validateEmail, validatePassword, sanitizeInput } from '../validation/validation';
 import { debugLog } from '../context/AuthContext';
 import { updateTimeSettings } from '../api/API';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,6 +26,7 @@ export default function SignIn() {
   const [rememberMe, setRememberMe] = useState(false);
   const navigation = useNavigation();
   const { signIn, is_prototype, is_DEBUG } = useContext(AuthContext);
+  const route = useRoute();
 
   const validateForm = () => {
     let isValid = true;
@@ -41,6 +42,43 @@ export default function SignIn() {
     if (!passwordValidation.isValid) isValid = false;
     
     return isValid;
+  };
+
+  // Enhanced input handlers with real-time sanitization
+  const handleEmailChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'email');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 20 && text.length > 5) {
+      debugLog('MBA1234: Potentially malicious email input detected in SignIn:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setEmail(sanitizedText);
+    setEmailError('');
+  };
+
+  const handlePasswordChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'password');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 50 && text.length > 8) {
+      debugLog('MBA1234: Potentially malicious password input detected in SignIn:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setPassword(sanitizedText);
+    setPasswordError('');
   };
 
   const handleLogin = async () => {
@@ -68,71 +106,79 @@ export default function SignIn() {
 
       debugLog('MBA67890 Attempting to authenticate with backend');
       
-      const response = await axios.post(`${API_BASE_URL}/api/token/`, {
-        email: email.trim().toLowerCase(),
-        password: password,
+      // Sanitize inputs before sending to API
+      const sanitizedEmail = sanitizeInput(email, 'email');
+      const sanitizedPassword = sanitizeInput(password, 'password');
+      
+      debugLog('MBA9876: Login attempt with sanitized inputs', {
+        originalEmail: email,
+        sanitizedEmail,
+        passwordChanged: password !== sanitizedPassword
+      });
+      
+      // Create a direct axios instance without interceptors for login
+      const directAxios = axios.create({
+        baseURL: API_BASE_URL,
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
 
-      debugLog('MBA67890 Login response:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers
+      const response = await directAxios.post('/api/token/', {
+        email: sanitizedEmail.toLowerCase(),
+        password: sanitizedPassword,
       });
 
       const { access, refresh } = response.data;
       
       debugLog('MBA67890 Authentication successful, received tokens');
       
-      // Pass both tokens to signIn and get the status
-      const status = await signIn(access, refresh, navigation);
-      debugLog('MBA67890 Sign in status:', status);
-      
-      // After successful login, detect and send timezone to backend
+      // Use the signIn function from AuthContext to properly set up authentication
+      await signIn(access, refresh);
+
+      // Update time settings after successful login
       try {
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        debugLog('MBA67890 Detected timezone:', timezone);
-        console.log('MBA67890 Detected timezone:', timezone);
-        // Pass only the timezone parameter, useMilitaryTime is optional
-        await updateTimeSettings(timezone);
-        debugLog('MBA67890 Successfully updated timezone in backend');
-      } catch (timezoneError) {
-        debugLog('MBA67890 Error updating timezone:', timezoneError);
-        // Continue with login process even if timezone update fails
-      }
-      
-      // Check if user needs to complete tutorial
-      try {
-        const tutorialResponse = await axios.get(`${API_BASE_URL}/api/users/v1/tutorial-status/current/`);
-        const needsTutorial = tutorialResponse.data.first_time_logging_in || 
-                             tutorialResponse.data.first_time_logging_in_after_signup;
-        
-        debugLog('MBA67890 Tutorial status:', tutorialResponse.data);
-        debugLog('MBA67890 Needs tutorial:', needsTutorial);
-        
-        // Navigate based on tutorial status
-        if (needsTutorial) {
-          debugLog('MBA67890 Navigating to MyProfile for tutorial');
-          navigateToFrom(navigation, 'MyProfile', 'SignIn');
-        } else {
-          debugLog('MBA67890 Navigating to Dashboard');
-          navigateToFrom(navigation, 'Dashboard', 'SignIn');
+        let userTimezone = 'UTC';
+        try {
+          userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch (error) {
+          debugLog('MBA9876: Error detecting timezone', error);
         }
-      } catch (tutorialError) {
-        debugLog('MBA67890 Error checking tutorial status:', tutorialError);
-        // Default to Dashboard if tutorial check fails
-        navigateToFrom(navigation, 'Dashboard', 'SignIn');
+        
+        await updateTimeSettings(userTimezone, false);
+        debugLog('MBA9876: Time settings updated successfully');
+      } catch (timeError) {
+        debugLog('MBA9876: Error updating time settings (non-critical)', timeError);
+      }
+
+      // Navigate to the appropriate screen
+      const fromScreen = route.params?.from;
+      if (fromScreen) {
+        navigateToFrom(navigation, fromScreen);
+      } else {
+        navigation.navigate('Dashboard');
       }
     } catch (error) {
-      debugLog('MBA67890 Login failed', error.response?.data || error.message);
+      debugLog('MBA9876: Login error:', error.response?.data || error.message);
       
-      const errorMessage = error.response && error.response.status === 401
-        ? 'Invalid credentials. Please try again.'
-        : 'An unexpected error occurred.';
-
+      let errorMessage = 'Login failed. Please check your credentials.';
+      if (error.response) {
+        const errorData = error.response.data;
+        if (errorData) {
+          if (typeof errorData === 'string') {
+            errorMessage = errorData;
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        }
+      }
+      
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         Alert.alert('Login Failed', errorMessage);
       } else {
-        setSuccessMessage(`Login Failed: ${errorMessage}`);
+        setSuccessMessage(errorMessage);
       }
 
       setEmailError('Invalid email or password');
@@ -211,14 +257,12 @@ export default function SignIn() {
         </View>
         
         <View style={styles.inputLabelContainer}>
-          <Text style={styles.inputLabel}>Username or Email</Text>
+          <Text style={styles.inputLabel}>Email</Text>
           <TextInput
             style={[styles.input, emailError ? styles.errorInput : null]}
             value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setEmailError('');
-            }}
+            onChangeText={handleEmailChange}
+            keyboardType="email-address"
             autoCapitalize="none"
             onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
           />
@@ -236,10 +280,7 @@ export default function SignIn() {
             style={[styles.input, passwordError ? styles.errorInput : null]}
             secureTextEntry={!showPassword}
             value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              setPasswordError('');
-            }}
+            onChangeText={handlePasswordChange}
             onKeyPress={Platform.OS === 'web' ? handleKeyPress : undefined}
           />
           {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}

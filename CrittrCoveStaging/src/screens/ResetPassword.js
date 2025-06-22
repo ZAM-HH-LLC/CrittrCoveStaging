@@ -3,59 +3,86 @@ import { View, TextInput, Text, StyleSheet, Alert, ActivityIndicator, Dimensions
 import { theme } from '../styles/theme';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, debugLog } from '../context/AuthContext';
 import CustomButton from '../components/CustomButton';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
+import { validateEmail, sanitizeInput } from '../validation/validation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function ResetPassword() {
   const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const navigation = useNavigation();
   const { screenWidth: contextScreenWidth, isCollapsed, isSignedIn } = useContext(AuthContext);
 
+  // Enhanced input handler with real-time sanitization
+  const handleEmailChange = (text) => {
+    const sanitizedText = sanitizeInput(text, 'email');
+    
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 20 && text.length > 5) {
+      debugLog('MBA1234: Potentially malicious email input detected in ResetPassword:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      return;
+    }
+    
+    setEmail(sanitizedText);
+    setEmailError('');
+    setSuccessMessage('');
+  };
+
   const handleResetPassword = async () => {
-    if (!email) {
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        Alert.alert('Error', 'Please enter your email address.');
-      } else {
-        setSuccessMessage('Error: Please enter your email address.');
-      }
+    // Validate email before proceeding
+    const emailValidation = validateEmail(email);
+    setEmailError(emailValidation.message);
+    
+    if (!emailValidation.isValid) {
       return;
     }
 
     setLoading(true);
+    setSuccessMessage('');
+
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/users/v1/reset-password/`, { email });
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        Alert.alert('Success', 'A reset password link has been sent to your email.', [
-          { text: 'OK', onPress: () => navigation.navigate('SignIn') }
-        ]);
-      } else {
-        setSuccessMessage('A reset password link has been sent to your email.');
-        setTimeout(() => {
-          navigation.navigate('SignIn');
-        }, 2000);
+      // Sanitize email before sending to API
+      const sanitizedEmail = sanitizeInput(email, 'email');
+      
+      debugLog('MBA1234: Password reset request for sanitized email:', {
+        originalEmail: email,
+        sanitizedEmail
+      });
+
+      const response = await axios.post(`${API_BASE_URL}/api/users/v1/reset-password/`, {
+        email: sanitizedEmail.toLowerCase(),
+      });
+
+      if (response.status === 200) {
+        setSuccessMessage('If an account with this email exists, you will receive a password reset link shortly.');
+        setEmail('');
       }
     } catch (error) {
-      if (error.response && error.response.status === 404) {
-        setEmailError(true);
-        if (Platform.OS === 'ios' || Platform.OS === 'android') {
-          Alert.alert('Error', 'Email is not associated with any user.');
-        } else {
-          setSuccessMessage('Error: Email is not associated with any user.');
-        }
-      } else {
-        if (Platform.OS === 'ios' || Platform.OS === 'android') {
-          Alert.alert('Error', 'Failed to send reset password email. Please try again later.');
-        } else {
-          setSuccessMessage('Error: Failed to send reset password email. Please try again later.');
+      debugLog('MBA1234: Error during password reset:', error);
+      
+      let errorMessage = 'Error: Unable to process password reset request.';
+      if (error.response && error.response.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
         }
       }
+      
+      setSuccessMessage(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -81,15 +108,12 @@ export default function ResetPassword() {
               style={[styles.input, emailError && styles.inputError]}
               placeholder="Email"
               value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setEmailError(false);
-                setSuccessMessage('');
-              }}
+              onChangeText={handleEmailChange}
               keyboardType="email-address"
               autoCapitalize="none"
               placeholderTextColor={theme.colors.placeHolderText}
             />
+            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
             
             <CustomButton 
               title="Reset Password" 
@@ -187,5 +211,9 @@ const createStyles = (screenWidth, isCollapsed, isSignedIn) => StyleSheet.create
   },
   errorMessage: {
     color: theme.colors.error,
+  },
+  errorText: {
+    color: theme.colors.error,
+    marginBottom: 10,
   },
 });
