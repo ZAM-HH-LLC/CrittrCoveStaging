@@ -90,7 +90,8 @@ export const sanitizeInput = (input, type = 'general', options = {}) => {
       break;
       
     case 'password':
-      // For passwords, remove dangerous characters and SQL keywords but preserve most special chars
+      // For passwords, remove HTML tags, SQL keywords, and dangerous characters but preserve most special chars
+      sanitized = removeHtmlTags(sanitized);
       sanitized = removeSqlKeywords(sanitized);
       sanitized = sanitized.replace(/[<>"']/g, '');
       break;
