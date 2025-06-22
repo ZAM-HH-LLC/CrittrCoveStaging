@@ -70,7 +70,7 @@ CURSOR PROJECT GUIDELINES
 | Variables | **snake_case** everywhere (`unit_of_time`) |
 | Values | **Title Case** exactly as user sees (`"Dog"`, `"Per Visit"`) |
 | Front ↔ Back | Names must match 1‑for‑1—no mapping tables if possible. |
-| Duplication | Don’t send the same field twice in JSON. Follow DRY Principles. |
+| Duplication | Don’t send the same field twice in JSON. Follow DRY Principles. This goes for functions, locations, and anything where code is duplicated, do not repeat yourself, call centralized functions that have the same code bodies. |
 
 ---
 

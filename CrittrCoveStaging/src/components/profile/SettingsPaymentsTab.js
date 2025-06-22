@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Modal, FlatList, TextInput } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { getTimeSettings, updateTimeSettings } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
 import { useToast } from '../../components/ToastProvider';
+import { USER_TIMEZONE_OPTIONS, getTimezoneDisplayName, searchTimezones, getGroupedTimezones } from '../../data/Timezones';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -65,6 +66,7 @@ const SettingsPaymentsTab = ({
   const [timezone, setTimezone] = useState(propTimezone || 'UTC');
   const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
   const [timezones, setTimezones] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const showToast = useToast();
 
@@ -101,9 +103,14 @@ const SettingsPaymentsTab = ({
       await updateTimeSettings(newTimezone);
       setTimezone(newTimezone);
       setTimezoneModalVisible(false);
+      setSearchQuery(''); // Clear search when timezone is selected
       debugLog('MBA12345 Updated timezone to:', newTimezone);
+      
+      // Get display name for the toast using centralized function
+      const friendlyName = getTimezoneDisplayName(newTimezone);
+      
       showToast({
-        message: 'Timezone updated successfully',
+        message: `Timezone updated to ${friendlyName}`,
         type: 'success',
         duration: 3000
       });
@@ -120,96 +127,98 @@ const SettingsPaymentsTab = ({
   };
 
   const openTimezoneModal = () => {
-    // Use the same timezone list as in TimezoneSettings.js
-    const COMMON_TIMEZONES = [
-      'America/New_York',
-      'America/Chicago',
-      'America/Denver',
-      'America/Los_Angeles',
-      'America/Anchorage',
-      'America/Adak',
-      'Pacific/Honolulu',
-      'America/Phoenix',
-      'America/Boise',
-      'America/Detroit',
-      'America/Indiana/Indianapolis',
-      'America/Indiana/Knox',
-      'America/Indiana/Marengo',
-      'America/Indiana/Petersburg',
-      'America/Indiana/Tell_City',
-      'America/Indiana/Vevay',
-      'America/Indiana/Vincennes',
-      'America/Indiana/Winamac',
-      'America/Kentucky/Louisville',
-      'America/Kentucky/Monticello',
-      'America/Menominee',
-      'America/North_Dakota/Beulah',
-      'America/North_Dakota/Center',
-      'America/North_Dakota/New_Salem',
-      'America/Sitka',
-      'America/Yakutat',
-      'Europe/London',
-      'Europe/Paris',
-      'Europe/Berlin',
-      'Europe/Moscow',
-      'Asia/Tokyo',
-      'Asia/Shanghai',
-      'Asia/Dubai',
-      'Australia/Sydney',
-      'Pacific/Auckland',
-      'UTC'
-    ];
-    
-    setTimezones(COMMON_TIMEZONES);
+    setTimezones(USER_TIMEZONE_OPTIONS);
+    setSearchQuery(''); // Clear search when opening modal
     setTimezoneModalVisible(true);
   };
 
-  const renderTimezoneModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={timezoneModalVisible}
-      onRequestClose={() => setTimezoneModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Timezone</Text>
-            <TouchableOpacity onPress={() => setTimezoneModalVisible(false)}>
-              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-          
-          <FlatList
-            data={timezones}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.timezoneItem,
-                  item === timezone && styles.selectedTimezoneItem
-                ]}
-                onPress={() => handleTimezoneChange(item)}
-              >
-                <Text style={[
-                  styles.timezoneText,
-                  item === timezone && styles.selectedTimezoneText
-                ]}>
-                  {item}
-                </Text>
-                {item === timezone && (
-                  <MaterialCommunityIcons name="check" size={20} color={theme.colors.primary} />
-                )}
-              </TouchableOpacity>
+  // Get display name for current timezone using centralized mapping
+  const getCurrentTimezoneDisplayName = () => {
+    return getTimezoneDisplayName(timezone);
+  };
+
+  const renderTimezoneModal = () => {
+    // Use centralized search function
+    const filteredTimezones = searchTimezones(searchQuery);
+    
+    // Use centralized grouping function
+    const groupedTimezones = getGroupedTimezones(filteredTimezones);
+
+    const renderTimezoneGroup = (zoneName, timezones) => (
+      <View key={zoneName} style={styles.timezoneGroup}>
+        <Text style={styles.timezoneGroupHeader}>{zoneName} Time Zone</Text>
+        {timezones.map((tz) => (
+          <TouchableOpacity
+            key={tz.id}
+            style={[
+              styles.timezoneItem,
+              tz.id === timezone && styles.selectedTimezoneItem
+            ]}
+            onPress={() => handleTimezoneChange(tz.id)}
+          >
+            <View style={styles.timezoneItemContent}>
+              <Text style={[
+                styles.timezoneText,
+                tz.id === timezone && styles.selectedTimezoneText
+              ]}>
+                {tz.displayName}
+              </Text>
+              <Text style={styles.timezoneId}>{tz.id}</Text>
+            </View>
+            {tz.id === timezone && (
+              <MaterialCommunityIcons name="check" size={20} color={theme.colors.primary} />
             )}
-            initialNumToRender={20}
-            maxToRenderPerBatch={20}
-            windowSize={10}
-          />
-        </View>
+          </TouchableOpacity>
+        ))}
       </View>
-    </Modal>
-  );
+    );
+
+    return (
+              <Modal
+          animationType="slide"
+          transparent={true}
+          visible={timezoneModalVisible}
+          onRequestClose={() => {
+            setTimezoneModalVisible(false);
+            setSearchQuery(''); // Clear search when closing modal
+          }}
+        >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Timezone</Text>
+              <TouchableOpacity onPress={() => {
+                setTimezoneModalVisible(false);
+                setSearchQuery(''); // Clear search when closing modal
+              }}>
+                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search timezones (e.g., 'Texas', 'Central Time', 'Mountain')..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor={theme.colors.secondary}
+            />
+            
+            <FlatList
+              data={Object.keys(groupedTimezones)}
+              keyExtractor={(zoneName) => zoneName}
+              renderItem={({ item: zoneName }) => 
+                renderTimezoneGroup(zoneName, groupedTimezones[zoneName])
+              }
+              showsVerticalScrollIndicator={true}
+              initialNumToRender={20}
+              maxToRenderPerBatch={20}
+              windowSize={10}
+            />
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   const getSubscriptionPlans = () => {
     const commonPlans = [
@@ -371,7 +380,7 @@ const SettingsPaymentsTab = ({
               style={styles.timezoneButton}
               onPress={openTimezoneModal}
             >
-              <Text style={styles.timezoneButtonText}>{timezone}</Text>
+              <Text style={styles.timezoneButtonText}>{getCurrentTimezoneDisplayName()}</Text>
               <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
@@ -444,7 +453,7 @@ const SettingsPaymentsTab = ({
             style={styles.timezoneButton}
             onPress={openTimezoneModal}
           >
-            <Text style={styles.timezoneButtonText}>{timezone}</Text>
+            <Text style={styles.timezoneButtonText}>{getCurrentTimezoneDisplayName()}</Text>
             <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
@@ -581,7 +590,7 @@ const SettingsPaymentsTab = ({
           style={styles.timezoneButton}
           onPress={openTimezoneModal}
         >
-          <Text style={styles.timezoneButtonText}>{timezone}</Text>
+          <Text style={styles.timezoneButtonText}>{getCurrentTimezoneDisplayName()}</Text>
           <MaterialCommunityIcons name="chevron-down" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       ) : (
@@ -995,6 +1004,34 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '500',
     marginRight: 5,
+  },
+  searchInput: {
+    backgroundColor: theme.colors.surface,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+    fontSize: 16,
+    color: theme.colors.text,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  timezoneGroup: {
+    marginBottom: 20,
+  },
+  timezoneGroupHeader: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    marginBottom: 10,
+    paddingHorizontal: 10,
+  },
+  timezoneItemContent: {
+    flex: 1,
+  },
+  timezoneId: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    marginTop: 2,
   },
   noPaymentMethodsContainer: {
     padding: 20,

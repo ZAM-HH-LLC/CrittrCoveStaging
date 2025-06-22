@@ -3,51 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, TextInput } 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTimeSettings, updateTimeSettings } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
-
-// Common timezones list
-const COMMON_TIMEZONES = [
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Anchorage',
-  'America/Adak',
-  'Pacific/Honolulu',
-  'America/Phoenix',
-  'America/Boise',
-  'America/Detroit',
-  'America/Indiana/Indianapolis',
-  'America/Indiana/Knox',
-  'America/Indiana/Marengo',
-  'America/Indiana/Petersburg',
-  'America/Indiana/Tell_City',
-  'America/Indiana/Vevay',
-  'America/Indiana/Vincennes',
-  'America/Indiana/Winamac',
-  'America/Kentucky/Louisville',
-  'America/Kentucky/Monticello',
-  'America/Menominee',
-  'America/North_Dakota/Beulah',
-  'America/North_Dakota/Center',
-  'America/North_Dakota/New_Salem',
-  'America/Sitka',
-  'America/Yakutat',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Europe/Moscow',
-  'Asia/Tokyo',
-  'Asia/Shanghai',
-  'Asia/Dubai',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-  'UTC'
-];
+import { USER_TIMEZONE_OPTIONS, getTimezoneDisplayName, searchTimezones, getGroupedTimezones } from '../../data/Timezones';
 
 const TimezoneSettings = () => {
   const [timezone, setTimezone] = useState('UTC');
   const [modalVisible, setModalVisible] = useState(false);
-  const [timezones, setTimezones] = useState(COMMON_TIMEZONES);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -92,9 +52,44 @@ const TimezoneSettings = () => {
     setModalVisible(true);
   };
 
-  const filteredTimezones = timezones.filter(tz => 
-    tz.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredTimezones = searchTimezones(searchQuery);
+  
+  // Group timezones by zone for better organization
+  const groupedTimezones = getGroupedTimezones(filteredTimezones);
+
+  const renderTimezoneGroup = (zoneName, timezones) => (
+    <View key={zoneName} style={styles.timezoneGroup}>
+      <Text style={styles.timezoneGroupHeader}>{zoneName} Time Zone</Text>
+      {timezones.map((tz) => (
+        <TouchableOpacity
+          key={tz.id}
+          style={[
+            styles.timezoneItem,
+            tz.id === timezone && styles.selectedTimezone
+          ]}
+          onPress={() => handleTimezoneChange(tz.id)}
+        >
+          <View style={styles.timezoneItemContent}>
+            <Text style={[
+              styles.timezoneItemText,
+              tz.id === timezone && styles.selectedTimezoneText
+            ]}>
+              {tz.displayName}
+            </Text>
+            <Text style={styles.timezoneId}>{tz.id}</Text>
+          </View>
+          {tz.id === timezone && (
+            <MaterialCommunityIcons name="check" size={24} color="#4CAF50" />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
   );
+
+  // Get the display label for the current timezone
+  const getCurrentTimezoneLabel = () => {
+    return getTimezoneDisplayName(timezone);
+  };
 
   return (
     <View style={styles.container}>
@@ -104,7 +99,10 @@ const TimezoneSettings = () => {
         disabled={loading}
       >
         <MaterialCommunityIcons name="clock-outline" size={24} color="#333" />
-        <Text style={styles.timezoneText}>{timezone}</Text>
+        <View style={styles.timezoneTextContainer}>
+          <Text style={styles.timezoneText}>{getCurrentTimezoneLabel()}</Text>
+          <Text style={styles.timezoneSubtext}>{timezone}</Text>
+        </View>
         <MaterialCommunityIcons name="chevron-down" size={24} color="#333" />
       </TouchableOpacity>
 
@@ -131,27 +129,12 @@ const TimezoneSettings = () => {
             />
 
             <FlatList
-              data={filteredTimezones}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.timezoneItem,
-                    item === timezone && styles.selectedTimezone
-                  ]}
-                  onPress={() => handleTimezoneChange(item)}
-                >
-                  <Text style={[
-                    styles.timezoneItemText,
-                    item === timezone && styles.selectedTimezoneText
-                  ]}>
-                    {item}
-                  </Text>
-                  {item === timezone && (
-                    <MaterialCommunityIcons name="check" size={24} color="#4CAF50" />
-                  )}
-                </TouchableOpacity>
-              )}
+              data={Object.keys(groupedTimezones)}
+              keyExtractor={(zoneName) => zoneName}
+              renderItem={({ item: zoneName }) => 
+                renderTimezoneGroup(zoneName, groupedTimezones[zoneName])
+              }
+              showsVerticalScrollIndicator={true}
             />
           </View>
         </View>
@@ -172,11 +155,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginHorizontal: 15,
   },
-  timezoneText: {
+  timezoneTextContainer: {
     flex: 1,
     marginLeft: 10,
+  },
+  timezoneText: {
     fontSize: 16,
     color: '#333',
+    fontWeight: '500',
+  },
+  timezoneSubtext: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   modalContainer: {
     flex: 1,
@@ -206,6 +197,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 15,
   },
+  timezoneGroup: {
+    marginBottom: 20,
+  },
+  timezoneGroupHeader: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginBottom: 10,
+    paddingHorizontal: 10,
+  },
   timezoneItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,13 +217,20 @@ const styles = StyleSheet.create({
   selectedTimezone: {
     backgroundColor: '#e8f5e9',
   },
-  timezoneItemText: {
+  timezoneItemContent: {
     flex: 1,
+  },
+  timezoneItemText: {
     fontSize: 16,
   },
   selectedTimezoneText: {
     color: '#4CAF50',
     fontWeight: 'bold',
+  },
+  timezoneId: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
 });
 
