@@ -163,7 +163,6 @@ const SettingsPaymentsTab = ({
               ]}>
                 {tz.displayName}
               </Text>
-              <Text style={styles.timezoneId}>{tz.id}</Text>
             </View>
             {tz.id === timezone && (
               <MaterialCommunityIcons name="check" size={20} color={theme.colors.primary} />

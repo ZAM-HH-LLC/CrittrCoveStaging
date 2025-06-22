@@ -76,7 +76,6 @@ const TimezoneSettings = () => {
             ]}>
               {tz.displayName}
             </Text>
-            <Text style={styles.timezoneId}>{tz.id}</Text>
           </View>
           {tz.id === timezone && (
             <MaterialCommunityIcons name="check" size={24} color="#4CAF50" />
