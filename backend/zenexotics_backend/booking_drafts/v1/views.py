@@ -2127,6 +2127,8 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     ('service_type', service.service_name),
                     ('service_id', service.service_id)
                 ])),
+                ('pro_agreed_tos', draft.draft_data.get('pro_agreed_tos', False)),
+                ('client_agreed_tos', draft.draft_data.get('client_agreed_tos', False)),
                 ('conversation_id', None)  # Initialize with None, will be updated below
             ])
 
@@ -2872,6 +2874,8 @@ class CreateDraftFromBookingView(APIView):
                     ('service_id', service.service_id)
                 ])),
                 ('cost_summary', cost_summary),
+                ('pro_agreed_tos', booking.pro_agreed_tos),
+                ('client_agreed_tos', booking.client_agreed_tos),
                 ('conversation_id', conversation_id)
             ])
             

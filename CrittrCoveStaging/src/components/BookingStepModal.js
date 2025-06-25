@@ -18,6 +18,7 @@ import DateSelectionCard from './bookingComponents/DateSelectionCard';
 import TimeSelectionCard from './bookingComponents/TimeSelectionCard';
 import ReviewAndRatesCard from './bookingComponents/ReviewAndRatesCard';
 import StepProgressIndicator from './common/StepProgressIndicator';
+import TosRequiredModal from './modals/TosRequiredModal';
 import { updateBookingDraftPetsAndServices, 
          updateBookingDraftTimeAndDate, 
          updateBookingDraftMultipleDays,
@@ -106,8 +107,14 @@ const BookingStepModal = ({
         debugLog('MBA2j3kbr9hve4: Received draft dates and times:', response);
         
         if (response) {
-          // Use our utility function to parse occurrences correctly
-          const parsedData = parseOccurrencesForBookingSteps(response.occurrences || []);
+          // Use our utility function to parse occurrences correctly with user's timezone
+          const userTimezone = timeSettings?.timezone || 'US/Mountain';
+          debugLog('MBA2j3kbr9hve4: Using timezone for parsing occurrences:', {
+            userTimezone,
+            timeSettings,
+            fallbackUsed: !timeSettings?.timezone
+          });
+          const parsedData = parseOccurrencesForBookingSteps(response.occurrences || [], userTimezone);
           
           debugLog('MBA2j3kbr9hve4: Parsed draft dates and times:', parsedData);
           
@@ -1032,7 +1039,7 @@ const BookingStepModal = ({
         debugLog('MBA66777 Creating booking from draft with conversation ID:', bookingData.conversation_id);
         
         // Call the API to create a booking from the draft
-        const response = await createBookingFromDraft(bookingData.conversation_id);
+        const response = await createBookingFromDraft(bookingData.conversation_id, termsAgreed);
         
         debugLog('MBA66777 Booking created successfully:', response);
         
@@ -1218,6 +1225,7 @@ const BookingStepModal = ({
               }));
             }}
             onTermsAgreed={setTermsAgreed}
+            onTosAgreementChange={setTermsAgreed}
           />
         );
       default:
@@ -1444,30 +1452,11 @@ const BookingStepModal = ({
       </Modal>
 
       {/* Terms of Service Modal */}
-      <Modal
+      <TosRequiredModal
         visible={showTermsModal}
-        animationType="fade"
-        onRequestClose={() => setShowTermsModal(false)}
-        transparent={true}
-      >
-        <View style={styles.termsModalOverlay}>
-          <View style={styles.termsModalContent}>
-            <View style={styles.termsModalHeader}>
-              <MaterialCommunityIcons name="alert-circle" size={24} color={theme.colors.error} />
-              <Text style={styles.termsModalTitle}>Terms of Service Required</Text>
-            </View>
-            <Text style={styles.termsModalText}>
-              You must agree to the terms of service before requesting a booking. Please scroll down and check the agreement box to continue.
-            </Text>
-            <TouchableOpacity
-              style={styles.termsModalButton}
-              onPress={() => setShowTermsModal(false)}
-            >
-              <Text style={styles.termsModalButtonText}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowTermsModal(false)}
+        actionType="booking"
+      />
     </>
   );
 };
@@ -1631,57 +1620,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  termsModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  termsModalContent: {
-    backgroundColor: theme.colors.background,
-    borderRadius: 12,
-    padding: 24,
-    maxWidth: 400,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  termsModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  termsModalTitle: {
-    fontSize: 18,
-    fontFamily: theme.fonts.header.fontFamily,
-    color: theme.colors.text,
-    marginLeft: 8,
-    flex: 1,
-  },
-  termsModalText: {
-    fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
-    color: theme.colors.text,
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  termsModalButton: {
-    backgroundColor: theme.colors.mainColors.main,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  termsModalButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
-    fontWeight: '600',
-  },
+
 });
 
 export default BookingStepModal; 

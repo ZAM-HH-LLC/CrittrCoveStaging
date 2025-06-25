@@ -393,7 +393,9 @@ export const checkDSTChange = (startDate, startTime, endDate, endTime, timezone)
 export const formatOccurrenceFromUTC = (occurrence, userTimezone) => {
   try {
     // Always use full timezone name for conversions
-    const fullTimezone = userTimezone.includes('/') ? userTimezone : 'US/Mountain';
+    // If userTimezone doesn't include '/', assume it's an abbreviation and default to US/Mountain
+    // In practice, userTimezone should come from timeSettings.timezone which is a full timezone identifier
+    const fullTimezone = userTimezone && userTimezone.includes('/') ? userTimezone : 'US/Mountain';
     
     console.log('MBA134njo0vh03 Formatting occurrence from UTC:', {
       occurrence,
@@ -716,16 +718,26 @@ export const formatDateTimeRangeFromUTC = ({
  */
 function convertTimeFromUTC(dateStr, timeStr, timezone = 'US/Mountain') {
   try {
+    // Use provided timezone or default to US/Mountain
+    // In practice, timezone should come from timeSettings.timezone from AuthContext
+    const targetTimezone = timezone || 'US/Mountain';
+    
     // Create a full UTC datetime string
     const utcDate = `${dateStr}T${timeStr}:00Z`;
     
     // Convert to local timezone using moment-timezone
     const utcMoment = moment.utc(utcDate);
-    const localMoment = utcMoment.tz(timezone);
+    const localMoment = utcMoment.tz(targetTimezone);
     
-    // Extract hours and minutes
+    // Extract hours and minutes with safety checks
     const hours = localMoment.hours();
     const minutes = localMoment.minutes();
+    
+    // Ensure we have valid numbers
+    if (isNaN(hours) || isNaN(minutes)) {
+      debugLog('MBA2j3kbr9hve4: Invalid hours or minutes from moment conversion:', { hours, minutes });
+      throw new Error('Invalid time values from moment conversion');
+    }
     
     // Check if the date changed during conversion
     const localDateStr = localMoment.format('YYYY-MM-DD');
@@ -742,7 +754,8 @@ function convertTimeFromUTC(dateStr, timeStr, timezone = 'US/Mountain') {
         time: `${hours}:${minutes}`,
         fullDateTime: localMoment.format(),
         dateChanged
-      }
+      },
+      timezone: targetTimezone
     });
     
     return {
@@ -754,21 +767,32 @@ function convertTimeFromUTC(dateStr, timeStr, timezone = 'US/Mountain') {
     debugLog('MBA2j3kbr9hve4: Error converting time from UTC:', error);
     
     // Return the UTC time parsed directly as fallback
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    return {
-      hours: hours || 0,
-      minutes: minutes || 0,
-      adjustedDate: null
-    };
+    try {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return {
+        hours: isNaN(hours) ? 0 : hours,
+        minutes: isNaN(minutes) ? 0 : minutes,
+        adjustedDate: null
+      };
+    } catch (parseError) {
+      debugLog('MBA2j3kbr9hve4: Error parsing fallback time:', parseError);
+      // Final fallback - return default times
+      return {
+        hours: 9,
+        minutes: 0,
+        adjustedDate: null
+      };
+    }
   }
 }
 
 /**
  * Parses occurrences from the backend API into the format expected by DateSelectionCard and TimeSelectionCard
  * @param {Array} occurrences - Array of occurrence objects from the API
+ * @param {string} userTimezone - User's timezone (from timeSettings.timezone), defaults to US/Mountain
  * @returns {Object} Object containing formatted dates and times
  */
-export const parseOccurrencesForBookingSteps = (occurrences) => {
+export const parseOccurrencesForBookingSteps = (occurrences, userTimezone = 'US/Mountain') => {
   debugLog('MBA2j3kbr9hve4: Parsing occurrences for booking steps:', occurrences);
   
   if (!occurrences || !Array.isArray(occurrences) || occurrences.length === 0) {
@@ -792,8 +816,9 @@ export const parseOccurrencesForBookingSteps = (occurrences) => {
   
   debugLog('MBA2j3kbr9hve4: Sorted occurrences:', sortedOccurrences);
   
-  // User's timezone - use Mountain Time as default
-  const userTimezone = 'US/Mountain';
+  // Use provided timezone or default to US/Mountain
+  // In practice, userTimezone should come from timeSettings.timezone from AuthContext
+  const targetTimezone = userTimezone || 'US/Mountain';
   
   // Process each occurrence
   sortedOccurrences.forEach(occurrence => {
@@ -805,8 +830,8 @@ export const parseOccurrencesForBookingSteps = (occurrences) => {
     }
     
     // Convert UTC times to local timezone, accounting for date boundary changes
-    const localStartTime = convertTimeFromUTC(start_date, start_time, userTimezone);
-    const localEndTime = convertTimeFromUTC(end_date || start_date, end_time, userTimezone);
+    const localStartTime = convertTimeFromUTC(start_date, start_time, targetTimezone);
+    const localEndTime = convertTimeFromUTC(end_date || start_date, end_time, targetTimezone);
     
     // Determine the actual local date to use, accounting for timezone adjustments
     const actualStartDate = localStartTime.adjustedDate || start_date;
@@ -833,6 +858,17 @@ export const parseOccurrencesForBookingSteps = (occurrences) => {
     // If end date is different and not the same as start date, add it too
     if (actualEndDate !== actualStartDate) {
       uniqueDates.add(actualEndDate);
+    }
+    
+    // Validate converted times before creating time objects
+    if (localStartTime.hours === undefined || localStartTime.minutes === undefined ||
+        localEndTime.hours === undefined || localEndTime.minutes === undefined) {
+      debugLog('MBA2j3kbr9hve4: Invalid time conversion result, skipping occurrence:', {
+        localStartTime,
+        localEndTime,
+        occurrence
+      });
+      return; // Skip this occurrence
     }
     
     // Create time objects for the TimeSelectionCard using the actual local date as key
@@ -885,10 +921,19 @@ export const parseOccurrencesForBookingSteps = (occurrences) => {
   if (Object.keys(individualTimes).length > 0) {
     // Use the first converted time as the default
     const firstDateKey = Object.keys(individualTimes)[0];
-    defaultTimes = {
-      startTime: individualTimes[firstDateKey].startTime,
-      endTime: individualTimes[firstDateKey].endTime
-    };
+    const firstTime = individualTimes[firstDateKey];
+    
+    // Validate the first time object before using it as default
+    if (firstTime && firstTime.startTime && firstTime.endTime &&
+        typeof firstTime.startTime.hours === 'number' && typeof firstTime.startTime.minutes === 'number' &&
+        typeof firstTime.endTime.hours === 'number' && typeof firstTime.endTime.minutes === 'number') {
+      defaultTimes = {
+        startTime: firstTime.startTime,
+        endTime: firstTime.endTime
+      };
+    } else {
+      debugLog('MBA2j3kbr9hve4: Invalid first time object, using fallback defaults:', firstTime);
+    }
   }
   
   const result = {

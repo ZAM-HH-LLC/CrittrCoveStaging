@@ -3,8 +3,8 @@ from .models import Booking
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ('booking_id', 'client', 'professional', 'get_service_name', 'status', 'created_at')
-    list_filter = ('status', 'service_id', 'created_at')
+    list_display = ('booking_id', 'client', 'professional', 'get_service_name', 'status', 'pro_agreed_tos', 'client_agreed_tos', 'created_at')
+    list_filter = ('status', 'service_id', 'pro_agreed_tos', 'client_agreed_tos', 'created_at')
     search_fields = ('client__user__email', 'professional__user__email', 'service_id__service_name')
     readonly_fields = ('created_at', 'updated_at')
     
@@ -30,6 +30,9 @@ class BookingAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Basic Information', {
             'fields': ('client', 'professional', 'service_id', 'status')
+        }),
+        ('Terms of Service', {
+            'fields': ('pro_agreed_tos', 'client_agreed_tos')
         }),
         ('User Actions', {
             'fields': ('initiated_by', 'cancelled_by', 'last_modified_by', 'denied_by')

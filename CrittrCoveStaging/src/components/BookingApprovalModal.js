@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import ReviewAndRatesCard from './bookingComponents/ReviewAndRatesCard';
+import TosRequiredModal from './modals/TosRequiredModal';
 import { getBookingDetails, approveBooking, requestBookingChanges } from '../api/API';
 import { capitalizeWords } from '../utils/formatStrings';
 import ProfessionalAlert from './common/ProfessionalAlert';
@@ -61,6 +62,8 @@ const BookingApprovalModal = ({
   const [error, setError] = useState(null);
   const [changeRequestMessage, setChangeRequestMessage] = useState('');
   const [showChangeRequestInput, setShowChangeRequestInput] = useState(false);
+  const [userTosAgreed, setUserTosAgreed] = useState(false);
+  const [showTosRequiredModal, setShowTosRequiredModal] = useState(false);
   
   // Use a ref to store a cached copy of the booking data that won't be affected by re-renders
   const bookingDataRef = useRef(defaultInitialData);
@@ -235,12 +238,36 @@ const BookingApprovalModal = ({
   }, [bookingData]);
 
   const handleApprove = async () => {
+    // Check TOS agreement before proceeding
+    const existingTosAgreed = isProfessional ? bookingData?.pro_agreed_tos : bookingData?.client_agreed_tos;
+    const currentTosAgreed = existingTosAgreed || userTosAgreed;
+    
+    debugLog('MBA4321: TOS check for approval:', {
+      isProfessional,
+      existingTosAgreed,
+      userTosAgreed,
+      currentTosAgreed
+    });
+    
+    if (!currentTosAgreed) {
+      setShowTosRequiredModal(true);
+      return;
+    }
+    
     try {
       setLoading(true);
       setLoadingText("Approving booking...");
       setError(null);
       
-      const response = await approveBooking(bookingId);
+      // Determine TOS value to send based on user type and current status
+      let tosValueToSend = false;
+      if (!isProfessional && !bookingData?.client_agreed_tos && userTosAgreed) {
+        // Client approving, hasn't agreed before, and just agreed in this session
+        tosValueToSend = true;
+      }
+      
+      // Call approve booking with TOS agreement if needed
+      const response = await approveBooking(bookingId, tosValueToSend);
       
       if (onApproveSuccess) {
         onApproveSuccess(response);
@@ -377,6 +404,7 @@ const BookingApprovalModal = ({
             showEditControls={false}
             isProfessional={isProfessional}
             fromApprovalModal={true}
+            onTosAgreementChange={setUserTosAgreed}
           />
         )}
       </>
@@ -489,7 +517,9 @@ const BookingApprovalModal = ({
             style={[styles.button, styles.approveButton]}
             onPress={handleApprove}
           >
-            <Text style={styles.approveText}>{isBookingUpdate ? "Approve Update" : "Approve"}</Text>
+            <Text style={styles.approveText}>
+              {isBookingUpdate ? "Approve Update" : "Approve"}
+            </Text>
           </TouchableOpacity>
         </View>
       );
@@ -532,6 +562,12 @@ const BookingApprovalModal = ({
           {!showChangeRequestInput && renderFooter()}
         </View>
       </SafeAreaView>
+      
+      <TosRequiredModal
+        visible={showTosRequiredModal}
+        onClose={() => setShowTosRequiredModal(false)}
+        actionType="approval"
+      />
     </Modal>
   );
 };

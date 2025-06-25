@@ -16,8 +16,9 @@ import { formatDateTimeRangeFromUTC, formatFromUTC, FORMAT_TYPES } from '../../u
 import { updateBookingDraftRates } from '../../api/API';
 import SupportButton from '../SupportButton';
 import ProfessionalAlert from '../common/ProfessionalAlert';
+import TermsOfServiceModal from '../modals/TermsOfServiceModal';
 
-const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditControls = true, isProfessional = true, onTermsAgreed, fromApprovalModal = false }) => {
+const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditControls = true, isProfessional = true, onTermsAgreed, fromApprovalModal = false, onTosAgreementChange }) => {
   const { timeSettings } = useContext(AuthContext);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAddingRate, setIsAddingRate] = useState(false);
@@ -31,6 +32,15 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const [isAddingRateForOccurrence, setIsAddingRateForOccurrence] = useState(null);
   const [newOccurrenceRate, setNewOccurrenceRate] = useState({ name: '', amount: '', description: '' });
   const [termsAgreed, setTermsAgreed] = useState(false);
+  
+  // Determine TOS status based on user type and booking data
+  const getTosStatus = () => {
+    if (!bookingData) return undefined;
+    return isProfessional ? bookingData.pro_agreed_tos : bookingData.client_agreed_tos;
+  };
+  
+  const currentTosStatus = getTosStatus();
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const { width } = useWindowDimensions();
 
   useEffect(() => {
@@ -1733,25 +1743,83 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
 
 
   const renderTermsCheckbox = () => {
+    // Determine if checkbox should be checked:
+    // - If client has previously agreed (currentTosStatus === true), show as checked
+    // - If client hasn't agreed yet (currentTosStatus === false), use local termsAgreed state  
+    // - If this is a new booking (currentTosStatus === undefined), use local termsAgreed state
+    const isChecked = currentTosStatus === true || (currentTosStatus !== true && termsAgreed);
+    const hasAgreedTos = currentTosStatus === true;
+    
+    // Debug checkbox state
+    debugLog('MBA54321: Checkbox state calculation:', {
+      currentTosStatus,
+      termsAgreed,
+      isChecked,
+      hasAgreedTos,
+      fromApprovalModal
+    });
+    
+    // If already agreed, show different text
+    if (hasAgreedTos) {
+      return (
+        <View style={styles.termsContainer}>
+          <View style={styles.checkboxContainer}>
+            <View style={[styles.checkbox, styles.checkboxChecked]}>
+              <MaterialCommunityIcons name="check" size={16} color="white" />
+            </View>
+            <Text style={styles.termsText}>
+              <Text style={styles.termsAgreedText}>TERMS AGREED</Text> -{' '}
+              <Text 
+                style={styles.termsLink}
+                onPress={() => setShowTermsModal(true)}
+              >
+                view terms of service
+              </Text>
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    
     return (
       <View style={styles.termsContainer}>
         <TouchableOpacity 
           style={styles.checkboxContainer}
           onPress={() => {
-            const newValue = !termsAgreed;
-            setTermsAgreed(newValue);
-            if (onTermsAgreed) {
-              onTermsAgreed(newValue);
+            // Allow toggling if this is a new booking (undefined) or if client hasn't agreed yet (false)
+            if (currentTosStatus !== true) {
+              const newValue = !termsAgreed;
+              setTermsAgreed(newValue);
+              if (onTermsAgreed) {
+                onTermsAgreed(newValue);
+              }
+              // Notify parent of TOS agreement change
+              if (onTosAgreementChange) {
+                debugLog('MBA54321: Notifying parent of TOS agreement change:', {
+                  newValue,
+                  isProfessional,
+                  fromApprovalModal,
+                  currentTosStatus
+                });
+                onTosAgreementChange(newValue);
+              }
             }
           }}
         >
-          <View style={[styles.checkbox, termsAgreed && styles.checkboxChecked]}>
-            {termsAgreed && (
+          <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
+            {isChecked && (
               <MaterialCommunityIcons name="check" size={16} color="white" />
             )}
           </View>
           <Text style={styles.termsText}>
-            I agree to the terms of service for this booking
+            I agree to the{' '}
+            <Text 
+              style={styles.termsLink}
+              onPress={() => setShowTermsModal(true)}
+            >
+              terms of service
+            </Text>
+            {' '}for this booking
           </Text>
         </TouchableOpacity>
       </View>
@@ -1759,19 +1827,26 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <ProfessionalAlert isProfessional={isProfessional} fromApprovalModal={fromApprovalModal} />
-      {renderBookingBreakdown()}
-      {renderTotalAmount()}
-      {renderTermsCheckbox()}
+    <>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ProfessionalAlert isProfessional={isProfessional} fromApprovalModal={fromApprovalModal} />
+        {renderBookingBreakdown()}
+        {renderTotalAmount()}
+        {renderTermsCheckbox()}
+        
+        {/* Support CrittrCove Button */}
+        <SupportButton 
+          size="compact"
+          showTitle={false}
+          style={{ marginTop: 16 }}
+        />
+      </ScrollView>
       
-      {/* Support CrittrCove Button */}
-      <SupportButton 
-        size="compact"
-        showTitle={false}
-        style={{ marginTop: 16 }}
+      <TermsOfServiceModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
       />
-    </ScrollView>
+    </>
   );
 };
 
@@ -2173,6 +2248,18 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
     flex: 1,
+  },
+  termsLink: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    fontFamily: theme.fonts.regular.fontFamily,
+    textDecorationLine: 'underline',
+  },
+  termsAgreedText: {
+    fontSize: 14,
+    color: theme.colors.mainColors.main,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: 'bold',
   },
 });
 

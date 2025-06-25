@@ -23,6 +23,8 @@ class Booking(models.Model):
     cancelled_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_bookings')
     last_modified_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='modified_bookings')
     denied_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='denied_bookings')
+    pro_agreed_tos = models.BooleanField(default=False)
+    client_agreed_tos = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

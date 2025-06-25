@@ -160,12 +160,18 @@ const NewTimeRangeSelector = ({
   const formatTimeDisplay = (time) => {
     if (!time) return '';
     
-    const hours = time.hours;
-    const minutes = time.minutes;
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours % 12 === 0 ? 12 : hours % 12;
+    // Ensure time object has valid hours and minutes
+    const hours = typeof time.hours === 'number' ? time.hours : 0;
+    const minutes = typeof time.minutes === 'number' ? time.minutes : 0;
     
-    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+    // Validate ranges
+    const validHours = Math.max(0, Math.min(23, hours));
+    const validMinutes = Math.max(0, Math.min(59, minutes));
+    
+    const period = validHours >= 12 ? 'PM' : 'AM';
+    const hours12 = validHours % 12 === 0 ? 12 : validHours % 12;
+    
+    return `${hours12}:${validMinutes.toString().padStart(2, '0')} ${period}`;
   };
   
   // Format a date for display

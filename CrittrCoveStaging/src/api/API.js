@@ -45,11 +45,13 @@ export const getBookingAvailablePets = async (bookingId) => {
   }
 };
 
-export const approveBooking = async (bookingId) => {
+export const approveBooking = async (bookingId, clientAgreedTos = false) => {
   try {
     const response = await axios.post(
       `${API_BASE_URL}/api/bookings/v1/${bookingId}/approve/`,
-      {}  // Empty body since we don't need to send any data
+      {
+        client_agreed_tos: clientAgreedTos
+      }
     );
     return response.data;
   } catch (error) {
@@ -1018,7 +1020,7 @@ export const updateBookingDraftRates = async (draftId, occurrences) => {
  * @param {string} conversationId - The ID of the conversation containing the draft
  * @returns {Promise<Object>} Response containing the new booking information and message
  */
-export const createBookingFromDraft = async (conversationId) => {
+export const createBookingFromDraft = async (conversationId, termsOfServiceAgreedByPro = false) => {
     try {
         debugLog('MBA66777 - Creating booking from draft:', {
             conversationId
@@ -1027,7 +1029,8 @@ export const createBookingFromDraft = async (conversationId) => {
         const response = await axios.post(
             `${API_BASE_URL}/api/bookings/v1/create-from-draft/`,
             {
-                conversation_id: conversationId
+                conversation_id: conversationId, 
+                terms_of_service_agreed_by_pro: termsOfServiceAgreedByPro
             }
         );
 

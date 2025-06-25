@@ -1207,6 +1207,9 @@ class ApproveBookingView(APIView):
 
     def post(self, request, booking_id):
         try:
+            # Get client TOS agreement from request data
+            client_agreed_tos = request.data.get('client_agreed_tos')
+            
             # Get the booking and verify client access
             booking = get_object_or_404(Booking, booking_id=booking_id)
             client = get_object_or_404(Client, user=request.user)
@@ -1229,8 +1232,13 @@ class ApproveBookingView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Update booking status to CONFIRMED
+            # Update booking status to CONFIRMED and TOS agreement if provided
             booking.status = BookingStates.CONFIRMED
+            
+            # Update client TOS agreement if provided
+            if client_agreed_tos is not None:
+                booking.client_agreed_tos = client_agreed_tos
+                
             booking.save()
 
             # Send confirmation message
@@ -1504,8 +1512,10 @@ class CreateFromDraftView(APIView):
         sid = transaction.savepoint()  # Create savepoint for rollback
         
         try:
-            # Extract conversation_id from request data
+            # Extract conversation_id and terms agreement from request data
             conversation_id = request.data.get('conversation_id')
+            terms_of_service_agreed_by_pro = request.data.get('terms_of_service_agreed_by_pro', False)
+            
             if not conversation_id:
                 return Response(
                     {"error": "Conversation ID is required"},
@@ -1573,6 +1583,7 @@ class CreateFromDraftView(APIView):
                 booking.status = BookingStates.PENDING_CLIENT_APPROVAL
                 booking.service_id = service
                 booking.last_modified_by = professional.user
+                booking.pro_agreed_tos = terms_of_service_agreed_by_pro
                 booking.save()
                 logger.info(f"MBA66777 Updated existing booking {booking.booking_id}")
                 
@@ -1590,7 +1601,8 @@ class CreateFromDraftView(APIView):
                     service_id=service,
                     status=BookingStates.PENDING_CLIENT_APPROVAL,
                     initiated_by=professional.user,
-                    last_modified_by=professional.user
+                    last_modified_by=professional.user,
+                    pro_agreed_tos=terms_of_service_agreed_by_pro
                 )
                 is_new_booking = True
                 logger.info(f"MBA66777 Created new booking {booking.booking_id}")
@@ -2108,7 +2120,9 @@ class BookingDetailView(APIView):
                 'occurrences': occurrences_data,
                 'cost_summary': cost_summary,
                 'status': BookingStates.get_display_state(booking.status),
-                'can_edit': can_edit
+                'can_edit': can_edit,
+                'pro_agreed_tos': booking.pro_agreed_tos,
+                'client_agreed_tos': booking.client_agreed_tos
             }
             
             return Response(response_data)
