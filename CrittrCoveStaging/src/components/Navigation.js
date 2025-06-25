@@ -9,6 +9,7 @@ import { Appbar, Menu, useTheme, Avatar } from 'react-native-paper';
 import { useNavigation as useReactNavigation, useRoute } from '@react-navigation/native';
 import { BackHandler } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate } from 'react-native-reanimated';
+import platformNavigation from '../utils/platformNavigation';
 
 /*
  * IMPORTANT ARCHITECTURE NOTE:
@@ -44,45 +45,20 @@ export const handleBack = async (navigation) => {
         to: previousRoute 
       });
       
-      // If on web platform, try to use the browser history if possible
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        // First try using browser history
-        window.history.back();
-        
-        // After a short delay, check if URL has changed
-        setTimeout(async () => {
-          const currentPath = window.location.pathname;
-          const pathSegments = currentPath.split('/').filter(Boolean);
-          const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
-          
-          // If we're still on the same page after trying window.history.back(),
-          // fall back to React Navigation
-          if (urlRoute === currentRoute) {
-            debugLog('MBA6789: Browser history.back() didn\'t change URL, using React Navigation');
-            navigation.navigate(previousRoute);
-            await setStorage('currentRoute', previousRoute);
-          } else if (urlRoute !== previousRoute) {
-            // Browser history worked but took us to a different route than expected,
-            // still update our state
-            debugLog('MBA6789: Browser history.back() worked, updating state to:', urlRoute);
-            await setStorage('currentRoute', urlRoute);
-          }
-          // If urlRoute === previousRoute, the browser back worked as expected, no need to log
-        }, 100);
-      } else {
-        // For non-web platforms, just use React Navigation
-        navigation.navigate(previousRoute);
+      // Use platform-aware navigation
+      const success = platformNavigation.goBack(navigation);
+      if (success) {
         await setStorage('currentRoute', previousRoute);
       }
       
-      return true;
+      return success;
     } else {
       // If no previous route, go to Dashboard as fallback
       if (currentRoute !== 'Dashboard') {
         debugLog('MBA6789: handleBack - no previous route, going to Dashboard', { 
           from: currentRoute 
         });
-        navigation.navigate('Dashboard');
+        platformNavigation.navigateTo(navigation, 'Dashboard');
         await setStorage('currentRoute', 'Dashboard');
         return true;
       }
@@ -109,35 +85,30 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
       }
     }
     
-    // Get the current browser URL path if on web
-    let currentPath = '';
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      currentPath = window.location.pathname;
-      const pathSegments = currentPath.split('/').filter(Boolean);
-      const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
-      
-      // Only log if we're not already at the route to reduce spam
-      if (urlRoute !== toLocation || currentRoute !== toLocation) {
-        debugLog('MBAuieo2o34nf navigateToFrom - current URL check', {
-          urlRoute,
-          currentPath,
-          navigatingTo: toLocation
-        });
-      }
-      
-      // If we're already on this route according to the URL but not our state, just update state
-      if (urlRoute === toLocation && currentRoute !== toLocation) {
-        await setStorage('currentRoute', toLocation);
-        debugLog('MBAuieo2o34nf navigateToFrom - only updating state, already at URL', {
-          toLocation,
-          urlRoute
-        });
-        return;
-      }
+    // Get current route information using platform navigation
+    const currentRouteInfo = platformNavigation.getCurrentRoute(navigation);
+    
+    // Only log if we're not already at the route to reduce spam
+    if (currentRouteInfo.name !== toLocation || currentRoute !== toLocation) {
+      debugLog('MBAuieo2o34nf navigateToFrom - current route check', {
+        currentRouteName: currentRouteInfo.name,
+        currentPath: currentRouteInfo.path,
+        navigatingTo: toLocation
+      });
     }
     
-    // Navigate to the new screen
-    navigation.navigate(toLocation, params);
+    // If we're already on this route according to the current info but not our state, just update state
+    if (currentRouteInfo.name === toLocation && currentRoute !== toLocation) {
+      await setStorage('currentRoute', toLocation);
+      debugLog('MBAuieo2o34nf navigateToFrom - only updating state, already at route', {
+        toLocation,
+        currentRouteName: currentRouteInfo.name
+      });
+      return;
+    }
+    
+    // Navigate to the new screen using platform navigation
+    platformNavigation.navigateTo(navigation, toLocation, params);
     
     // Update current route in storage
     await setStorage('currentRoute', toLocation);
@@ -150,7 +121,7 @@ export const navigateToFrom = async (navigation, toLocation, fromLocation, param
         params,
         previousRoute: currentRoute,
         newCurrentRoute: toLocation,
-        currentPath
+        currentPath: currentRouteInfo.path
       });
     }
   } catch (error) {
@@ -407,55 +378,54 @@ const NavigationContent = ({
   useEffect(() => {
     const updateCurrentRoute = async () => {
       try {
-        // When running on web, get the current route from URL path
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          const currentPath = window.location.pathname;
-          const pathSegments = currentPath.split('/').filter(Boolean);
-          const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
-          
-          // Only log if the route is different from current route to reduce spam
-          if (urlRoute !== currentRoute) {
-            debugLog('MBA2o3uihf48hv: URL route check', { 
-              urlRoute, 
-              currentRoute,
-              pathname: window.location.pathname
-            });
-          }
-          
-          // If URL path is different from current route, prefer the URL path
-          if (urlRoute && urlRoute !== currentRoute) {
-            setCurrentRoute(urlRoute);
-            await setStorage('currentRoute', urlRoute);
-            
-            // Update message notification context with new route
-            updateRoute && updateRoute(urlRoute);
-            
-            // Only reset notifications when navigating to MessageHistory
-            if (urlRoute === 'MessageHistory' && hasUnreadMessages) {
-              // Check for a specific selected conversation ID from global variable
-              const selectedConvId = (typeof window !== 'undefined') ? window.selectedConversationId : null;
-              debugLog('MBA2o3uihf48hv: Navigation checking for selected conversation ID from URL', { 
-                selectedConvId, 
-                hasUnreadMessages, 
-                route: urlRoute 
-              });
-              
-              // Pass the selected conversation ID if available
-              resetNotifications && resetNotifications(urlRoute, selectedConvId);
-            }
-            
-            debugLog('MBA2o3uihf48hv: Updated current route from URL', { 
-              urlRoute, 
-              oldRoute: currentRoute,
-              hasUnreadMessages,
-              unreadCount
-            });
-            
-            return; // Skip checking localStorage if we've already updated from URL
-          }
+        // Get current route using platform navigation
+        const currentRouteInfo = platformNavigation.getCurrentRoute(navigation, reactRoute);
+        const urlRoute = currentRouteInfo.name;
+        
+        // Only log if the route is different from current route to reduce spam
+        if (urlRoute !== currentRoute) {
+          debugLog('MBA2o3uihf48hv: Route check', { 
+            urlRoute, 
+            currentRoute,
+            path: currentRouteInfo.path
+          });
         }
         
-        // Fall back to localStorage if URL didn't provide a route
+        // If route info is different from current route, update it
+        if (urlRoute && urlRoute !== currentRoute) {
+          setCurrentRoute(urlRoute);
+          await setStorage('currentRoute', urlRoute);
+          
+          // Update message notification context with new route
+          updateRoute && updateRoute(urlRoute);
+          
+          // Only reset notifications when navigating to MessageHistory
+          if (urlRoute === 'MessageHistory' && hasUnreadMessages) {
+            // Check for a specific selected conversation ID from global variable (web only)
+            const selectedConvId = platformNavigation.isWeb() && typeof window !== 'undefined' 
+              ? window.selectedConversationId 
+              : null;
+            debugLog('MBA2o3uihf48hv: Navigation checking for selected conversation ID', { 
+              selectedConvId, 
+              hasUnreadMessages, 
+              route: urlRoute 
+            });
+            
+            // Pass the selected conversation ID if available
+            resetNotifications && resetNotifications(urlRoute, selectedConvId);
+          }
+          
+          debugLog('MBA2o3uihf48hv: Updated current route', { 
+            urlRoute, 
+            oldRoute: currentRoute,
+            hasUnreadMessages,
+            unreadCount
+          });
+          
+          return; // Skip checking localStorage if we've already updated from route info
+        }
+        
+        // Fall back to localStorage if route info didn't provide a different route
         const route = await getStorage('currentRoute');
         
         // Only log in debug mode, not every time
@@ -473,8 +443,10 @@ const NavigationContent = ({
           
           // Only reset notifications when navigating to MessageHistory
           if (route === 'MessageHistory' && hasUnreadMessages) {
-            // Check for a specific selected conversation ID from global variable
-            const selectedConvId = (typeof window !== 'undefined') ? window.selectedConversationId : null;
+            // Check for a specific selected conversation ID from global variable (web only)
+            const selectedConvId = platformNavigation.isWeb() && typeof window !== 'undefined' 
+              ? window.selectedConversationId 
+              : null;
             debugLog('MBA2o3uihf48hv: Navigation checking for selected conversation ID from storage', { 
               selectedConvId, 
               hasUnreadMessages, 
@@ -503,39 +475,29 @@ const NavigationContent = ({
     // Add navigation state listener
     const unsubscribe = navigation.addListener('state', updateCurrentRoute);
     
-    // Add browser history listener for web to handle back/forward navigation
-    let popStateListener;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      popStateListener = () => {
-        debugLog('MBA4477: Detected browser history change, updating route', {
-          pathname: window.location.pathname
-        });
-        
-        // Force immediate update on popstate
-        updateCurrentRoute();
-      };
+    // Add platform-aware navigation listener for handling browser history changes
+    const removeNavigationListener = platformNavigation.addNavigationListener((routeInfo, event) => {
+      debugLog('MBA4477: Detected navigation change, updating route', {
+        routeName: routeInfo.name,
+        path: routeInfo.path
+      });
       
-      window.addEventListener('popstate', popStateListener);
-    }
+      // Force immediate update on navigation change
+      updateCurrentRoute();
+    });
     
-    // Also set up an interval to periodically check and sync route with URL
-    // but much less frequently to avoid log spam
+    // Set up periodic route checking for web platform
     let routeCheckInterval;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // Store previous URL check to avoid unnecessary updates
-      let lastCheckedPath = window.location.pathname;
+    if (platformNavigation.isWeb() && typeof window !== 'undefined') {
+      // Store previous route check to avoid unnecessary updates
       let lastCheckedRoute = currentRoute;
       
       routeCheckInterval = setInterval(() => {
-        // Only run check if the URL has changed since last check
-        // or if our route doesn't match the current URL
-        const currentPath = window.location.pathname;
-        const pathSegments = currentPath.split('/').filter(Boolean);
-        const urlRoute = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Dashboard';
+        const currentRouteInfo = platformNavigation.getCurrentRoute(navigation, reactRoute);
+        const urlRoute = currentRouteInfo.name;
         
         // Only update if something has changed
-        if (currentPath !== lastCheckedPath || (urlRoute !== lastCheckedRoute && urlRoute !== currentRoute)) {
-          lastCheckedPath = currentPath;
+        if (urlRoute !== lastCheckedRoute && urlRoute !== currentRoute) {
           lastCheckedRoute = urlRoute;
           updateCurrentRoute();
         }
@@ -544,16 +506,12 @@ const NavigationContent = ({
     
     return () => {
       unsubscribe();
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        if (popStateListener) {
-          window.removeEventListener('popstate', popStateListener);
-        }
-        if (routeCheckInterval) {
-          clearInterval(routeCheckInterval);
-        }
+      removeNavigationListener();
+      if (routeCheckInterval) {
+        clearInterval(routeCheckInterval);
       }
     };
-  }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, currentRoute]);
+  }, [navigation, resetNotifications, updateRoute, hasUnreadMessages, currentRoute, reactRoute]);
 
   // Animated hamburger menu component
   const AnimatedHamburgerMenu = ({ size = 28, color = theme.colors.text }) => {

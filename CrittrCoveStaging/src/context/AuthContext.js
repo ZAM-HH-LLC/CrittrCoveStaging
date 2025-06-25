@@ -7,6 +7,7 @@ import { navigate } from '../../App';
 import { navigateToFrom } from '../components/Navigation';
 import { initStripe } from '../utils/StripeService';
 import { getUserName, getTimeSettings } from '../api/API';
+import platformNavigation from '../utils/platformNavigation';
 
 export const SCREEN_WIDTH = Dimensions.get('window').width;
 export const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -501,29 +502,14 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     
-    if (!loading && !isSignedIn && typeof window !== 'undefined') {
-      // Log full URL info for debugging
-      debugLog(`MBA1111 AUTH REDIRECT: Full URL: ${window.location.href}`);
-      debugLog(`MBA1111 AUTH REDIRECT: Pathname: ${window.location.pathname}`);
-      debugLog(`MBA1111 AUTH REDIRECT: Hash: ${window.location.hash}`);
-      debugLog(`MBA1111 AUTH REDIRECT: Search: ${window.location.search}`);
+    if (!loading && !isSignedIn) {
+      // Get current route information using platform navigation
+      const currentRouteInfo = platformNavigation.getCurrentRoute();
+      const currentPath = currentRouteInfo.path;
       
-      // Get the current path - prioritize pathname over hash
-      // The pathname represents where the user actually is, 
-      // while hash might be from previous navigation
-      let currentPath = window.location.pathname;
-      
-      // Only use hash if pathname is root/empty and we have a meaningful hash
-      if ((currentPath === '/' || currentPath === '') && 
-          window.location.hash && 
-          window.location.hash.startsWith('#/') && 
-          window.location.hash.length > 2) {
-        currentPath = window.location.hash.substring(1); // Remove the #
-        debugLog(`MBA1111 AUTH REDIRECT: Using hash-based path (pathname was root): ${currentPath}`);
-      } else {
-        debugLog(`MBA1111 AUTH REDIRECT: Using pathname (primary route): ${currentPath}`);
-      }
-      
+      debugLog(`MBA1111 AUTH REDIRECT: Full URL: ${currentRouteInfo.href}`);
+      debugLog(`MBA1111 AUTH REDIRECT: Route name: ${currentRouteInfo.name}`);
+      debugLog(`MBA1111 AUTH REDIRECT: Path: ${currentPath}`);
       debugLog(`MBA1111 AUTH REDIRECT CHECK: Current path detected as: ${currentPath}`);
       
       // List of protected paths that require authentication
@@ -545,6 +531,7 @@ export const AuthProvider = ({ children }) => {
         '/ProfessionalProfile',
         '/MyContracts',
         '/ChangePassword',
+        '/change-password',
         '/MyBookings',
         '/ServiceManager',
         '/service-manager',
@@ -565,20 +552,15 @@ export const AuthProvider = ({ children }) => {
       if (isOnProtectedRoute) {
         debugLog(`MBA1111 AUTH REDIRECT: User not signed in on protected route ${currentPath}, redirecting to SignIn`);
         
-        // Use navigation system instead of window.location.href
+        // Use platform navigation for redirect
         try {
+          // First try using existing navigate function
           navigate('SignIn');
           debugLog('MBA1111 AUTH REDIRECT: Navigation to SignIn successful');
         } catch (error) {
-          debugLog('MBA1111 AUTH REDIRECT: Navigation failed, using fallback redirect:', error);
-          // Fallback to direct URL manipulation
-          if (window.location.hash) {
-            window.location.hash = '#/signin';
-            debugLog('MBA1111 AUTH REDIRECT: Used hash fallback redirect');
-          } else {
-            window.location.href = '/signin';
-            debugLog('MBA1111 AUTH REDIRECT: Used href fallback redirect');
-          }
+          debugLog('MBA1111 AUTH REDIRECT: Navigation failed, using platform navigation fallback:', error);
+          // Fallback to platform navigation redirect
+          platformNavigation.redirectToSignIn(null);
         }
       } else {
         debugLog(`MBA1111 AUTH REDIRECT: Current path ${currentPath} is not protected, no redirect needed`);
@@ -589,9 +571,6 @@ export const AuthProvider = ({ children }) => {
       }
       if (isSignedIn) {
         debugLog('MBA1111 AUTH REDIRECT: User is signed in, no redirect needed');
-      }
-      if (typeof window === 'undefined') {
-        debugLog('MBA1111 AUTH REDIRECT: Not in browser environment, skipping redirect check');
       }
     }
   }, [isSignedIn, loading]);
@@ -669,10 +648,8 @@ export const AuthProvider = ({ children }) => {
           navigate('SignIn');
         } catch (navError) {
           console.error('MBA1111 Navigation error during signOut:', navError);
-          // Fallback: try direct navigation
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            window.location.hash = '#/signin';
-          }
+          // Fallback: use platform navigation
+          platformNavigation.redirectToSignIn(null);
         }
       };
       

@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { navigateToFrom } from './src/components/Navigation';
 import { TutorialProvider } from './src/context/TutorialContext';
 import { ToastProvider } from './src/components/ToastProvider';
+import platformNavigation from './src/utils/platformNavigation';
 
 // Import CSS fixes for mobile browsers
 if (Platform.OS === 'web') {
@@ -245,7 +246,10 @@ function AppContent() {
   // Check for invitation in the URL
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const url = window.location.pathname;
+      // Use platform navigation to get current route info
+      const currentRouteInfo = platformNavigation.getCurrentRoute();
+      const url = currentRouteInfo.path;
+      
       if (authContext.debugLog) {
         authContext.debugLog('MBA6666 App - Current URL path:', url);
       }
