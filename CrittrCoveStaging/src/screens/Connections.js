@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Platform, Dimensions, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Platform, ActivityIndicator, Dimensions, ScrollView, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -370,7 +370,7 @@ const Connections = () => {
   };
 
   const handleCopyLink = () => {
-    if (generatedLink) {
+    if (generatedLink && Platform.OS === 'web') {
       navigator.clipboard.writeText(generatedLink);
       setInviteSuccess('Link copied to clipboard!');
     }
