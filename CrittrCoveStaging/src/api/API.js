@@ -1266,28 +1266,6 @@ export const getClientDashboard = async () => {
 };
 
 /**
- * Logs input focus events to the backend for debugging mobile keyboard issues
- * @param {string} eventType - Type of event (focus/blur)
- * @param {Object} eventData - Additional event data
- */
-export const logInputEvent = async (eventType, eventData = {}) => {
-  try {
-    await axios.post(`${API_BASE_URL}/api/core/v1/debug_log/`, {
-      message: `MBA92hc3h4kl: Input ${eventType} event`,
-      data: {
-        ...eventData,
-        platform: Platform.OS,
-        userAgent: navigator.userAgent,
-        timestamp: new Date().toISOString()
-      }
-    });
-  } catch (error) {
-    // Silently fail - don't disrupt the app if logging fails
-    console.error('Failed to log input event:', error);
-  }
-};
-
-/**
  * Get client pets
  * 
  * Retrieves all pets for a specific client based on conversation ID
@@ -1430,6 +1408,20 @@ export const compressImage = async (imageUri, maxWidth = 1024, quality = 0.7) =>
  */
 const compressWebImage = (imageUri, maxWidth, quality) => {
   return new Promise((resolve, reject) => {
+    // Only perform canvas operations on web platform
+    if (Platform.OS !== 'web') {
+      debugLog('MBA5511: Canvas compression not available on mobile platform, returning original image');
+      resolve(imageUri);
+      return;
+    }
+
+    // Check if required web APIs are available
+    if (typeof document === 'undefined' || typeof Image === 'undefined') {
+      debugLog('MBA5511: Web APIs not available, returning original image');
+      resolve(imageUri);
+      return;
+    }
+
     const img = new Image();
     img.crossOrigin = 'Anonymous'; // Help with CORS issues
     img.src = imageUri;
@@ -1530,6 +1522,20 @@ const compressWebImage = (imageUri, maxWidth, quality) => {
  */
 const compressWebBase64Image = (base64Data, maxWidth, quality) => {
   return new Promise((resolve, reject) => {
+    // Only perform canvas operations on web platform
+    if (Platform.OS !== 'web') {
+      debugLog('MBA5511: Canvas compression not available on mobile platform, returning original base64');
+      resolve(base64Data);
+      return;
+    }
+
+    // Check if required web APIs are available
+    if (typeof document === 'undefined' || typeof Image === 'undefined') {
+      debugLog('MBA5511: Web APIs not available, returning original base64');
+      resolve(base64Data);
+      return;
+    }
+
     const img = new Image();
     img.src = base64Data;
     

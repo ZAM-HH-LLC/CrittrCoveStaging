@@ -16,7 +16,7 @@ import { formatOccurrenceFromUTC } from '../utils/time_utils';
 import DraftConfirmationModal from '../components/DraftConfirmationModal';
 import useWebSocket from '../hooks/useWebSocket';
 import MessageNotificationContext from '../context/MessageNotificationContext';
-import { getConversationMessages, createDraftFromBooking, getConversations, sendDebugLog, logInputEvent } from '../api/API';
+import { getConversationMessages, createDraftFromBooking, getConversations, sendDebugLog } from '../api/API';
 import { navigateToFrom } from '../components/Navigation';
 import { applyViewportFix } from '../utils/viewport-fix';
 import ImageViewer from '../components/Messages/ImageViewer';
