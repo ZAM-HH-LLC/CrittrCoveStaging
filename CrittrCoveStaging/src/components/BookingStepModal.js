@@ -77,6 +77,8 @@ const BookingStepModal = ({
   });
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   // Add effect to log initial data
   useEffect(() => {
@@ -1012,6 +1014,12 @@ const BookingStepModal = ({
       setCurrentStep(prev => prev + 1);
     } else {
       // We're on the final step (REVIEW_AND_RATES), so create the booking
+      // First check if terms have been agreed to
+      if (!termsAgreed) {
+        setShowTermsModal(true);
+        return;
+      }
+      
       try {
         setError(null);
         
@@ -1209,6 +1217,7 @@ const BookingStepModal = ({
                 cost_summary: updatedData.cost_summary
               }));
             }}
+            onTermsAgreed={setTermsAgreed}
           />
         );
       default:
@@ -1239,6 +1248,8 @@ const BookingStepModal = ({
     });
     setError(null);
     setIsLoading(false);
+    setTermsAgreed(false);
+    setShowTermsModal(false);
   };
 
   // Function to handle cancellation of the modal
@@ -1329,107 +1340,135 @@ const BookingStepModal = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      onRequestClose={handleClose}
-      transparent={true}
-    >
-      <View style={styles.modalOverlay}>
-        <SafeAreaView style={styles.modalContent}>
-          <View style={styles.stepIndicatorContainer}>
-            <StepProgressIndicator
-              steps={Object.values(STEPS).map(step => step.name)}
-              currentStep={currentStep}
-            />
-          </View>
-          <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
-            <View style={styles.content}>
-              {isLoading ? (
-                <View style={styles.loadingContainer}>
-                  <Text style={styles.loadingText}>Loading booking information...</Text>
-                </View>
+    <>
+      <Modal
+        visible={visible}
+        animationType="fade"
+        onRequestClose={handleClose}
+        transparent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <SafeAreaView style={styles.modalContent}>
+            <View style={styles.stepIndicatorContainer}>
+              <StepProgressIndicator
+                steps={Object.values(STEPS).map(step => step.name)}
+                currentStep={currentStep}
+              />
+            </View>
+            <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
+              <View style={styles.content}>
+                {isLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <Text style={styles.loadingText}>Loading booking information...</Text>
+                  </View>
+                ) : (
+                  renderCurrentStep()
+                )}
+              </View>
+              {error && (
+                <Text style={styles.errorText}>{error}</Text>
+              )}
+            </ScrollView>
+            <View style={styles.footer}>
+              {currentStep === STEPS.SERVICES_AND_PETS.id ? (
+                // Step 1: [Cancel] [Next]
+                <>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={handleClose}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.nextButton,
+                      (!canProceedToNextStep() || isLoading) && styles.disabledButton
+                    ]}
+                    onPress={handleNext}
+                    disabled={!canProceedToNextStep() || isLoading}
+                  >
+                    <Text style={[
+                      styles.nextButtonText,
+                      (!canProceedToNextStep() || isLoading) && styles.disabledButtonText
+                    ]}>
+                      Next
+                    </Text>
+                  </TouchableOpacity>
+                </>
               ) : (
-                renderCurrentStep()
+                // Steps 2-4: [Back] [Cancel][Next/Confirm]
+                <>
+                  <TouchableOpacity
+                    style={[styles.backButton, isSmallScreen && styles.smallScreenButton]}
+                    onPress={handleBack}
+                  >
+                    <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+                  <View style={styles.spacer} />
+                  <TouchableOpacity
+                    style={[styles.cancelButtonSmall, isSmallScreen && styles.smallScreenButton]}
+                    onPress={handleClose}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <View style={isSmallScreen ? styles.smallMargin : null} />
+                  <TouchableOpacity
+                    style={[
+                      styles.nextButtonSmall, 
+                      isSmallScreen && styles.smallScreenButton,
+                      (!canProceedToNextStep() || isLoading) && styles.disabledButton
+                    ]}
+                    onPress={handleNext}
+                    disabled={!canProceedToNextStep() || isLoading}
+                  >
+                    {currentStep === STEPS.REVIEW_AND_RATES.id && isSmallScreen ? (
+                      <View style={styles.confirmButtonColumn}>
+                        <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
+                          Request
+                        </Text>
+                        <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
+                          Booking
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
+                        {currentStep === STEPS.REVIEW_AND_RATES.id ? 'Request Booking' : 'Next'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
             </View>
-            {error && (
-              <Text style={styles.errorText}>{error}</Text>
-            )}
-          </ScrollView>
-          <View style={styles.footer}>
-            {currentStep === STEPS.SERVICES_AND_PETS.id ? (
-              // Step 1: [Cancel] [Next]
-              <>
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={handleClose}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.nextButton,
-                    (!canProceedToNextStep() || isLoading) && styles.disabledButton
-                  ]}
-                  onPress={handleNext}
-                  disabled={!canProceedToNextStep() || isLoading}
-                >
-                  <Text style={[
-                    styles.nextButtonText,
-                    (!canProceedToNextStep() || isLoading) && styles.disabledButtonText
-                  ]}>
-                    Next
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              // Steps 2-4: [Back] [Cancel][Next/Confirm]
-              <>
-                <TouchableOpacity
-                  style={[styles.backButton, isSmallScreen && styles.smallScreenButton]}
-                  onPress={handleBack}
-                >
-                  <Text style={styles.backButtonText}>Back</Text>
-                </TouchableOpacity>
-                <View style={styles.spacer} />
-                <TouchableOpacity
-                  style={[styles.cancelButtonSmall, isSmallScreen && styles.smallScreenButton]}
-                  onPress={handleClose}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <View style={isSmallScreen ? styles.smallMargin : null} />
-                <TouchableOpacity
-                  style={[
-                    styles.nextButtonSmall, 
-                    isSmallScreen && styles.smallScreenButton,
-                    (!canProceedToNextStep() || isLoading) && styles.disabledButton
-                  ]}
-                  onPress={handleNext}
-                  disabled={!canProceedToNextStep() || isLoading}
-                >
-                  {currentStep === STEPS.REVIEW_AND_RATES.id && isSmallScreen ? (
-                    <View style={styles.confirmButtonColumn}>
-                      <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
-                        Request
-                      </Text>
-                      <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
-                        Booking
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
-                      {currentStep === STEPS.REVIEW_AND_RATES.id ? 'Request Booking' : 'Next'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* Terms of Service Modal */}
+      <Modal
+        visible={showTermsModal}
+        animationType="fade"
+        onRequestClose={() => setShowTermsModal(false)}
+        transparent={true}
+      >
+        <View style={styles.termsModalOverlay}>
+          <View style={styles.termsModalContent}>
+            <View style={styles.termsModalHeader}>
+              <MaterialCommunityIcons name="alert-circle" size={24} color={theme.colors.error} />
+              <Text style={styles.termsModalTitle}>Terms of Service Required</Text>
+            </View>
+            <Text style={styles.termsModalText}>
+              You must agree to the terms of service before requesting a booking. Please scroll down and check the agreement box to continue.
+            </Text>
+            <TouchableOpacity
+              style={styles.termsModalButton}
+              onPress={() => setShowTermsModal(false)}
+            >
+              <Text style={styles.termsModalButtonText}>OK</Text>
+            </TouchableOpacity>
           </View>
-        </SafeAreaView>
-      </View>
-    </Modal>
+        </View>
+      </Modal>
+    </>
   );
 };
 
@@ -1591,6 +1630,57 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  termsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  termsModalContent: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 12,
+    padding: 24,
+    maxWidth: 400,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  termsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  termsModalTitle: {
+    fontSize: 18,
+    fontFamily: theme.fonts.header.fontFamily,
+    color: theme.colors.text,
+    marginLeft: 8,
+    flex: 1,
+  },
+  termsModalText: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  termsModalButton: {
+    backgroundColor: theme.colors.mainColors.main,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  termsModalButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
   },
 });
 

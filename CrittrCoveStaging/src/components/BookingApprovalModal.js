@@ -18,6 +18,7 @@ import { AuthContext, debugLog } from '../context/AuthContext';
 import ReviewAndRatesCard from './bookingComponents/ReviewAndRatesCard';
 import { getBookingDetails, approveBooking, requestBookingChanges } from '../api/API';
 import { capitalizeWords } from '../utils/formatStrings';
+import ProfessionalAlert from './common/ProfessionalAlert';
 
 const BookingApprovalModal = ({ 
   visible, 
@@ -338,6 +339,7 @@ const BookingApprovalModal = ({
 
     return (
       <>
+        <ProfessionalAlert isProfessional={isProfessional} fromApprovalModal={false} />
         <View style={[styles.section, { marginTop: 0 }]}>
           <Text style={styles.sectionHeader}>Service & Pets</Text>
           <View style={styles.card}>
@@ -374,6 +376,7 @@ const BookingApprovalModal = ({
             onRatesUpdate={(updatedData) => setBookingData(updatedData)}
             showEditControls={false}
             isProfessional={isProfessional}
+            fromApprovalModal={true}
           />
         )}
       </>
@@ -550,7 +553,6 @@ const styles = StyleSheet.create({
     maxWidth: 800,
     maxHeight: '90%',
     alignSelf: 'center',
-    marginTop: '5%',
   },
   header: {
     flexDirection: 'row',

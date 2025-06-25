@@ -15,8 +15,9 @@ import { AuthContext, debugLog } from '../../context/AuthContext';
 import { formatDateTimeRangeFromUTC, formatFromUTC, FORMAT_TYPES } from '../../utils/time_utils';
 import { updateBookingDraftRates } from '../../api/API';
 import SupportButton from '../SupportButton';
+import ProfessionalAlert from '../common/ProfessionalAlert';
 
-const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditControls = true, isProfessional = true }) => {
+const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditControls = true, isProfessional = true, onTermsAgreed, fromApprovalModal = false }) => {
   const { timeSettings } = useContext(AuthContext);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAddingRate, setIsAddingRate] = useState(false);
@@ -29,6 +30,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const [occurrenceEdits, setOccurrenceEdits] = useState({});
   const [isAddingRateForOccurrence, setIsAddingRateForOccurrence] = useState(null);
   const [newOccurrenceRate, setNewOccurrenceRate] = useState({ name: '', amount: '', description: '' });
+  const [termsAgreed, setTermsAgreed] = useState(false);
   const { width } = useWindowDimensions();
 
   useEffect(() => {
@@ -1728,10 +1730,40 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     );
   };
 
+
+
+  const renderTermsCheckbox = () => {
+    return (
+      <View style={styles.termsContainer}>
+        <TouchableOpacity 
+          style={styles.checkboxContainer}
+          onPress={() => {
+            const newValue = !termsAgreed;
+            setTermsAgreed(newValue);
+            if (onTermsAgreed) {
+              onTermsAgreed(newValue);
+            }
+          }}
+        >
+          <View style={[styles.checkbox, termsAgreed && styles.checkboxChecked]}>
+            {termsAgreed && (
+              <MaterialCommunityIcons name="check" size={16} color="white" />
+            )}
+          </View>
+          <Text style={styles.termsText}>
+            I agree to the terms of service for this booking
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ProfessionalAlert isProfessional={isProfessional} fromApprovalModal={fromApprovalModal} />
       {renderBookingBreakdown()}
       {renderTotalAmount()}
+      {renderTermsCheckbox()}
       
       {/* Support CrittrCove Button */}
       <SupportButton 
@@ -2113,6 +2145,34 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.border,
     marginBottom: 16,
+  },
+  termsContainer: {
+    backgroundColor: theme.colors.surfaceContrast,
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 16,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: theme.colors.border,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.mainColors.main,
+  },
+  termsText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    flex: 1,
   },
 });
 
