@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Animated, Platform } from 'react-native';
 import { theme } from '../styles/theme';
 import { AuthContext } from '../context/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -91,8 +91,14 @@ const DateTimePicker = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    // Only add document listeners on web platform
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+    
+    // On mobile platforms, we'll handle click outside via Modal components
+    // which have built-in touch dismissal functionality
   }, []);
 
   const formatTwoDigitInput = (input, field, currentValue) => {

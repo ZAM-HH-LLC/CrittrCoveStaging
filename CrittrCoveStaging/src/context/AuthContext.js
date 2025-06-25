@@ -490,10 +490,6 @@ export const AuthProvider = ({ children }) => {
   });
   const [is_prototype, setIsPrototype] = useState(false);
   const [is_DEBUG, setIsDebug] = useState(true);
-
-  // Protected routes that require authentication
-  const protectedRoutes = ['Dashboard', 'MyProfile', 'MessageHistory', 'OwnerHistory', 'BecomeProfessional', 'More', 'Owners', 'AvailabilitySettings', 'Settings', 'ProfessionalSettings', 'ProfessionalProfile', 'MyContracts', 'ChangePassword', 'MyBookings', 'ServiceManager', 'TestToast', 'Connections'];
-
   // Simple redirect effect for users without tokens on protected routes
   useEffect(() => {
     // Don't check for redirects until auth has been initialized

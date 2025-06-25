@@ -12,6 +12,7 @@ import { debugLog } from '../context/AuthContext';
 import { updateTimeSettings } from '../api/API';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
+import platformNavigation from '../utils/platformNavigation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -190,7 +191,7 @@ export default function SignIn() {
 
   // Add useEffect to handle document-wide keyboard events
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const handleDocumentKeyPress = (e) => {
         if (e.key === 'Enter') {
           handleLogin();
@@ -217,7 +218,8 @@ export default function SignIn() {
   useEffect(() => {
     // Check if we're on web and have an invitation token in the URL
     if (Platform.OS === 'web') {
-      const url = window.location.pathname;
+      const currentRouteInfo = platformNavigation.getCurrentRoute();
+      const url = currentRouteInfo.path;
       debugLog('MBA5555 SignIn screen - Current URL path:', url);
       
       if (url.includes('/invite/')) {

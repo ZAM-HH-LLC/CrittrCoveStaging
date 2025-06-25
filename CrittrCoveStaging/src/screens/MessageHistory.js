@@ -4426,12 +4426,12 @@ const MessageHistory = ({ navigation, route }) => {
         </View>
       )}
       
-      <RequestBookingModal
+      {/* <RequestBookingModal
         visible={showRequestModal}
         onClose={() => setShowRequestModal(false)}
         onSubmit={handleBookingRequest}
         conversationId={selectedConversation}
-      />
+      /> */}
 
       <BookingStepModal
         visible={showBookingStepModal}

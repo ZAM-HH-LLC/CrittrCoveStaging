@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Switch, Platform, Dimensions, ScrollView } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../styles/theme';
 import UnavailableTimeSlot from './UnavailableTimeSlot';
 import { format, parse } from 'date-fns';

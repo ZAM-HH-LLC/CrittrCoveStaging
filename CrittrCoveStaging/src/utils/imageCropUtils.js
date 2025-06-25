@@ -48,91 +48,115 @@ export const processImageWithCrop = async (imageUri, cropParams) => {
  */
 const cropImageOnWeb = async (imageUri, cropParams) => {
   return new Promise((resolve, reject) => {
-    // Create an image element to load the original image
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Ensure we're on web platform and have required APIs
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || typeof Image === 'undefined') {
+      debugLog('MBA8080', 'Canvas cropping not available on this platform');
+      reject(new Error('Canvas cropping not available on this platform'));
+      return;
+    }
     
-    img.onload = () => {
-      try {
-        // Create a canvas to draw the cropped image
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Set canvas size to the crop dimensions (which is the circle diameter)
-        const cropSize = Math.min(cropParams.cropWidth, cropParams.cropHeight);
-        canvas.width = cropSize;
-        canvas.height = cropSize;
-        
-        // Calculate the center of the crop area
-        const centerX = cropSize / 2;
-        const centerY = cropSize / 2;
-        
-        // Create circular clipping path
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, cropSize / 2, 0, Math.PI * 2, true);
-        ctx.closePath();
-        ctx.clip();
-        
-        // Calculate the source position and dimensions in the original image
-        const scaledWidth = cropParams.imageWidth * cropParams.scale;
-        const scaledHeight = cropParams.imageHeight * cropParams.scale;
-        
-        // Calculate the center of the image in the coordinate system
-        // of the crop window, accounting for the translation
-        const cropCenterX = cropSize / 2;
-        const cropCenterY = cropSize / 2;
-        
-        // Calculate the image center coordinates in the crop window
-        const imageCenterX = cropCenterX - cropParams.x;
-        const imageCenterY = cropCenterY - cropParams.y;
-        
-        // Calculate the top-left position to draw the image
-        const drawX = imageCenterX - (scaledWidth / 2);
-        const drawY = imageCenterY - (scaledHeight / 2);
-        
-        debugLog('MBA8080', 'Crop calculations:', {
-          cropSize,
-          scaledWidth,
-          scaledHeight,
-          drawX,
-          drawY,
-          imageCenterX,
-          imageCenterY
-        });
-        
-        // Draw the image with the appropriate transformations
-        ctx.drawImage(
-          img,
-          drawX,
-          drawY,
-          scaledWidth,
-          scaledHeight
-        );
-        
-        // Convert the canvas to a base64 data URL
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        
-        debugLog('MBA8080', 'Image cropped successfully on web');
-        
-        // Return the cropped image data
-        resolve({
-          base64Data: dataUrl,
-          type: 'image/jpeg',
-          oldProfilePhotoUrl: cropParams.oldProfilePhotoUrl // Pass through for deletion
-        });
-      } catch (error) {
-        debugLog('MBA8080', 'Error cropping image on web:', error);
-        reject(error);
-      }
-    };
-    
-    img.onerror = (error) => {
-      debugLog('MBA8080', 'Error loading image for cropping:', error);
-      reject(new Error('Failed to load image for cropping'));
-    };
-    
-    // Start loading the image
-    img.src = imageUri;
+    try {
+      // Create an image element to load the original image
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        try {
+          // Check if canvas is available
+          if (typeof document.createElement !== 'function') {
+            throw new Error('document.createElement not available');
+          }
+          
+          // Create a canvas to draw the cropped image
+          const canvas = document.createElement('canvas');
+          if (!canvas || typeof canvas.getContext !== 'function') {
+            throw new Error('Canvas not supported');
+          }
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            throw new Error('Canvas 2D context not available');
+          }
+          
+          // Set canvas size to the crop dimensions (which is the circle diameter)
+          const cropSize = Math.min(cropParams.cropWidth, cropParams.cropHeight);
+          canvas.width = cropSize;
+          canvas.height = cropSize;
+          
+          // Calculate the center of the crop area
+          const centerX = cropSize / 2;
+          const centerY = cropSize / 2;
+          
+          // Create circular clipping path
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, cropSize / 2, 0, Math.PI * 2, true);
+          ctx.closePath();
+          ctx.clip();
+          
+          // Calculate the source position and dimensions in the original image
+          const scaledWidth = cropParams.imageWidth * cropParams.scale;
+          const scaledHeight = cropParams.imageHeight * cropParams.scale;
+          
+          // Calculate the center of the image in the coordinate system
+          // of the crop window, accounting for the translation
+          const cropCenterX = cropSize / 2;
+          const cropCenterY = cropSize / 2;
+          
+          // Calculate the image center coordinates in the crop window
+          const imageCenterX = cropCenterX - cropParams.x;
+          const imageCenterY = cropCenterY - cropParams.y;
+          
+          // Calculate the top-left position to draw the image
+          const drawX = imageCenterX - (scaledWidth / 2);
+          const drawY = imageCenterY - (scaledHeight / 2);
+          
+          debugLog('MBA8080', 'Crop calculations:', {
+            cropSize,
+            scaledWidth,
+            scaledHeight,
+            drawX,
+            drawY,
+            imageCenterX,
+            imageCenterY
+          });
+          
+          // Draw the image with the appropriate transformations
+          ctx.drawImage(
+            img,
+            drawX,
+            drawY,
+            scaledWidth,
+            scaledHeight
+          );
+          
+          // Convert the canvas to a base64 data URL
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          
+          debugLog('MBA8080', 'Image cropped successfully on web');
+          
+          // Return the cropped image data
+          resolve({
+            base64Data: dataUrl,
+            type: 'image/jpeg',
+            oldProfilePhotoUrl: cropParams.oldProfilePhotoUrl // Pass through for deletion
+          });
+        } catch (error) {
+          debugLog('MBA8080', 'Error cropping image on web:', error);
+          reject(error);
+        }
+      };
+      
+      img.onerror = (error) => {
+        debugLog('MBA8080', 'Error loading image for cropping:', error);
+        reject(new Error('Failed to load image for cropping'));
+      };
+      
+      // Start loading the image
+      img.src = imageUri;
+    } catch (error) {
+      debugLog('MBA8080', 'Error cropping image on web:', error);
+      reject(error);
+    }
   });
 };
 

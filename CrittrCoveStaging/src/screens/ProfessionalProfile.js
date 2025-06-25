@@ -14,6 +14,7 @@ import { SCREEN_WIDTH } from '../context/AuthContext';
 import ServiceCard from '../components/ServiceCard';
 import { mockServicesForCards } from '../data/mockData';
 import { mockConversations, mockMessages } from '../data/mockData';
+import platformNavigation from '../utils/platformNavigation';
 // Conditionally import WebMap component
 const WebMap = Platform.OS === 'web' ? require('react-leaflet').MapContainer : null;
 
@@ -93,30 +94,76 @@ const useResponsiveLayout = () => {
   return isWideScreen;
 };
 
-// Move this outside the component
-if (Platform.OS === 'web') {
-  const style = document.createElement('style');
-  style.textContent = `
-    .services-scroll::-webkit-scrollbar {
-      -webkit-appearance: none;
-    }
+// Move this outside the component and add platform safety
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  try {
+    const style = document.createElement('style');
+    style.textContent = `
+      .services-scroll::-webkit-scrollbar {
+        -webkit-appearance: none;
+      }
 
-    .services-scroll::-webkit-scrollbar:vertical {
-      width: 11px;
-    }
+      .services-scroll::-webkit-scrollbar:vertical {
+        width: 11px;
+      }
 
-    .services-scroll::-webkit-scrollbar:horizontal {
-      height: 11px;
-    }
+      .services-scroll::-webkit-scrollbar:horizontal {
+        height: 11px;
+      }
 
-    .services-scroll::-webkit-scrollbar-thumb {
-      border-radius: 8px;
-      border: 2px solid white;
-      background-color: rgba(0, 0, 0, .5);
+      .services-scroll::-webkit-scrollbar-thumb {
+        border-radius: 8px;
+        border: 2px solid white;
+        background-color: rgba(0, 0, 0, .5);
+      }
+    `;
+    if (document.head) {
+      document.head.appendChild(style);
     }
-  `;
-  document.head.appendChild(style);
+  } catch (error) {
+    console.warn('MBA5511: Could not inject CSS styles:', error);
+  }
 }
+
+// Platform-aware storage helpers
+const platformStorage = {
+  setItem: async (key, value) => {
+    try {
+      if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(key, value);
+      } else {
+        await AsyncStorage.setItem(key, value);
+      }
+    } catch (error) {
+      console.warn('MBA5511: Storage setItem failed:', error);
+    }
+  },
+  
+  getItem: async (key) => {
+    try {
+      if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+        return sessionStorage.getItem(key);
+      } else {
+        return await AsyncStorage.getItem(key);
+      }
+    } catch (error) {
+      console.warn('MBA5511: Storage getItem failed:', error);
+      return null;
+    }
+  },
+  
+  removeItem: async (key) => {
+    try {
+      if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(key);
+      } else {
+        await AsyncStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.warn('MBA5511: Storage removeItem failed:', error);
+    }
+  }
+};
 
 const ProfessionalProfile = ({ route, navigation }) => {
   const { width: windowWidth } = useWindowDimensions();
@@ -167,24 +214,20 @@ const ProfessionalProfile = ({ route, navigation }) => {
     setCanGoBack(navigation.canGoBack() && hasHistory);
   }, [navigation]);
 
-  const handleBack = () => {
+  const handleBack = async () => {
     if (is_DEBUG) {
       console.log('MBA9999: handleBack called, Platform:', Platform.OS);
     }
     
-    if (Platform.OS === 'web') {
-      sessionStorage.removeItem('currentProfessional');
-      if (is_DEBUG) {
-        console.log('MBA9999: Navigating back to SearchProfessionalsListing');
-      }
-      // Always use navigate to ensure consistent behavior
-      navigation.navigate('SearchProfessionalsListing');
-    } else {
-      if (is_DEBUG) {
-        console.log('MBA9999: Using navigation.goBack()');
-      }
-      navigation.goBack();
+    // Remove stored professional data
+    await platformStorage.removeItem('currentProfessional');
+    
+    if (is_DEBUG) {
+      console.log('MBA9999: Navigating back to SearchProfessionalsListing');
     }
+    
+    // Use navigation.navigate for consistent behavior across platforms
+    navigation.navigate('SearchProfessionalsListing');
   };
 
   // Handle browser back button - REMOVED due to causing navigation issues
@@ -209,22 +252,20 @@ const ProfessionalProfile = ({ route, navigation }) => {
           console.log('MBA9999: Setting professional data from route params:', route.params.professional.name);
         }
         setProfessionalData(route.params.professional);
-        // Also store in sessionStorage for web reload persistence
-        if (Platform.OS === 'web') {
-          sessionStorage.setItem('currentProfessional', JSON.stringify(route.params.professional));
-        }
-      } else if (Platform.OS === 'web') {
-        // Try to get professional data from sessionStorage on web reload
-        const storedProfessional = sessionStorage.getItem('currentProfessional');
+        // Store in platform-appropriate storage for persistence
+        await platformStorage.setItem('currentProfessional', JSON.stringify(route.params.professional));
+      } else {
+        // Try to get professional data from storage
+        const storedProfessional = await platformStorage.getItem('currentProfessional');
         if (is_DEBUG) {
-          console.log('MBA9999: Checking sessionStorage for professional data:', !!storedProfessional);
+          console.log('MBA9999: Checking storage for professional data:', !!storedProfessional);
         }
         
         if (storedProfessional) {
           try {
             const parsedProfessional = JSON.parse(storedProfessional);
             if (is_DEBUG) {
-              console.log('MBA9999: Setting professional data from sessionStorage:', parsedProfessional.name);
+              console.log('MBA9999: Setting professional data from storage:', parsedProfessional.name);
             }
             setProfessionalData(parsedProfessional);
           } catch (error) {
@@ -244,13 +285,6 @@ const ProfessionalProfile = ({ route, navigation }) => {
 
     loadProfessionalData();
   }, [route?.params?.professional, navigation, is_DEBUG]);
-
-  // Store professional data in AsyncStorage for mobile
-  useEffect(() => {
-    if (Platform.OS !== 'web' && professionalData) {
-      AsyncStorage.setItem('currentProfessional', JSON.stringify(professionalData));
-    }
-  }, [professionalData]);
 
   const getContentWidth = () => {
     if (Platform.OS === 'web') {
