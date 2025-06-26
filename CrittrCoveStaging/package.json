@@ -19,7 +19,6 @@
     "win:deploy:full": "npm run win:build && npm run win:deploy"
   },
   "dependencies": {
-    "@expo-google-fonts/playfair-display": "^0.4.1",
     "@expo/vector-icons": "^14.0.0",
     "@formspree/react": "^2.5.1",
     "@react-native-async-storage/async-storage": "1.21.0",

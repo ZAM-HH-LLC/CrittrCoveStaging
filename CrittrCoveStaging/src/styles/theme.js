@@ -1,27 +1,37 @@
 // theme.js
 import { DefaultTheme } from 'react-native-paper';
+import { Platform } from 'react-native';
+import { fontFamilies, fontWeights } from './fonts';
+
+// Get font with platform-specific fallbacks
+const getFontFamily = (customFont) => {
+  if (Platform.OS === 'web') {
+    // On web, use custom fonts with CSS fallbacks
+    if (customFont === fontFamilies.header) {
+      return 'Futura, "Helvetica Neue", Arial, sans-serif';
+    }
+    return `${customFont}, Georgia, serif`;
+  }
+  // On mobile, use the loaded custom fonts or platform-specific fonts
+  return customFont;
+};
 
 export const theme = {
   ...DefaultTheme,
-  // the regular and header fonts are the fonts used in the app
+  // Cross-platform fonts using system fonts for optimal performance and consistency
   fonts: {
     ...DefaultTheme.fonts,
     regular: {
-      fontFamily: 'PlayfairDisplay',
+      fontFamily: fontFamilies.regular,
+      fontWeight: fontWeights.regular,
     },
     medium: {
-      fontFamily: 'PlayfairDisplay-Medium',
+      fontFamily: fontFamilies.medium,
+      fontWeight: fontWeights.medium,
     },
     header: {
-      fontFamily: 'Futura',
-    }
-  },
-  typography: {
-    header: {
-      fontFamily: 'Futura',
-    },
-    body: {
-      fontFamily: 'PlayfairDisplay',
+      fontFamily: fontFamilies.header,
+      fontWeight: fontWeights.header,
     }
   },
   colors: {

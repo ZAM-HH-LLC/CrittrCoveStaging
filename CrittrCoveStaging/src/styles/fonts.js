@@ -1,46 +1,76 @@
 import * as Font from 'expo-font';
 import { Platform } from 'react-native';
-import {
-  PlayfairDisplay_400Regular,
-  PlayfairDisplay_500Medium,
-  PlayfairDisplay_600SemiBold,
-  PlayfairDisplay_700Bold,
-} from '@expo-google-fonts/playfair-display';
 
-// Font configuration
-export const customFonts = {
-  'PlayfairDisplay': PlayfairDisplay_400Regular,
-  'PlayfairDisplay-Medium': PlayfairDisplay_500Medium,
-  'PlayfairDisplay-SemiBold': PlayfairDisplay_600SemiBold,
-  'PlayfairDisplay-Bold': PlayfairDisplay_700Bold,
+// Platform-specific font configurations
+const getFontConfig = () => {
+  return Platform.select({
+    ios: {
+      regular: 'System', // iOS System font (SF Pro)
+      medium: 'System', // iOS System font medium weight
+      header: 'Avenir-Heavy', // Distinctive header font
+    },
+    android: {
+      regular: 'Roboto', // Android default
+      medium: 'Roboto', // Use same font with different weights
+      header: 'Roboto', // Use Roboto for headers too, with bold weight
+    },
+    web: {
+      regular: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      medium: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      header: 'Avenir, "Helvetica Neue", Arial, sans-serif',
+    },
+    default: {
+      regular: 'System',
+      medium: 'System', 
+      header: 'System',
+    }
+  });
 };
 
-// Load fonts function
+// Load fonts function - no custom fonts needed since we're using system fonts
 export const loadFonts = async () => {
   try {
-    await Font.loadAsync(customFonts);
+    // No custom fonts to load - using system fonts for better performance and consistency
     return true;
   } catch (error) {
-    console.warn('Error loading fonts:', error);
+    console.warn('Error in font loading process:', error);
     return false;
   }
 };
 
-// Consistent header font across all platforms (Futura-like)
-const getHeaderFont = () => {
-  return Platform.select({
-    ios: 'Avenir-Heavy', // Avenir is similar to Futura and available on iOS
-    android: 'sans-serif-medium', // Clean sans-serif for Android
-    web: 'Avenir, "Helvetica Neue", Arial, sans-serif', // Avenir with fallbacks for web
-    default: 'sans-serif'
-  });
-};
+// Font family names for use in styles - optimized for each platform
+export const fontFamilies = getFontConfig();
 
-// Font family names for use in styles - standardized across all platforms
-export const fontFamilies = {
-  regular: 'PlayfairDisplay',
-  medium: 'PlayfairDisplay-Medium',
-  semiBold: 'PlayfairDisplay-SemiBold',
-  bold: 'PlayfairDisplay-Bold',
-  header: getHeaderFont(), // Consistent Futura-like font across platforms
-}; 
+// Font weight configurations for cross-platform consistency
+export const fontWeights = {
+  regular: Platform.select({
+    ios: '400',
+    android: 'normal',
+    web: '400',
+    default: 'normal'
+  }),
+  medium: Platform.select({
+    ios: '500',
+    android: '500',
+    web: '500', 
+    default: '500'
+  }),
+  semiBold: Platform.select({
+    ios: '600',
+    android: '600',
+    web: '600',
+    default: '600'
+  }),
+  bold: Platform.select({
+    ios: '700',
+    android: 'bold',
+    web: '700',
+    default: 'bold'
+  }),
+  header: Platform.select({
+    ios: '800',
+    android: '900',
+    web: '700',
+    default: 'bold'
+  })
+};
