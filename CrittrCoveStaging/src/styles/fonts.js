@@ -15,9 +15,9 @@ const getFontConfig = () => {
       header: 'Roboto', // Use Roboto for headers too, with bold weight
     },
     web: {
-      regular: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-      medium: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-      header: 'Avenir, "Helvetica Neue", Arial, sans-serif',
+      regular: 'PlayfairDisplay',
+      medium: 'PlayfairDisplay-Medium',
+      header: 'Futura',
     },
     default: {
       regular: 'System',
