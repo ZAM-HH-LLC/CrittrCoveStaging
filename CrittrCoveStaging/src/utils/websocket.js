@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/config';
-import { debugLog } from '../context/AuthContext';
+import { debugLog } from './logging';
 import { Platform } from 'react-native';
 
 /**
@@ -82,7 +82,7 @@ class WebSocketManager {
     
     // Create the handler function
     const handleVisibilityChange = () => {
-      if (Platform.OS === 'web' && document.visibilityState === 'visible') {
+      if (Platform.OS === 'web' && typeof document !== 'undefined' && document.visibilityState === 'visible') {
         debugLog('MBA4321: Document became visible, checking WebSocket connection');
         
         // Only reconnect if we have a token and weren't explicitly disconnected
@@ -93,7 +93,7 @@ class WebSocketManager {
     };
     
     // Add the listener only for web
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange);
       this._hasVisibilityListener = true;
       

@@ -209,12 +209,12 @@ const SearchProfessionals = ({ navigation }) => {
       return (
         <View style={styles.datePickerContainer}>
           <Text>{label}:</Text>
-          <input
-            type="date"
-            value={date.toISOString().split('T')[0]}
-            onChange={(e) => setDate(new Date(e.target.value))}
-            style={styles.webDatePicker}
-          />
+          {React.createElement('input', {
+            type: 'date',
+            value: date.toISOString().split('T')[0],
+            onChange: (e) => setDate(new Date(e.target.value)),
+            style: styles.webDatePicker
+          })}
         </View>
       );
     } else {

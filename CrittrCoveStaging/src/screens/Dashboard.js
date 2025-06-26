@@ -3,6 +3,7 @@ import { View, ScrollView, StyleSheet, Platform, SafeAreaView, Dimensions, Statu
 import { Card, Title, Paragraph, List, Button, useTheme, Appbar, ActivityIndicator, Avatar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { API_BASE_URL } from '../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext, debugLog } from '../context/AuthContext';
@@ -345,18 +346,40 @@ const Dashboard = ({ navigation }) => {
   const renderWelcomeSection = () => (
     <View style={styles.welcomeSection}>
       <View style={styles.welcomeContent}>
-        <View style={styles.welcomeCard}>
-          <View style={styles.welcomeHeader}>
-            <View style={styles.welcomeTextContainer}>
-              <Text style={dynamicStyles.welcomeTitle}>
-                Welcome back{firstName ? ', ' + firstName : ''}! 👋
-              </Text>
-              <Text style={dynamicStyles.bookingCount}>
-                You have {bookings.filter(b => !b.completed).length} active bookings today and {bookings.filter(b => new Date(b.start_date) > new Date()).length} upcoming appointments.
-              </Text>
+        {Platform.OS === 'web' ? (
+          // Web version with CSS gradient
+          <View style={styles.welcomeCard}>
+            <View style={styles.welcomeHeader}>
+              <View style={styles.welcomeTextContainer}>
+                <Text style={dynamicStyles.welcomeTitle}>
+                  Welcome back{firstName ? ', ' + firstName : ''}! 👋
+                </Text>
+                <Text style={dynamicStyles.bookingCount}>
+                  You have {bookings.filter(b => !b.completed).length} active bookings today and {bookings.filter(b => new Date(b.start_date) > new Date()).length} upcoming appointments.
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
+        ) : (
+          // Mobile version with LinearGradient
+          <LinearGradient
+            colors={['#6B6C53', '#86C5D9']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.welcomeCard, { backgroundImage: undefined }]}
+          >
+            <View style={styles.welcomeHeader}>
+              <View style={styles.welcomeTextContainer}>
+                <Text style={dynamicStyles.welcomeTitle}>
+                  Welcome back{firstName ? ', ' + firstName : ''}! 👋
+                </Text>
+                <Text style={dynamicStyles.bookingCount}>
+                  You have {bookings.filter(b => !b.completed).length} active bookings today and {bookings.filter(b => new Date(b.start_date) > new Date()).length} upcoming appointments.
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        )}
       </View>
     </View>
   );
@@ -815,7 +838,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   welcomeCard: {
-    backgroundColor: 'transparent',
+    // backgroundColor: 'transparent',
     backgroundImage: 'linear-gradient(to right, #6B6C53, #86C5D9)',
     borderRadius: 12,
     padding: 24,

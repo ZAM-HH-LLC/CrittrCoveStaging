@@ -6,7 +6,7 @@
 export const debugLog = (message, data) => {
   if (process.env.NODE_ENV !== 'production') {
     // Log the actual process.env.NODE_ENV value
-    console.log('MBA1234: Current process.env.NODE_ENV:', process.env.NODE_ENV);
+    // console.log('MBA1234: Current process.env.NODE_ENV:', process.env.NODE_ENV);
     
     if (data) {
       console.log(message, data);

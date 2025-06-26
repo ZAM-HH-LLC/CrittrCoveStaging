@@ -22,6 +22,11 @@ const DatetimePicker = ({
     ampm: 'AM'
   });
 
+  // Only render on web platform
+  if (Platform.OS !== 'web') {
+    return null;
+  }
+
   const handleSelectChange = (type, value) => {
     if (disabled) return;
     
@@ -110,19 +115,23 @@ const DatetimePicker = ({
     };
 
     return (
-      <select
-        value={selectedValues[type === 'am/pm' ? 'ampm' : type]}
-        onChange={handleChange}
-        style={selectStyle}
-        disabled={disabled}
-      >
-        <option value="">{type.charAt(0).toUpperCase() + type.slice(1)}</option>
-        {options.map(option => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      React.createElement('select', {
+        value: selectedValues[type === 'am/pm' ? 'ampm' : type],
+        onChange: handleChange,
+        style: selectStyle,
+        disabled: disabled
+      }, [
+        React.createElement('option', { 
+          key: 'default', 
+          value: '' 
+        }, type.charAt(0).toUpperCase() + type.slice(1)),
+        ...options.map(option => 
+          React.createElement('option', {
+            key: option.value,
+            value: option.value
+          }, option.label)
+        )
+      ])
     );
   };
 

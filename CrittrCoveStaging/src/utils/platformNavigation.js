@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { debugLog } from '../context/AuthContext';
+import { debugLog } from './logging';
 
 /**
  * Platform-aware navigation utilities

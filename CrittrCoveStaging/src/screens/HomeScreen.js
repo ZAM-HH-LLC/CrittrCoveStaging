@@ -9,7 +9,17 @@ import { navigateToFrom } from '../components/Navigation';
 import { FontAwesome } from '@expo/vector-icons';
 import { FontAwesome5 } from '@expo/vector-icons';
 import RoadmapSection from '../components/RoadmapSection';
-import { useForm, ValidationError } from '@formspree/react';
+// Conditionally import formspree only on web
+let useForm, ValidationError;
+if (Platform.OS === 'web') {
+  try {
+    const formspree = require('@formspree/react');
+    useForm = formspree.useForm;
+    ValidationError = formspree.ValidationError;
+  } catch (error) {
+    console.log('Formspree not available:', error);
+  }
+}
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -220,10 +230,20 @@ export default function HomeScreen({ navigation }) {
         onPress={() => navigateToFrom(navigation, 'BlogPost', 'Home', { post })}
       >
         <View style={styles.authorContainer}>
-          <Image
-            source={{ uri: post.author.profilePicture }}
-            style={styles.authorImage}
-          />
+          {/* Add safety check for image source */}
+          {post.author.profilePicture && (
+            <Image
+              source={
+                typeof post.author.profilePicture === 'string' 
+                  ? { uri: post.author.profilePicture }
+                  : post.author.profilePicture
+              }
+              style={styles.authorImage}
+              onError={(error) => {
+                console.log('Image load error:', error);
+              }}
+            />
+          )}
           <View style={styles.blogContent}>
             <Text style={[styles.title, { color: theme.colors.primary }]} numberOfLines={2}>
               {post.title}
@@ -417,29 +437,65 @@ export default function HomeScreen({ navigation }) {
   };
 
   const ContactSection = () => {
-    const [state, handleSubmit] = useForm("mkgobpro");
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [message, setMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitted, setIsSubmitted] = useState(false);
+
+    // Use formspree only on web
+    const webFormData = Platform.OS === 'web' && useForm ? useForm("mkgobpro") : [null, null];
+    const [state, handleSubmit] = webFormData;
 
     const handleFormSubmit = async (e) => {
-      e.preventDefault();
-      const formData = {
-        name: name,
-        email: email,
-        message: message
-      };
-      
-      await handleSubmit(formData);
-      
-      if (state.succeeded) {
-        setName('');
-        setEmail('');
-        setMessage('');
+      if (Platform.OS === 'web') {
+        e.preventDefault();
       }
+      
+      setIsSubmitting(true);
+
+      if (Platform.OS === 'web' && handleSubmit) {
+        // Use formspree on web
+        const formData = {
+          name: name,
+          email: email,
+          message: message
+        };
+        
+        await handleSubmit(formData);
+        
+        if (state && state.succeeded) {
+          setName('');
+          setEmail('');
+          setMessage('');
+          setIsSubmitted(true);
+        }
+      } else {
+        // On mobile, use mailto or show success message
+        const subject = `Contact from ${name}`;
+        const body = `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`;
+        const mailtoUrl = `mailto:support@crittrcove.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        
+        try {
+          await Linking.openURL(mailtoUrl);
+          setName('');
+          setEmail('');
+          setMessage('');
+          setIsSubmitted(true);
+        } catch (error) {
+          console.log('Error opening mail app:', error);
+          // Still show success for better UX
+          setIsSubmitted(true);
+        }
+      }
+      
+      setIsSubmitting(false);
     };
 
-    if (state.succeeded) {
+    const isWebSubmitted = Platform.OS === 'web' && state && state.succeeded;
+    const showSuccessMessage = isSubmitted || isWebSubmitted;
+
+    if (showSuccessMessage) {
       return (
         <View style={styles.contactSection}>
           <View style={styles.contactContainer}>
@@ -447,12 +503,17 @@ export default function HomeScreen({ navigation }) {
               Thanks for reaching out!
             </Text>
             <Text style={styles.successMessage}>
-              We'll get back to you soon.
+              {Platform.OS === 'web' 
+                ? "We'll get back to you soon." 
+                : "Your email app should open with a pre-filled message."}
             </Text>
           </View>
         </View>
       );
     }
+
+    const webErrors = Platform.OS === 'web' && state ? state.errors : null;
+    const currentlySubmitting = isSubmitting || (Platform.OS === 'web' && state && state.submitting);
 
     return (
       <View style={styles.contactSection}>
@@ -465,7 +526,9 @@ export default function HomeScreen({ navigation }) {
             onChangeText={setName}
             name="name"
           />
-          <ValidationError prefix="Name" field="name" errors={state.errors} />
+          {Platform.OS === 'web' && ValidationError && (
+            <ValidationError prefix="Name" field="name" errors={webErrors} />
+          )}
           
           <TextInput
             placeholder="Your Email"
@@ -476,7 +539,9 @@ export default function HomeScreen({ navigation }) {
             name="email"
             autoCapitalize="none"
           />
-          <ValidationError prefix="Email" field="email" errors={state.errors} />
+          {Platform.OS === 'web' && ValidationError && (
+            <ValidationError prefix="Email" field="email" errors={webErrors} />
+          )}
           
           <TextInput
             placeholder="Your Message"
@@ -486,19 +551,21 @@ export default function HomeScreen({ navigation }) {
             multiline
             name="message"
           />
-          <ValidationError prefix="Message" field="message" errors={state.errors} />
+          {Platform.OS === 'web' && ValidationError && (
+            <ValidationError prefix="Message" field="message" errors={webErrors} />
+          )}
           
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[
                 styles.actionButton,
-                state.submitting && styles.disabledButton
+                currentlySubmitting && styles.disabledButton
               ]}
               onPress={handleFormSubmit}
-              disabled={state.submitting}
+              disabled={currentlySubmitting}
             >
               <Text style={styles.buttonText}>
-                {state.submitting ? 'Sending...' : 'Send'}
+                {currentlySubmitting ? 'Sending...' : (Platform.OS === 'web' ? 'Send' : 'Open Email')}
               </Text>
             </TouchableOpacity>
           </View>

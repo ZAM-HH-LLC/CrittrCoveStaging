@@ -927,7 +927,7 @@ export const MessageNotificationProvider = ({ children }) => {
     if (!isSignedIn) return;
     
     const handleVisibilityChange = () => {
-      if (Platform.OS === 'web' && document.visibilityState === 'visible') {
+      if (Platform.OS === 'web' && typeof document !== 'undefined' && document.visibilityState === 'visible') {
         debugLog('MBA4321: Tab became visible, ensuring WebSocket connection');
         
         // First check if the WebSocket is already connected

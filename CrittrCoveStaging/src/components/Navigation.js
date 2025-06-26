@@ -472,8 +472,16 @@ const NavigationContent = ({
     // Initial update
     updateCurrentRoute();
     
-    // Add navigation state listener
-    const unsubscribe = navigation.addListener('state', updateCurrentRoute);
+    // Add navigation state listener with safety check
+    let unsubscribe = () => {};
+    if (navigation && typeof navigation.addListener === 'function') {
+      unsubscribe = navigation.addListener('state', updateCurrentRoute);
+    } else {
+      debugLog('MBA4477: Warning - navigation.addListener not available', { 
+        navigationExists: !!navigation,
+        addListenerExists: navigation && typeof navigation.addListener === 'function'
+      });
+    }
     
     // Add platform-aware navigation listener for handling browser history changes
     const removeNavigationListener = platformNavigation.addNavigationListener((routeInfo, event) => {
@@ -505,7 +513,9 @@ const NavigationContent = ({
     }
     
     return () => {
-      unsubscribe();
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
       removeNavigationListener();
       if (routeCheckInterval) {
         clearInterval(routeCheckInterval);
@@ -1054,6 +1064,9 @@ const NavigationContent = ({
   };
   
   const renderMobileNavBar = () => {
+    // Get current role notification count
+    const currentRoleCount = getCurrentRoleUnreadCount();
+    
     // For mobile nav bar when signed out
     if (!isSignedIn) {
       return (

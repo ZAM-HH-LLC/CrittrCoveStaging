@@ -33,6 +33,38 @@ const TimePicker = ({
     // Add browser detection for Chrome
     const isChrome = typeof navigator !== 'undefined' && /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
 
+    // Create style element using React.createElement to avoid JSX parsing on mobile
+    const styleElement = React.createElement('style', {}, `
+      input[type="time"]::-webkit-calendar-picker-indicator {
+        display: ${showClockIcon && isChrome ? 'block' : 'none'};
+      }
+      input[type="time"]::-webkit-inner-spin-button,
+      input[type="time"]::-webkit-clear-button {
+        display: none;
+      }
+    `);
+
+    // Create input element using React.createElement
+    const inputElement = React.createElement('input', {
+      type: 'time',
+      value: value.toTimeString().slice(0, 5),
+      onChange: (e) => onChange(new Date(`2000-01-01T${e.target.value}`)),
+      style: {
+        ...styles.webInput,
+        paddingRight: '12px',
+      },
+      disabled: disabled
+    });
+
+    const handleIconPress = () => {
+      if (!disabled && typeof document !== 'undefined') {
+        const input = document.querySelector('input[type="time"]');
+        if (input && typeof input.showPicker === 'function') {
+          input.showPicker();
+        }
+      }
+    };
+
     return (
       <View style={[styles.container, fullWidth && styles.fullWidth, containerStyle]}>
         {label && <Text style={[styles.label, error && styles.errorText]}>{label}</Text>}
@@ -42,37 +74,15 @@ const TimePicker = ({
           error && styles.errorBorder,
           disabled && styles.disabled
         ]}>
-          <style>
-            {`
-              input[type="time"]::-webkit-calendar-picker-indicator {
-                display: ${showClockIcon && isChrome ? 'block' : 'none'};
-              }
-              input[type="time"]::-webkit-inner-spin-button,
-              input[type="time"]::-webkit-clear-button {
-                display: none;
-              }
-            `}
-          </style>
-          <input
-            type="time"
-            value={value.toTimeString().slice(0, 5)}
-            onChange={(e) => onChange(new Date(`2000-01-01T${e.target.value}`))}
-            style={{
-              ...styles.webInput,
-              paddingRight: '12px',
-            }}
-            disabled={disabled}
-          />
+          {styleElement}
+          {inputElement}
           {showClockIcon && !isChrome && (
             <MaterialCommunityIcons 
               name="clock-outline" 
               size={24} 
               color={disabled ? theme.colors.placeholder : theme.colors.text}
               style={styles.webIcon}
-              onPress={disabled ? null : () => {
-                const input = document.querySelector('input[type="time"]');
-                if (input) input.showPicker();
-              }}
+              onPress={disabled ? null : handleIconPress}
             />
           )}
         </View>
