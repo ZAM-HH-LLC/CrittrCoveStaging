@@ -1,5 +1,31 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+// Add base64 polyfill for React Native if needed
+if (Platform.OS !== 'web' && typeof global.atob === 'undefined') {
+  global.atob = (str) => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let result = '';
+    let i = 0;
+    
+    str = str.replace(/[^A-Za-z0-9+/]/g, '');
+    
+    while (i < str.length) {
+      const encoded1 = chars.indexOf(str.charAt(i++));
+      const encoded2 = chars.indexOf(str.charAt(i++));
+      const encoded3 = chars.indexOf(str.charAt(i++));
+      const encoded4 = chars.indexOf(str.charAt(i++));
+      
+      const bitmap = (encoded1 << 18) | (encoded2 << 12) | (encoded3 << 6) | encoded4;
+      
+      result += String.fromCharCode((bitmap >> 16) & 255);
+      if (encoded3 !== 64) result += String.fromCharCode((bitmap >> 8) & 255);
+      if (encoded4 !== 64) result += String.fromCharCode(bitmap & 255);
+    }
+    
+    return result;
+  };
+}
 import { Provider as PaperProvider } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
