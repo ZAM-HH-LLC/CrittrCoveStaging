@@ -15,9 +15,9 @@ const getFontConfig = () => {
       header: 'Roboto', // Use Roboto for headers too, with bold weight
     },
     web: {
-      regular: 'PlayfairDisplay',
-      medium: 'PlayfairDisplay-Medium',
-      header: 'Futura',
+      regular: 'PlayfairDisplay', // DO NOT CHANGE
+      medium: 'PlayfairDisplay-Medium', // DO NOT CHANGE
+      header: 'Futura', // DO NOT CHANGE
     },
     default: {
       regular: 'System',
