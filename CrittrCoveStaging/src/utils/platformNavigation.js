@@ -13,30 +13,41 @@ import { debugLog } from './logging';
  * @returns {Object} Current route information
  */
 export const getCurrentRoute = (navigation = null, route = null) => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const currentPath = window.location.pathname;
-    const pathSegments = currentPath.split('/').filter(Boolean);
-    const routeName = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Home';
-    
-    return {
-      name: routeName,
-      path: currentPath,
-      params: getURLParams(),
-      href: window.location.href
-    };
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    try {
+      const currentPath = window.location.pathname;
+      const pathSegments = currentPath.split('/').filter(Boolean);
+      const routeName = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'Home';
+      
+      return {
+        name: routeName,
+        path: currentPath,
+        params: getURLParams(),
+        href: window.location.href
+      };
+    } catch (error) {
+      debugLog('MBA9999: Error accessing window.location:', error);
+      return {
+        name: 'Home',
+        path: '/',
+        params: {},
+        href: 'web://error'
+      };
+    }
   } else if (route) {
     return {
-      name: route.name || 'Unknown',
-      path: `/${route.name || 'unknown'}`,
+      name: route.name || 'home',
+      path: `/${route.name || 'home'}`,
       params: route.params || {},
-      href: `app://${route.name || 'unknown'}`
+      href: `app://${route.name || 'home'}`
     };
   } else {
+    // Mobile fallback when no route is provided
     return {
-      name: 'Unknown',
-      path: '/unknown',
+      name: 'Home',
+      path: '/home',
       params: {},
-      href: 'app://unknown'
+      href: 'app://home'
     };
   }
 };
@@ -124,19 +135,23 @@ export const replaceRoute = (navigation, routeName, params = {}) => {
   }
 
   try {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // On web, update the URL without adding to history
-      const newUrl = new URL(window.location.href);
-      newUrl.pathname = `/${routeName.toLowerCase()}`;
-      
-      // Add params to URL
-      Object.keys(params).forEach(key => {
-        if (params[key] !== null && params[key] !== undefined) {
-          newUrl.searchParams.set(key, params[key]);
-        }
-      });
-      
-      window.history.replaceState({}, '', newUrl.toString());
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+      try {
+        // On web, update the URL without adding to history
+        const newUrl = new URL(window.location.href);
+        newUrl.pathname = `/${routeName.toLowerCase()}`;
+        
+        // Add params to URL
+        Object.keys(params).forEach(key => {
+          if (params[key] !== null && params[key] !== undefined) {
+            newUrl.searchParams.set(key, params[key]);
+          }
+        });
+        
+        window.history.replaceState({}, '', newUrl.toString());
+      } catch (error) {
+        debugLog('MBA9999: Error in replaceRoute web logic:', error);
+      }
     }
     
     // Use React Navigation replace
@@ -152,7 +167,7 @@ export const replaceRoute = (navigation, routeName, params = {}) => {
  * @param {boolean} replace - Whether to replace current history entry
  */
 export const updateURLParams = (params = {}, replace = true) => {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) {
     return;
   }
 
@@ -251,12 +266,16 @@ export const getUserAgent = () => {
  * @param {Object} navigation - React Navigation object
  */
 export const redirectToSignIn = (navigation) => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    // On web, use URL navigation
-    if (window.location.hash) {
-      window.location.hash = '#/signin';
-    } else {
-      window.location.href = '/signin';
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    try {
+      // On web, use URL navigation
+      if (window.location.hash) {
+        window.location.hash = '#/signin';
+      } else {
+        window.location.href = '/signin';
+      }
+    } catch (error) {
+      debugLog('MBA9999: Error in web redirectToSignIn:', error);
     }
   } else if (navigation) {
     // On mobile, use React Navigation
