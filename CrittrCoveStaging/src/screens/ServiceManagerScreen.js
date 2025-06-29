@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Platform, Dimensions, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import ServiceManager from '../components/ServiceManager';
 import { theme } from '../styles/theme';
-import BackHeader from '../components/BackHeader';
-import { handleBack } from '../components/Navigation';
+import LogoHeader from '../components/LogoHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getProfessionalServices } from '../api/API';
 import { AuthContext, debugLog } from '../context/AuthContext';
@@ -15,13 +15,14 @@ const ServiceManagerScreen = () => {
   const [services, setServices] = useState([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMobile, setIsMobile] = useState(Dimensions.get('window').width < 900);
+  const [isMobile, setIsMobile] = useState(Platform.OS === 'web' ? false : true);
+  const [isMobileBrowser, setIsMobileBrowser] = useState(Dimensions.get('window').width < 900);
   const { isCollapsed, is_DEBUG, isSignedIn, userRole } = useContext(AuthContext);
   const showToast = useToast();
 
   useEffect(() => {
     const updateLayout = () => {
-      setIsMobile(Dimensions.get('window').width < 900);
+      setIsMobileBrowser(Dimensions.get('window').width < 900);
     };
 
     const subscription = Dimensions.addEventListener('change', updateLayout);
@@ -122,23 +123,39 @@ const ServiceManagerScreen = () => {
   return (
     <View style={[
       styles.container,
-      { marginLeft: !isMobile ? (isCollapsed ? 70 : 250) : 0 }
+      { marginLeft: !isMobileBrowser ? (isCollapsed ? 70 : 250) : 0 }
     ]}>
-      {isMobile && (
-        <BackHeader 
-          title="Service Manager" 
-          onBackPress={() => handleBack(navigation)} 
-        />
+      {isMobile ? (
+        <SafeAreaView style={styles.safeAreaContainer}>
+          <LogoHeader title="CrittrCove" />
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={[styles.scrollContent, { marginTop: 20 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            <ServiceManager
+              services={services || []}
+              setServices={setServices}
+              setHasUnsavedChanges={setHasUnsavedChanges}
+              isProfessionalTab={false}
+              isMobile={isMobile}
+            />
+          </ScrollView>
+        </SafeAreaView>
+      ) : (
+        <View 
+          style={[styles.content, { marginTop: isMobileBrowser ? 30 : 0 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <ServiceManager
+            services={services || []}
+            setServices={setServices}
+            setHasUnsavedChanges={setHasUnsavedChanges}
+            isProfessionalTab={false}
+            isMobile={isMobile}
+          />
+        </View>
       )}
-      <View style={[styles.content, { marginTop: isMobile ? 20 : 0 }]}>
-        <ServiceManager
-          services={services || []}
-          setServices={setServices}
-          setHasUnsavedChanges={setHasUnsavedChanges}
-          isProfessionalTab={false}
-          isMobile={isMobile}
-        />
-      </View>
     </View>
   );
 };
@@ -164,6 +181,17 @@ const styles = StyleSheet.create({
   loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  safeAreaContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 80,
   },
 });
 

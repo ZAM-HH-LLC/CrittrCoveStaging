@@ -571,14 +571,13 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     position: 'relative',
     zIndex: 9998,
     elevation: 9998,
     backgroundColor: theme.colors.surface,
+    minHeight: '100%',
   },
   serviceListContainer: {
-    flex: 1,
     paddingVertical: 0,
   },
   servicesGrid: {
@@ -634,13 +633,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
   },
   emptyContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 40,
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
     marginBottom: 24,
+    minHeight: 200,
   },
   emptyText: {
     fontSize: theme.fontSizes.mediumLarge,
