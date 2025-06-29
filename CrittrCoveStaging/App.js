@@ -37,12 +37,13 @@ import { MessageNotificationProvider } from './src/context/MessageNotificationCo
 import { API_BASE_URL } from './src/config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createNavigationContainerRef } from '@react-navigation/native';
-import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { navigateToFrom } from './src/components/Navigation';
 import { TutorialProvider } from './src/context/TutorialContext';
 import { ToastProvider } from './src/components/ToastProvider';
 import platformNavigation from './src/utils/platformNavigation';
+import { loadFonts } from './src/styles/fonts';
+import { ActivityIndicator } from 'react-native-paper';
 
 // Import CSS fixes for mobile browsers
 if (Platform.OS === 'web') {
@@ -123,13 +124,67 @@ const screens = [
   { name: 'Connections', component: Connections },
 ];
 
-const linking = {
+const createLinking = (authContext) => ({
   enabled: true,
   prefixes: [
     'https://staging.crittrcove.com',
     'http://staging.crittrcove.com',
     `${API_BASE_URL}`
   ],
+  getInitialURL: async () => {
+    if (Platform.OS !== 'web') {
+      return null; // Let React Navigation handle mobile normally
+    }
+    
+    const url = window.location.href;
+    const pathname = window.location.pathname;
+    
+    debugLog('MBA1111 LINKING: Checking initial URL for auth protection:', { url, pathname });
+    
+    // List of protected paths
+    const protectedPaths = [
+      '/Dashboard', '/dashboard',
+      '/MyProfile', '/my-profile', 
+      '/MessageHistory', '/message-history',
+      '/OwnerHistory', '/owner-history',
+      '/BecomeProfessional', '/become-professional',
+      '/More', '/more',
+      '/Owners', '/owners',
+      '/AvailabilitySettings', '/availability-settings',
+      '/Settings', '/settings',
+      '/ProfessionalSettings', '/professional-settings',
+      '/ProfessionalProfile', '/professional-profile',
+      '/MyContracts', '/my-contracts',
+      '/ChangePassword', '/change-password',
+      '/MyBookings', '/my-bookings',
+      '/ServiceManager', '/service-manager',
+      '/TestToast', '/test-toast',
+      '/Connections', '/connections'
+    ];
+    
+    const isProtectedPath = protectedPaths.some(path => 
+      pathname.startsWith(path) || pathname === path
+    );
+    
+    if (isProtectedPath) {
+      // Wait for auth context to be available and initialized
+      let waitCount = 0;
+      while ((!authContext || !authContext.isInitialized) && waitCount < 50) {
+        debugLog('MBA1111 LINKING: Waiting for auth context...', waitCount);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+      }
+      
+      if (authContext && !authContext.isSignedIn) {
+        debugLog('MBA1111 LINKING: Protected path accessed without auth, redirecting to signin');
+        const baseUrl = url.split(pathname)[0];
+        return `${baseUrl}/signin`;
+      }
+    }
+    
+    debugLog('MBA1111 LINKING: Allowing access to URL:', url);
+    return url;
+  },
   config: {
     screens: {
       Home: '*',  // This will catch all unmatched routes
@@ -202,9 +257,12 @@ export function navigate(name, params) {
   }
 }
 
-function TabNavigator() {
+function TabNavigator({ initialRouteName = 'Home' }) {
   return (
-    <Tab.Navigator tabBar={props => <Navigation {...props} />}>
+    <Tab.Navigator 
+      initialRouteName={initialRouteName}
+      tabBar={props => <Navigation {...props} />}
+    >
       {screens.map(screen => (
         <Tab.Screen 
           key={screen.name}
@@ -263,7 +321,7 @@ const MVPWarning = () => {
 
 function AppContent() {
   const authContext = useContext(AuthContext);
-  const { checkAuthStatus, is_DEBUG } = authContext;
+  const { checkAuthStatus, is_DEBUG, isInitialized, isSignedIn, userRole } = authContext;
   const [initialRoute, setInitialRoute] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
@@ -296,6 +354,11 @@ function AppContent() {
 
   useEffect(() => {
     const initializeApp = async () => {
+      // Wait for AuthContext to be fully initialized
+      if (!isInitialized) {
+        return;
+      }
+
       try {
         const authStatus = await checkAuthStatus();
         let route = 'Home';
@@ -307,12 +370,59 @@ function AppContent() {
           }
           route = 'SignUp';
         }
-        // Only change route if user is authenticated and no invite token
-        else if (authStatus.isAuthenticated) {
-          route = authStatus.userRole === 'professional' ? 'Dashboard' : 'Home';
+        // If user is authenticated and no invite token, go to appropriate screen
+        else if (isSignedIn) {
+          route = 'Dashboard'; // Both roles go to Dashboard now
+          if (authContext.debugLog) {
+            authContext.debugLog('MBA6666 User authenticated, setting route to:', route, 'for role:', userRole);
+          }
+        } else {
+          // User not signed in - check if they're trying to access a protected route
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const currentPath = window.location.pathname;
+            const protectedPaths = [
+              '/Dashboard', '/dashboard',
+              '/MyProfile', '/my-profile',
+              '/MessageHistory', '/message-history',
+              '/OwnerHistory', '/owner-history',
+              '/BecomeProfessional', '/become-professional',
+              '/More', '/more',
+              '/Owners', '/owners',
+              '/AvailabilitySettings', '/availability-settings',
+              '/Settings', '/settings',
+              '/ProfessionalSettings', '/professional-settings',
+              '/ProfessionalProfile', '/professional-profile',
+              '/MyContracts', '/my-contracts',
+              '/ChangePassword', '/change-password',
+              '/MyBookings', '/my-bookings',
+              '/ServiceManager', '/service-manager',
+              '/TestToast', '/test-toast',
+              '/Connections', '/connections'
+            ];
+            
+            const isOnProtectedPath = protectedPaths.some(path => 
+              currentPath.startsWith(path) || currentPath === path
+            );
+            
+            if (isOnProtectedPath) {
+              debugLog('MBA6666 Web: User not authenticated but on protected path, redirecting to SignIn');
+              route = 'SignIn';
+            } else {
+              route = 'Home';
+              if (authContext.debugLog) {
+                authContext.debugLog('MBA6666 User not authenticated, setting route to Home');
+              }
+            }
+          } else {
+            route = 'Home';
+            if (authContext.debugLog) {
+              authContext.debugLog('MBA6666 User not authenticated, setting route to Home');
+            }
+          }
         }
 
         setInitialRoute(route);
+        debugLog('MBA6666 Final initial route set to:', route);
       } catch (error) {
         console.error('Error initializing app:', error);
         setInitialRoute(inviteToken ? 'SignUp' : 'Home');
@@ -322,7 +432,62 @@ function AppContent() {
     };
 
     initializeApp();
-  }, [inviteToken]);
+  }, [inviteToken, isInitialized, isSignedIn, userRole]);
+
+  // Route guard effect - handles URL-based redirects after app initialization
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isInitialized || isLoading) {
+      return;
+    }
+
+    const checkAndRedirectProtectedRoute = () => {
+      if (typeof window === 'undefined') return;
+      
+      const currentPath = window.location.pathname;
+      const protectedPaths = [
+        '/Dashboard', '/dashboard',
+        '/MyProfile', '/my-profile',
+        '/MessageHistory', '/message-history',
+        '/OwnerHistory', '/owner-history',
+        '/BecomeProfessional', '/become-professional',
+        '/More', '/more',
+        '/Owners', '/owners',
+        '/AvailabilitySettings', '/availability-settings',
+        '/Settings', '/settings',
+        '/ProfessionalSettings', '/professional-settings',
+        '/ProfessionalProfile', '/professional-profile',
+        '/MyContracts', '/my-contracts',
+        '/ChangePassword', '/change-password',
+        '/MyBookings', '/my-bookings',
+        '/ServiceManager', '/service-manager',
+        '/TestToast', '/test-toast',
+        '/Connections', '/connections'
+      ];
+      
+      const isOnProtectedPath = protectedPaths.some(path => 
+        currentPath.startsWith(path) || currentPath === path
+      );
+      
+      debugLog('MBA7777 Route guard check:', {
+        currentPath,
+        isOnProtectedPath,
+        isSignedIn,
+        isInitialized,
+        isLoading
+      });
+      
+      if (isOnProtectedPath && !isSignedIn) {
+        debugLog('MBA7777 Route guard: Redirecting unauthenticated user from protected route');
+        // Use window.location.href for immediate redirect
+        window.location.href = '/signin';
+      }
+    };
+
+    // Small delay to ensure all initialization is complete
+    const timeoutId = setTimeout(checkAndRedirectProtectedRoute, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [isInitialized, isSignedIn, isLoading]);
 
   // Handle route changes without triggering auth checks
   useEffect(() => {
@@ -332,9 +497,66 @@ function AppContent() {
     }
   }, [initialRoute, isLoading]);
 
-  if (isLoading || !initialRoute) {
-    return null; // Or a loading spinner component
+  if (!isInitialized || isLoading || !initialRoute) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ marginTop: 16, color: theme.colors.text, fontSize: 16 }}>Loading...</Text>
+      </View>
+    );
   }
+
+  // Add navigation state listener
+  const handleNavigationStateChange = async (state) => {
+    // Store route for mobile
+    if (Platform.OS !== 'web' && state?.routes?.length > 0) {
+      const currentRoute = state.routes[state.routes.length - 1].name;
+      await AsyncStorage.setItem('lastRoute', currentRoute)
+        .catch(error => console.error('Error storing route:', error));
+    }
+    
+    // Web route protection - only redirect if clearly unauthenticated on protected route
+    if (Platform.OS === 'web' && state?.routes?.length > 0) {
+      const currentRoute = state.routes[state.routes.length - 1];
+      const routeName = currentRoute.name;
+      
+      // List of protected route names
+      const protectedRoutes = [
+        '/Dashboard', '/dashboard',
+        '/MyProfile', '/my-profile',
+        '/MessageHistory', '/message-history',
+        '/OwnerHistory', '/owner-history',
+        '/BecomeProfessional', '/become-professional',
+        '/More', '/more',
+        '/Owners', '/owners',
+        '/AvailabilitySettings', '/availability-settings',
+        '/Settings', '/settings',
+        '/ProfessionalSettings', '/professional-settings',
+        '/ProfessionalProfile', '/professional-profile',
+        '/MyContracts', '/my-contracts',
+        '/ChangePassword', '/change-password',
+        '/MyBookings', '/my-bookings',
+        '/ServiceManager', '/service-manager',
+        '/TestToast', '/test-toast',
+        '/Connections', '/connections'
+      ];
+      
+      const isProtectedRoute = protectedRoutes.includes(routeName);
+      
+      // Only redirect if:
+      // 1. On a protected route
+      // 2. Auth is fully initialized (not still loading)
+      // 3. User is definitely not signed in
+      // 4. Not already on signin page
+      if (isProtectedRoute && isInitialized && !isSignedIn && routeName !== 'SignIn') {
+        debugLog('MBA1111 Web: Protected route accessed without authentication, redirecting to signin');
+        // Use React Navigation instead of window.location to avoid full page reload
+        if (navigationRef.current) {
+          navigationRef.current.navigate('SignIn');
+        }
+      }
+    }
+  };
 
   return (
     <>
@@ -429,30 +651,39 @@ const styles = StyleSheet.create({
 });
 
 export default function App() {
-  return (
-    <NavigationContainer
-      ref={navigationRef}
-      linking={linking}
-      onStateChange={async (state) => {
-        if (Platform.OS !== 'web' && state?.routes?.length > 0) {
-          const currentRoute = state.routes[state.routes.length - 1].name;
-          await AsyncStorage.setItem('lastRoute', currentRoute)
-            .catch(error => console.error('Error storing route:', error));
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    const initializeFonts = async () => {
+      if (Platform.OS !== 'web') {
+        // Only load fonts on mobile platforms
+        try {
+          await loadFonts();
+          debugLog('MBA1234: Fonts loaded successfully');
+        } catch (error) {
+          console.warn('MBA1234: Error loading fonts:', error);
         }
-      }}
-    >
-      <AuthProvider>
-        <MessageNotificationProvider>
-          <TutorialProvider>
-            <PaperProvider theme={theme}>
-              <ToastProvider>
-                <AppContent />
-              </ToastProvider>
-            </PaperProvider>
-          </TutorialProvider>
-        </MessageNotificationProvider>
-      </AuthProvider>
-    </NavigationContainer>
+      }
+      setFontsLoaded(true);
+    };
+
+    initializeFonts();
+  }, []);
+
+  // Show loading screen while fonts are loading on mobile
+  if (!fontsLoaded && Platform.OS !== 'web') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ marginTop: 16, color: theme.colors.text }}>Loading fonts...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

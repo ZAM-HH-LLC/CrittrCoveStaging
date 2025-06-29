@@ -76,34 +76,64 @@ class AuthService {
   // Parse JWT token to get expiry time
   parseJwt(token) {
     try {
-      if (!token) return null;
-      
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      let jsonPayload;
-      
-      if (typeof atob === 'function') {
-        // Browser environment
-        jsonPayload = decodeURIComponent(
-          atob(base64)
-            .split('')
-            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        );
-      } else {
-        // React Native environment
-        jsonPayload = decodeURIComponent(
-          Buffer.from(base64, 'base64')
-            .toString('binary')
-            .split('')
-            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        );
+      if (!token || typeof token !== 'string') {
+        debugLog('MBA1111 parseJwt: Invalid token provided');
+        return null;
       }
       
-      return JSON.parse(jsonPayload);
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        debugLog('MBA1111 parseJwt: Token does not have 3 parts');
+        return null;
+      }
+      
+      const base64Url = parts[1];
+      if (!base64Url) {
+        debugLog('MBA1111 parseJwt: No payload part found');
+        return null;
+      }
+      
+      let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      
+      // Add padding if needed
+      const padding = base64.length % 4;
+      if (padding) {
+        base64 += '='.repeat(4 - padding);
+      }
+      
+      // Decode base64 using platform-appropriate method
+      let decoded;
+      if (Platform.OS === 'web') {
+        // Use browser's atob
+        decoded = atob(base64);
+      } else {
+        // React Native - use built-in base64 support through global atob or Buffer
+        try {
+          if (typeof atob !== 'undefined') {
+            decoded = atob(base64);
+          } else if (typeof global !== 'undefined' && global.atob) {
+            decoded = global.atob(base64);
+          } else {
+            // Fallback - this should not be needed in modern RN
+            debugLog('MBA1111 parseJwt: No base64 decode method available');
+            return null;
+          }
+        } catch (e) {
+          debugLog('MBA1111 parseJwt: Error during base64 decode:', e);
+          throw e;
+        }
+      }
+      
+      return JSON.parse(decoded);
+      
     } catch (error) {
       console.error('MBA1111 Error parsing JWT:', error);
+      debugLog('MBA1111 parseJwt error details:', {
+        tokenLength: token ? token.length : 0,
+        tokenStart: token ? token.substring(0, 50) : 'null',
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
       return null;
     }
   }
@@ -335,9 +365,9 @@ class AuthService {
 
   // Clear tokens from storage
   async clearTokens() {
-    debugLog('MBA1111 Clearing tokens');
     try {
       if (Platform.OS === 'web') {
+        // Clear from sessionStorage (original behavior)
         sessionStorage.removeItem('userToken');
         sessionStorage.removeItem('refreshToken');
       } else {
@@ -345,21 +375,19 @@ class AuthService {
       }
       this.accessToken = null;
       this.refreshToken = null;
-      
-      debugLog('MBA1111 Tokens cleared successfully');
     } catch (error) {
-      console.error('MBA1111 Error clearing tokens:', error);
+      console.error('MBA2ounf4f Error clearing tokens:', error);
     }
   }
 
   // Set tokens in storage
   async setTokens(accessToken, refreshToken) {
-    debugLog('MBA1111 Setting tokens');
     try {
       this.accessToken = accessToken;
       this.refreshToken = refreshToken;
 
       if (Platform.OS === 'web') {
+        // Use sessionStorage for web (original behavior)
         sessionStorage.setItem('userToken', accessToken);
         sessionStorage.setItem('refreshToken', refreshToken);
       } else {
@@ -368,38 +396,76 @@ class AuthService {
           ['refreshToken', refreshToken]
         ]);
       }
-      
-      debugLog('MBA1111 Tokens set successfully');
     } catch (error) {
       console.error('MBA1111 Error setting tokens:', error);
       throw error;
     }
   }
 
+  // Validate JWT format without full parsing
+  isValidJWT(token) {
+    if (!token || typeof token !== 'string') return false;
+    
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    
+    // Check if each part has content
+    return parts.every(part => part && part.length > 0);
+  }
+
   // Initialize auth service
   async initialize() {
-    debugLog('MBA1111 Starting AuthService.initialize()');
+    debugLog('MBA2ounf4f Starting AuthService.initialize()');
     try {
       let accessToken, refreshToken;
       
+      debugLog('MBA2ounf4f Attempting to get stored tokens');
       accessToken = await getStorage('userToken');
       refreshToken = await getStorage('refreshToken');
+      
+      debugLog('MBA2ounf4f Raw tokens retrieved:', {
+        accessTokenExists: !!accessToken,
+        refreshTokenExists: !!refreshToken,
+        accessTokenLength: accessToken ? accessToken.length : 0,
+        refreshTokenLength: refreshToken ? refreshToken.length : 0,
+        accessTokenStart: accessToken ? accessToken.substring(0, 20) + '...' : 'null',
+        refreshTokenStart: refreshToken ? refreshToken.substring(0, 20) + '...' : 'null'
+      });
+      
+      // Validate tokens before using them
+      if (accessToken && !this.isValidJWT(accessToken)) {
+        debugLog('MBA2ounf4f Invalid access token found, clearing it', {
+          tokenLength: accessToken.length,
+          tokenStart: accessToken.substring(0, 20)
+        });
+        accessToken = null;
+        await setStorage('userToken', '');
+      }
+      
+      if (refreshToken && !this.isValidJWT(refreshToken)) {
+        debugLog('MBA2ounf4f Invalid refresh token found, clearing it', {
+          tokenLength: refreshToken.length,
+          tokenStart: refreshToken.substring(0, 20)
+        });
+        refreshToken = null;
+        await setStorage('refreshToken', '');
+      }
       
       this.accessToken = accessToken;
       this.refreshToken = refreshToken;
 
-      debugLog('MBA1111 Tokens retrieved:', {
+      debugLog('MBA2ounf4f Tokens retrieved and validated:', {
         hasAccessToken: !!this.accessToken,
         hasRefreshToken: !!this.refreshToken
       });
       
       // Check if token needs immediate refresh
       if (this.accessToken && this.shouldRefreshToken(this.accessToken)) {
-        debugLog('MBA1111 Token needs refresh during init');
+        debugLog('MBA2ounf4f Token needs refresh during init');
         try {
           await this.refreshTokens();
         } catch (err) {
-          debugLog('MBA1111 Failed to refresh token during init:', err);
+          debugLog('MBA2ounf4f Failed to refresh token during init:', err);
         }
       }
 
@@ -408,7 +474,7 @@ class AuthService {
         hasRefreshToken: !!this.refreshToken
       };
     } catch (error) {
-      console.error('MBA1111 Error in AuthService.initialize():', error);
+      console.error('MBA2ounf4f Error in AuthService.initialize():', error);
       return { hasAccessToken: false, hasRefreshToken: false };
     }
   }
@@ -431,20 +497,30 @@ class AuthService {
 
 export const AuthContext = createContext();
 
-// Storage helper functions
+// Storage helper functions with platform-specific persistence strategies
 export const getStorage = async (key) => {
   try {
     if (Platform.OS === 'web') {
-      const value = sessionStorage.getItem(key);
-      // debugLog('MBA1111 getStorage web:', { key, hasValue: !!value });
-      return value;
+      // For authentication tokens on web, use sessionStorage for session persistence (original behavior)
+      // For other data, check both sessionStorage and localStorage
+      if (key === 'userToken' || key === 'refreshToken') {
+        const value = sessionStorage.getItem(key);
+        return value;
+      } else {
+        // For non-auth data, prefer sessionStorage but fallback to localStorage
+        const sessionValue = sessionStorage.getItem(key);
+        if (sessionValue) {
+          return sessionValue;
+        }
+        const localValue = localStorage.getItem(key);
+        return localValue;
+      }
     } else {
       const value = await AsyncStorage.getItem(key);
-      // debugLog('MBA1111 getStorage mobile:', { key, hasValue: !!value });
       return value;
     }
   } catch (error) {
-    console.error('MBA1111 Error getting from storage:', error);
+    console.error('MBA2ounf4f Error getting from storage:', error);
     return null;
   }
 };
@@ -452,14 +528,18 @@ export const getStorage = async (key) => {
 export const setStorage = async (key, value) => {
   try {
     if (Platform.OS === 'web') {
-      sessionStorage.setItem(key, value);
-      debugLog('MBA1111 setStorage web:', { key, value });
+      // For authentication tokens on web, use sessionStorage (original behavior)
+      if (key === 'userToken' || key === 'refreshToken') {
+        sessionStorage.setItem(key, value);
+      } else {
+        // For other data, use sessionStorage
+        sessionStorage.setItem(key, value);
+      }
     } else {
       await AsyncStorage.setItem(key, value);
-      debugLog('MBA1111 setStorage mobile:', { key, value });
     }
   } catch (error) {
-    console.error('MBA1111 Error setting storage:', error);
+    console.error('MBA2ounf4f Error setting storage:', error);
   }
 };
 
@@ -479,6 +559,7 @@ export const AuthProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(null);
   const [isApprovedProfessional, setIsApprovedProfessional] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const [firstName, setFirstName] = useState('');
   const [name, setName] = useState('');
@@ -490,8 +571,14 @@ export const AuthProvider = ({ children }) => {
   });
   const [is_prototype, setIsPrototype] = useState(false);
   const [is_DEBUG, setIsDebug] = useState(true);
-  // Simple redirect effect for users without tokens on protected routes
+  // Platform-aware redirect effect for users without tokens on protected routes
+  // NOTE: Only run this on mobile - web uses React Navigation linking for route protection
   useEffect(() => {
+    // Skip redirect logic entirely on web - React Navigation linking handles it
+    if (Platform.OS === 'web') {
+      return;
+    }
+    
     // Don't check for redirects until auth has been initialized
     if (!isInitializedRef.current) {
       debugLog('MBA1111 AUTH REDIRECT: Auth not yet initialized, skipping redirect check');
@@ -499,54 +586,99 @@ export const AuthProvider = ({ children }) => {
     }
     
     if (!loading && !isSignedIn) {
-      // Get current route information using platform navigation
-      const currentRouteInfo = platformNavigation.getCurrentRoute();
-      const currentPath = currentRouteInfo.path;
-      
-      debugLog(`MBA1111 AUTH REDIRECT: Full URL: ${currentRouteInfo.href}`);
-      debugLog(`MBA1111 AUTH REDIRECT: Route name: ${currentRouteInfo.name}`);
-      debugLog(`MBA1111 AUTH REDIRECT: Path: ${currentPath}`);
-      debugLog(`MBA1111 AUTH REDIRECT CHECK: Current path detected as: ${currentPath}`);
-      
-      // List of protected paths that require authentication
-      // TODO: When adding new screens, make sure to add them to the protectedPaths array
-      const protectedPaths = [
-        '/Dashboard',
-        '/MyProfile', 
-        '/my-profile',
-        '/MessageHistory',
-        '/message-history',
-        '/OwnerHistory',
-        '/BecomeProfessional',
-        '/become-professional',
-        '/More',
-        '/Owners',
-        '/AvailabilitySettings',
-        '/Settings',
-        '/ProfessionalSettings',
-        '/ProfessionalProfile',
-        '/MyContracts',
-        '/ChangePassword',
-        '/change-password',
-        '/MyBookings',
-        '/ServiceManager',
-        '/service-manager',
-        '/TestToast',
-        '/Connections',
-        '/connections'
-      ];
-      
-      // Check if current path matches any protected path
-      const isOnProtectedRoute = protectedPaths.some(path => {
-        const matches = currentPath.startsWith(path) || currentPath === path;
-        if (matches) {
-          debugLog(`MBA1111 AUTH REDIRECT: Matched protected path ${path} with current path ${currentPath}`);
+      try {
+        // Get current route information using platform navigation
+        const currentRouteInfo = platformNavigation.getCurrentRoute();
+        
+        // Safety check: ensure currentRouteInfo is valid
+        if (!currentRouteInfo) {
+          debugLog('MBA1111 AUTH REDIRECT: currentRouteInfo is null/undefined, skipping redirect check');
+          return;
         }
-        return matches;
-      });
+      
+      // Handle platform-specific route checking (mobile only now)
+      let isOnProtectedRoute = false;
+      
+      // This should never execute on web due to early return above, but keeping for safety
+      if (Platform.OS === 'web') {
+        const currentPath = currentRouteInfo.path;
+        
+        debugLog(`MBA1111 AUTH REDIRECT WEB: Full URL: ${currentRouteInfo.href || 'N/A'}`);
+        debugLog(`MBA1111 AUTH REDIRECT WEB: Route name: ${currentRouteInfo.name}`);
+        debugLog(`MBA1111 AUTH REDIRECT WEB: Path: ${currentPath}`);
+        
+        // List of protected paths for web
+        const protectedWebPaths = [
+          '/Dashboard',
+          '/MyProfile', 
+          '/my-profile',
+          '/MessageHistory',
+          '/message-history',
+          '/OwnerHistory',
+          '/BecomeProfessional',
+          '/become-professional',
+          '/More',
+          '/Owners',
+          '/AvailabilitySettings',
+          '/Settings',
+          '/ProfessionalSettings',
+          '/ProfessionalProfile',
+          '/MyContracts',
+          '/ChangePassword',
+          '/change-password',
+          '/MyBookings',
+          '/ServiceManager',
+          '/service-manager',
+          '/TestToast',
+          '/Connections',
+          '/connections'
+        ];
+        
+        // Check if current path matches any protected path
+        isOnProtectedRoute = protectedWebPaths.some(path => {
+          const matches = currentPath.startsWith(path) || currentPath === path;
+          if (matches) {
+            debugLog(`MBA1111 AUTH REDIRECT WEB: Matched protected path ${path} with current path ${currentPath}`);
+          }
+          return matches;
+        });
+      } else {
+        // Mobile apps: use route names instead of paths
+        const currentRouteName = currentRouteInfo.name;
+        
+        debugLog(`MBA1111 AUTH REDIRECT MOBILE: Route name: ${currentRouteName}`);
+        
+        // List of protected route names for mobile
+        const protectedMobileRoutes = [
+          'Dashboard',
+          'MyProfile',
+          'MessageHistory',
+          'OwnerHistory',
+          'BecomeProfessional',
+          'More',
+          'Owners',
+          'AvailabilitySettings',
+          'Settings',
+          'ProfessionalSettings',
+          'ProfessionalProfile',
+          'MyContracts',
+          'ChangePassword',
+          'MyBookings',
+          'ServiceManager',
+          'TestToast',
+          'Connections'
+        ];
+        
+        // Check if current route name matches any protected route
+        isOnProtectedRoute = protectedMobileRoutes.includes(currentRouteName);
+        
+        if (isOnProtectedRoute) {
+          debugLog(`MBA1111 AUTH REDIRECT MOBILE: On protected route ${currentRouteName}`);
+        }
+      }
       
       if (isOnProtectedRoute) {
-        debugLog(`MBA1111 AUTH REDIRECT: User not signed in on protected route ${currentPath}, redirecting to SignIn`);
+        debugLog(`MBA1111 AUTH REDIRECT: User not signed in on protected route, redirecting to SignIn`);
         
         // Use platform navigation for redirect
         try {
@@ -559,7 +691,11 @@ export const AuthProvider = ({ children }) => {
           platformNavigation.redirectToSignIn(null);
         }
       } else {
-        debugLog(`MBA1111 AUTH REDIRECT: Current path ${currentPath} is not protected, no redirect needed`);
+        debugLog(`MBA1111 AUTH REDIRECT: Current route is not protected, no redirect needed`);
+      }
+      } catch (error) {
+        debugLog('MBA1111 AUTH REDIRECT: Error during redirect check:', error);
+        // Don't crash the app, just log the error and continue
       }
     } else {
       if (loading) {
@@ -611,11 +747,22 @@ export const AuthProvider = ({ children }) => {
       await authService.current.clearTokens();
       await AsyncStorage.multiRemove(['userRole', 'isApprovedProfessional']);
       
-      // Clear sessionStorage items for web
+      // Clear all storage items for web (both localStorage and sessionStorage)
       if (Platform.OS === 'web') {
+        // Clear from localStorage
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('isApprovedProfessional');
+        localStorage.removeItem('currentProfessional');
+        localStorage.removeItem('userToken');
+        localStorage.removeItem('refreshToken');
+        
+        // Clear from sessionStorage
         sessionStorage.removeItem('userRole');
         sessionStorage.removeItem('isApprovedProfessional');
         sessionStorage.removeItem('currentProfessional');
+        sessionStorage.removeItem('userToken');
+        sessionStorage.removeItem('refreshToken');
+        // Mark as explicit sign out for web
         sessionStorage.setItem('explicitSignOut', 'true');
       }
       
@@ -637,15 +784,32 @@ export const AuthProvider = ({ children }) => {
       authService.current.accessToken = null;
       authService.current.refreshToken = null;
       
-      // Navigate to sign in with more explicit handling
+      // Navigate to sign in with platform-specific handling
       const navigateToSignIn = () => {
         try {
           debugLog('MBA1111 Navigating to SignIn screen due to:', reason);
-          navigate('SignIn');
+          
+          if (Platform.OS === 'web') {
+            // For web, use direct URL navigation to avoid conflicts with React Navigation
+            if (typeof window !== 'undefined' && window.location) {
+              window.location.href = '/signin';
+              debugLog('MBA1111 Web redirect to /signin successful');
+            } else {
+              // Fallback to navigate function
+              navigate('SignIn');
+            }
+          } else {
+            // For mobile, use React Navigation
+            navigate('SignIn');
+          }
         } catch (navError) {
           console.error('MBA1111 Navigation error during signOut:', navError);
-          // Fallback: use platform navigation
-          platformNavigation.redirectToSignIn(null);
+          // Final fallback: use platform navigation
+          try {
+            platformNavigation.redirectToSignIn(null);
+          } catch (fallbackError) {
+            console.error('MBA1111 Platform navigation fallback also failed:', fallbackError);
+          }
         }
       };
       
@@ -804,11 +968,14 @@ export const AuthProvider = ({ children }) => {
           consecutiveAuth401Errors++;
           lastErrorTime = now;
           
-          debugLog(`MBA1111 401 error detected (${consecutiveAuth401Errors}/${MAX_401_RETRIES}), attempting token refresh`);
+          debugLog(`MBA2ounf4f 401 error detected (${consecutiveAuth401Errors}/${MAX_401_RETRIES}), attempting token refresh`, {
+            url: originalRequest.url,
+            method: originalRequest.method
+          });
           
           // Enhanced circuit breaker: Stop trying after too many consecutive failures
           if (consecutiveAuth401Errors >= MAX_401_RETRIES) {
-            debugLog('MBA9999 Circuit breaker triggered: Too many consecutive 401 errors, forcing sign out');
+            debugLog('MBA2ounf4f Circuit breaker triggered: Too many consecutive 401 errors, forcing sign out');
             authService.current.forceSignOut('too_many_auth_failures');
             return Promise.reject(error);
           }
@@ -866,6 +1033,17 @@ export const AuthProvider = ({ children }) => {
             throw error;
           }
         }
+        
+        // Log all network errors for debugging
+        debugLog('MBA2ounf4f Axios response interceptor error:', {
+          status: error.response?.status,
+          url: error.config?.url,
+          method: error.config?.method,
+          message: error.message,
+          isNetworkError: !error.response,
+          errorCode: error.code,
+          isBackendDown: error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK'
+        });
         
         return Promise.reject(error);
       }
@@ -930,20 +1108,20 @@ export const AuthProvider = ({ children }) => {
     };
   }, [isSignedIn, is_prototype]);
 
-  // Initialize auth state
+  // Initialize auth state with debounce protection for rapid refreshes
   useEffect(() => {
+    let initTimeout;
+    
     const init = async () => {
       if (isInitializedRef.current) return;
       
+      // Add small delay for web to prevent race conditions on rapid refresh
+      if (Platform.OS === 'web') {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
       try {
         debugLog('MBA1111 Initializing auth state');
-        
-        // Log current URL at start of initialization
-        if (typeof window !== 'undefined') {
-          debugLog(`MBA1111 INIT: Current URL at start: ${window.location.href}`);
-          debugLog(`MBA1111 INIT: Current pathname: ${window.location.pathname}`);
-          debugLog(`MBA1111 INIT: Current hash: ${window.location.hash}`);
-        }
         
         const { hasAccessToken, hasRefreshToken } = await authService.current.initialize();
         
@@ -1026,7 +1204,7 @@ export const AuthProvider = ({ children }) => {
                   setIsApprovedProfessional(status.isApprovedProfessional);
                   await fetchTimeSettings();
                   
-                  debugLog('MBA1111 User session restored successfully');
+                                    debugLog('MBA1111 User session restored successfully');
                 } else {
                   debugLog('MBA1111 Server-side token validation failed, signing out');
                   await signOut('server_validation_failed');
@@ -1050,12 +1228,6 @@ export const AuthProvider = ({ children }) => {
           // Just ensure they're in the signed out state
           setIsSignedIn(false);
           debugLog('MBA1111 Set isSignedIn to false due to no tokens');
-          
-          // Log URL after setting signed out state
-          if (typeof window !== 'undefined') {
-            debugLog(`MBA1111 INIT: URL after setting signed out: ${window.location.href}`);
-            debugLog(`MBA1111 INIT: Hash after setting signed out: ${window.location.hash}`);
-          }
         }
       } catch (error) {
         console.error('MBA1111 Error initializing auth state:', error);
@@ -1064,17 +1236,19 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
         debugLog('MBA1111 Auth initialization completed, loading set to false');
         
-        // Log URL at end of initialization
-        if (typeof window !== 'undefined') {
-          debugLog(`MBA1111 INIT: Final URL at end: ${window.location.href}`);
-          debugLog(`MBA1111 INIT: Final hash at end: ${window.location.hash}`);
-        }
-        
         isInitializedRef.current = true;
+        setIsInitialized(true);
       }
     };
 
-    init();
+    // Use setTimeout to prevent rapid successive initialization attempts
+    initTimeout = setTimeout(init, Platform.OS === 'web' ? 10 : 0);
+    
+    return () => {
+      if (initTimeout) {
+        clearTimeout(initTimeout);
+      }
+    };
   }, []);
 
   // Fetch user name
@@ -1446,6 +1620,7 @@ export const AuthProvider = ({ children }) => {
         userRole,
         isApprovedProfessional,
         loading,
+        isInitialized,
         screenWidth,
         firstName,
         name,
