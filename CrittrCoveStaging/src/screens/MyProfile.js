@@ -575,14 +575,7 @@ const MyProfile = () => {
 
   return (
     <View style={styles.mainContainer}>
-      <SafeAreaView style={styles.container}>
-        {isMobile && (
-          <BackHeader 
-            title="Profile Settings" 
-            onBackPress={() => navigation.goBack()} 
-          />
-        )}
-        
+      <SafeAreaView style={styles.container}>        
         <View style={styles.content}>
           <View style={styles.mainContent}>
             <View style={styles.headerSection}>

@@ -1086,7 +1086,7 @@ export const AuthProvider = ({ children }) => {
     };
     
     // Set up event listeners only for web
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
       window.addEventListener('focus', handleWindowFocus);
       
       document.addEventListener('visibilitychange', () => {
@@ -1101,7 +1101,7 @@ export const AuthProvider = ({ children }) => {
         clearTimeout(focusCheckTimeout);
       }
       
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
         window.removeEventListener('focus', handleWindowFocus);
         document.removeEventListener('visibilitychange', handleWindowFocus);
       }

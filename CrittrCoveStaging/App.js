@@ -187,9 +187,9 @@ const createLinking = (authContext) => ({
   },
   config: {
     screens: {
-      Home: '*',  // This will catch all unmatched routes
-      About: 'about',
-      MyProfile: 'my-profile',
+      Home: '/',  // Only match root path
+      // About: 'about',
+      // MyProfile: 'my-profile',
       SignIn: 'signin',
       SignUp: {
         path: 'signup/:token?',
@@ -522,23 +522,23 @@ function AppContent() {
       
       // List of protected route names
       const protectedRoutes = [
-        '/Dashboard', '/dashboard',
-        '/MyProfile', '/my-profile',
-        '/MessageHistory', '/message-history',
-        '/OwnerHistory', '/owner-history',
-        '/BecomeProfessional', '/become-professional',
-        '/More', '/more',
-        '/Owners', '/owners',
-        '/AvailabilitySettings', '/availability-settings',
-        '/Settings', '/settings',
-        '/ProfessionalSettings', '/professional-settings',
-        '/ProfessionalProfile', '/professional-profile',
-        '/MyContracts', '/my-contracts',
-        '/ChangePassword', '/change-password',
-        '/MyBookings', '/my-bookings',
-        '/ServiceManager', '/service-manager',
-        '/TestToast', '/test-toast',
-        '/Connections', '/connections'
+        'Dashboard',
+        'MyProfile',
+        'MessageHistory',
+        'OwnerHistory',
+        'BecomeProfessional',
+        'More',
+        'Owners',
+        'AvailabilitySettings',
+        'Settings',
+        'ProfessionalSettings',
+        'ProfessionalProfile',
+        'MyContracts',
+        'ChangePassword',
+        'MyBookings',
+        'ServiceManager',
+        'TestToast',
+        'Connections'
       ];
       
       const isProtectedRoute = protectedRoutes.includes(routeName);

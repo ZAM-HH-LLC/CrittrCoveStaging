@@ -1,18 +1,11 @@
 import React, { useState, useRef, useCallback, useContext, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, ScrollView, Switch, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Dropdown from 'react-native-element-dropdown/src/components/Dropdown';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../styles/theme';
 import Slider from '@react-native-community/slider';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import DatePicker from '../components/DatePicker';
 import { debounce } from 'lodash';
-import MultiSelect from 'react-native-element-dropdown/src/components/MultiSelect';
-import CustomMultiSelect from '../components/CustomMultiSelect';
-import { SERVICE_TYPES, GENERAL_CATEGORIES } from '../data/mockData';
+import { GENERAL_CATEGORIES } from '../data/mockData';
 import { AuthContext, debugLog } from '../context/AuthContext';
-import Tooltip from './Tooltip';
 import ServiceTypeSelect from './ServiceTypeSelect';
 import { searchProfessionals } from '../api/API';
 
