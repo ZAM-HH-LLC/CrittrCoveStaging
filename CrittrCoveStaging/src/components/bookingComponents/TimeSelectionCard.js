@@ -88,7 +88,7 @@ const TimeSelectionCard = ({
         const defaultTimes = {
           startTime: { hours: 9, minutes: 0 },
           endTime: { hours: 17, minutes: 0 },
-          isOvernightForced: selectedService?.is_overnight || false
+          isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
         };
         debugLog('MBAoi9uv43d: Using default times:', defaultTimes);
         setTimes(defaultTimes);
@@ -117,10 +117,17 @@ const TimeSelectionCard = ({
       const formattedTimes = {
         startTime: startTimeValue || { hours: 9, minutes: 0 },
         endTime: endTimeValue || { hours: 17, minutes: 0 },
-        isOvernightForced: initialTimes.isOvernightForced || selectedService?.is_overnight || false
+        // CRITICAL FIX: prioritize selectedService.is_overnight over previous state
+        isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
       };
       
-      debugLog('MBAoi9uv43d: Setting formatted times:', formattedTimes);
+      debugLog('MBAoi9uv43d: CRITICAL FIX - Setting formatted times:', {
+        formattedTimes,
+        selectedServiceIsOvernight: selectedService?.is_overnight,
+        isOvernightForcedProp: isOvernightForced,
+        initialTimesIsOvernightForced: initialTimes.isOvernightForced,
+        message: 'isOvernightForced now prioritizes current service over previous state'
+      });
       setTimes(formattedTimes);
       
       // Check if initialTimes already has individual times or if we have dates from draft
@@ -185,7 +192,8 @@ const TimeSelectionCard = ({
                 newTimeRanges[key] = {
                   startTime: parsedStartTime || { hours: 9, minutes: 0 },
                   endTime: parsedEndTime || { hours: 17, minutes: 0 },
-                  isOvernightForced: dayTime.isOvernightForced || false
+                  // CRITICAL FIX: prioritize current service over previous state
+                  isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
                 };
               }
             }
@@ -204,7 +212,8 @@ const TimeSelectionCard = ({
                 newTimeRanges[dateKey] = {
                   startTime: parsedStartTime || { hours: 9, minutes: 0 },
                   endTime: parsedEndTime || { hours: 17, minutes: 0 },
-                  isOvernightForced: dayTime.isOvernightForced || false
+                  // CRITICAL FIX: prioritize current service over previous state
+                  isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
                 };
               }
             }
@@ -220,7 +229,7 @@ const TimeSelectionCard = ({
       setTimes({
         startTime: { hours: 9, minutes: 0 },
         endTime: { hours: 17, minutes: 0 },
-        isOvernightForced: selectedService?.is_overnight || false
+        isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
       });
     }
   }, [initialTimes, dateRange, selectedService]);
@@ -498,7 +507,8 @@ const TimeSelectionCard = ({
                   timeData = {
                     startTime: parsedStartTime || JSON.parse(JSON.stringify(times.startTime)),
                     endTime: parsedEndTime || JSON.parse(JSON.stringify(times.endTime)),
-                    isOvernightForced: !!initialTimes[dateKey].isOvernightForced
+                    // CRITICAL FIX: prioritize current service over previous state
+                    isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
                   };
                   
                   debugLog(`MBAoi9uv43d: Found specific time data for date ${dateKey} in initialTimes`);
