@@ -188,8 +188,8 @@ const createLinking = (authContext) => ({
   config: {
     screens: {
       Home: '/',  // Only match root path
-      // About: 'about',
-      // MyProfile: 'my-profile',
+      About: 'about',
+      MyProfile: 'my-profile',
       SignIn: 'signin',
       SignUp: {
         path: 'signup/:token?',
@@ -246,7 +246,7 @@ const createLinking = (authContext) => ({
       Connections: 'connections',
     }
   }
-};
+});
 
 
 export const navigationRef = createNavigationContainerRef();
