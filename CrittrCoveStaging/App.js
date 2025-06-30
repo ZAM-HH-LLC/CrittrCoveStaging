@@ -53,18 +53,16 @@ if (Platform.OS === 'web') {
 
 // Import all your screen components
 import HomeScreen from './src/screens/HomeScreen';
-import AboutScreen from './src/screens/AboutScreen';
+// import AboutScreen from './src/screens/AboutScreen';
 import MyProfile from './src/screens/MyProfile';
 import SignIn from './src/screens/SignIn';
 import SignUp from './src/screens/SignUp';
 import ResetPassword from './src/screens/ResetPassword';
 import ResetPasswordConfirm from './src/screens/ResetPasswordConfirm';
-// import Dashboard from './src/screens/Dashboard';
 import Dashboard from './src/screens/Dashboard';
 import BecomeProfessional from './src/screens/BecomeProfessional';
 import MoreScreen from './src/screens/MoreScreen';
 import AvailabilitySettings from './src/screens/AvailabilitySettings';
-// import Messages from './src/screens/Messages';
 import OwnerHistory from './src/screens/OwnerHistory';
 import MessageHistory from './src/screens/MessageHistory';
 import Settings from './src/screens/Settings';
@@ -91,7 +89,6 @@ const Tab = createBottomTabNavigator();
 
 const screens = [
   { name: 'Home', component: HomeScreen },
-  { name: 'About', component: AboutScreen },
   { name: 'MyProfile', component: MyProfile },  
   { name: 'SignIn', component: SignIn },
   { name: 'SignUp', component: SignUp },
@@ -139,7 +136,7 @@ const createLinking = (authContext) => ({
     const url = window.location.href;
     const pathname = window.location.pathname;
     
-    debugLog('MBA1111 LINKING: Checking initial URL for auth protection:', { url, pathname });
+    debugLog('MBA2ounf4f LINKING: Checking initial URL for auth protection:', { url, pathname });
     
     // List of protected paths
     const protectedPaths = [
@@ -170,25 +167,24 @@ const createLinking = (authContext) => ({
       // Wait for auth context to be available and initialized
       let waitCount = 0;
       while ((!authContext || !authContext.isInitialized) && waitCount < 50) {
-        debugLog('MBA1111 LINKING: Waiting for auth context...', waitCount);
+        debugLog('MBA2ounf4f LINKING: Waiting for auth context...', waitCount);
         await new Promise(resolve => setTimeout(resolve, 100));
         waitCount++;
       }
       
       if (authContext && !authContext.isSignedIn) {
-        debugLog('MBA1111 LINKING: Protected path accessed without auth, redirecting to signin');
+        debugLog('MBA2ounf4f LINKING: Protected path accessed without auth, redirecting to signin');
         const baseUrl = url.split(pathname)[0];
         return `${baseUrl}/signin`;
       }
     }
     
-    debugLog('MBA1111 LINKING: Allowing access to URL:', url);
+    debugLog('MBA2ounf4f LINKING: Allowing access to URL:', url);
     return url;
   },
   config: {
     screens: {
       Home: '/',  // Only match root path
-      About: 'about',
       MyProfile: 'my-profile',
       SignIn: 'signin',
       SignUp: {
@@ -209,7 +205,7 @@ const createLinking = (authContext) => ({
       },
       ResetPassword: 'reset-password',
       ResetPasswordConfirm: 'reset-password/:uid/:token',
-      SearchProfessionalsListing: 'search-professionals-listing',
+      SearchProfessionalsListing: 'SearchProfessionalsListing',
       OwnerHistory: 'owner-history',
       MessageHistory: {
         path: 'message-history',
@@ -360,7 +356,6 @@ function AppContent() {
       }
 
       try {
-        const authStatus = await checkAuthStatus();
         let route = 'Home';
 
         // If we have an invite token, go to SignUp
@@ -520,7 +515,14 @@ function AppContent() {
       const currentRoute = state.routes[state.routes.length - 1];
       const routeName = currentRoute.name;
       
-      // List of protected route names
+      debugLog('MBA2ounf4f Navigation state change:', {
+        routeName,
+        currentPath: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
+        isInitialized,
+        isSignedIn
+      });
+      
+      // List of protected route names (these are route names, not paths)
       const protectedRoutes = [
         'Dashboard',
         'MyProfile',
@@ -549,7 +551,7 @@ function AppContent() {
       // 3. User is definitely not signed in
       // 4. Not already on signin page
       if (isProtectedRoute && isInitialized && !isSignedIn && routeName !== 'SignIn') {
-        debugLog('MBA1111 Web: Protected route accessed without authentication, redirecting to signin');
+        debugLog('MBA2ounf4f Web: Protected route accessed without authentication, redirecting to signin');
         // Use React Navigation instead of window.location to avoid full page reload
         if (navigationRef.current) {
           navigationRef.current.navigate('SignIn');
@@ -559,35 +561,47 @@ function AppContent() {
   };
 
   return (
-    <>
-      {/* {isVisible && <MVPWarning />} */}
-      {Platform.OS === 'web' ? (
-        <Stack.Navigator
-          initialRouteName={initialRoute}
-          screenOptions={{
-            headerShown: true,
-            header: ({ navigation }) => <Navigation navigation={navigation} />,
-            ...TransitionPresets.SlideFromRightIOS,
-            presentation: 'card',
-            animation: 'slide_from_right'
-          }}
-        >
-          {screens.map(screen => (
-            <Stack.Screen 
-              key={screen.name}
-              name={screen.name} 
-              component={screen.component}
-              options={{
-                headerShown: true,
-                animation: 'slide_from_right'
-              }}
-            />
-          ))}
-        </Stack.Navigator>
-      ) : (
-        <TabNavigator />
-      )}
-    </>
+    <NavigationContainer
+      ref={navigationRef}
+      linking={createLinking(authContext)}
+      onStateChange={handleNavigationStateChange}
+    >
+      <MessageNotificationProvider>
+        <TutorialProvider>
+          <PaperProvider theme={theme}>
+            <ToastProvider>
+              {/* {isVisible && <MVPWarning />} */}
+              {Platform.OS === 'web' ? (
+                <Stack.Navigator
+                  initialRouteName={initialRoute}
+                  screenOptions={{
+                    headerShown: true,
+                    header: ({ navigation }) => <Navigation navigation={navigation} />,
+                    ...TransitionPresets.SlideFromRightIOS,
+                    presentation: 'card',
+                    animation: 'slide_from_right'
+                  }}
+                >
+                  {screens.map(screen => (
+                    <Stack.Screen 
+                      key={screen.name}
+                      name={screen.name} 
+                      component={screen.component}
+                      options={{
+                        headerShown: true,
+                        animation: 'slide_from_right'
+                      }}
+                    />
+                  ))}
+                </Stack.Navigator>
+              ) : (
+                <TabNavigator initialRouteName={initialRoute} />
+              )}
+            </ToastProvider>
+          </PaperProvider>
+        </TutorialProvider>
+      </MessageNotificationProvider>
+    </NavigationContainer>
   );
 }
 

@@ -782,17 +782,18 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
                 ))}
               </Picker>
             ) : (
-              <select
-                value={customAnimalCategory}
-                onChange={(e) => setCustomAnimalCategory(e.target.value)}
-                style={styles.picker}
-              >
-                {GENERAL_CATEGORIES.filter(cat => cat.id !== 'all').map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+              React.createElement('select', {
+                value: customAnimalCategory,
+                onChange: (e) => setCustomAnimalCategory(e.target.value),
+                style: styles.picker
+              }, 
+                GENERAL_CATEGORIES.filter(cat => cat.id !== 'all').map(category => 
+                  React.createElement('option', {
+                    key: category.id,
+                    value: category.id
+                  }, category.name)
+                )
+              )
             )}
           </View>
         </View>
