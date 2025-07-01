@@ -989,72 +989,149 @@ const MessageHistory = ({ navigation, route }) => {
                 // Handle URL parameters on web
         if (Platform.OS === 'web') {
           const currentUrl = new URL(window.location.href);
-          // Only process URLs with valid conversationIds - 'null' is not valid
+          
+          // Check for selectedConversation parameter (this is the main one we care about for reloads)
+          const rawSelectedConversationId = currentUrl.searchParams.get('selectedConversation');
+          const selectedConversationId = (rawSelectedConversationId && rawSelectedConversationId !== 'null') 
+                                         ? rawSelectedConversationId : null;
+          
+          // Also check conversationId for compatibility
           const rawUrlConversationId = currentUrl.searchParams.get('conversationId');
           const urlConversationId = (rawUrlConversationId && rawUrlConversationId !== 'null') 
                                     ? rawUrlConversationId : null;
           
+          // Use selectedConversation first, then fall back to conversationId
+          const conversationToLoad = selectedConversationId || urlConversationId;
+          
           debugLog('MBA24u45vn', 'Checking URL parameters on initialization', {
             url: window.location.href,
+            rawSelectedConversationId,
+            selectedConversationId,
             rawUrlConversationId,
             urlConversationId,
+            conversationToLoad,
             hasSelectedConversation: !!selectedConversation,
             timestamp: Date.now()
           });
           
-          // Clear URL parameters - do this once regardless of valid conversationId
-          if (currentUrl.searchParams.has('conversationId')) {
-            // Store parameters we need before clearing
-            const paramsToStore = {
-              conversationId: urlConversationId
-            };
-            
-            // Clear all URL parameters to prevent repeated processing
-            [...currentUrl.searchParams.keys()].forEach(key => {
-              currentUrl.searchParams.delete(key);
-            });
-            
-            // Update history to remove params from URL
-            window.history.replaceState({}, '', currentUrl.toString());
-            debugLog('MBA24u45vn', 'Cleared URL parameters to prevent reprocessing');
-            
-            // If we have a valid conversation ID from URL, process it
-            if (urlConversationId) {
-              debugLog('MBA24u45vn', 'Processing valid conversation ID from URL', {
-                conversationId: urlConversationId,
-                timestamp: Date.now()
-              });
-              
-              debugLog('MBA24u45vn: Fetching conversations for URL conversation ID');
-              
-              const conversationsData = await fetchConversations();
-              
-              // Find the conversation in the data
-              const conversation = conversationsData.find(c => c.conversation_id === urlConversationId);
-              
-              if (conversation) {
-                debugLog('MBA24u45vn', 'Found conversation from URL in data', {
-                  conversation_id: conversation.conversation_id,
-                  other_user_name: conversation.other_user_name,
-                  has_profile_pic: !!conversation.profile_picture
-                });
-                
-                // Set the selected conversation
-                setSelectedConversation(urlConversationId);
-                setSelectedConversationData(conversation);
-                
-                // Fetch messages for this conversation
-                fetchMessages(urlConversationId);
-              } else {
-                debugLog('MBA24u45vn', 'Conversation from URL NOT found in data', {
-                  conversationId: urlConversationId,
-                  conversationsCount: conversationsData.length
-                });
-              }
-              
-              return;
-            }
-          }
+                     // If we have a valid conversation ID from URL, process it (don't clear URL params yet)
+           if (conversationToLoad) {
+             debugLog('MBA24u45vn', 'Processing valid conversation ID from URL', {
+               conversationId: conversationToLoad,
+               source: selectedConversationId ? 'selectedConversation' : 'conversationId',
+               timestamp: Date.now()
+             });
+             
+             debugLog('MBA24u45vn: Fetching conversations for URL conversation ID');
+             
+             // Fetch conversations and wait for the result
+             const conversationsData = await fetchConversations();
+             
+             // Make sure we have data before proceeding
+             if (conversationsData && Array.isArray(conversationsData) && conversationsData.length > 0) {
+               // Find the conversation in the data
+               const conversation = conversationsData.find(c => c.conversation_id === conversationToLoad);
+               
+               if (conversation) {
+                 debugLog('MBA24u45vn', 'Found conversation from URL in data', {
+                   conversation_id: conversation.conversation_id,
+                   other_user_name: conversation.other_user_name,
+                   has_profile_pic: !!conversation.profile_picture
+                 });
+                 
+                 // Set the selected conversation
+                 setSelectedConversation(conversationToLoad);
+                 setSelectedConversationData(conversation);
+                 
+                 // Set global variable for Navigation component
+                 if (typeof window !== 'undefined') {
+                   window.selectedConversationId = conversationToLoad;
+                 }
+                 
+                 // Update URL to maintain selectedConversation parameter, but clean up other params
+                 const cleanUrl = new URL(window.location.href);
+                 const paramsToKeep = ['selectedConversation'];
+                 const paramsToRemove = [...cleanUrl.searchParams.keys()].filter(key => !paramsToKeep.includes(key));
+                 
+                 paramsToRemove.forEach(key => {
+                   cleanUrl.searchParams.delete(key);
+                 });
+                 
+                 // Ensure selectedConversation is set correctly
+                 cleanUrl.searchParams.set('selectedConversation', conversationToLoad);
+                 
+                 window.history.replaceState({}, '', cleanUrl.toString());
+                 debugLog('MBA24u45vn', 'Updated URL to preserve selectedConversation', {
+                   newUrl: cleanUrl.toString()
+                 });
+                 
+                 // Fetch messages for this conversation
+                 fetchMessages(conversationToLoad);
+                 
+                 return;
+               } else {
+                 debugLog('MBA24u45vn', 'Conversation from URL NOT found in conversations data', {
+                   conversationId: conversationToLoad,
+                   conversationsCount: conversationsData.length,
+                   availableIds: conversationsData.map(c => c.conversation_id)
+                 });
+                 
+                 // Clear invalid conversation parameters only if we have conversation data but conversation not found
+                 const cleanUrl = new URL(window.location.href);
+                 cleanUrl.searchParams.delete('selectedConversation');
+                 cleanUrl.searchParams.delete('conversationId');
+                 window.history.replaceState({}, '', cleanUrl.toString());
+                 debugLog('MBA24u45vn', 'Cleared invalid conversation parameters from URL');
+               }
+             } else {
+               debugLog('MBA24u45vn', 'No conversations data available yet, keeping URL parameters', {
+                 conversationId: conversationToLoad,
+                 conversationsData: conversationsData ? 'empty array' : 'null/undefined'
+               });
+               
+               // Don't clear URL parameters if we don't have conversation data yet
+               // Let the normal initialization proceed and handle this later
+               // Set the conversation ID anyway in case the data loads later
+               setSelectedConversation(conversationToLoad);
+               
+               // Set global variable for Navigation component
+               if (typeof window !== 'undefined') {
+                 window.selectedConversationId = conversationToLoad;
+               }
+               
+               // Clean up other URL parameters but keep selectedConversation
+               const cleanUrl = new URL(window.location.href);
+               const paramsToKeep = ['selectedConversation'];
+               const paramsToRemove = [...cleanUrl.searchParams.keys()].filter(key => !paramsToKeep.includes(key));
+               
+               paramsToRemove.forEach(key => {
+                 cleanUrl.searchParams.delete(key);
+               });
+               
+               window.history.replaceState({}, '', cleanUrl.toString());
+               debugLog('MBA24u45vn', 'Cleaned up other URL parameters but preserved selectedConversation');
+               
+               return;
+             }
+           } else {
+             // No valid conversation parameters, clean up URL
+             const cleanUrl = new URL(window.location.href);
+             const hasAnyParams = cleanUrl.searchParams.toString().length > 0;
+             
+             if (hasAnyParams) {
+               // Only clear params if we're not coming from another screen with valid params
+               const isNavigatingFromOtherScreen = urlConversationId || rawUrlConversationId;
+               
+               if (!isNavigatingFromOtherScreen) {
+                 [...cleanUrl.searchParams.keys()].forEach(key => {
+                   cleanUrl.searchParams.delete(key);
+                 });
+                 
+                 window.history.replaceState({}, '', cleanUrl.toString());
+                 debugLog('MBA24u45vn', 'Cleared all URL parameters - no valid conversation found');
+               }
+             }
+           }
         }
 
         // If we have route params on initial load, handle them here
@@ -1150,7 +1227,8 @@ const MessageHistory = ({ navigation, route }) => {
         
         // Clear URL params
         const currentUrl = new URL(window.location.href);
-        if (currentUrl.searchParams.has('conversationId')) {
+        if (currentUrl.searchParams.has('selectedConversation') || currentUrl.searchParams.has('conversationId')) {
+          currentUrl.searchParams.delete('selectedConversation');
           currentUrl.searchParams.delete('conversationId');
           window.history.replaceState({}, '', currentUrl.toString());
           debugLog('MBA4477: Cleared URL params on component unmount');
@@ -1425,6 +1503,61 @@ const MessageHistory = ({ navigation, route }) => {
       });
     }
   }, [searchQuery, conversations, userRole]);
+
+  // Effect to validate preserved selectedConversation from URL once conversations are loaded
+  useEffect(() => {
+    // Only run this effect if:
+    // 1. We have conversations loaded
+    // 2. We have a selected conversation 
+    // 3. We're signed in
+    // 4. We're on web platform
+    if (Platform.OS === 'web' && conversations.length > 0 && selectedConversation && isSignedIn) {
+      // Check if the current selectedConversation is actually in the loaded conversations
+      const conversationExists = conversations.find(c => c.conversation_id === selectedConversation);
+      
+      if (conversationExists) {
+        debugLog('MBA24u45vn', 'Validated preserved selectedConversation from URL', {
+          conversationId: selectedConversation,
+          conversationName: conversationExists.other_user_name,
+          isFound: true
+        });
+        
+        // Ensure the conversation data is set
+        if (!selectedConversationData) {
+          setSelectedConversationData(conversationExists);
+        }
+        
+        // Ensure messages are loaded for this conversation
+        if (!hasLoadedMessagesRef.current || lastViewedConversationRef.current !== selectedConversation) {
+          debugLog('MBA24u45vn', 'Loading messages for validated preserved conversation');
+          fetchMessages(selectedConversation, 1);
+          hasLoadedMessagesRef.current = true;
+          lastViewedConversationRef.current = selectedConversation;
+        }
+      } else {
+        debugLog('MBA24u45vn', 'Preserved selectedConversation not found in loaded conversations', {
+          conversationId: selectedConversation,
+          totalConversations: conversations.length,
+          availableIds: conversations.map(c => c.conversation_id)
+        });
+        
+        // Clear invalid conversation from URL and state
+        if (typeof window !== 'undefined') {
+          const currentUrl = new URL(window.location.href);
+          if (currentUrl.searchParams.has('selectedConversation')) {
+            currentUrl.searchParams.delete('selectedConversation');
+            window.history.replaceState({}, '', currentUrl.toString());
+            debugLog('MBA24u45vn', 'Cleared invalid selectedConversation from URL');
+          }
+          window.selectedConversationId = null;
+        }
+        
+        // Clear selected conversation state
+        setSelectedConversation(null);
+        setSelectedConversationData(null);
+      }
+    }
+  }, [conversations, selectedConversation, isSignedIn, selectedConversationData]);
 
     // Fetch conversations 
   const fetchConversations = async () => {
@@ -2953,9 +3086,9 @@ const MessageHistory = ({ navigation, route }) => {
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
             window.selectedConversationId = convId;
             
-            // Update URL to include conversation ID
+            // Update URL to include selectedConversation parameter (this is what we check on reload)
             const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.set('conversationId', convId);
+            currentUrl.searchParams.set('selectedConversation', convId);
             window.history.replaceState({}, '', currentUrl.toString());
           }
           
@@ -3125,7 +3258,8 @@ const MessageHistory = ({ navigation, route }) => {
     // Also update URL directly to ensure Navigation component sees the change
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.delete('conversationId');
+      currentUrl.searchParams.delete('selectedConversation');
+      currentUrl.searchParams.delete('conversationId'); // Also clear this for compatibility
       window.history.replaceState({}, '', currentUrl.toString());
       
       // Clear global context variable used by Navigation
@@ -3133,7 +3267,7 @@ const MessageHistory = ({ navigation, route }) => {
       
       debugLog('MBA24u45vn', 'Cleared URL parameters in handleBack', {
         oldValue: selectedConversation,
-        url_before: window.location.href,
+        url_after: currentUrl.toString(),
         timestamp: Date.now()
       });
     }
