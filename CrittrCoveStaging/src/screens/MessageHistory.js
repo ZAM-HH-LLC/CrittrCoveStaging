@@ -135,6 +135,9 @@ const MessageHistory = ({ navigation, route }) => {
 
   // Add a ref to track if messages fetch is already in progress for specific conversations
   const isFetchingMessagesRef = useRef(new Set());
+  
+  // Ref to store the keyboard dismissal handler from MessageInput
+  const keyboardDismissHandlerRef = useRef(null);
 
   // Add re-render tracking - MOVED HERE after all state declarations
   const renderCountRef = useRef(0);
@@ -3025,6 +3028,16 @@ const MessageHistory = ({ navigation, route }) => {
                 theme={theme}
                 className="message-list-component"
                 userTimezone={timeSettings?.timezone || 'America/Denver'}
+                onScrollStart={(handlerSetter) => {
+                  // MessageList will call this with a function that accepts the actual handler
+                  handlerSetter(() => {
+                    // This is the handler that will be called when scrolling starts
+                    if (keyboardDismissHandlerRef.current) {
+                      debugLog('MBA8765: Scroll detected, calling keyboard dismiss handler');
+                      keyboardDismissHandlerRef.current();
+                    }
+                  });
+                }}
               />
             )}
           </View>
@@ -3032,6 +3045,11 @@ const MessageHistory = ({ navigation, route }) => {
 
         {/* Input Section - Simplified to use flexbox positioning */}
         <MessageInput 
+          onScrollStart={(handler) => {
+            // Store the keyboard dismiss handler from MessageInput
+            keyboardDismissHandlerRef.current = handler;
+            debugLog('MBA8765: Registered keyboard dismiss handler from MessageInput');
+          }}
           onSendMessage={async (messageContent, imageMessageIds, messageObject, alreadySent) => {
             try {
               setIsSending(true);

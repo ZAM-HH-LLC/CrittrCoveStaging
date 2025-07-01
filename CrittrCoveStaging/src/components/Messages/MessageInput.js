@@ -7,19 +7,82 @@ import { uploadAndSendImageMessage } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
 import { validateMessage, sanitizeInput } from '../../validation/validation';
 
-const MessageInput = ({ 
+const MessageInput = React.forwardRef(({ 
   onSendMessage, 
   onShowDropdown,
   showDropdown,
   styles,
   screenWidth,
-  selectedConversation
-}) => {
+  selectedConversation,
+  onScrollStart // New prop to handle scroll start events
+}, ref) => {
   const [messageContent, setMessageContent] = useState('');
   const [selectedImages, setSelectedImages] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const textInputRef = useRef(null);
   const defaultHeight = 40; // Define constant for default height
+
+  // Function to dismiss keyboard - can be called from parent
+  const dismissKeyboard = useCallback(() => {
+    if (Platform.OS === 'web') {
+      // On web, blur the active element if it's an input
+      if (document.activeElement && 
+          (document.activeElement.tagName === 'INPUT' || 
+           document.activeElement.tagName === 'TEXTAREA')) {
+        debugLog('MBA8765: Dismissing keyboard by blurring active element');
+        document.activeElement.blur();
+      }
+      
+      // Also blur our specific input ref if it exists
+      if (textInputRef.current) {
+        textInputRef.current.blur();
+      }
+    } else {
+      // On native platforms, blur the ref
+      if (textInputRef.current) {
+        textInputRef.current.blur();
+      }
+    }
+  }, []);
+
+  // Handle scroll start event to dismiss keyboard on mobile browsers with delay
+  useEffect(() => {
+    if (onScrollStart && Platform.OS === 'web') {
+      let scrollTimeout = null;
+      
+      // Set up the scroll start handler with delay
+      const handleScrollStart = () => {
+        // Only dismiss keyboard on mobile browsers (viewport width <= 900)
+        if (screenWidth <= 900) {
+          // Clear any existing timeout
+          if (scrollTimeout) {
+            clearTimeout(scrollTimeout);
+          }
+          
+          // Add a small delay before dismissing keyboard
+          scrollTimeout = setTimeout(() => {
+            debugLog('MBA8765: Scroll started on mobile browser, dismissing keyboard after delay');
+            dismissKeyboard();
+          }, 100);
+        }
+      };
+
+      // Call the onScrollStart prop with our handler
+      onScrollStart(handleScrollStart);
+      
+      // Cleanup timeout on unmount
+      return () => {
+        if (scrollTimeout) {
+          clearTimeout(scrollTimeout);
+        }
+      };
+    }
+  }, [onScrollStart, screenWidth, dismissKeyboard]);
+
+  // Expose dismissKeyboard function to parent component
+  React.useImperativeHandle(ref, () => ({
+    dismissKeyboard
+  }), [dismissKeyboard]);
 
   const resetInputHeight = useCallback(() => {
     if (Platform.OS === 'web' && textInputRef.current) {
@@ -426,6 +489,6 @@ const MessageInput = ({
       </View>
     </View>
   );
-};
+});
 
 export default MessageInput; 

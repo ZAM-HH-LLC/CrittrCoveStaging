@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, forwardRef, useState, useMemo } from 'react';
+import React, { useRef, useCallback, forwardRef, useState, useMemo, useEffect } from 'react';
 import { FlatList, ActivityIndicator, Platform, View, Text } from 'react-native';
 import { debugLog } from '../../context/AuthContext';
 import MessageDateSeparator from './MessageDateSeparator';
@@ -14,7 +14,8 @@ const MessageList = forwardRef(({
   styles,
   theme,
   className,
-  userTimezone
+  userTimezone,
+  onScrollStart
 }, ref) => {
   const flatListRef = useRef(null);
   const isUserScrollingRef = useRef(false);
@@ -25,6 +26,30 @@ const MessageList = forwardRef(({
   const scrollPositionRef = useRef(0);
   const lastPaginationTimeRef = useRef(0);
   const PAGINATION_COOLDOWN = 1000; // Reduced from 2000 to 1000 for more responsive pagination
+  
+  // Scroll start detection state
+  const scrollStartHandlerRef = useRef(null);
+  const hasScrollStartedRef = useRef(false);
+  const scrollStartTimeoutRef = useRef(null);
+  
+  // Register the scroll start handler from MessageInput
+  useEffect(() => {
+    if (onScrollStart && typeof onScrollStart === 'function') {
+      // onScrollStart should be a function that accepts a handler
+      onScrollStart((handler) => {
+        scrollStartHandlerRef.current = handler;
+        debugLog('MBA8765: Registered scroll start handler for keyboard dismissal');
+      });
+    }
+    
+    // Cleanup function
+    return () => {
+      if (scrollStartTimeoutRef.current) {
+        clearTimeout(scrollStartTimeoutRef.current);
+        scrollStartTimeoutRef.current = null;
+      }
+    };
+  }, [onScrollStart]);
   
   // Group messages by date
   const messagesByDate = useMemo(() => {
@@ -365,8 +390,54 @@ const MessageList = forwardRef(({
   
   // Enhanced scroll handler that better detects when we're at pagination boundaries
   const handleScroll = useCallback((event) => {
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+    const previousScrollY = scrollPositionRef.current;
+    
     // Store current scroll position
-    scrollPositionRef.current = event.nativeEvent.contentOffset.y;
+    scrollPositionRef.current = currentScrollY;
+    
+    // Detect scroll start for keyboard dismissal on mobile browsers with smart logic
+    if (!hasScrollStartedRef.current && scrollStartHandlerRef.current) {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const scrollDirection = currentScrollY > previousScrollY ? 'up' : 'down';
+      const isAtTop = currentScrollY <= 10; // Very close to top
+      const canScrollUp = contentSize.height > layoutMeasurement.height && currentScrollY < (contentSize.height - layoutMeasurement.height - 10);
+      
+      // Only trigger keyboard dismissal if:
+      // 1. Scrolling up (toward older messages) AND
+      // 2. Not already at the top AND
+      // 3. There's actually content to scroll to
+      if (scrollDirection === 'up' && !isAtTop && canScrollUp) {
+        debugLog('MBA8765: Scroll started upward with room to scroll, triggering keyboard dismissal', {
+          scrollDirection,
+          isAtTop,
+          canScrollUp,
+          currentScrollY,
+          previousScrollY,
+          contentHeight: contentSize.height,
+          visibleHeight: layoutMeasurement.height
+        });
+        hasScrollStartedRef.current = true;
+        scrollStartHandlerRef.current();
+        
+        // Reset the scroll started flag after a delay
+        if (scrollStartTimeoutRef.current) {
+          clearTimeout(scrollStartTimeoutRef.current);
+        }
+        scrollStartTimeoutRef.current = setTimeout(() => {
+          hasScrollStartedRef.current = false;
+        }, 1000);
+      } else {
+        debugLog('MBA8765: Scroll detected but not dismissing keyboard', {
+          scrollDirection,
+          isAtTop,
+          canScrollUp,
+          reason: scrollDirection === 'down' ? 'scrolling down' : 
+                  isAtTop ? 'already at top' : 
+                  !canScrollUp ? 'no room to scroll' : 'unknown'
+        });
+      }
+    }
     
     // Get the full scroll metrics for better pagination detection
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
@@ -481,6 +552,14 @@ const MessageList = forwardRef(({
   const onScrollBeginDragRef = useRef(() => {
     isUserScrollingRef.current = true;
     preventInitialPaginationRef.current = false;
+    
+    // Reset scroll start detection when user begins dragging
+    hasScrollStartedRef.current = false;
+    if (scrollStartTimeoutRef.current) {
+      clearTimeout(scrollStartTimeoutRef.current);
+      scrollStartTimeoutRef.current = null;
+    }
+    
     debugLog('MBA9876: Scroll drag began');
   });
   

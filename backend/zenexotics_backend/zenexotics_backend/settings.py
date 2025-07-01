@@ -86,6 +86,7 @@ DOMAIN_MAP = {
 }
 
 # # Allow override via environment variable
+# TODO CRITICAL: This is a security risk. We need to uncomment this.
 # ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
 # if ALLOWED_HOSTS_ENV:
 #     ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',')]
@@ -292,6 +293,7 @@ if IS_DEVELOPMENT:
         'http://10.0.2.2:19006',
         'http://localhost:19006',
         'http://10.0.0.169:19006',
+        'http://10.0.0.137:19006',  # Current LAN IP
         'http://127.0.0.1:19006'
     ])
 if IS_STAGING:
@@ -313,6 +315,7 @@ if IS_DEVELOPMENT:
         'http://10.0.2.2:19006',
         'http://localhost:19006',
         'http://10.0.0.169:19006',
+        'http://10.0.0.137:19006',  # Current LAN IP
         'http://127.0.0.1:19006'
     ])
 if IS_STAGING:
