@@ -1,5 +1,5 @@
 // THIS FILE IS FOR THE BOOKING STEP MODAL
-import React, { useEffect, useContext, useState } from 'react';
+import React, { useEffect, useContext, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,10 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const [isAddingRateForOccurrence, setIsAddingRateForOccurrence] = useState(null);
   const [newOccurrenceRate, setNewOccurrenceRate] = useState({ name: '', amount: '', description: '' });
   const [termsAgreed, setTermsAgreed] = useState(false);
+  const [serviceAdditionalRatesEnabled, setServiceAdditionalRatesEnabled] = useState({});
+  const [availableAdditionalRates, setAvailableAdditionalRates] = useState([]);
+  const [hasInitializedRates, setHasInitializedRates] = useState(false);
+  const lastBookingIdRef = useRef(null);
   
   // Determine TOS status based on user type and booking data
   const getTosStatus = () => {
@@ -67,7 +71,98 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       // Initialize edited rates
       setEditedRates({ ...safeRates });
     }
-  }, [bookingData, bookingId]);
+
+    // Initialize service additional rates toggle state for non-overnight services
+    debugLog('MBA2394jv340 Effect triggered - checking if should initialize service rates');
+    debugLog('MBA2394jv340 Has service:', !!bookingData?.service);
+    debugLog('MBA2394jv340 Service is_overnight:', bookingData?.service?.is_overnight);
+    debugLog('MBA2394jv340 Occurrences length:', bookingData?.occurrences?.length);
+    debugLog('MBA2394jv340 Has already initialized rates:', hasInitializedRates);
+    
+    // Check if bookingId changed to reset initialization
+    if (lastBookingIdRef.current !== bookingId && lastBookingIdRef.current !== null) {
+      debugLog('MBA2394jv340 BookingId changed from', lastBookingIdRef.current, 'to', bookingId, '- resetting');
+      setHasInitializedRates(false);
+      setAvailableAdditionalRates([]);
+      setServiceAdditionalRatesEnabled({});
+    }
+    lastBookingIdRef.current = bookingId;
+    
+    if (bookingData?.service && !bookingData.service.is_overnight && bookingData?.occurrences?.length > 1 && !hasInitializedRates) {
+      debugLog('MBA2394jv340 Initializing service additional rates for non-overnight service with multiple dates');
+      
+      // Get service additional rates from the service object or collect from occurrences
+      const serviceAdditionalRates = bookingData.service.additional_rates || [];
+      debugLog('MBA2394jv340 Raw service additional rates from initialization:', serviceAdditionalRates);
+      
+      // If service doesn't have additional rates, collect unique rates from all occurrences
+      let availableRates = serviceAdditionalRates;
+      if (serviceAdditionalRates.length === 0) {
+        debugLog('MBA2394jv340 No service rates found in initialization, collecting from occurrences');
+        const allOccurrenceRates = [];
+        
+        bookingData.occurrences.forEach((occ, index) => {
+          const occRates = occ.rates?.additional_rates || [];
+          debugLog(`MBA2394jv340 Initialization: Occurrence ${index} additional rates:`, occRates);
+          allOccurrenceRates.push(...occRates);
+        });
+        
+        // Get unique rates by title
+        const uniqueRatesMap = new Map();
+        allOccurrenceRates.forEach(rate => {
+          if (rate.title && !uniqueRatesMap.has(rate.title)) {
+            uniqueRatesMap.set(rate.title, {
+              title: rate.title,
+              amount: rate.amount,
+              rate: rate.amount, // For consistency with service rates
+              description: rate.description || ''
+            });
+          }
+        });
+        
+        availableRates = Array.from(uniqueRatesMap.values());
+        debugLog('MBA2394jv340 Initialization: Unique rates collected from occurrences:', availableRates);
+      }
+      
+      // Filter out base rates that are not actual additional rates
+      const filteredRates = availableRates.filter(rate => {
+        const title = (rate.title || '').toLowerCase();
+        return !title.includes('base rate') && 
+               !title.includes('additional animal') && 
+               !title.includes('holiday rate');
+      });
+      
+      debugLog('MBA2394jv340 Filtered service additional rates from initialization:', filteredRates);
+      
+      // Store the available rates in state so they persist
+      setAvailableAdditionalRates(filteredRates);
+      
+      // Check which rates are currently applied to the first occurrence
+      const firstOccurrenceRates = bookingData.occurrences[0]?.rates?.additional_rates || [];
+      debugLog('MBA2394jv340 First occurrence additional rates:', firstOccurrenceRates);
+      const enabledRates = {};
+      
+      filteredRates.forEach(serviceRate => {
+        // Check if this service rate is currently applied
+        const isEnabled = firstOccurrenceRates.some(occRate => 
+          (occRate.title || occRate.name) === serviceRate.title
+        );
+        enabledRates[serviceRate.title] = isEnabled;
+        debugLog('MBA2394jv340 Rate status:', { title: serviceRate.title, isEnabled });
+      });
+      
+      debugLog('MBA2394jv340 Final enabled rates state:', enabledRates);
+      setServiceAdditionalRatesEnabled(enabledRates);
+      setHasInitializedRates(true);
+    } else {
+      debugLog('MBA2394jv340 NOT initializing service rates - conditions not met or already initialized');
+      if (!hasInitializedRates) {
+        setAvailableAdditionalRates([]);
+      }
+    }
+  }, [bookingData, bookingId, hasInitializedRates]);
+
+
 
   // Log whenever either editMode or editingOccurrenceId changes
   useEffect(() => {
@@ -805,6 +900,92 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     }
   };
 
+  const toggleServiceAdditionalRate = async (serviceRate, isEnabled) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      debugLog('MBA77999 Toggling service additional rate:', { 
+        title: serviceRate.title, 
+        isEnabled, 
+        occurrencesCount: bookingData.occurrences.length 
+      });
+      
+      // Update the toggle state
+      setServiceAdditionalRatesEnabled(prev => ({
+        ...prev,
+        [serviceRate.title]: isEnabled
+      }));
+      
+      // Create occurrences array for API - apply the rate to all occurrences if enabled
+      const occurrencesForApi = bookingData.occurrences.map(occ => {
+        const currentAdditionalRates = [...(occ.rates.additional_rates || [])];
+        
+        if (isEnabled) {
+          // Add the rate if it's not already present
+          const rateExists = currentAdditionalRates.some(rate => 
+            (rate.title || rate.name) === serviceRate.title
+          );
+          
+                     if (!rateExists) {
+             currentAdditionalRates.push({
+               title: serviceRate.title,
+               amount: parseFloat(serviceRate.amount || serviceRate.rate || 0),
+               description: serviceRate.description || 'Additional rate'
+             });
+           }
+        } else {
+          // Remove the rate if it exists
+          const filteredRates = currentAdditionalRates.filter(rate => 
+            (rate.title || rate.name) !== serviceRate.title
+          );
+          currentAdditionalRates.length = 0;
+          currentAdditionalRates.push(...filteredRates);
+        }
+        
+        return {
+          occurrence_id: occ.occurrence_id,
+          rates: {
+            base_rate: parseFloat(occ.rates.base_rate),
+            additional_animal_rate: parseFloat(occ.rates.additional_animal_rate || 0),
+            applies_after: parseInt(occ.rates.applies_after || 1),
+            holiday_rate: parseFloat(occ.rates.holiday_rate || 0),
+            additional_rates: currentAdditionalRates
+          }
+        };
+      });
+      
+      debugLog('MBA77999 Sending updated occurrences to API:', occurrencesForApi);
+      
+      // Call the API to update rates for all occurrences
+      const response = await updateBookingDraftRates(
+        bookingId, 
+        occurrencesForApi
+      );
+      
+      debugLog('MBA77999 Service rate toggle API response:', response);
+      
+      // Update the local state with the response
+      if (response.draft_data) {
+        if (onRatesUpdate) {
+          onRatesUpdate(response.draft_data);
+        }
+      }
+      
+    } catch (err) {
+      debugLog('MBA77999 Error toggling service additional rate:', err);
+      setError('Failed to update rates. Please try again.');
+      
+      // Revert the toggle state on error
+      setServiceAdditionalRatesEnabled(prev => ({
+        ...prev,
+        [serviceRate.title]: !isEnabled
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Helper function to get the correct value for an additional rate field based on edit state
   const getAdditionalRateValue = (occurrence, index, field) => {
     // If we're editing this occurrence, get value from occurrenceEdits
@@ -831,6 +1012,89 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     // For numeric fields like 'amount', 0 is a valid value
     if (field === 'amount' && value === 0) return '';
     return value || '';
+  };
+
+  const renderServiceAdditionalRates = () => {
+    debugLog('MBA2394jv340 renderServiceAdditionalRates called');
+    debugLog('MBA2394jv340 bookingData:', bookingData);
+    debugLog('MBA2394jv340 bookingData.service:', bookingData?.service);
+    debugLog('MBA2394jv340 service.is_overnight:', bookingData?.service?.is_overnight);
+    debugLog('MBA2394jv340 occurrences length:', bookingData?.occurrences?.length);
+    
+    // Only show for non-overnight services with multiple dates
+    if (!bookingData?.service) {
+      debugLog('MBA2394jv340 No service found, returning null');
+      return null;
+    }
+    
+    if (bookingData.service.is_overnight === true) {
+      debugLog('MBA2394jv340 Service is overnight, returning null');
+      return null;
+    }
+    
+    if (!bookingData?.occurrences) {
+      debugLog('MBA2394jv340 No occurrences found, returning null');
+      return null;
+    }
+    
+    if (bookingData.occurrences.length <= 1) {
+      debugLog('MBA2394jv340 Only one or no occurrences, returning null');
+      return null;
+    }
+
+    // Use the stored available rates from state
+    const filteredRates = availableAdditionalRates;
+    debugLog('MBA2394jv340 Using stored available rates:', filteredRates);
+    
+    if (filteredRates.length === 0) {
+      debugLog('MBA2394jv340 No stored rates found, returning null');
+      return null;
+    }
+
+    debugLog('MBA2394jv340 Rendering service additional rates section with', filteredRates.length, 'rates');
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderContainer}>
+          <Text style={styles.sectionHeader}>Additional Rates</Text>
+        </View>
+        <View style={[styles.card, { paddingTop: 16 }]}>
+          <Text style={styles.additionalRatesDescription}>
+            Toggle additional rates to apply or remove them from all {bookingData.occurrences.length} dates in this booking:
+          </Text>
+          
+          {filteredRates.map((serviceRate, index) => {
+            const isEnabled = serviceAdditionalRatesEnabled[serviceRate.title] || false;
+            
+            return (
+              <View key={index} style={styles.serviceRateItem}>
+                <TouchableOpacity 
+                  style={styles.serviceRateCheckbox}
+                  onPress={() => toggleServiceAdditionalRate(serviceRate, !isEnabled)}
+                  disabled={isLoading}
+                >
+                  <View style={[styles.checkbox, isEnabled && styles.checkboxChecked]}>
+                    {isEnabled && (
+                      <MaterialCommunityIcons name="check" size={16} color="white" />
+                    )}
+                  </View>
+                  
+                  <View style={styles.serviceRateInfo}>
+                    <Text style={styles.serviceRateTitle}>{serviceRate.title}</Text>
+                    <Text style={styles.serviceRateAmount}>
+                      {formatCurrency(serviceRate.amount || serviceRate.rate)}
+                    </Text>
+                    {serviceRate.description && (
+                      <Text style={styles.serviceRateDescription}>{serviceRate.description}</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
   };
 
   const renderBookingBreakdown = () => {
@@ -1826,10 +2090,13 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     );
   };
 
+  debugLog('MBA2394jv340 ReviewAndRatesCard main render called');
+  
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <ProfessionalAlert isProfessional={isProfessional} fromApprovalModal={fromApprovalModal} />
+        {renderServiceAdditionalRates()}
         {renderBookingBreakdown()}
         {renderTotalAmount()}
         {renderTermsCheckbox()}
@@ -2260,6 +2527,50 @@ const styles = StyleSheet.create({
     color: theme.colors.mainColors.main,
     fontFamily: theme.fonts.regular.fontFamily,
     fontWeight: 'bold',
+  },
+  // Service Additional Rates Styles
+  additionalRatesDescription: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  serviceRateItem: {
+    marginBottom: 12,
+  },
+  serviceRateCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  serviceRateInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  serviceRateTitle: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  serviceRateAmount: {
+    fontSize: 16,
+    color: theme.colors.mainColors.main,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  serviceRateDescription: {
+    fontSize: 14,
+    color: theme.colors.placeHolderText,
+    fontFamily: theme.fonts.regular.fontFamily,
+    lineHeight: 18,
   },
 });
 
