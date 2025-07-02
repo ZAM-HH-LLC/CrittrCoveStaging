@@ -77,6 +77,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        # Initialize logger for the entire method
+        logger = logging.getLogger(__name__)
+        
         # Extract time settings
         timezone = validated_data.pop('timezone', 'UTC')
         use_military_time = validated_data.pop('use_military_time', False)
@@ -110,7 +113,6 @@ class RegisterSerializer(serializers.ModelSerializer):
                 from clients.models import Client
                 from professionals.models import Professional
                 
-                logger = logging.getLogger(__name__)
                 logger.info(f"MBAnb23ou4bf954: Processing invitation acceptance during registration for user {user.id}")
                 
                 # Create client profile if it doesn't exist
@@ -147,6 +149,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         
         # Log the created settings for debugging
         print(f"Created user settings for {user.email}: timezone={timezone}, use_military_time={use_military_time}")
+        
+        # Log for debugging - this helps track when welcome email signal should fire
+        logger.info(f"MBA5934: User registration completed for {user.email} (ID: {user.user_id}). Welcome email signal should trigger.")
         
         return user
 

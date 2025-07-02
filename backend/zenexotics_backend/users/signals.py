@@ -6,7 +6,7 @@ from django.db import transaction
 from clients.models import Client
 from professional_status.models import ProfessionalStatus
 from user_addresses.models import Address, AddressType
-from .email_helpers import send_new_user_notification
+from .email_helpers import send_new_user_notification, send_welcome_email
 
 logger = logging.getLogger(__name__)
 
@@ -77,4 +77,26 @@ def send_admin_notification_on_signup(sender, instance, created, **kwargs):
     if created:
         # Send email asynchronously to avoid delaying the registration response
         transaction.on_commit(lambda: send_new_user_notification(instance))
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def send_welcome_email_on_signup(sender, instance, created, **kwargs):
+    """
+    Signal handler to send a welcome email to a new user when they sign up.
+    This runs in a separate transaction to avoid blocking the registration process.
+    """
+    if created:
+        def send_welcome():
+            # Check if this user was created from an invitation
+            # Look for accepted invitations for this user's email since the invitation
+            # is marked as accepted during user creation
+            from users.models import Invitation
+            invitation = Invitation.objects.filter(
+                email=instance.email, 
+                is_accepted=True,
+                invitee=instance
+            ).first()
+            send_welcome_email(instance, invitation)
+        
+        # Send welcome email asynchronously to avoid delaying the registration response
+        transaction.on_commit(send_welcome)
         
