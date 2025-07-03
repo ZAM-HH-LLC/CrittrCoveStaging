@@ -2903,4 +2903,65 @@ class CreateDraftFromBookingView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class UpdateNotesFromProView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [JSONRenderer]
+    
+    def post(self, request):
+        logger.info("MBA88888 - Starting UpdateNotesFromProView.post")
+        logger.info(f"MBA88888 - Request data: {request.data}")
+        
+        try:
+            # Get conversation_id and notes from request
+            conversation_id = request.data.get('conversation_id')
+            notes_from_pro = request.data.get('notes_from_pro', '')
+            
+            if not conversation_id:
+                return Response(
+                    {"error": "Conversation ID is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify professional access
+            professional = get_object_or_404(Professional, user=request.user)
+            
+            # Find the draft by conversation_id
+            from conversations.models import Conversation
+            conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
+            
+             # Get draft from conversation
+            draft = BookingDraft.objects.filter(
+                draft_data__conversation_id=conversation_id
+            ).first()
+            
+            if not draft:
+                return Response(
+                    {"error": "No draft found for this conversation"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Update the notes in the draft data
+            if not draft.draft_data:
+                draft.draft_data = {}
+            
+            draft.draft_data['notes_from_pro'] = notes_from_pro
+            draft.save()
+            
+            logger.info(f"MBA88888 - Successfully updated notes for draft {draft.draft_id}")
+            
+            return Response({
+                'status': 'success',
+                'message': 'Notes updated successfully',
+                'notes_from_pro': notes_from_pro
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"MBA88888 - Error updating notes: {str(e)}")
+            logger.error(f"MBA88888 - Traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": f"An error occurred while updating notes: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 # Placeholder: Ready for views to be added

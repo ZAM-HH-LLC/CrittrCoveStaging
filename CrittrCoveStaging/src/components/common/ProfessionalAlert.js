@@ -7,7 +7,7 @@ const ProfessionalAlert = ({ isProfessional, fromApprovalModal = false }) => {
   if (!isProfessional || fromApprovalModal) return null;
 
   return (
-    <View style={styles.alertContainer}>
+    <View style={[styles.alertContainer, { marginBottom: fromApprovalModal ? 0 : 16 }]}>
       <View style={styles.alertHeader}>
         <MaterialCommunityIcons name="alert-circle" size={20} color={theme.colors.error} />
         <Text style={styles.alertBold}>Professional Reminders</Text>
@@ -27,7 +27,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fef2f2',
     borderRadius: 8,
     padding: 16,
-    marginBottom: 16,
+    // marginBottom: 16,
     borderLeftWidth: 4,
     borderLeftColor: theme.colors.error,
   },

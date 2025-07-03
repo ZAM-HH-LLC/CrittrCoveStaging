@@ -25,6 +25,7 @@ class Booking(models.Model):
     denied_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='denied_bookings')
     pro_agreed_tos = models.BooleanField(default=False)
     client_agreed_tos = models.BooleanField(default=False)
+    notes_from_pro = models.TextField(blank=True, null=True, help_text="Notes from the professional to the client for this booking")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

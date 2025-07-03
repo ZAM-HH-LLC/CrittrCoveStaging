@@ -1521,7 +1521,13 @@ class CreateFromDraftView(APIView):
                     {"error": "Conversation ID is required"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
+            if not terms_of_service_agreed_by_pro:
+                return Response(
+                    {"error": "Terms of service agreement is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
             # Get conversation and verify professional access
             conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
             if not (request.user == conversation.participant1 or request.user == conversation.participant2):
@@ -1578,12 +1584,16 @@ class CreateFromDraftView(APIView):
             # Check if we have an existing booking to update or need to create a new one
             is_new_booking = False
             if draft.booking:
+                # Get notes from draft data
+                notes_from_pro = draft.draft_data.get('notes_from_pro', '') if draft.draft_data else ''
+                
                 # Update existing booking
                 booking = draft.booking
                 booking.status = BookingStates.PENDING_CLIENT_APPROVAL
                 booking.service_id = service
                 booking.last_modified_by = professional.user
                 booking.pro_agreed_tos = terms_of_service_agreed_by_pro
+                booking.notes_from_pro = notes_from_pro
                 booking.save()
                 logger.info(f"MBA66777 Updated existing booking {booking.booking_id}")
                 
@@ -1594,6 +1604,9 @@ class CreateFromDraftView(APIView):
                 # This prevents foreign key constraint issues when deleting occurrences
                 existing_occurrences = list(BookingOccurrence.objects.filter(booking=booking))
             else:
+                # Get notes from draft data for new booking
+                notes_from_pro = draft.draft_data.get('notes_from_pro', '') if draft.draft_data else ''
+                
                 # Create new booking with status "Pending Client Approval"
                 booking = Booking.objects.create(
                     client=client,
@@ -1602,7 +1615,8 @@ class CreateFromDraftView(APIView):
                     status=BookingStates.PENDING_CLIENT_APPROVAL,
                     initiated_by=professional.user,
                     last_modified_by=professional.user,
-                    pro_agreed_tos=terms_of_service_agreed_by_pro
+                    pro_agreed_tos=terms_of_service_agreed_by_pro,
+                    notes_from_pro=notes_from_pro
                 )
                 is_new_booking = True
                 logger.info(f"MBA66777 Created new booking {booking.booking_id}")
@@ -2122,7 +2136,8 @@ class BookingDetailView(APIView):
                 'status': BookingStates.get_display_state(booking.status),
                 'can_edit': can_edit,
                 'pro_agreed_tos': booking.pro_agreed_tos,
-                'client_agreed_tos': booking.client_agreed_tos
+                'client_agreed_tos': booking.client_agreed_tos,
+                'notes_from_pro': booking.notes_from_pro or ''
             }
             
             return Response(response_data)

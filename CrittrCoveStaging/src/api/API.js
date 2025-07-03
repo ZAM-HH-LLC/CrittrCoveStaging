@@ -1018,12 +1018,14 @@ export const updateBookingDraftRates = async (draftId, occurrences) => {
  * Create a booking from a draft
  * Called when the professional confirms a booking from the booking step modal
  * @param {string} conversationId - The ID of the conversation containing the draft
+ * @param {boolean} termsOfServiceAgreedByPro - Whether the professional agreed to terms
  * @returns {Promise<Object>} Response containing the new booking information and message
  */
 export const createBookingFromDraft = async (conversationId, termsOfServiceAgreedByPro = false) => {
     try {
         debugLog('MBA66777 - Creating booking from draft:', {
-            conversationId
+            conversationId,
+            termsOfServiceAgreedByPro
         });
 
         const response = await axios.post(
@@ -1038,6 +1040,35 @@ export const createBookingFromDraft = async (conversationId, termsOfServiceAgree
         return response.data;
     } catch (error) {
         debugLog('MBA66777 Error creating booking from draft:', error);
+        throw error;
+    }
+};
+
+/**
+ * Update notes from professional in a booking draft
+ * @param {string} conversationId - The ID of the conversation containing the draft
+ * @param {string} notesFromPro - Notes from the professional for the client
+ * @returns {Promise<Object>} Response containing updated draft data
+ */
+export const updateDraftNotesFromPro = async (conversationId, notesFromPro) => {
+    try {
+        debugLog('MBA88888 - Updating draft notes from pro:', {
+            conversationId,
+            notesFromPro
+        });
+
+        const response = await axios.post(
+            `${API_BASE_URL}/api/booking_drafts/v1/update-notes-from-pro/`,
+            {
+                conversation_id: conversationId,
+                notes_from_pro: notesFromPro
+            }
+        );
+
+        debugLog('MBA88888 - Draft notes updated successfully:', response.data);
+        return response.data;
+    } catch (error) {
+        debugLog('MBA88888 Error updating draft notes:', error);
         throw error;
     }
 };

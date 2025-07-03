@@ -367,33 +367,6 @@ const BookingApprovalModal = ({
     return (
       <>
         <ProfessionalAlert isProfessional={isProfessional} fromApprovalModal={false} />
-        <View style={[styles.section, { marginTop: 0 }]}>
-          <Text style={styles.sectionHeader}>Service & Pets</Text>
-          <View style={styles.card}>
-            <View style={styles.serviceContainer}>
-              <Text style={styles.serviceLabel}>Service:</Text>
-              <Text style={styles.serviceValue}>{bookingData.service_details?.service_type || 'N/A'}</Text>
-            </View>
-            
-            <View style={styles.serviceDivider} />
-            
-            <View style={styles.petsContainer}>
-              <Text style={styles.petsLabel}>Pets:</Text>
-              <View style={styles.petsList}>
-                {bookingData.pets && bookingData.pets.length > 0 ? (
-                  bookingData.pets.map((pet, index) => (
-                    <View key={index} style={styles.petItem}>
-                      <Text style={styles.petName}>{pet.name}</Text>
-                      <Text style={styles.petType}>{capitalizeWords(pet.species)} | {pet.breed}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.noPets}>No pets selected</Text>
-                )}
-              </View>
-            </View>
-          </View>
-        </View>
         
         {/* ReviewAndRatesCard for booking details */}
         {bookingData && (
@@ -725,65 +698,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  serviceContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    alignItems: 'center',
-    paddingBottom: 16,
-  },
-  serviceDivider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginBottom: 16,
-    width: '100%',
-  },
-  serviceLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-    width: 80,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  serviceValue: {
-    fontSize: 16,
-    color: theme.colors.text,
-    flex: 1,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  petsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  petsLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-    width: 80,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  petsList: {
-    flex: 1,
-  },
-  petItem: {
-    marginBottom: 8,
-  },
-  petName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  petType: {
-    fontSize: 14,
-    color: theme.colors.placeHolderText,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  noPets: {
-    fontSize: 16,
-    color: theme.colors.placeHolderText,
-    fontStyle: 'italic',
-    fontFamily: theme.fonts.regular.fontFamily,
   },
   // Change request styles
   changeRequestContainer: {

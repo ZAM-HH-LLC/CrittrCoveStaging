@@ -13,8 +13,9 @@ import { theme } from '../../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext, debugLog } from '../../context/AuthContext';
 import { formatDateTimeRangeFromUTC, formatFromUTC, FORMAT_TYPES } from '../../utils/time_utils';
-import { updateBookingDraftRates } from '../../api/API';
+import { updateBookingDraftRates, updateDraftNotesFromPro } from '../../api/API';
 import SupportButton from '../SupportButton';
+import { capitalizeWords } from '../../utils/formatStrings';
 import ProfessionalAlert from '../common/ProfessionalAlert';
 import TermsOfServiceModal from '../modals/TermsOfServiceModal';
 
@@ -36,6 +37,23 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const [availableAdditionalRates, setAvailableAdditionalRates] = useState([]);
   const [hasInitializedRates, setHasInitializedRates] = useState(false);
   const lastBookingIdRef = useRef(null);
+  const [notesFromPro, setNotesFromPro] = useState('');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
+  const [lastSavedNotes, setLastSavedNotes] = useState('');
+  
+  // Initialize notes from booking data if it exists
+  useEffect(() => {
+    if (bookingData?.notes_from_pro) {
+      setNotesFromPro(bookingData.notes_from_pro);
+      setLastSavedNotes(bookingData.notes_from_pro);
+    }
+  }, [bookingData?.notes_from_pro]);
+
+  // Update saved state when notes change
+  useEffect(() => {
+    setNotesSaved(notesFromPro === lastSavedNotes);
+  }, [notesFromPro, lastSavedNotes]);
   
   // Determine TOS status based on user type and booking data
   const getTosStatus = () => {
@@ -173,9 +191,41 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     });
   }, [isEditMode, editingOccurrenceId, bookingData?.occurrences?.length]);
 
+
+
   const formatCurrency = (amount) => {
     if (!amount) return '$0.00';
     return `$${parseFloat(amount).toFixed(2)}`;
+  };
+
+  const saveNotesToDraft = async () => {
+    if (!bookingData?.conversation_id) {
+      debugLog('MBA88888 No conversation ID available for saving notes');
+      return;
+    }
+
+    if (notesFromPro === lastSavedNotes) {
+      debugLog('MBA88888 Notes are the same as last saved notes');
+      return;
+    }
+
+    try {
+      setIsSavingNotes(true);
+      debugLog('MBA88888 Saving notes to draft:', { 
+        conversationId: bookingData.conversation_id, 
+        notes: notesFromPro 
+      });
+
+      await updateDraftNotesFromPro(bookingData.conversation_id, notesFromPro);
+      
+      setLastSavedNotes(notesFromPro);
+      debugLog('MBA88888 Notes saved successfully');
+    } catch (error) {
+      debugLog('MBA88888 Error saving notes:', error);
+      // Could add error state/toast here if needed
+    } finally {
+      setIsSavingNotes(false);
+    }
   };
 
   const toggleEditMode = () => {
@@ -1014,6 +1064,38 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     return value || '';
   };
 
+  const renderServiceAndPets = () => {
+    return (
+      <View style={[styles.section, { marginTop: 0 }]}>
+          <Text style={styles.sectionHeader}>Service & Pets</Text>
+          <View style={[styles.card, { padding: 16 }]}>
+            <View style={styles.serviceContainer}>
+              <Text style={styles.serviceLabel}>Service:</Text>
+              <Text style={styles.serviceValue}>{bookingData.service_details?.service_type || 'N/A'}</Text>
+            </View>
+            
+            <View style={styles.serviceDivider} />
+            
+            <View style={styles.petsContainer}>
+              <Text style={styles.petsLabel}>Pets:</Text>
+              <View style={styles.petsList}>
+                {bookingData.pets && bookingData.pets.length > 0 ? (
+                  bookingData.pets.map((pet, index) => (
+                    <View key={index} style={styles.petItem}>
+                      <Text style={styles.petName}>{pet.name}</Text>
+                      <Text style={styles.petType}>{capitalizeWords(pet.species)} | {pet.breed}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noPets}>No pets selected</Text>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+    );
+  };
+
   const renderServiceAdditionalRates = () => {
     debugLog('MBA2394jv340 renderServiceAdditionalRates called');
     debugLog('MBA2394jv340 bookingData:', bookingData);
@@ -1097,6 +1179,65 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     );
   };
 
+  const renderNotesForClient = () => {
+    // Show notes section for professionals (when creating/editing) or anyone when viewing from approval modal
+    if (!isProfessional && !fromApprovalModal) {
+      return null;
+    }
+
+    // Don't show if viewing from approval modal and there are no notes
+    if (fromApprovalModal && !notesFromPro) {
+      return null;
+    }
+
+    const isReadOnly = fromApprovalModal;
+    const sectionTitle = fromApprovalModal ? "Notes from Professional" : "Notes for Client";
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderContainer}>
+          <Text style={styles.sectionHeader}>{sectionTitle}</Text>
+        </View>
+        <View style={[styles.card, { paddingTop: 16 }]}>
+          {isReadOnly ? (
+            <Text style={styles.notesTextInputReadOnly}>
+              {notesFromPro}
+            </Text>
+          ) : (
+            <View>
+              <TextInput
+                style={styles.notesTextInput}
+                value={notesFromPro}
+                onChangeText={(text) => {
+                  setNotesFromPro(text);
+                  setNotesSaved(false); // Reset saved state when text changes
+                }}
+                placeholder={"Enter notes for the client (optional)..."}
+                placeholderTextColor={theme.colors.placeHolderText}
+                multiline={true}
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+              
+              {/* Save Button */}
+              <View style={styles.notesSaveContainer}>
+                <TouchableOpacity 
+                  style={[styles.notesSaveButton, notesSaved && styles.notesSaveButtonSaved]}
+                  onPress={saveNotesToDraft}
+                  disabled={isSavingNotes}
+                >
+                  <Text style={[styles.notesSaveButtonText, notesSaved && styles.notesSaveButtonTextSaved]}>
+                    {notesSaved ? '✓ Saved' : isSavingNotes ? 'Saving...' : 'Save Notes'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   const renderBookingBreakdown = () => {
     debugLog('MBAio3htg5uohg: Rendering booking breakdown with data:', bookingData?.occurrences?.[0]);
     const occurrences = bookingData?.occurrences;
@@ -1128,7 +1269,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
 
     if (isMultipleDates) {
       return (
-        <View style={[styles.section, { marginTop: showEditControls ? 24 : 0 }]}>
+        <View style={[styles.section]}>
           <View style={styles.sectionHeaderContainer}>
             <Text style={styles.sectionHeader}>Booking Breakdown</Text>
           </View>
@@ -1990,7 +2131,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
               </Text>
               {costSummary.pro_platform_fee === 0 ? (
                 <Text style={styles.badge}>{costSummary.pro_subscription_plan === 0 ? 'Free Tier - ' 
-                  : costSummary.pro_subscription_plan === 1 ? 'Waitlist Tier - ' 
+                  : costSummary.pro_subscription_plan === 1 ? 'Beta Tier - ' 
                   : costSummary.pro_subscription_plan === 2 ? 'Commission Tier - ' 
                   : costSummary.pro_subscription_plan === 3 ? 'Pro Subscription - ' 
                   : costSummary.pro_subscription_plan === 4 ? 'Pro Subscription - ' 
@@ -2096,6 +2237,8 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <ProfessionalAlert isProfessional={isProfessional} fromApprovalModal={fromApprovalModal} />
+        {renderServiceAndPets()}
+        {renderNotesForClient()}
         {renderServiceAdditionalRates()}
         {renderBookingBreakdown()}
         {renderTotalAmount()}
@@ -2571,6 +2714,113 @@ const styles = StyleSheet.create({
     color: theme.colors.placeHolderText,
     fontFamily: theme.fonts.regular.fontFamily,
     lineHeight: 18,
+  },
+  serviceContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'center',
+    paddingBottom: 16,
+  },
+  serviceDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginBottom: 16,
+    width: '100%',
+  },
+  serviceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    width: 80,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  serviceValue: {
+    fontSize: 16,
+    color: theme.colors.text,
+    flex: 1,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  petsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  petsLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    width: 80,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  petsList: {
+    flex: 1,
+  },
+  petItem: {
+    marginBottom: 8,
+  },
+  petName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  petType: {
+    fontSize: 14,
+    color: theme.colors.placeHolderText,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  noPets: {
+    fontSize: 16,
+    color: theme.colors.placeHolderText,
+    fontStyle: 'italic',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  notesDescription: {
+    fontSize: 18,
+    color: theme.colors.text,
+    fontWeight: 'bold',
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 12,
+  },
+  notesTextInput: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    width: '100%',
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  notesTextInputReadOnly: {
+    backgroundColor: theme.colors.surfaceContrast,
+    color: theme.colors.text,
+    borderColor: theme.colors.surface,
+  },
+  notesSaveContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+  },
+  notesSaveButton: {
+    backgroundColor: theme.colors.mainColors.main,
+    borderRadius: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  notesSaveButtonSaved: {
+    backgroundColor: theme.colors.success,
+  },
+  notesSaveButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  notesSaveButtonTextSaved: {
+    color: 'white',
   },
 });
 
