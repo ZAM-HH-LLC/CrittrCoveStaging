@@ -38,6 +38,14 @@ from django.utils import timezone
 from booking_drafts.serializers import OvernightBookingCalculationSerializer, UpdateRatesSerializer
 from core.tax_utils import get_state_from_address, calculate_booking_taxes
 from core.platform_fee_utils import calculate_platform_fees
+import uuid
+import re
+from collections import OrderedDict
+from decimal import Decimal, ROUND_HALF_UP
+from datetime import datetime, date, time
+import pytz
+import traceback
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -1787,6 +1795,24 @@ class UpdateBookingRatesView(APIView):
             # Update occurrences in draft data
             draft.draft_data['occurrences'] = updated_occurrences
             
+            # Get service for managing additional rates
+            service = None
+            if 'service_details' in draft.draft_data:
+                try:
+                    service = Service.objects.get(
+                        service_name=draft.draft_data['service_details']['service_type'],
+                        professional=professional,
+                        moderation_status='APPROVED'
+                    )
+                except Service.DoesNotExist:
+                    service = draft.booking.service_id if draft.booking else None
+            elif draft.booking:
+                service = draft.booking.service_id
+            
+            # Manage service additional rates based on updated occurrences
+            if service:
+                draft.draft_data = manage_service_additional_rates(draft.draft_data, service, updated_occurrences)
+            
             # Get professional's service address for tax calculation
             address = Address.objects.filter(
                 user=professional.user,
@@ -1906,6 +1932,108 @@ class UpdateBookingRatesView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+def manage_service_additional_rates(draft_data, service, occurrences_data):
+    """
+    Manages the service_details.additional_rates object based on service rates and occurrence rates.
+    
+    Args:
+        draft_data: The current draft data dictionary
+        service: The Service model instance
+        occurrences_data: List of occurrence data dictionaries
+    
+    Returns:
+        Updated draft_data with service_details.additional_rates managed
+    """
+    logger.info("MBA5321 - Managing service additional rates")
+    
+    # Initialize service_details if it doesn't exist
+    if 'service_details' not in draft_data:
+        draft_data['service_details'] = {}
+    
+    # Initialize additional_rates if it doesn't exist
+    if 'additional_rates' not in draft_data['service_details']:
+        draft_data['service_details']['additional_rates'] = {}
+    
+    # Get existing additional_rates mapping
+    existing_additional_rates = draft_data['service_details']['additional_rates']
+    logger.info(f"MBA5321 - Existing additional rates: {existing_additional_rates}")
+    
+    # Collect all unique rate titles from service and occurrences
+    all_rate_titles = set()
+    service_rate_titles = set()
+    
+    # Get service additional rates
+    if service and hasattr(service, 'additional_rates'):
+        service_rates = service.additional_rates
+        # Handle both QuerySet and list
+        if hasattr(service_rates, 'all'):
+            service_rates = service_rates.all()
+        
+        for rate in service_rates:
+            if isinstance(rate, dict):
+                rate_title = rate.get('title')
+            else:
+                rate_title = getattr(rate, 'title', None)
+            
+            if rate_title:
+                all_rate_titles.add(rate_title)
+                service_rate_titles.add(rate_title)
+                logger.info(f"MBA5321 - Found service rate: {rate_title}")
+    
+    # Get occurrence rates
+    occurrence_rate_counts = {}
+    total_occurrences = len(occurrences_data)
+    
+    for occurrence in occurrences_data:
+        occ_additional_rates = occurrence.get('rates', {}).get('additional_rates', [])
+        for rate in occ_additional_rates:
+            rate_title = rate.get('title') or rate.get('name', '')
+            if rate_title:
+                all_rate_titles.add(rate_title)
+                occurrence_rate_counts[rate_title] = occurrence_rate_counts.get(rate_title, 0) + 1
+                logger.info(f"MBA5321 - Found occurrence rate: {rate_title}")
+    
+    logger.info(f"MBA5321 - All rate titles: {all_rate_titles}")
+    logger.info(f"MBA5321 - Occurrence rate counts: {occurrence_rate_counts}")
+    logger.info(f"MBA5321 - Total occurrences: {total_occurrences}")
+    
+    # Create new additional_rates mapping
+    new_additional_rates = {}
+    
+    # Helper function to generate unique key for a rate title
+    def generate_rate_key(title):
+        # Check if this title already has a key in existing mapping
+        for existing_key, existing_value in existing_additional_rates.items():
+            if existing_key.startswith(f"{title}_start-"):
+                return existing_key
+        
+        # Generate new unique key
+        random_id = uuid.uuid4().hex[:8]
+        return f"{title}_start-{random_id}"
+    
+    # Process all rate titles
+    for rate_title in all_rate_titles:
+        rate_key = generate_rate_key(rate_title)
+        
+        # Determine if rate should be True (applies to ALL occurrences) or False
+        occurrences_with_rate = occurrence_rate_counts.get(rate_title, 0)
+        applies_to_all = (occurrences_with_rate == total_occurrences)
+        
+        # For service rates, set to False if not in all occurrences
+        # For non-service rates, only include if present in at least one occurrence
+        if rate_title in service_rate_titles:
+            new_additional_rates[rate_key] = applies_to_all
+            logger.info(f"MBA5321 - Service rate {rate_title} -> {applies_to_all} (in {occurrences_with_rate}/{total_occurrences} occurrences)")
+        elif occurrences_with_rate > 0:
+            new_additional_rates[rate_key] = applies_to_all
+            logger.info(f"MBA5321 - Custom rate {rate_title} -> {applies_to_all} (in {occurrences_with_rate}/{total_occurrences} occurrences)")
+    
+    # Update the draft data
+    draft_data['service_details']['additional_rates'] = new_additional_rates
+    logger.info(f"MBA5321 - Final additional rates: {new_additional_rates}")
+    
+    return draft_data
+
 class UpdateBookingDraftMultipleDaysView(APIView):
     permission_classes = [IsAuthenticated]
     renderer_classes = [JSONRenderer]
@@ -1952,253 +2080,195 @@ class UpdateBookingDraftMultipleDaysView(APIView):
             if not service:
                 return Response(
                     {"error": "No service found"},
-                    status=status.HTTP_404_NOT_FOUND
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
             # Get number of pets
             num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
 
-            # Process each date and create occurrences
-            processed_occurrences = []
-            for date_data in dates_data:
-                try:
-                    # Parse date and times
-                    date_obj = datetime.strptime(date_data['date'], '%Y-%m-%d').date()
-                    start_time = datetime.strptime(date_data['startTime'], '%H:%M').time()
-                    end_time = datetime.strptime(date_data['endTime'], '%H:%M').time()
-                    
-                    # Check if we have an end date in the request (for handling day boundaries)
-                    end_date_obj = None
-                    if 'endDate' in date_data and date_data['endDate']:
-                        try:
-                            end_date_obj = datetime.strptime(date_data['endDate'], '%Y-%m-%d').date()
-                            logger.info(f"MBA5321 - Using separate end date: {end_date_obj} for start date: {date_obj}")
-                        except Exception as e:
-                            logger.error(f"MBA5321 - Error parsing endDate: {e}")
-                    
-                    # Use the provided end date or fall back to the start date
-                    end_date_obj = end_date_obj or date_obj
+            # Get existing occurrences for comparison
+            existing_occurrences = draft.draft_data.get('occurrences', [])
+            logger.info(f"MBA5321 - Found {len(existing_occurrences)} existing occurrences")
 
-                    # Create temporary occurrence for rate calculation
-                    class TempOccurrence:
-                        def __init__(self, start_date, end_date, start_time, end_time):
-                            self.start_date = start_date
-                            self.end_date = end_date
-                            self.start_time = start_time
-                            self.end_time = end_time
+            # Parse incoming dates and compare with existing
+            new_occurrences = []
+            occurrence_counter = 0
 
-                    temp_occurrence = TempOccurrence(
-                        start_date=date_obj,
-                        end_date=end_date_obj,
-                        start_time=start_time,
-                        end_time=end_time
-                    )
+            for date_entry in dates_data:
+                start_date = date_entry.get('date')
+                start_time = date_entry.get('start_time') or date_entry.get('startTime')
+                end_time = date_entry.get('end_time') or date_entry.get('endTime')
+                end_date = date_entry.get('end_date') or date_entry.get('endDate', start_date)
 
-                    # Calculate rates
-                    rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
-                    if not rate_data:
-                        raise Exception(f"Failed to calculate rates for date {date_obj}")
+                logger.info(f"MBA5321 - Processing date entry: {date_entry}")
+                logger.info(f"MBA5321 - Extracted: date={start_date}, start_time={start_time}, end_time={end_time}, end_date={end_date}")
 
-                    # Convert string values to Decimal for rounding
-                    # Safely convert to Decimal, even if the values are already numbers
-                    calculated_cost = Decimal(str(rate_data['calculated_cost']))
-                    base_total = Decimal(str(rate_data['base_total']))
+                if not all([start_date, start_time, end_time]):
+                    logger.warning(f"MBA5321 - Skipping incomplete date entry: {date_entry}")
+                    continue
 
-                    # Create occurrence data
-                    occurrence = OrderedDict([
-                        ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"),
-                        ('start_date', date_obj.isoformat()),
-                        ('end_date', end_date_obj.isoformat()),
-                        ('start_time', start_time.strftime('%H:%M')),
-                        ('end_time', end_time.strftime('%H:%M')),
-                        ('calculated_cost', float(round(calculated_cost, 2))),
-                        ('base_total', float(round(base_total, 2))),
-                        ('multiple', rate_data['multiple']),
-                        ('rates', rate_data['rates'])
-                    ])
+                # Create date and time objects for comparison
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                start_time_obj = datetime.strptime(start_time, '%H:%M').time()
+                end_time_obj = datetime.strptime(end_time, '%H:%M').time()
 
-                    processed_occurrences.append(occurrence)
+                # Look for matching existing occurrence
+                matching_occurrence = None
+                for existing_occ in existing_occurrences:
+                    existing_start_date = datetime.strptime(existing_occ['start_date'], '%Y-%m-%d').date()
+                    existing_end_date = datetime.strptime(existing_occ['end_date'], '%Y-%m-%d').date()
+                    existing_start_time = datetime.strptime(existing_occ['start_time'], '%H:%M').time()
+                    existing_end_time = datetime.strptime(existing_occ['end_time'], '%H:%M').time()
 
-                except Exception as e:
-                    logger.error(f"MBA5321 - Error processing date: {str(e)}")
-                    return Response(
-                        {"error": f"Error processing date: {str(e)}"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    if (existing_start_date == start_date_obj and existing_end_date == end_date_obj and
+                        existing_start_time == start_time_obj and existing_end_time == end_time_obj):
+                        # Exact match - preserve everything
+                        matching_occurrence = existing_occ.copy()
+                        logger.info(f"MBA5321 - Exact match found for {start_date} {start_time}-{end_time}")
+                        break
+                    elif existing_start_date == start_date_obj and existing_end_date == end_date_obj:
+                        # Date match but time difference - preserve additional_rates, recalculate base rates
+                        logger.info(f"MBA5321 - Date match with time change for {start_date}")
+                        matching_occurrence = existing_occ.copy()
+                        # Keep the additional_rates but we'll recalculate base rates below
+                        break
 
-            # Calculate cost summary with rounded values
-            subtotal = Decimal('0')
-            for occ in processed_occurrences:
-                subtotal += Decimal(str(occ['calculated_cost']))
-            
-            subtotal = round(subtotal, 2)
+                if matching_occurrence:
+                    # Update times if they changed
+                    matching_occurrence['start_time'] = start_time
+                    matching_occurrence['end_time'] = end_time
+                    matching_occurrence['end_date'] = end_date
 
-            # Get professional's service address for tax calculation
-            address = Address.objects.filter(
-                user=professional.user,
-                address_type=AddressType.SERVICE
-            ).first()
-            
-            # Get state from address or use default
-            state = get_state_from_address(address, default_state='CO')
-
-            # Get client from the booking or draft data
-            client = None
-            client_user = None
-            
-            # First try to get client from booking
-            if draft.booking and draft.booking.client:
-                client = draft.booking.client
-                client_user = client.user if client else None
-                logger.info(f"MBA5321 - Found client from booking: {client.id if client else 'None'}")
-            # If not in booking, try to get from draft data
-            elif draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
-                try:
-                    client_id = draft.draft_data['client_id']
-                    client = Client.objects.get(id=client_id)
-                    client_user = client.user if client else None
-                    logger.info(f"MBA5321 - Found client from draft data: {client.id if client else 'None'}")
-                except (Client.DoesNotExist, Exception) as e:
-                    logger.error(f"MBA5321 - Error retrieving client from draft data: {str(e)}")
-            
-            # Add debug log to see what client user we're passing
-            logger.info(f"MBA5321 - Client user being passed to platform_fees: {client_user.id if client_user else 'None'}")
-            
-            # Use the new platform fee utility to calculate platform fees
-            platform_fees = calculate_platform_fees(subtotal, client_user, professional.user)
-            
-            client_platform_fee = platform_fees['client_platform_fee']
-            pro_platform_fee = platform_fees['pro_platform_fee']
-            total_platform_fee = platform_fees['total_platform_fee']
-            client_platform_fee_percentage = platform_fees['client_platform_fee_percentage']
-            pro_platform_fee_percentage = platform_fees['pro_platform_fee_percentage']
-
-            # Use tax_utils to calculate taxes
-            taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
-            
-            total_client_cost = (subtotal + total_platform_fee + taxes).quantize(Decimal('0.01'))
-            total_sitter_payout = (subtotal * (Decimal('1.0') - pro_platform_fee_percentage)).quantize(Decimal('0.01'))
-
-            cost_summary = OrderedDict([
-                ('subtotal', float(subtotal)),
-                ('client_platform_fee', float(client_platform_fee)),
-                ('pro_platform_fee', float(pro_platform_fee)),
-                ('total_platform_fee', float(total_platform_fee)),
-                ('taxes', float(taxes)),
-                ('total_client_cost', float(total_client_cost)),
-                ('total_sitter_payout', float(total_sitter_payout)),
-                ('is_prorated', True),
-                ('tax_state', state),
-                ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
-                ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
-            ])
-
-            # Preserve existing client data if it exists in draft_data
-            client_name = None
-            client_id = None
-            
-            if draft.draft_data and 'client_name' in draft.draft_data and draft.draft_data['client_name']:
-                client_name = draft.draft_data['client_name']
-                logger.info(f"MBA5321 - Using client_name from draft_data: {client_name}")
-            elif draft.booking and draft.booking.client:
-                client_name = draft.booking.client.user.name
-                logger.info(f"MBA5321 - Using client_name from booking: {client_name}")
-            
-            if draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
-                client_id = draft.draft_data['client_id']
-                logger.info(f"MBA5321 - Using client_id from draft_data: {client_id}")
-            elif draft.booking and draft.booking.client:
-                client_id = draft.booking.client.id
-                logger.info(f"MBA5321 - Using client_id from booking: {client_id}")
-
-            # Create draft data structure
-            draft_data = OrderedDict([
-                ('booking_id', draft.booking.booking_id if draft.booking else None),
-                ('status', draft.booking.status if draft.booking else 'DRAFT'),
-                ('client_name', client_name),
-                ('client_id', client_id),
-                ('professional_name', professional.user.name),
-                ('professional_id', professional.professional_id),
-                ('pets', draft.draft_data.get('pets', [])),
-                ('can_edit', True),
-                ('occurrences', processed_occurrences),
-                ('cost_summary', cost_summary),
-                ('service_details', OrderedDict([
-                    ('service_type', service.service_name),
-                    ('service_id', service.service_id)
-                ])),
-                ('pro_agreed_tos', draft.draft_data.get('pro_agreed_tos', False)),
-                ('client_agreed_tos', draft.draft_data.get('client_agreed_tos', False)),
-                ('conversation_id', None)  # Initialize with None, will be updated below
-            ])
-
-            # Get conversation_id - try multiple sources
-            conversation_id = None
-            
-            # 1. Try to get from draft_data
-            if draft.draft_data and 'conversation_id' in draft.draft_data:
-                conversation_id = draft.draft_data.get('conversation_id')
-                logger.info(f"MBA5321 - Found conversation_id from draft_data: {conversation_id}")
-                
-            # 2. If booking exists, try to get from related message
-            if not conversation_id and draft.booking:
-                try:
-                    from user_messages.models import UserMessage
-                    message = UserMessage.objects.filter(booking=draft.booking).first()
-                    if message and message.conversation:
-                        conversation_id = message.conversation.conversation_id
-                        logger.info(f"MBA5321 - Found conversation_id from booking message: {conversation_id}")
-                except Exception as e:
-                    logger.error(f"MBA5321 - Error getting conversation_id from message: {str(e)}")
-            
-            # 3. If client and professional exist, try to find conversation between them
-            if not conversation_id and client_id and professional:
-                try:
-                    from conversations.models import Conversation
-                    from django.db.models import Q
-                    
-                    # Get client user
-                    client = Client.objects.filter(id=client_id).first()
-                    
-                    if client and client.user:
-                        # Find conversation between professional and client
-                        conversation = Conversation.objects.filter(
-                            Q(participant1=professional.user, participant2=client.user) |
-                            Q(participant1=client.user, participant2=professional.user)
-                        ).first()
+                    # If times changed, recalculate base rates but preserve additional_rates
+                    if (matching_occurrence.get('_time_changed', False) or 
+                        matching_occurrence['start_time'] != start_time or 
+                        matching_occurrence['end_time'] != end_time):
                         
-                        if conversation:
-                            conversation_id = conversation.conversation_id
-                            logger.info(f"MBA5321 - Found conversation_id by looking up participants: {conversation_id}")
-                except Exception as e:
-                    logger.error(f"MBA5321 - Error finding conversation between users: {str(e)}")
+                        # Preserve additional_rates
+                        preserved_additional_rates = matching_occurrence.get('rates', {}).get('additional_rates', [])
+                        
+                        # Recalculate occurrence data with new times
+                        start_datetime = datetime.combine(start_date_obj, start_time_obj)
+                        end_datetime = datetime.combine(end_date_obj, end_time_obj)
+                        
+                        # Create temporary occurrence object for calculation
+                        from types import SimpleNamespace
+                        temp_occurrence = SimpleNamespace()
+                        temp_occurrence.start_date = start_date_obj
+                        temp_occurrence.end_date = end_date_obj
+                        temp_occurrence.start_time = start_time_obj
+                        temp_occurrence.end_time = end_time_obj
+                        
+                        # Calculate new rates data
+                        rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
+                        
+                        if rate_data:
+                            # Update the matching occurrence with new rates but preserve additional_rates
+                            matching_occurrence['rates']['base_rate'] = rate_data['rates']['base_rate']
+                            matching_occurrence['rates']['additional_animal_rate'] = rate_data['rates']['additional_animal_rate']
+                            matching_occurrence['rates']['applies_after'] = rate_data['rates']['applies_after']
+                            matching_occurrence['rates']['holiday_rate'] = rate_data['rates']['holiday_rate']
+                            matching_occurrence['rates']['holiday_days'] = rate_data['rates'].get('holiday_days', 0)
+                            matching_occurrence['rates']['unit_of_time'] = rate_data['rates']['unit_of_time']
+                            matching_occurrence['rates']['additional_rates'] = preserved_additional_rates  # Restore preserved rates
+                            
+                            # Update other fields
+                            matching_occurrence['base_total'] = rate_data['base_total']
+                            matching_occurrence['multiple'] = rate_data['multiple']
+                            
+                            # Recalculate total cost including preserved additional rates
+                            base_cost = Decimal(str(rate_data.get('calculated_cost', 0)))
+                            additional_rates_total = Decimal('0')
+                            for rate in preserved_additional_rates:
+                                rate_amount = Decimal(str(rate.get('amount', 0)))
+                                additional_rates_total += rate_amount
+                            
+                            matching_occurrence['calculated_cost'] = float(base_cost + additional_rates_total)
+                        
+                        logger.info(f"MBA5321 - Recalculated rates for time change, preserved additional rates")
+
+                    new_occurrences.append(matching_occurrence)
+                else:
+                    # New occurrence - calculate fresh data
+                    logger.info(f"MBA5321 - Creating new occurrence for {start_date} {start_time}-{end_time}")
+                    
+                    # Create temporary occurrence object for calculation
+                    from types import SimpleNamespace
+                    temp_occurrence = SimpleNamespace()
+                    temp_occurrence.start_date = start_date_obj
+                    temp_occurrence.end_date = end_date_obj
+                    temp_occurrence.start_time = start_time_obj
+                    temp_occurrence.end_time = end_time_obj
+                    
+                    # Calculate new occurrence data
+                    rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
+                    
+                    if rate_data:
+                        # Create new occurrence with proper structure
+                        new_occurrence = {
+                            'occurrence_id': f"draft_{int(datetime.now().timestamp())}_{occurrence_counter}",
+                            'start_date': start_date,
+                            'end_date': end_date,
+                            'start_time': start_time,
+                            'end_time': end_time,
+                            'calculated_cost': float(Decimal(str(rate_data['calculated_cost']))),
+                            'base_total': float(Decimal(str(rate_data['base_total']))),
+                            'multiple': rate_data['multiple'],
+                            'rates': rate_data['rates']
+                        }
+                        new_occurrences.append(new_occurrence)
+
+                occurrence_counter += 1
+
+            # Calculate cost summary
+            cost_summary = calculate_cost_summary(new_occurrences)
+
+            # Update draft data with preserved/recalculated occurrences
+            draft.draft_data['occurrences'] = new_occurrences
+            draft.draft_data['cost_summary'] = cost_summary
+
+            # Preserve other important fields
+            preserved_fields = ['notes_from_pro', 'pro_agreed_tos', 'client_agreed_tos', 'conversation_id']
+            for field in preserved_fields:
+                if field in draft.draft_data:
+                    # Keep existing value
+                    pass
+                elif hasattr(draft, 'booking') and draft.booking:
+                    # Set from booking if available
+                    if field == 'notes_from_pro':
+                        draft.draft_data[field] = getattr(draft.booking, field, '')
+                    elif field == 'pro_agreed_tos':
+                        draft.draft_data[field] = getattr(draft.booking, field, False)
+                    elif field == 'client_agreed_tos':
+                        draft.draft_data[field] = getattr(draft.booking, field, False)
+                    elif field == 'conversation_id':
+                        if hasattr(draft.booking, 'conversation'):
+                            draft.draft_data[field] = draft.booking.conversation.conversation_id
+
+            # Manage service additional rates - ensure service_details exists
+            if 'service_details' not in draft.draft_data:
+                draft.draft_data['service_details'] = {
+                    'service_id': service.service_id,
+                    'service_type': service.service_name
+                }
             
-            # Update the draft data with the conversation_id
-            draft_data['conversation_id'] = conversation_id
-            logger.info(f"MBA5321 - Final conversation_id in draft_data: {conversation_id}")
+            draft.draft_data = manage_service_additional_rates(draft.draft_data, service, new_occurrences)
 
-            # Update draft status if needed
-            if draft.booking and draft.booking.status == BookingStates.CONFIRMED:
-                draft_data['status'] = BookingStates.CONFIRMED_PENDING_PROFESSIONAL_CHANGES
-
-            # Save the draft
-            draft.draft_data = draft_data
+            # Save the updated draft
             draft.save()
 
-            logger.info(f"MBA5321 - Successfully updated booking draft {draft_id}")
-            logger.info(f"MBA5321 - Client ID in response: {draft_data['client_id']}")
-            logger.info(f"MBA5321 - Client Name in response: {draft_data['client_name']}")
-            
+            logger.info(f"MBA5321 - Successfully updated draft {draft_id}")
             return Response({
                 'status': 'success',
-                'draft_data': draft_data
+                'draft_data': draft.draft_data
             })
 
         except Exception as e:
             logger.error(f"MBA5321 - Error in UpdateBookingDraftMultipleDaysView: {str(e)}")
-            logger.error(f"MBA5321 - Full error traceback: {traceback.format_exc()}")
+            logger.error(f"MBA5321 - Full traceback: {traceback.format_exc()}")
             return Response(
-                {"error": f"An error occurred while updating the booking draft: {str(e)}"},
+                {"error": "An error occurred while updating the booking draft"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

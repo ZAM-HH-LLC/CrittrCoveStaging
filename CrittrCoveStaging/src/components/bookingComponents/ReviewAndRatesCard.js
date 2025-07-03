@@ -96,6 +96,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     debugLog('MBA2394jv340 Service is_overnight:', bookingData?.service?.is_overnight);
     debugLog('MBA2394jv340 Occurrences length:', bookingData?.occurrences?.length);
     debugLog('MBA2394jv340 Has already initialized rates:', hasInitializedRates);
+    debugLog('MBA2394jv340 Service details additional rates:', bookingData?.service_details?.additional_rates);
     
     // Check if bookingId changed to reset initialization
     if (lastBookingIdRef.current !== bookingId && lastBookingIdRef.current !== null) {
@@ -109,67 +110,129 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     if (bookingData?.service && !bookingData.service.is_overnight && bookingData?.occurrences?.length > 1 && !hasInitializedRates) {
       debugLog('MBA2394jv340 Initializing service additional rates for non-overnight service with multiple dates');
       
-      // Get service additional rates from the service object or collect from occurrences
-      const serviceAdditionalRates = bookingData.service.additional_rates || [];
-      debugLog('MBA2394jv340 Raw service additional rates from initialization:', serviceAdditionalRates);
+      // Prioritize service_details.additional_rates as source of truth
+      let availableRates = [];
+      let enabledRates = {};
       
-      // If service doesn't have additional rates, collect unique rates from all occurrences
-      let availableRates = serviceAdditionalRates;
-      if (serviceAdditionalRates.length === 0) {
-        debugLog('MBA2394jv340 No service rates found in initialization, collecting from occurrences');
-        const allOccurrenceRates = [];
+      if (bookingData.service_details?.additional_rates) {
+        debugLog('MBA2394jv340 Using service_details.additional_rates as source:', bookingData.service_details.additional_rates);
         
-        bookingData.occurrences.forEach((occ, index) => {
-          const occRates = occ.rates?.additional_rates || [];
-          debugLog(`MBA2394jv340 Initialization: Occurrence ${index} additional rates:`, occRates);
-          allOccurrenceRates.push(...occRates);
-        });
-        
-        // Get unique rates by title
-        const uniqueRatesMap = new Map();
-        allOccurrenceRates.forEach(rate => {
-          if (rate.title && !uniqueRatesMap.has(rate.title)) {
-            uniqueRatesMap.set(rate.title, {
-              title: rate.title,
-              amount: rate.amount,
-              rate: rate.amount, // For consistency with service rates
-              description: rate.description || ''
+        // Parse service_details.additional_rates to extract rate info
+        Object.entries(bookingData.service_details.additional_rates).forEach(([rateKey, isEnabled]) => {
+          // Extract rate title from key (format: "rate_title_start-randomid")
+          const titleMatch = rateKey.match(/^(.+)_start-[a-f0-9]+$/);
+          if (titleMatch) {
+            const rateTitle = titleMatch[1];
+            
+            // Find the rate details from service or occurrences
+            let rateAmount = '0.00';
+            let rateDescription = '';
+            
+            // First check service rates
+            const serviceRate = bookingData.service?.additional_rates?.find(r => r.title === rateTitle);
+            if (serviceRate) {
+              rateAmount = serviceRate.amount || serviceRate.rate || '0.00';
+              rateDescription = serviceRate.description || '';
+            } else {
+              // Check occurrence rates for amount/description
+              for (const occ of bookingData.occurrences) {
+                const occRate = occ.rates?.additional_rates?.find(r => (r.title || r.name) === rateTitle);
+                if (occRate) {
+                  rateAmount = occRate.amount || '0.00';
+                  rateDescription = occRate.description || '';
+                  break;
+                }
+              }
+            }
+            
+            availableRates.push({
+              title: rateTitle,
+              amount: rateAmount,
+              rate: rateAmount, // For consistency
+              description: rateDescription
             });
+            
+            enabledRates[rateTitle] = isEnabled;
           }
         });
         
-        availableRates = Array.from(uniqueRatesMap.values());
-        debugLog('MBA2394jv340 Initialization: Unique rates collected from occurrences:', availableRates);
+        debugLog('MBA2394jv340 Parsed available rates from service_details:', availableRates);
+        debugLog('MBA2394jv340 Parsed enabled rates from service_details:', enabledRates);
+      } else {
+        // Fallback to legacy logic if service_details.additional_rates doesn't exist
+        debugLog('MBA2394jv340 No service_details.additional_rates found, falling back to legacy logic');
+        
+        // Get service additional rates from the service object or collect from occurrences
+        const serviceAdditionalRates = bookingData.service.additional_rates || [];
+        debugLog('MBA2394jv340 Raw service additional rates from initialization:', serviceAdditionalRates);
+        
+        // If service doesn't have additional rates, collect unique rates from all occurrences
+        availableRates = serviceAdditionalRates;
+        if (serviceAdditionalRates.length === 0) {
+          debugLog('MBA2394jv340 No service rates found in initialization, collecting from occurrences');
+          const allOccurrenceRates = [];
+          
+          bookingData.occurrences.forEach((occ, index) => {
+            const occRates = occ.rates?.additional_rates || [];
+            debugLog(`MBA2394jv340 Initialization: Occurrence ${index} additional rates:`, occRates);
+            allOccurrenceRates.push(...occRates);
+          });
+          
+          // Get unique rates by title
+          const uniqueRatesMap = new Map();
+          allOccurrenceRates.forEach(rate => {
+            if (rate.title && !uniqueRatesMap.has(rate.title)) {
+              uniqueRatesMap.set(rate.title, {
+                title: rate.title,
+                amount: rate.amount,
+                rate: rate.amount, // For consistency with service rates
+                description: rate.description || ''
+              });
+            }
+          });
+          
+          availableRates = Array.from(uniqueRatesMap.values());
+          debugLog('MBA2394jv340 Initialization: Unique rates collected from occurrences:', availableRates);
+        }
+        
+        // Filter out base rates that are not actual additional rates
+        availableRates = availableRates.filter(rate => {
+          const title = (rate.title || '').toLowerCase();
+          return !title.includes('base rate') && 
+                 !title.includes('additional animal') && 
+                 !title.includes('holiday rate');
+        });
+        
+        debugLog('MBA2394jv340 Filtered service additional rates from initialization:', availableRates);
+        
+        // Check which rates are currently applied to ALL occurrences
+        availableRates.forEach(serviceRate => {
+          // Count how many occurrences have this rate
+          let occurrencesWithRate = 0;
+          bookingData.occurrences.forEach(occ => {
+            const hasRate = occ.rates?.additional_rates?.some(occRate => 
+              (occRate.title || occRate.name) === serviceRate.title
+            );
+            if (hasRate) occurrencesWithRate++;
+          });
+          
+          // Rate is enabled only if it appears in ALL occurrences
+          const isEnabled = occurrencesWithRate === bookingData.occurrences.length;
+          enabledRates[serviceRate.title] = isEnabled;
+          debugLog('MBA2394jv340 Rate status:', { 
+            title: serviceRate.title, 
+            isEnabled, 
+            occurrencesWithRate, 
+            totalOccurrences: bookingData.occurrences.length 
+          });
+        });
       }
       
-      // Filter out base rates that are not actual additional rates
-      const filteredRates = availableRates.filter(rate => {
-        const title = (rate.title || '').toLowerCase();
-        return !title.includes('base rate') && 
-               !title.includes('additional animal') && 
-               !title.includes('holiday rate');
-      });
-      
-      debugLog('MBA2394jv340 Filtered service additional rates from initialization:', filteredRates);
+      debugLog('MBA2394jv340 Final available rates:', availableRates);
+      debugLog('MBA2394jv340 Final enabled rates state:', enabledRates);
       
       // Store the available rates in state so they persist
-      setAvailableAdditionalRates(filteredRates);
-      
-      // Check which rates are currently applied to the first occurrence
-      const firstOccurrenceRates = bookingData.occurrences[0]?.rates?.additional_rates || [];
-      debugLog('MBA2394jv340 First occurrence additional rates:', firstOccurrenceRates);
-      const enabledRates = {};
-      
-      filteredRates.forEach(serviceRate => {
-        // Check if this service rate is currently applied
-        const isEnabled = firstOccurrenceRates.some(occRate => 
-          (occRate.title || occRate.name) === serviceRate.title
-        );
-        enabledRates[serviceRate.title] = isEnabled;
-        debugLog('MBA2394jv340 Rate status:', { title: serviceRate.title, isEnabled });
-      });
-      
-      debugLog('MBA2394jv340 Final enabled rates state:', enabledRates);
+      setAvailableAdditionalRates(availableRates);
       setServiceAdditionalRatesEnabled(enabledRates);
       setHasInitializedRates(true);
     } else {
