@@ -633,9 +633,9 @@ const NavigationContent = ({
   const closeMenu = () => setVisible(false);
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
-  const handleNavigation = (route) => {
-    debugLog('MBA4477: Navigation handling', { route, currentRoute });
-    if (route === currentRoute) {
+  const handleNavigation = (route, params = {}) => {
+    debugLog('MBA4477: Navigation handling', { route, currentRoute, params });
+    if (route === currentRoute && !params.source) {
       return;
     }
     
@@ -644,7 +644,7 @@ const NavigationContent = ({
     closeMenu();
     
     // Use the navigation helpers
-    navigateToFrom(navigation, route, currentRoute);
+    navigateToFrom(navigation, route, currentRoute, params);
   };
   
   const handleRoleSwitch = async (role) => {
@@ -705,7 +705,7 @@ const NavigationContent = ({
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
-        { icon: 'account-group-outline', label: 'Become Professional', route: 'ContactUs' },
+        { icon: 'account-group-outline', label: 'Become Professional', route: 'ContactUs', params: { source: 'becomeProfessional' } },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
         { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' }
       ];
@@ -722,7 +722,7 @@ const NavigationContent = ({
             styles.sidebarItem,
             currentRoute === item.route && styles.activeItem
           ]}
-          onPress={() => item.action ? item.action() : handleNavigation(item.route)}
+          onPress={() => item.action ? item.action() : handleNavigation(item.route, item.params)}
         >
           <MaterialCommunityIcons
             name={item.icon}
@@ -793,7 +793,7 @@ const NavigationContent = ({
         { icon: 'view-dashboard-outline', label: 'Dashboard', route: 'Dashboard' },
         { icon: 'message-text-outline', label: 'Messages', route: 'MessageHistory', notification: hasCurrentRoleUnread, count: currentRoleCount },
         { icon: 'magnify', label: 'Search Pros', route: 'SearchProfessionalsListing' },
-        { icon: 'account-group-outline', label: 'Become Professional', route: 'ContactUs' },
+        { icon: 'account-group-outline', label: 'Become Professional', route: 'ContactUs', params: { source: 'becomeProfessional' } },
         { icon: 'account-outline', label: 'Profile', route: 'MyProfile' },
         { icon: 'email-outline', label: 'Contact Us', route: 'ContactUs' },
         { icon: 'logout', label: 'Logout', route: 'logout', action: handleLogout }
@@ -871,7 +871,7 @@ const NavigationContent = ({
             ]}
             onPress={() => {
               setIsMenuOpen(false);
-              item.action ? item.action() : handleNavigation(item.route);
+              item.action ? item.action() : handleNavigation(item.route, item.params);
             }}
           >
             <MaterialCommunityIcons

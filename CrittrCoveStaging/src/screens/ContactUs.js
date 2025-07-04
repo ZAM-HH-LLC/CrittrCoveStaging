@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, Dimensions } from 'react-native';
 import { theme } from '../styles/theme';
 import CrossPlatformView from '../components/CrossPlatformView';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { AuthContext, debugLog } from '../context/AuthContext';
@@ -11,6 +11,7 @@ import { validateEmail, validateName, validateMessage, sanitizeInput } from '../
 
 const ContactUs = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const { screenWidth, isCollapsed } = useContext(AuthContext);
   const [state, handleFormspreeSubmit] = useForm("mkgobpro");
   const [name, setName] = useState('');
@@ -28,6 +29,14 @@ const ContactUs = () => {
   const isMobile = screenWidth < 900;
   const contentWidth = isMobile ? '90%' : '600px';
   const maxContentWidth = isMobile ? '100%' : '800px';
+  
+  // Check if this is accessed from "Become Professional" navigation
+  const isBecomeProfessional = route.params?.source === 'becomeProfessional';
+  
+  debugLog('MBA1234: ContactUs screen loaded with params:', {
+    params: route.params,
+    isBecomeProfessional
+  });
 
   // Enhanced input handlers with real-time sanitization
   const handleNameChange = (text) => {
@@ -182,10 +191,13 @@ const ContactUs = () => {
         <View style={styles.container}>
           <View style={[styles.contentWrapper, { width: contentWidth }]}>
             <Text style={[styles.title, { color: theme.colors.primary }]}>
-              Thanks for reaching out!
+              {isBecomeProfessional ? 'Application Received!' : 'Thanks for reaching out!'}
             </Text>
             <Text style={styles.successMessage}>
-              We'll get back to you soon.
+              {isBecomeProfessional 
+                ? 'We\'ve received your professional application and will get back to you with next steps soon.'
+                : 'We\'ll get back to you soon.'
+              }
             </Text>
           </View>
         </View>
@@ -205,8 +217,73 @@ const ContactUs = () => {
     >
       <View style={styles.container}>
         <View style={[styles.contentWrapper, { width: contentWidth }]}>
-          <Text style={styles.title}>Contact Us</Text>
-          <Text style={styles.subtitle}>Get in touch with our support team</Text>
+          <Text style={styles.title}>
+            {isBecomeProfessional ? 'Become a Professional' : 'Contact Us'}
+          </Text>
+          <Text style={styles.subtitle}>
+            {isBecomeProfessional 
+              ? 'Learn how to join our network of pet care professionals' 
+              : 'Get in touch with our support team'
+            }
+          </Text>
+          
+          {/* Become Professional Information Section */}
+          {isBecomeProfessional && (
+            <View style={styles.infoSection}>
+              <Text style={styles.infoTitle}>How to Become a Professional</Text>
+              
+              <View style={styles.stepContainer}>
+                <View style={styles.stepHeader}>
+                  <View style={styles.stepNumber}>
+                    <Text style={styles.stepNumberText}>1</Text>
+                  </View>
+                  <Text style={styles.stepTitle}>Contact Us</Text>
+                </View>
+                <Text style={styles.stepDescription}>
+                  Fill out the contact form below with your email and express your desire to become a professional. 
+                  Tell us about your experience with pet care and what services you'd like to offer.
+                </Text>
+              </View>
+              
+              <View style={styles.stepContainer}>
+                <View style={styles.stepHeader}>
+                  <View style={styles.stepNumber}>
+                    <Text style={styles.stepNumberText}>2</Text>
+                  </View>
+                  <Text style={styles.stepTitle}>Application Process</Text>
+                </View>
+                <Text style={styles.stepDescription}>
+                  We'll reply with all the information and documents we need, including:
+                </Text>
+                <View style={styles.bulletPoints}>
+                  <Text style={styles.bulletPoint}>• Background check link (optional, but provides a verification badge)</Text>
+                  <Text style={styles.bulletPoint}>• Insurance documentation you can provide (optional, but provides a verification badge)</Text>
+                  <Text style={styles.bulletPoint}>• Information about your experience and qualifications (can be included in the below message)</Text>
+                  <Text style={styles.bulletPoint}>• Details about the services you want to offer (can be included in the below message)</Text>
+                </View>
+              </View>
+              
+              <View style={styles.stepContainer}>
+                <View style={styles.stepHeader}>
+                  <View style={styles.stepNumber}>
+                    <Text style={styles.stepNumberText}>3</Text>
+                  </View>
+                  <Text style={styles.stepTitle}>Approval & Activation</Text>
+                </View>
+                <Text style={styles.stepDescription}>
+                  Once we review your application and documentation, we'll approve your account and activate 
+                  your professional status. You'll then be able to create services, manage bookings, and be contacted 
+                  by pet owners in your area.
+                </Text>
+              </View>
+              
+              <View style={styles.ctaContainer}>
+                <Text style={styles.ctaText}>
+                  Ready to get started? Fill out the form below and mention that you want to become a professional!
+                </Text>
+              </View>
+            </View>
+          )}
           
           <TextInput
             style={[styles.input, nameError ? styles.errorInput : null]}
@@ -230,7 +307,10 @@ const ContactUs = () => {
           
           <TextInput
             style={[styles.input, styles.messageInput, messageError ? styles.errorInput : null]}
-            placeholder="Your Message (minimum 10 characters)"
+            placeholder={isBecomeProfessional 
+              ? "Tell us about your interest in becoming a professional, your experience with pets, and what services you'd like to offer (minimum 10 characters)"
+              : "Your Message (minimum 10 characters)"
+            }
             value={message}
             onChangeText={handleMessageChange}
             multiline
@@ -362,6 +442,85 @@ const styles = StyleSheet.create({
   },
   errorMessage: {
     color: theme.colors.error,
+  },
+  infoSection: {
+    backgroundColor: '#F0F9E5',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 25,
+    borderWidth: 1,
+    borderColor: theme.colors.primary + '20',
+  },
+  infoTitle: {
+    fontSize: theme.fontSizes.large,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    fontFamily: theme.fonts.header.fontFamily,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  stepContainer: {
+    marginBottom: 20,
+  },
+  stepHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  stepNumber: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stepNumberText: {
+    color: theme.colors.whiteText,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: 'bold',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  stepTitle: {
+    fontSize: theme.fontSizes.mediumLarge,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
+  stepDescription: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    lineHeight: 22,
+    marginLeft: 42,
+  },
+  bulletPoints: {
+    marginLeft: 42,
+    marginTop: 8,
+  },
+  bulletPoint: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  ctaContainer: {
+    backgroundColor: theme.colors.primary + '10',
+    borderRadius: 8,
+    padding: 15,
+    marginTop: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.primary,
+  },
+  ctaText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

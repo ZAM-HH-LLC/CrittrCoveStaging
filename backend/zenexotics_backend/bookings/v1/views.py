@@ -2088,6 +2088,7 @@ class BookingDetailView(APIView):
                     'rates': {
                         'base_rate': str(booking_details.base_rate) if booking_details else '0.00',
                         'additional_animal_rate': str(booking_details.additional_pet_rate) if booking_details else '0.00',
+                        'additional_animal_rate_total': str(booking_details.additional_pet_rate * multiple) if booking_details else '0.00',
                         'applies_after': booking_details.applies_after if booking_details else 1,
                         'holiday_rate': str(booking_details.holiday_rate) if booking_details else '0.00',
                         'holiday_days': 0,  # Add holiday_days field with default

@@ -481,6 +481,9 @@ class AvailablePetsView(APIView):
             if draft.draft_data and 'pets' in draft.draft_data:
                 selected_pet_ids = [pet['pet_id'] for pet in draft.draft_data['pets']]
 
+            logger.info(f"MBA-PETS-DEBUG: Draft {booking_id} has pets in draft_data: {draft.draft_data.get('pets', []) if draft.draft_data else []}")
+            logger.info(f"MBA-PETS-DEBUG: Extracted selected_pet_ids: {selected_pet_ids}")
+
             # Format the response
             pets_data = [
                 OrderedDict([
@@ -494,10 +497,13 @@ class AvailablePetsView(APIView):
                 for pet in client_pets
             ]
 
-            return Response({
+            response_data = {
                 'pets': pets_data,
                 'selected_pet_ids': selected_pet_ids
-            })
+            }
+            logger.info(f"MBA-PETS-DEBUG: Returning response: {response_data}")
+
+            return Response(response_data)
         except Exception as e:
             logger.error(f"Error in AvailablePetsView: {str(e)}")
             return Response(
@@ -1509,10 +1515,12 @@ class UpdateBookingDraftTimeAndDateView(APIView):
 
             # Calculate additional pet charges
             additional_pet_charges = Decimal('0')
-            if num_pets > 1:
-                additional_pets = num_pets - 1
-                additional_pet_charges = additional_animal_rate * additional_pets * nights
-                logger.info(f"MBA1234 - Additional pet charges: {additional_pet_charges} for {additional_pets} additional pets")
+            applies_after = existing_rates.get('applies_after', service.applies_after) if existing_rates else service.applies_after
+            additional_pets_count = 0
+            if num_pets > applies_after:
+                additional_pets_count = num_pets - applies_after
+                additional_pet_charges = additional_animal_rate * additional_pets_count * nights
+                logger.info(f"MBA1234 - Additional pet charges: {additional_pet_charges} for {additional_pets_count} additional pets after {applies_after}")
 
             # Calculate total cost (base rate per night + additional pet charges)
             total_cost = (base_rate * nights) + additional_pet_charges
@@ -1553,8 +1561,10 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                 ('multiple', nights),
                 ('rates', OrderedDict([
                     ('base_rate', str(base_rate)),
-                    ('additional_animal_rate', str(additional_animal_rate)),
-                    ('applies_after', service.applies_after),
+                    ('additional_animal_rate', str(additional_animal_rate)),  # Per-unit rate (e.g., $10/pet/night)
+                    ('additional_animal_rate_total', str(additional_pet_charges)),  # Total calculated amount (e.g., $60)
+                    ('additional_animal_rate_applies', additional_pets_count),
+                    ('applies_after', applies_after),
                     ('holiday_rate', str(holiday_rate)),
                     ('holiday_days', 0),
                     ('additional_rates', existing_rates.get('additional_rates', []) if existing_rates else [
@@ -1759,8 +1769,13 @@ class UpdateBookingRatesView(APIView):
                             if num_pets > applies_after:
                                 additional_pets = num_pets - applies_after
                                 additional_animal_rate = Decimal(str(new_rates['additional_animal_rate']))
+                                multiple = occurrence.get('multiple', 1)
+                                # For overnight services: additional animal rate × additional pets × nights
                                 additional_animal_rate_total = additional_animal_rate * additional_pets * Decimal(str(multiple))
                                 occurrence['rates']['additional_animal_rate_total'] = float(additional_animal_rate_total)
+                                logger.info(f"MBA98765 - Additional animal rate calc: {num_pets} pets - {applies_after} applies_after = {additional_pets} extra pets × ${additional_animal_rate} × {multiple} = ${additional_animal_rate_total}")
+                            else:
+                                occurrence['rates']['additional_animal_rate_total'] = 0.0
                         
                         # Calculate holiday rates
                         holiday_rate_total = Decimal('0')
@@ -1935,6 +1950,7 @@ class UpdateBookingRatesView(APIView):
 def manage_service_additional_rates(draft_data, service, occurrences_data):
     """
     Manages the service_details.additional_rates object based on service rates and occurrence rates.
+    Enhanced to store full rate data: {applies: bool, amount: str, description: str}
     
     Args:
         draft_data: The current draft data dictionary
@@ -1944,7 +1960,7 @@ def manage_service_additional_rates(draft_data, service, occurrences_data):
     Returns:
         Updated draft_data with service_details.additional_rates managed
     """
-    logger.info("MBA5321 - Managing service additional rates")
+    logger.info("MBA5321 - Managing service additional rates with enhanced structure")
     
     # Initialize service_details if it doesn't exist
     if 'service_details' not in draft_data:
@@ -1958,11 +1974,11 @@ def manage_service_additional_rates(draft_data, service, occurrences_data):
     existing_additional_rates = draft_data['service_details']['additional_rates']
     logger.info(f"MBA5321 - Existing additional rates: {existing_additional_rates}")
     
-    # Collect all unique rate titles from service and occurrences
-    all_rate_titles = set()
+    # Collect all unique rate titles from service and occurrences with their details
+    all_rate_details = {}  # {title: {amount: str, description: str}}
     service_rate_titles = set()
     
-    # Get service additional rates
+    # Get service additional rates with full details
     if service and hasattr(service, 'additional_rates'):
         service_rates = service.additional_rates
         # Handle both QuerySet and list
@@ -1972,15 +1988,22 @@ def manage_service_additional_rates(draft_data, service, occurrences_data):
         for rate in service_rates:
             if isinstance(rate, dict):
                 rate_title = rate.get('title')
+                rate_amount = rate.get('amount') or rate.get('rate', '0.00')
+                rate_description = rate.get('description', '')
             else:
                 rate_title = getattr(rate, 'title', None)
+                rate_amount = getattr(rate, 'amount', None) or getattr(rate, 'rate', '0.00')
+                rate_description = getattr(rate, 'description', '')
             
             if rate_title:
-                all_rate_titles.add(rate_title)
+                all_rate_details[rate_title] = {
+                    'amount': str(rate_amount),
+                    'description': str(rate_description)
+                }
                 service_rate_titles.add(rate_title)
-                logger.info(f"MBA5321 - Found service rate: {rate_title}")
+                logger.info(f"MBA5321 - Found service rate: {rate_title} - ${rate_amount}")
     
-    # Get occurrence rates
+    # Get occurrence rates with details
     occurrence_rate_counts = {}
     total_occurrences = len(occurrences_data)
     
@@ -1989,11 +2012,19 @@ def manage_service_additional_rates(draft_data, service, occurrences_data):
         for rate in occ_additional_rates:
             rate_title = rate.get('title') or rate.get('name', '')
             if rate_title:
-                all_rate_titles.add(rate_title)
+                # Store rate details if not already collected from service
+                if rate_title not in all_rate_details:
+                    rate_amount = rate.get('amount', '0.00')
+                    rate_description = rate.get('description', '')
+                    all_rate_details[rate_title] = {
+                        'amount': str(rate_amount),
+                        'description': str(rate_description)
+                    }
+                
                 occurrence_rate_counts[rate_title] = occurrence_rate_counts.get(rate_title, 0) + 1
                 logger.info(f"MBA5321 - Found occurrence rate: {rate_title}")
     
-    logger.info(f"MBA5321 - All rate titles: {all_rate_titles}")
+    logger.info(f"MBA5321 - All rate details: {all_rate_details}")
     logger.info(f"MBA5321 - Occurrence rate counts: {occurrence_rate_counts}")
     logger.info(f"MBA5321 - Total occurrences: {total_occurrences}")
     
@@ -2004,6 +2035,7 @@ def manage_service_additional_rates(draft_data, service, occurrences_data):
     def generate_rate_key(title):
         # Check if this title already has a key in existing mapping
         for existing_key, existing_value in existing_additional_rates.items():
+            # Handle both old boolean format and new object format
             if existing_key.startswith(f"{title}_start-"):
                 return existing_key
         
@@ -2012,25 +2044,32 @@ def manage_service_additional_rates(draft_data, service, occurrences_data):
         return f"{title}_start-{random_id}"
     
     # Process all rate titles
-    for rate_title in all_rate_titles:
+    for rate_title, rate_details in all_rate_details.items():
         rate_key = generate_rate_key(rate_title)
         
         # Determine if rate should be True (applies to ALL occurrences) or False
         occurrences_with_rate = occurrence_rate_counts.get(rate_title, 0)
         applies_to_all = (occurrences_with_rate == total_occurrences)
         
-        # For service rates, set to False if not in all occurrences
+        # Create enhanced rate object with full details
+        rate_object = {
+            'applies': applies_to_all,
+            'amount': rate_details['amount'],
+            'description': rate_details['description']
+        }
+        
+        # For service rates, include even if not in all occurrences
         # For non-service rates, only include if present in at least one occurrence
         if rate_title in service_rate_titles:
-            new_additional_rates[rate_key] = applies_to_all
-            logger.info(f"MBA5321 - Service rate {rate_title} -> {applies_to_all} (in {occurrences_with_rate}/{total_occurrences} occurrences)")
+            new_additional_rates[rate_key] = rate_object
+            logger.info(f"MBA5321 - Service rate {rate_title} -> applies: {applies_to_all}, amount: ${rate_details['amount']} (in {occurrences_with_rate}/{total_occurrences} occurrences)")
         elif occurrences_with_rate > 0:
-            new_additional_rates[rate_key] = applies_to_all
-            logger.info(f"MBA5321 - Custom rate {rate_title} -> {applies_to_all} (in {occurrences_with_rate}/{total_occurrences} occurrences)")
+            new_additional_rates[rate_key] = rate_object
+            logger.info(f"MBA5321 - Custom rate {rate_title} -> applies: {applies_to_all}, amount: ${rate_details['amount']} (in {occurrences_with_rate}/{total_occurrences} occurrences)")
     
     # Update the draft data
     draft_data['service_details']['additional_rates'] = new_additional_rates
-    logger.info(f"MBA5321 - Final additional rates: {new_additional_rates}")
+    logger.info(f"MBA5321 - Final enhanced additional rates: {new_additional_rates}")
     
     return draft_data
 
@@ -2114,7 +2153,10 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                 end_time_obj = datetime.strptime(end_time, '%H:%M').time()
 
                 # Look for matching existing occurrence
+                # Strategy: Match by start date OR by position in the list for better user experience
                 matching_occurrence = None
+                
+                # First, try to find exact match (start date, end date, and times all match)
                 for existing_occ in existing_occurrences:
                     existing_start_date = datetime.strptime(existing_occ['start_date'], '%Y-%m-%d').date()
                     existing_end_date = datetime.strptime(existing_occ['end_date'], '%Y-%m-%d').date()
@@ -2127,25 +2169,50 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                         matching_occurrence = existing_occ.copy()
                         logger.info(f"MBA5321 - Exact match found for {start_date} {start_time}-{end_time}")
                         break
-                    elif existing_start_date == start_date_obj and existing_end_date == end_date_obj:
-                        # Date match but time difference - preserve additional_rates, recalculate base rates
-                        logger.info(f"MBA5321 - Date match with time change for {start_date}")
-                        matching_occurrence = existing_occ.copy()
-                        # Keep the additional_rates but we'll recalculate base rates below
-                        break
+                
+                # If no exact match, try to find by start date only (handles overnight changes)
+                if not matching_occurrence:
+                    for existing_occ in existing_occurrences:
+                        existing_start_date = datetime.strptime(existing_occ['start_date'], '%Y-%m-%d').date()
+                        
+                        if existing_start_date == start_date_obj:
+                            # Start date match - preserve user's additional_rates choices
+                            matching_occurrence = existing_occ.copy()
+                            logger.info(f"MBA5321 - Start date match found for {start_date} (preserving user choices)")
+                            break
+                
+                # If still no match, try positional matching ONLY if it's a reasonable match
+                # (same start date OR at least same day of week to avoid rate pollution)
+                if not matching_occurrence and occurrence_counter < len(existing_occurrences):
+                    positional_candidate = existing_occurrences[occurrence_counter]
+                    existing_start_date = datetime.strptime(positional_candidate['start_date'], '%Y-%m-%d').date()
+                    
+                    # Only use positional match if it's the same start date or very close
+                    # (this prevents new dates from getting rates from unrelated dates)
+                    date_diff = abs((start_date_obj - existing_start_date).days)
+                    
+                    if date_diff <= 1:  # Allow up to 1 day difference for reasonable matching
+                        matching_occurrence = positional_candidate.copy()
+                        logger.info(f"MBA5321 - Positional match found at index {occurrence_counter} for {start_date} (preserving user choices, date diff: {date_diff} days)")
+                    else:
+                        logger.info(f"MBA5321 - Skipping positional match at index {occurrence_counter} for {start_date} (date diff too large: {date_diff} days, would cause rate pollution)")
 
                 if matching_occurrence:
-                    # Update times if they changed
+                    # Detect if times actually changed before modifying the occurrence
+                    original_start_time = matching_occurrence['start_time']
+                    original_end_time = matching_occurrence['end_time']
+                    times_changed = (original_start_time != start_time or original_end_time != end_time)
+                    
+                    # Update ALL date and time fields (CRITICAL: don't forget start_date!)
+                    matching_occurrence['start_date'] = start_date
                     matching_occurrence['start_time'] = start_time
                     matching_occurrence['end_time'] = end_time
                     matching_occurrence['end_date'] = end_date
 
                     # If times changed, recalculate base rates but preserve additional_rates
-                    if (matching_occurrence.get('_time_changed', False) or 
-                        matching_occurrence['start_time'] != start_time or 
-                        matching_occurrence['end_time'] != end_time):
+                    if times_changed:
                         
-                        # Preserve additional_rates
+                        # Preserve additional_rates exactly as they were in the draft
                         preserved_additional_rates = matching_occurrence.get('rates', {}).get('additional_rates', [])
                         
                         # Recalculate occurrence data with new times
@@ -2164,29 +2231,41 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                         rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
                         
                         if rate_data:
-                            # Update the matching occurrence with new rates but preserve additional_rates
+                            # Update the matching occurrence with new base rates but preserve user's additional_rates
                             matching_occurrence['rates']['base_rate'] = rate_data['rates']['base_rate']
                             matching_occurrence['rates']['additional_animal_rate'] = rate_data['rates']['additional_animal_rate']
                             matching_occurrence['rates']['applies_after'] = rate_data['rates']['applies_after']
                             matching_occurrence['rates']['holiday_rate'] = rate_data['rates']['holiday_rate']
                             matching_occurrence['rates']['holiday_days'] = rate_data['rates'].get('holiday_days', 0)
                             matching_occurrence['rates']['unit_of_time'] = rate_data['rates']['unit_of_time']
-                            matching_occurrence['rates']['additional_rates'] = preserved_additional_rates  # Restore preserved rates
+                            # CRITICAL: Use preserved additional_rates, NOT the ones from calculate_occurrence_rates
+                            matching_occurrence['rates']['additional_rates'] = preserved_additional_rates
+                            
+                            # Calculate additional_animal_rate_total
+                            applies_after = int(rate_data['rates']['applies_after'])
+                            num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
+                            additional_pets = num_pets - applies_after if num_pets > applies_after else 0
+                            multiple = rate_data['multiple']
+                            additional_animal_rate = Decimal(str(rate_data['rates']['additional_animal_rate']))
+                            additional_animal_rate_total = additional_animal_rate * additional_pets * Decimal(str(multiple))
+                            matching_occurrence['rates']['additional_animal_rate_total'] = str(additional_animal_rate_total)
                             
                             # Update other fields
                             matching_occurrence['base_total'] = rate_data['base_total']
                             matching_occurrence['multiple'] = rate_data['multiple']
                             
-                            # Recalculate total cost including preserved additional rates
-                            base_cost = Decimal(str(rate_data.get('calculated_cost', 0)))
+                            # Recalculate total cost using individual components
+                            base_cost = Decimal(str(rate_data['base_total']))
                             additional_rates_total = Decimal('0')
                             for rate in preserved_additional_rates:
                                 rate_amount = Decimal(str(rate.get('amount', 0)))
                                 additional_rates_total += rate_amount
                             
-                            matching_occurrence['calculated_cost'] = float(base_cost + additional_rates_total)
+                            # Calculate final cost: base + additional animal + preserved additional rates
+                            final_cost = base_cost + additional_animal_rate_total + additional_rates_total
+                            matching_occurrence['calculated_cost'] = float(final_cost)
                         
-                        logger.info(f"MBA5321 - Recalculated rates for time change, preserved additional rates")
+                        logger.info(f"MBA5321 - Recalculated rates for time change, preserved user's additional rates: {len(preserved_additional_rates)} rates")
 
                     new_occurrences.append(matching_occurrence)
                 else:
@@ -2205,14 +2284,53 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     rate_data = calculate_occurrence_rates(temp_occurrence, service, num_pets)
                     
                     if rate_data:
-                        # Create new occurrence with proper structure
+                        # CRITICAL FIX: For new occurrences, always include all service additional rates
+                        filtered_additional_rates = []
+                        
+                        # NEW LOGIC: For ALL new occurrences, include ALL service additional rates by default
+                        # This ensures new occurrences always start with all available service rates
+                        if rate_data['rates'].get('additional_rates'):
+                            for rate in rate_data['rates']['additional_rates']:
+                                rate_title = rate.get('title', '')
+                                # Always include all service rates for new occurrences
+                                filtered_additional_rates.append(rate)
+                                logger.info(f"MBA5321 - Including rate '{rate_title}' in new occurrence (all service rates included by default for new occurrences)")
+                        
+                        # Update rate_data with filtered additional rates
+                        rate_data['rates']['additional_rates'] = filtered_additional_rates
+                        
+                        # Calculate additional_animal_rate_total for new occurrences
+                        applies_after = int(rate_data['rates']['applies_after'])
+                        num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
+                        additional_pets = num_pets - applies_after if num_pets > applies_after else 0
+                        multiple = rate_data['multiple']
+                        additional_animal_rate = Decimal(str(rate_data['rates']['additional_animal_rate']))
+                        additional_animal_rate_total = additional_animal_rate * additional_pets * Decimal(str(multiple))
+                        rate_data['rates']['additional_animal_rate_total'] = str(additional_animal_rate_total)
+                        
+                        # Recalculate cost with filtered rates
+                        base_cost = Decimal(str(rate_data['base_total']))
+                        additional_rates_total = Decimal('0')
+                        for rate in filtered_additional_rates:
+                            rate_amount = Decimal(str(rate.get('amount', 0)))
+                            additional_rates_total += rate_amount
+                        
+                        # Add additional animal rate if applicable
+                        additional_animal_rate = Decimal('0')
+                        if rate_data['rates'].get('additional_animal_rate_applies', 0) > 0:
+                            additional_animal_rate = Decimal(str(rate_data['rates'].get('additional_animal_rate', 0))) * Decimal(str(rate_data['rates'].get('additional_animal_rate_applies', 0)))
+                        
+                        # Calculate final cost
+                        calculated_cost = base_cost + additional_rates_total + additional_animal_rate_total
+                        
+                        # Create new occurrence with proper structure and filtered rates
                         new_occurrence = {
                             'occurrence_id': f"draft_{int(datetime.now().timestamp())}_{occurrence_counter}",
                             'start_date': start_date,
                             'end_date': end_date,
                             'start_time': start_time,
                             'end_time': end_time,
-                            'calculated_cost': float(Decimal(str(rate_data['calculated_cost']))),
+                            'calculated_cost': float(calculated_cost),
                             'base_total': float(Decimal(str(rate_data['base_total']))),
                             'multiple': rate_data['multiple'],
                             'rates': rate_data['rates']
@@ -2221,8 +2339,81 @@ class UpdateBookingDraftMultipleDaysView(APIView):
 
                 occurrence_counter += 1
 
-            # Calculate cost summary
-            cost_summary = calculate_cost_summary(new_occurrences)
+            # Calculate cost summary with proper platform fees and taxes (like UpdateBookingRatesView does)
+            # This respects waitlist status (no platform fees) and state tax rules (Colorado = no taxes)
+            # Calculate subtotal
+            subtotal = Decimal('0')
+            for occ in new_occurrences:
+                subtotal += Decimal(str(occ['calculated_cost']))
+            
+            # Get professional's service address for tax calculation
+            address = Address.objects.filter(
+                user=professional.user,
+                address_type=AddressType.SERVICE
+            ).first()
+            
+            # Get state from address or use default
+            state = get_state_from_address(address, default_state='CO')
+            
+            # Get client for platform fee calculation
+            client = None
+            client_user = None
+            
+            # First try to get client from booking
+            if draft.booking and draft.booking.client:
+                client = draft.booking.client
+                client_user = client.user if client else None
+                logger.info(f"MBA5321 - Found client from booking: {client.id if client else 'None'}")
+            # If not in booking, try to get from draft data
+            elif draft.draft_data and 'client_id' in draft.draft_data and draft.draft_data['client_id']:
+                try:
+                    client_id = draft.draft_data['client_id']
+                    client = Client.objects.get(id=client_id)
+                    client_user = client.user if client else None
+                    logger.info(f"MBA5321 - Found client from draft data: {client.id if client else 'None'}")
+                except (Client.DoesNotExist, Exception) as e:
+                    logger.error(f"MBA5321 - Error retrieving client from draft data: {str(e)}")
+            
+            # Use the proper platform fee utility to calculate platform fees (respects waitlist status)
+            platform_fees = calculate_platform_fees(subtotal, client_user, professional.user)
+            
+            client_platform_fee = platform_fees['client_platform_fee']
+            pro_platform_fee = platform_fees['pro_platform_fee']
+            total_platform_fee = platform_fees['total_platform_fee']
+            client_platform_fee_percentage = platform_fees['client_platform_fee_percentage']
+            pro_platform_fee_percentage = platform_fees['pro_platform_fee_percentage']
+            
+            # Calculate taxes using proper tax_utils (respects Colorado no-tax rule)
+            taxes = calculate_booking_taxes(state, subtotal, client_platform_fee, pro_platform_fee)
+            
+            # Calculate totals
+            total_client_cost = subtotal + client_platform_fee + taxes
+            total_sitter_payout = (subtotal - pro_platform_fee).quantize(Decimal('0.01'))
+            
+            # Get pro subscription plan if available
+            pro_subscription_plan = 0  # Default value
+            try:
+                pro_subscription_plan = professional.user.subscription_plan
+                logger.info(f"MBA5321 - Retrieved professional subscription plan: {pro_subscription_plan}")
+            except Exception as e:
+                logger.error(f"MBA5321 - Error retrieving professional subscription plan: {str(e)}")
+                pro_subscription_plan = 0
+            
+            # Create proper cost summary
+            cost_summary = OrderedDict([
+                ('subtotal', float(subtotal)),
+                ('client_platform_fee', float(client_platform_fee)),
+                ('pro_platform_fee', float(pro_platform_fee)),
+                ('total_platform_fee', float(total_platform_fee)),
+                ('taxes', float(taxes)),
+                ('total_client_cost', float(total_client_cost)),
+                ('total_sitter_payout', float(total_sitter_payout)),
+                ('is_prorated', True),
+                ('tax_state', state),
+                ('client_platform_fee_percentage', float(client_platform_fee_percentage * 100)),
+                ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100)),
+                ('pro_subscription_plan', pro_subscription_plan)
+            ])
 
             # Update draft data with preserved/recalculated occurrences
             draft.draft_data['occurrences'] = new_occurrences
@@ -2253,7 +2444,43 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                     'service_type': service.service_name
                 }
             
+            # CRITICAL: Store existing user choices BEFORE calling manage_service_additional_rates
+            # This preserves user's unchecked rates even when new occurrences are created
+            existing_user_choices = {}
+            if 'service_details' in draft.draft_data and 'additional_rates' in draft.draft_data['service_details']:
+                existing_additional_rates = draft.draft_data['service_details']['additional_rates']
+                
+                # Extract user choices from existing format (both old boolean and new enhanced)
+                for rate_key, rate_value in existing_additional_rates.items():
+                    if isinstance(rate_value, bool):
+                        # Old boolean format
+                        existing_user_choices[rate_key] = rate_value
+                    elif isinstance(rate_value, dict) and 'applies' in rate_value:
+                        # New enhanced format
+                        existing_user_choices[rate_key] = rate_value['applies']
+                
+                logger.info(f"MBA5321 - Preserved user choices before manage_service_additional_rates: {existing_user_choices}")
+            
+            # Call manage_service_additional_rates to get the enhanced structure
             draft.draft_data = manage_service_additional_rates(draft.draft_data, service, new_occurrences)
+            
+            # CRITICAL: Restore user choices after manage_service_additional_rates
+            # This ensures user's unchecked rates stay unchecked even if they appear in new occurrences
+            if existing_user_choices:
+                updated_additional_rates = draft.draft_data['service_details']['additional_rates']
+                
+                for rate_key, user_choice in existing_user_choices.items():
+                    if rate_key in updated_additional_rates:
+                        # Preserve the user's choice in the enhanced format
+                        if isinstance(updated_additional_rates[rate_key], dict):
+                            updated_additional_rates[rate_key]['applies'] = user_choice
+                        else:
+                            # Fallback for unexpected format
+                            updated_additional_rates[rate_key] = user_choice
+                        
+                        logger.info(f"MBA5321 - Restored user choice for {rate_key}: applies={user_choice}")
+                
+                logger.info(f"MBA5321 - Final additional rates after restoring user choices: {updated_additional_rates}")
 
             # Save the updated draft
             draft.save()
@@ -2752,6 +2979,10 @@ class CreateDraftFromBookingView(APIView):
             processed_occurrences = []
             num_pets = len(pets_data)
             
+            # Generate draft timestamp for unique occurrence IDs
+            draft_timestamp = int(datetime.now().timestamp())
+            occurrence_counter = 0
+            
             # Get booking occurrences
             occurrences = BookingOccurrence.objects.filter(booking=booking)
             
@@ -2779,9 +3010,10 @@ class CreateDraftFromBookingView(APIView):
                 )
                 
                 # Extract data directly from the occurrence model in 24-hour UTC format
-                # instead of relying on create_occurrence_data which may convert to user timezone
+                # Use draft occurrence ID instead of booking occurrence ID
+                draft_occurrence_id = f"draft_{draft_timestamp}_{occurrence_counter}"
                 occurrence_data = OrderedDict([
-                    ('occurrence_id', occurrence.occurrence_id),
+                    ('occurrence_id', draft_occurrence_id),
                     ('start_date', occurrence.start_date.strftime('%Y-%m-%d')),
                     ('end_date', occurrence.end_date.strftime('%Y-%m-%d')),
                     ('start_time', occurrence.start_time.strftime('%H:%M')),
@@ -2791,80 +3023,84 @@ class CreateDraftFromBookingView(APIView):
                 
                 logger.info(f"MBA23oh9uvrnu32: Created occurrence with UTC times: {occurrence_data['start_time']}-{occurrence_data['end_time']}")
                 
-                # Directly calculate necessary rate data if temp_service available
-                # This ensures we have calculated_cost even if create_occurrence_data fails
-                try:
-                    # Start with default base rate from service
-                    base_rate = temp_service.base_rate
-                    # Calculate duration in hours
-                    hour_diff = (occurrence.end_time.hour - occurrence.start_time.hour)
-                    minute_diff = (occurrence.end_time.minute - occurrence.start_time.minute) / 60
-                    duration_hours = hour_diff + minute_diff
-                    
-                    # Calculate multiple based on unit_of_time
-                    multiple = 0.33333  # Default for per day (8 hours)
-                    if temp_service.unit_of_time == 'Per Hour':
-                        multiple = duration_hours
-                    elif temp_service.unit_of_time == 'Per Visit':
-                        multiple = 1
-                    
-                    # Calculate basic costs
-                    base_total = Decimal(str(base_rate)) * Decimal(str(multiple))
-                    calculated_cost = base_total
-                    
-                    # Add default calculated values
-                    occurrence_data['multiple'] = float(multiple)
-                    occurrence_data['base_total'] = str(base_total)
-                    occurrence_data['calculated_cost'] = str(calculated_cost)
-                    occurrence_data['duration'] = f"{int(duration_hours)} hours"
-                    
-                    # Add basic rates information
-                    occurrence_data['rates'] = OrderedDict([
-                        ('base_rate', str(temp_service.base_rate)),
-                        ('holiday_rate', str(temp_service.holiday_rate)),
-                        ('additional_animal_rate', str(temp_service.additional_animal_rate)),
-                        ('applies_after', temp_service.applies_after),
-                        ('holiday_days', 0),
-                        ('unit_of_time', temp_service.unit_of_time),
-                        ('additional_rates', [])
-                    ])
-                    
-                    logger.info(f"MBA23oh9uvrnu32: Directly calculated cost: {calculated_cost} with multiple: {multiple}")
-                except Exception as e:
-                    logger.error(f"MBA23oh9uvrnu32: Error calculating rates directly: {str(e)}")
+                # CRITICAL FIX: Build rates directly from booking data, don't use calculate_occurrence_rates
+                # which automatically adds all service rates to all occurrences
                 
-                # Try to use create_occurrence_data for calculating rates, but preserve our time formats
-                temp_data = create_occurrence_data(
-                    occurrence=occurrence,
-                    service=temp_service,
-                    num_pets=num_pets,
-                    user_timezone=None  # Setting to None prevents timezone conversion
-                )
+                # Calculate basic values
+                start_datetime = datetime.combine(occurrence.start_date, occurrence.start_time)
+                end_datetime = datetime.combine(occurrence.end_date, occurrence.end_time)
+                duration_hours = (end_datetime - start_datetime).total_seconds() / 3600
                 
-                # Copy only the necessary fields from temp_data, preserving our time formats
-                if temp_data:
-                    for key, value in temp_data.items():
-                        # Skip time and date fields that we've already set
-                        if key not in ['start_date', 'end_date', 'start_time', 'end_time', 'formatted_start', 'formatted_end']:
-                            occurrence_data[key] = value
+                # Get rate details from booking_details 
+                base_rate = booking_details.base_rate if booking_details else service.base_rate
+                additional_animal_rate = booking_details.additional_pet_rate if booking_details else service.additional_animal_rate
+                applies_after = booking_details.applies_after if booking_details else service.applies_after
+                holiday_rate = booking_details.holiday_rate if booking_details else service.holiday_rate
+                unit_of_time = booking_details.unit_of_time if booking_details else service.unit_of_time
                 
-                # If occurrence_rates exists, add any additional rates
+                # Calculate multiple based on unit_of_time
+                if unit_of_time == '1 Hour':
+                    multiple = duration_hours
+                elif unit_of_time == '1 Day':
+                    multiple = max(1, duration_hours / 24)
+                else:
+                    multiple = 1
+                
+                # Calculate base total
+                base_total = base_rate * Decimal(str(multiple))
+                
+                # Calculate additional animal rate (only if more pets than applies_after)
+                additional_animal_total = Decimal('0')
+                additional_animal_rate_applies = max(0, num_pets - applies_after) if applies_after else 0
+                if additional_animal_rate_applies > 0:
+                    additional_animal_total = additional_animal_rate * Decimal(str(additional_animal_rate_applies))
+                
+                # Start with base + additional animal costs
+                total_cost = base_total + additional_animal_total
+                
+                # Build rates structure with NO additional rates initially
+                rates_structure = OrderedDict([
+                    ('base_rate', str(base_rate)),
+                    ('additional_animal_rate', str(additional_animal_rate)),
+                    ('additional_animal_rate_applies', additional_animal_rate_applies),
+                    ('applies_after', applies_after),
+                    ('unit_of_time', unit_of_time),
+                    ('holiday_rate', str(holiday_rate)),
+                    ('holiday_days', 0),
+                    ('additional_rates', [])  # Start with empty additional rates
+                ])
+                
+                # Now add ONLY the actual additional rates from this specific occurrence
+                additional_rates = []
+                occurrence_additional_total = Decimal('0')
+                
                 if occurrence_rates and hasattr(occurrence_rates, 'rates'):
-                    additional_rates = []
                     for rate in occurrence_rates.rates:
-                        if rate.get('title') != 'Base Rate' and rate.get('title') != 'Additional Animal Rate' and rate.get('title') != 'Holiday Rate':
+                        if rate.get('title') not in ['Base Rate', 'Additional Animal Rate', 'Holiday Rate']:
+                            rate_amount = Decimal(str(rate.get('amount', '0.00')))
                             additional_rates.append(OrderedDict([
                                 ('title', rate.get('title', '')),
                                 ('description', rate.get('description', '')),
                                 ('amount', rate.get('amount', '0.00'))
                             ]))
-                    
-                    # Update the occurrence data with these additional rates
-                    if occurrence_data and 'rates' in occurrence_data:
-                        occurrence_data['rates']['additional_rates'] = additional_rates
+                            occurrence_additional_total += rate_amount
+                
+                # Update rates structure with actual additional rates
+                rates_structure['additional_rates'] = additional_rates
+                total_cost += occurrence_additional_total
+                
+                # Add calculated values to occurrence_data
+                occurrence_data['multiple'] = float(multiple)
+                occurrence_data['base_total'] = str(base_total)
+                occurrence_data['calculated_cost'] = str(total_cost)
+                occurrence_data['duration'] = f"{int(duration_hours)} hours"
+                occurrence_data['rates'] = rates_structure
+                
+                logger.info(f"MBA6428: Built occurrence from booking data - Base: {base_total}, Additional: {occurrence_additional_total}, Total: {total_cost}")
                 
                 if occurrence_data:
                     processed_occurrences.append(occurrence_data)
+                    occurrence_counter += 1
             
             # Calculate subtotal from all occurrences
             subtotal = Decimal('0.00')
@@ -2928,7 +3164,18 @@ class CreateDraftFromBookingView(APIView):
                 ('pro_platform_fee_percentage', float(pro_platform_fee_percentage * 100))
             ])
             
-            # Create draft data
+            # Create initial draft data for manage_service_additional_rates
+            initial_draft_data = {
+                'service_details': {
+                    'service_type': service.service_name,
+                    'service_id': service.service_id
+                }
+            }
+            
+            # Manage service additional rates to create the enhanced structure
+            manage_service_additional_rates(initial_draft_data, service, processed_occurrences)
+            
+            # Create final draft data
             draft_data = OrderedDict([
                 ('booking_id', booking.booking_id),
                 ('status', booking.status),
@@ -2939,10 +3186,7 @@ class CreateDraftFromBookingView(APIView):
                 ('pets', pets_data),
                 ('can_edit', True),
                 ('occurrences', processed_occurrences),
-                ('service_details', OrderedDict([
-                    ('service_type', service.service_name),
-                    ('service_id', service.service_id)
-                ])),
+                ('service_details', initial_draft_data['service_details']),
                 ('cost_summary', cost_summary),
                 ('pro_agreed_tos', booking.pro_agreed_tos),
                 ('client_agreed_tos', booking.client_agreed_tos),

@@ -261,9 +261,17 @@ const BookingApprovalModal = ({
       
       // Determine TOS value to send based on user type and current status
       let tosValueToSend = false;
-      if (!isProfessional && !bookingData?.client_agreed_tos && userTosAgreed) {
-        // Client approving, hasn't agreed before, and just agreed in this session
-        tosValueToSend = true;
+      if (!isProfessional) {
+        // For clients, send true if they have agreed to TOS (either previously or in this session)
+        const clientHasAgreedTos = bookingData?.client_agreed_tos || userTosAgreed;
+        tosValueToSend = clientHasAgreedTos;
+        
+        debugLog('MBA4321: Client TOS agreement for approval:', {
+          bookingDataClientAgreedTos: bookingData?.client_agreed_tos,
+          userTosAgreed,
+          clientHasAgreedTos,
+          tosValueToSend
+        });
       }
       
       // Call approve booking with TOS agreement if needed

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext, debugLog } from '../../context/AuthContext';
 import { API_BASE_URL, getMediaUrl } from '../../config/config';
 import { getBookingAvailableServices, getBookingAvailablePets } from '../../api/API';
 import axios from 'axios';
@@ -22,6 +22,7 @@ const ServiceAndPetsCard = ({
   bookingId, 
   onServiceSelect, 
   onPetSelect, 
+  onBatchPetSelect,
   selectedService, 
   selectedPets,
   isLoading,
@@ -29,49 +30,154 @@ const ServiceAndPetsCard = ({
   onNext,
   currentBookingId,
   navigation,
-  onClose
+  onClose,
+  shouldFetchServices,
+  shouldFetchPets,
+  markServicesInitialized,
+  markPetsInitialized,
+  // New props for parent-managed data
+  availableServices: parentAvailableServices = [],
+  availablePets: parentAvailablePets = [],
+  onServicesData,
+  onPetsData
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
-  const [availableServices, setAvailableServices] = useState([]);
-  const [availablePets, setAvailablePets] = useState([]);
+  
+  if (is_DEBUG) {
+    console.log('MBA2ou09hv595: ServiceAndPetsCard component rendered/re-rendered', {
+      bookingId,
+      timestamp: new Date().toISOString()
+    });
+  }
+  // Use parent-provided data if available, otherwise fall back to local state
+  const [localAvailableServices, setLocalAvailableServices] = useState([]);
+  const [localAvailablePets, setLocalAvailablePets] = useState([]);
+  
+  // Use parent data if provided, otherwise use local state
+  const availableServices = parentAvailableServices.length > 0 ? parentAvailableServices : localAvailableServices;
+  const availablePets = parentAvailablePets.length > 0 ? parentAvailablePets : localAvailablePets;
+  
+  // Add debugging for state changes
+  useEffect(() => {
+    debugLog('MBA2ou09hv595', 'availableServices state changed', {
+      bookingId,
+      count: availableServices.length,
+      services: availableServices.map(s => ({ id: s.service_id, name: s.service_name })),
+      source: parentAvailableServices.length > 0 ? 'parent' : 'local'
+    });
+  }, [availableServices, parentAvailableServices]);
+  
+  useEffect(() => {
+    debugLog('MBA2ou09hv595', 'availablePets state changed', {
+      bookingId,
+      count: availablePets.length,
+      pets: availablePets.map(p => ({ id: p.pet_id, name: p.name })),
+      source: parentAvailablePets.length > 0 ? 'parent' : 'local'
+    });
+  }, [availablePets, parentAvailablePets]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [isLoadingPets, setIsLoadingPets] = useState(false);
   const [serviceError, setServiceError] = useState(null);
   const [petsError, setPetsError] = useState(null);
 
   useEffect(() => {
-    if (bookingId) {
+    debugLog('MBA2ou09hv595', 'useEffect triggered', {
+      bookingId,
+      selectedService,
+      selectedPetsCount: selectedPets.length,
+      selectedPetIds: selectedPets.map(p => p.pet_id),
+      currentAvailableServicesCount: availableServices.length,
+      currentAvailablePetsCount: availablePets.length,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Use parent-controlled initialization logic
+    if (shouldFetchServices && shouldFetchServices()) {
+      debugLog('MBA2ou09hv595', 'Parent says should fetch services', {
+        bookingId,
+        timestamp: new Date().toISOString()
+      });
       fetchAvailableServices();
+    } else {
+      debugLog('MBA2ou09hv595', 'Parent says skip services fetch', {
+        bookingId,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (shouldFetchPets && shouldFetchPets()) {
+      debugLog('MBA2ou09hv595', 'Parent says should fetch pets', {
+        bookingId,
+        timestamp: new Date().toISOString()
+      });
       fetchAvailablePets();
+    } else {
+      debugLog('MBA2ou09hv595', 'Parent says skip pets fetch', {
+        bookingId,
+        timestamp: new Date().toISOString()
+      });
     }
   }, [bookingId]);
 
   const fetchAvailableServices = async () => {
     try {
+      if (is_DEBUG) {
+        console.log('MBA2ou09hv595: fetchAvailableServices started', {
+          bookingId,
+          timestamp: new Date().toISOString()
+        });
+      }
       setIsLoadingServices(true);
       setServiceError(null);
       const response = await getBookingAvailableServices(bookingId);
       if (is_DEBUG) {
-        console.log('MBA12345 Available services response:', response);
+        console.log('MBA2ou09hv595: fetchAvailableServices completed', {
+          bookingId,
+          servicesCount: response.services?.length,
+          timestamp: new Date().toISOString()
+        });
       }
-      setAvailableServices(response.services);
       
-      // If there's a selected service in the response and no service is currently selected,
-      // automatically select it
-      if (response.selected_service_id && !selectedService) {
-        const serviceToSelect = response.services.find(s => s.service_id === response.selected_service_id);
-        if (serviceToSelect) {
-          onServiceSelect({
-            ...serviceToSelect,
-            isOvernightForced: serviceToSelect.is_overnight
-          });
+      debugLog('MBA2ou09hv595', 'Setting available services in state', {
+        bookingId,
+        services: response.services,
+        servicesCount: response.services?.length,
+        responseKeys: Object.keys(response),
+        timestamp: new Date().toISOString()
+      });
+      
+      // Safety check: only update if we actually have services data
+      if (response.services && Array.isArray(response.services)) {
+        // Use parent data handler if available, otherwise update local state
+        if (onServicesData) {
+          onServicesData(response.services, response.selected_service_id);
+        } else {
+          setLocalAvailableServices(response.services);
         }
+      } else {
+        debugLog('MBA2ou09hv595', 'WARNING: Invalid services response', {
+          bookingId,
+          response,
+          responseType: typeof response,
+          servicesType: typeof response.services
+        });
+      }
+      
+      // Mark services as initialized
+      if (markServicesInitialized) {
+        markServicesInitialized();
       }
     } catch (error) {
       if (is_DEBUG) {
         console.error('MBA12345 Error fetching services:', error);
       }
       setServiceError('Failed to load available services');
+      
+      // Reset the in-progress flag on error so it can be retried
+      if (markServicesInitialized) {
+        // Call with error flag to reset progress without marking as initialized
+        markServicesInitialized(true); // true indicates error
+      }
     } finally {
       setIsLoadingServices(false);
     }
@@ -79,26 +185,70 @@ const ServiceAndPetsCard = ({
 
   const fetchAvailablePets = async () => {
     try {
+      if (is_DEBUG) {
+        console.log('MBA2ou09hv595: fetchAvailablePets started', {
+          bookingId,
+          currentSelectedPets: selectedPets.map(p => ({ id: p.pet_id, name: p.name })),
+          timestamp: new Date().toISOString()
+        });
+      }
       setIsLoadingPets(true);
       setPetsError(null);
+      
       const response = await getBookingAvailablePets(bookingId);
       if (is_DEBUG) {
-        console.log('MBA12345 Available pets response:', response);
+        console.log('MBA2ou09hv595: fetchAvailablePets completed', {
+          bookingId,
+          petsCount: response.pets?.length,
+          selectedPetIds: response.selected_pet_ids,
+          timestamp: new Date().toISOString()
+        });
       }
-      setAvailablePets(response.pets);
       
-      // If there are selected pets in the response and no pets are currently selected,
-      // automatically select them
-      if (response.selected_pet_ids && response.selected_pet_ids.length > 0 && selectedPets.length === 0) {
-        const petsToSelect = response.pets.filter(p => response.selected_pet_ids.includes(p.pet_id));
-        petsToSelect.forEach(pet => onPetSelect(pet));
+      debugLog('MBA2ou09hv595', 'Setting available pets in state', {
+        bookingId,
+        pets: response.pets,
+        petsCount: response.pets?.length,
+        responseKeys: Object.keys(response),
+        timestamp: new Date().toISOString()
+      });
+      
+      // Safety check: only update if we actually have pets data
+      if (response.pets && Array.isArray(response.pets)) {
+        // Use parent data handler if available, otherwise update local state
+        if (onPetsData) {
+          onPetsData(response.pets, response.selected_pet_ids);
+        } else {
+          setLocalAvailablePets(response.pets);
+        }
+      } else {
+        debugLog('MBA2ou09hv595', 'WARNING: Invalid pets response', {
+          bookingId,
+          response,
+          responseType: typeof response,
+          petsType: typeof response.pets
+        });
+      }
+      
+      // Mark pets as initialized
+      if (markPetsInitialized) {
+        markPetsInitialized();
       }
     } catch (error) {
       if (is_DEBUG) {
-        console.error('MBA12345 Error fetching pets:', error);
+        console.error('MBAio4wo4nou: Error fetching pets:', error);
       }
       setPetsError('Failed to load available pets');
+      
+      // Reset the in-progress flag on error so it can be retried
+      if (markPetsInitialized) {
+        // Call with error flag to reset progress without marking as initialized
+        markPetsInitialized(true); // true indicates error
+      }
     } finally {
+      if (is_DEBUG) {
+        console.log('MBAio4wo4nou: fetchAvailablePets completed');
+      }
       setIsLoadingPets(false);
     }
   };
@@ -161,6 +311,14 @@ const ServiceAndPetsCard = ({
   const renderPetCard = (pet) => {
     const isSelected = selectedPets.some(selectedPet => selectedPet.pet_id === pet.pet_id);
     
+    if (is_DEBUG) {
+      console.log(`MBAio4wo4nou: Rendering pet card for ${pet.name}`, {
+        petId: pet.pet_id,
+        isSelected,
+        selectedPetsCount: selectedPets.length
+      });
+    }
+    
     return (
       <TouchableOpacity
         key={pet.pet_id}
@@ -168,7 +326,12 @@ const ServiceAndPetsCard = ({
           styles.petCard,
           isSelected && styles.selectedPetCard
         ]}
-        onPress={() => onPetSelect(pet)}
+        onPress={() => {
+          if (is_DEBUG) {
+            console.log('MBAio4wo4nou: Pet card clicked:', { id: pet.pet_id, name: pet.name });
+          }
+          onPetSelect(pet);
+        }}
       >
         <View style={styles.petImageContainer}>
           {pet.profile_photo ? (
@@ -289,6 +452,20 @@ const ServiceAndPetsCard = ({
       </View>
     );
   }
+
+  // Debug render state
+  debugLog('MBA2ou09hv595', 'ServiceAndPetsCard rendering with state', {
+    bookingId,
+    availableServicesCount: availableServices.length,
+    availablePetsCount: availablePets.length,
+    isLoadingServices,
+    isLoadingPets,
+    serviceError,
+    petsError,
+    selectedServiceId: selectedService?.service_id,
+    selectedPetsCount: selectedPets.length,
+    timestamp: new Date().toISOString()
+  });
 
   return (
     <ScrollView style={styles.container}>

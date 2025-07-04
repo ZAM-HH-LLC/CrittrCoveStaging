@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -55,23 +55,28 @@ const BookingStepModal = ({
   initialData = {},
   navigation
 }) => {
+  debugLog('MBA2ou09hv595', 'BookingStepModal component rendered/re-rendered', {
+    visible,
+    bookingId,
+    timestamp: new Date().toISOString()
+  });
   const { is_DEBUG, screenWidth, timeSettings } = useContext(AuthContext);
   const isSmallScreen = screenWidth < 600;
   const isDesktop = screenWidth > 768;
   const [currentStep, setCurrentStep] = useState(STEPS.SERVICES_AND_PETS.id);
   const [bookingData, setBookingData] = useState({
-    service: initialData.service || null,
-    pets: initialData.pets || [],
-    dates: initialData.dates || [],
-    bookingType: initialData.bookingType || 'one-time',
-    dateRangeType: initialData.dateRangeType || 'date-range',
-    times: initialData.times || {
+    service: initialData?.service || null,
+    pets: initialData?.pets || [],
+    dates: initialData?.dates || [],
+    bookingType: initialData?.bookingType || 'one-time',
+    dateRangeType: initialData?.dateRangeType || 'date-range',
+    times: initialData?.times || {
       startTime: '09:00',  // Default start time
       endTime: '17:00',    // Default end time
       isOvernightForced: false,
       hasIndividualTimes: false  // Default to false
     },
-    rates: initialData.rates || {},
+    rates: initialData?.rates || {},
     dateSelectionData: null,
     dateRange: null,
     hasFetchedDates: false, // Track whether dates have been fetched
@@ -80,6 +85,33 @@ const BookingStepModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  
+  // Function to check if user has already agreed to terms (matches ReviewAndRatesCard logic)
+  const getTosStatus = () => {
+    if (!bookingData) return undefined;
+    // For professionals creating a booking, they are the "pro" side
+    // For clients creating a booking, they are the "client" side
+    // Since BookingStepModal is used by professionals, check pro_agreed_tos
+    return bookingData.pro_agreed_tos;
+  };
+  
+  // Add persistent state for preventing duplicate API calls
+  const [hasInitializedServices, setHasInitializedServices] = useState(false);
+  const [hasInitializedPets, setHasInitializedPets] = useState(false);
+  const [lastInitializedBookingId, setLastInitializedBookingId] = useState(null);
+  
+  // Store fetched data at parent level to prevent loss during re-renders
+  const [availableServices, setAvailableServices] = useState([]);
+  const [availablePets, setAvailablePets] = useState([]);
+  
+  // Use refs to track initialization state without causing re-renders
+  const initializationRef = useRef({
+    lastBookingId: null,
+    servicesInitialized: false,
+    petsInitialized: false,
+    servicesInProgress: false,
+    petsInProgress: false
+  });
 
   // Add effect to log initial data
   useEffect(() => {
@@ -331,6 +363,148 @@ const BookingStepModal = ({
       ...prev,
       pets: updatedPets
     }));
+  };
+
+  // New batch pet selection function for auto-selection from server
+  const handleBatchPetSelect = (petsArray) => {
+    debugLog('MBA12345 Batch selecting pets:', petsArray.map(p => ({ id: p.pet_id, name: p.name })));
+    
+    setBookingData(prev => ({
+      ...prev,
+      pets: petsArray
+    }));
+  };
+
+  // Functions to manage initialization state at parent level
+  const shouldFetchServices = () => {
+    if (!bookingId) return false;
+    
+    const currentRef = initializationRef.current;
+    
+    // If this is a new bookingId, reset everything
+    if (bookingId !== currentRef.lastBookingId) {
+      currentRef.lastBookingId = bookingId;
+      currentRef.servicesInitialized = false;
+      currentRef.petsInitialized = false;
+      currentRef.servicesInProgress = false;
+      currentRef.petsInProgress = false;
+      
+      // Update state for UI consistency
+      setLastInitializedBookingId(bookingId);
+      setHasInitializedServices(false);
+      setHasInitializedPets(false);
+      
+      // Reset data when booking ID changes
+      setAvailableServices([]);
+      setAvailablePets([]);
+    }
+    
+    // Only fetch if not already initialized and not in progress
+    const shouldFetch = !currentRef.servicesInitialized && !currentRef.servicesInProgress;
+    
+    if (shouldFetch) {
+      currentRef.servicesInProgress = true;
+    }
+    
+    return shouldFetch;
+  };
+
+  const shouldFetchPets = () => {
+    if (!bookingId) return false;
+    
+    const currentRef = initializationRef.current;
+    
+    // Only fetch if not already initialized and not in progress
+    const shouldFetch = !currentRef.petsInitialized && !currentRef.petsInProgress;
+    
+    if (shouldFetch) {
+      currentRef.petsInProgress = true;
+    }
+    
+    return shouldFetch;
+  };
+
+  const markServicesInitialized = (isError = false) => {
+    debugLog('MBA2ou09hv595', 'Marking services as initialized', { bookingId, isError });
+    
+    if (isError) {
+      // On error, just reset the in-progress flag so it can be retried
+      initializationRef.current.servicesInProgress = false;
+    } else {
+      // On success, mark as initialized and reset in-progress flag
+      initializationRef.current.servicesInitialized = true;
+      initializationRef.current.servicesInProgress = false;
+      setHasInitializedServices(true);
+    }
+  };
+
+  const markPetsInitialized = (isError = false) => {
+    debugLog('MBA2ou09hv595', 'Marking pets as initialized', { bookingId, isError });
+    
+    if (isError) {
+      // On error, just reset the in-progress flag so it can be retried
+      initializationRef.current.petsInProgress = false;
+    } else {
+      // On success, mark as initialized and reset in-progress flag
+      initializationRef.current.petsInitialized = true;
+      initializationRef.current.petsInProgress = false;
+      setHasInitializedPets(true);
+    }
+  };
+
+  // Parent-level data handling functions
+  const handleServicesData = (services, selectedServiceId) => {
+    debugLog('MBA2ou09hv595', 'Parent handling services data', {
+      bookingId,
+      services,
+      servicesCount: services?.length,
+      selectedServiceId
+    });
+    
+    setAvailableServices(services || []);
+    
+    // Handle auto-selection at parent level
+    if (selectedServiceId && services) {
+      const currentSelectedId = bookingData.service?.service_id;
+      if (currentSelectedId !== selectedServiceId) {
+        const serviceToSelect = services.find(s => s.service_id === selectedServiceId);
+        if (serviceToSelect) {
+          debugLog('MBA2ou09hv595', 'Parent auto-selecting service', {
+            currentSelectedId,
+            selectedServiceId,
+            serviceToSelect: { id: serviceToSelect.service_id, name: serviceToSelect.service_name }
+          });
+          
+          handleServiceSelect({
+            ...serviceToSelect,
+            isOvernightForced: serviceToSelect.is_overnight
+          });
+        }
+      }
+    }
+  };
+
+  const handlePetsData = (pets, selectedPetIds) => {
+    debugLog('MBA2ou09hv595', 'Parent handling pets data', {
+      bookingId,
+      pets,
+      petsCount: pets?.length,
+      selectedPetIds
+    });
+    
+    setAvailablePets(pets || []);
+    
+    // Handle auto-selection at parent level
+    if (selectedPetIds && selectedPetIds.length > 0 && pets) {
+      const petsToSelect = pets.filter(p => p.is_selected === true);
+      if (petsToSelect.length > 0) {
+        debugLog('MBA2ou09hv595', 'Parent auto-selecting pets', {
+          petsToSelect: petsToSelect.map(p => ({ id: p.pet_id, name: p.name }))
+        });
+        
+        handleBatchPetSelect(petsToSelect);
+      }
+    }
   };
 
   const handleDateSelect = (dateData) => {
@@ -1041,8 +1215,19 @@ const BookingStepModal = ({
       setCurrentStep(prev => prev + 1);
     } else {
       // We're on the final step (REVIEW_AND_RATES), so create the booking
-      // First check if terms have been agreed to
-      if (!termsAgreed) {
+      // First check if terms have been agreed to (using same logic as ReviewAndRatesCard)
+      const currentTosStatus = getTosStatus();
+      const hasAgreedToTerms = currentTosStatus === true || (currentTosStatus !== true && termsAgreed);
+      
+      debugLog('MBA54321: BookingStepModal TOS validation:', {
+        currentTosStatus,
+        termsAgreed,
+        hasAgreedToTerms,
+        bookingData: !!bookingData
+      });
+      
+      if (!hasAgreedToTerms) {
+        debugLog('MBA54321: Terms not agreed, showing TOS modal');
         setShowTermsModal(true);
         return;
       }
@@ -1059,7 +1244,7 @@ const BookingStepModal = ({
         debugLog('MBA66777 Creating booking from draft with conversation ID:', bookingData.conversation_id);
         
         // Call the API to create a booking from the draft
-        const response = await createBookingFromDraft(bookingData.conversation_id, termsAgreed);
+        const response = await createBookingFromDraft(bookingData.conversation_id, hasAgreedToTerms);
         
         debugLog('MBA66777 Booking created successfully:', response);
         
@@ -1127,15 +1312,34 @@ const BookingStepModal = ({
   const renderCurrentStep = () => {
     switch (currentStep) {
       case STEPS.SERVICES_AND_PETS.id:
+        debugLog('MBA2ou09hv595', 'BookingStepModal rendering ServiceAndPetsCard', {
+          bookingId,
+          currentStep,
+          selectedServiceId: bookingData.service?.service_id,
+          selectedPetsCount: bookingData.pets?.length,
+          timestamp: new Date().toISOString()
+        });
+        
         return (
           <ServiceAndPetsCard
+            key={`services-pets-${bookingId}`} // Add key to prevent unnecessary remounting
             bookingId={bookingId}
             onServiceSelect={handleServiceSelect}
             onPetSelect={handlePetSelect}
+            onBatchPetSelect={handleBatchPetSelect}
             selectedService={bookingData.service}
             selectedPets={bookingData.pets}
             navigation={navigation}
             onClose={onClose}
+            shouldFetchServices={shouldFetchServices}
+            shouldFetchPets={shouldFetchPets}
+            markServicesInitialized={markServicesInitialized}
+            markPetsInitialized={markPetsInitialized}
+            // Pass data from parent to prevent loss during re-renders
+            availableServices={availableServices}
+            availablePets={availablePets}
+            onServicesData={handleServicesData}
+            onPetsData={handlePetsData}
           />
         );
       case STEPS.DATE_SELECTION.id:
@@ -1248,8 +1452,16 @@ const BookingStepModal = ({
                 cost_summary: updatedData.cost_summary
               }));
             }}
-            onTermsAgreed={setTermsAgreed}
-            onTosAgreementChange={setTermsAgreed}
+            isProfessional={true}
+            fromApprovalModal={false}
+            onTermsAgreed={(agreed) => {
+              debugLog('MBA54321: BookingStepModal received onTermsAgreed:', agreed);
+              setTermsAgreed(agreed);
+            }}
+            onTosAgreementChange={(agreed) => {
+              debugLog('MBA54321: BookingStepModal received onTosAgreementChange:', agreed);
+              setTermsAgreed(agreed);
+            }}
           />
         );
       default:
@@ -1262,25 +1474,29 @@ const BookingStepModal = ({
     debugLog('MBA2j3kbr9hve4: Resetting booking step modal state');
     setCurrentStep(STEPS.SERVICES_AND_PETS.id);
     setBookingData({
-      service: initialData.service || null,
-      pets: initialData.pets || [],
-      dates: initialData.dates || [],
-      bookingType: initialData.bookingType || 'one-time',
-      dateRangeType: initialData.dateRangeType || 'date-range',
-      times: initialData.times || {
+      service: initialData?.service || null,
+      pets: initialData?.pets || [],
+      dates: initialData?.dates || [],
+      bookingType: initialData?.bookingType || 'one-time',
+      dateRangeType: initialData?.dateRangeType || 'date-range',
+      times: initialData?.times || {
         startTime: '09:00',
         endTime: '17:00',
         isOvernightForced: false,
         hasIndividualTimes: false
       },
-      rates: initialData.rates || {},
+      rates: initialData?.rates || {},
       dateSelectionData: null,
       dateRange: null,
       hasFetchedDates: false, // Reset the fetch flag to ensure dates are refetched
     });
     setError(null);
     setIsLoading(false);
-    setTermsAgreed(false);
+    // Only reset termsAgreed if user hasn't previously agreed to terms
+    const currentTosStatus = getTosStatus();
+    if (currentTosStatus !== true) {
+      setTermsAgreed(false);
+    }
     setShowTermsModal(false);
   };
 

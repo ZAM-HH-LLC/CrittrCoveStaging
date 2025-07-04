@@ -107,8 +107,8 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     }
     lastBookingIdRef.current = bookingId;
     
-    if (bookingData?.service && !bookingData.service.is_overnight && bookingData?.occurrences?.length > 1 && !hasInitializedRates) {
-      debugLog('MBA2394jv340 Initializing service additional rates for non-overnight service with multiple dates');
+    if (bookingData?.service && !bookingData.service.is_overnight && bookingData?.occurrences?.length >= 1 && !hasInitializedRates) {
+      debugLog('MBA2394jv340 Initializing service additional rates for non-overnight service');
       
       // Prioritize service_details.additional_rates as source of truth
       let availableRates = [];
@@ -118,31 +118,50 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
         debugLog('MBA2394jv340 Using service_details.additional_rates as source:', bookingData.service_details.additional_rates);
         
         // Parse service_details.additional_rates to extract rate info
-        Object.entries(bookingData.service_details.additional_rates).forEach(([rateKey, isEnabled]) => {
+        Object.entries(bookingData.service_details.additional_rates).forEach(([rateKey, rateValue]) => {
           // Extract rate title from key (format: "rate_title_start-randomid")
           const titleMatch = rateKey.match(/^(.+)_start-[a-f0-9]+$/);
           if (titleMatch) {
             const rateTitle = titleMatch[1];
             
-            // Find the rate details from service or occurrences
-            let rateAmount = '0.00';
-            let rateDescription = '';
+            // Handle both old boolean format and new enhanced object format
+            let isEnabled, rateAmount, rateDescription;
             
-            // First check service rates
-            const serviceRate = bookingData.service?.additional_rates?.find(r => r.title === rateTitle);
-            if (serviceRate) {
-              rateAmount = serviceRate.amount || serviceRate.rate || '0.00';
-              rateDescription = serviceRate.description || '';
-            } else {
-              // Check occurrence rates for amount/description
-              for (const occ of bookingData.occurrences) {
-                const occRate = occ.rates?.additional_rates?.find(r => (r.title || r.name) === rateTitle);
-                if (occRate) {
-                  rateAmount = occRate.amount || '0.00';
-                  rateDescription = occRate.description || '';
-                  break;
+            if (typeof rateValue === 'boolean') {
+              // Old format: boolean value only
+              isEnabled = rateValue;
+              
+              // Find the rate details from service or occurrences for backward compatibility
+              rateAmount = '0.00';
+              rateDescription = '';
+              
+              // First check service rates
+              const serviceRate = bookingData.service?.additional_rates?.find(r => r.title === rateTitle);
+              if (serviceRate) {
+                rateAmount = serviceRate.amount || serviceRate.rate || '0.00';
+                rateDescription = serviceRate.description || '';
+              } else {
+                // Check occurrence rates for amount/description
+                for (const occ of bookingData.occurrences) {
+                  const occRate = occ.rates?.additional_rates?.find(r => (r.title || r.name) === rateTitle);
+                  if (occRate) {
+                    rateAmount = occRate.amount || '0.00';
+                    rateDescription = occRate.description || '';
+                    break;
+                  }
                 }
               }
+            } else if (typeof rateValue === 'object' && rateValue !== null) {
+              // New enhanced format: {applies: bool, amount: str, description: str}
+              isEnabled = rateValue.applies || false;
+              rateAmount = rateValue.amount || '0.00';
+              rateDescription = rateValue.description || '';
+            } else {
+              // Fallback for unexpected format
+              debugLog('MBA2394jv340 Unexpected rate value format:', rateValue);
+              isEnabled = false;
+              rateAmount = '0.00';
+              rateDescription = '';
             }
             
             availableRates.push({
@@ -252,7 +271,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       editingOccurrenceId, 
       occurrencesCount: bookingData?.occurrences?.length || 0
     });
-  }, [isEditMode, editingOccurrenceId, bookingData?.occurrences?.length]);
+    debugLog('MBA2oinv5nd Current editedRates state:', editedRates);
+    debugLog('MBA2oinv5nd Current occurrenceEdits state:', occurrenceEdits);
+  }, [isEditMode, editingOccurrenceId, bookingData?.occurrences?.length, editedRates, occurrenceEdits]);
 
 
 
@@ -292,11 +313,30 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const toggleEditMode = () => {
+    debugLog('MBA2oinv5nd toggleEditMode called, current isEditMode:', isEditMode);
     if (isEditMode) {
       // Save changes
+      debugLog('MBA2oinv5nd Saving changes via toggleEditMode');
       saveRateChanges();
     } else {
-      // Enter edit mode
+      // Enter edit mode - initialize editedRates with current occurrence data
+      const occurrence = bookingData.occurrences[0]; // For single occurrence bookings
+      debugLog('MBA2oinv5nd Entering edit mode, initializing editedRates with occurrence data:', occurrence?.rates);
+      if (occurrence) {
+        const initialEditedRates = {
+          base_rate: occurrence.rates.base_rate,
+          additional_animal_rate: occurrence.rates.additional_animal_rate || 0,
+          applies_after: occurrence.rates.applies_after || 1,
+          holiday_rate: occurrence.rates.holiday_rate || 0,
+          additional_rates: occurrence.rates.additional_rates?.map(r => ({
+            name: r.name || r.title,
+            amount: r.amount,
+            description: r.description || ''
+          })) || []
+        };
+        debugLog('MBA2oinv5nd Setting editedRates to:', initialEditedRates);
+        setEditedRates(initialEditedRates);
+      }
       setIsEditMode(true);
       setIsAddingRate(false);
     }
@@ -341,21 +381,35 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const saveRateChanges = async () => {
-    // Create a copy of bookingData with updated rates
-    if (!editedRates) return;
+    // Use occurrenceEdits if it has values (single occurrence edit mode), otherwise use editedRates
+    const hasOccurrenceEdits = occurrenceEdits && Object.keys(occurrenceEdits).length > 0;
+    const ratesToSave = hasOccurrenceEdits ? occurrenceEdits : editedRates;
+    debugLog('MBA2oinv5nd saveRateChanges called. Using ratesToSave:', ratesToSave, 'Source:', hasOccurrenceEdits ? 'occurrenceEdits' : 'editedRates');
+    
+    if (!ratesToSave) {
+      debugLog('MBA2oinv5nd No ratesToSave found, returning early');
+      return;
+    }
 
     try {
       setIsLoading(true);
       setError(null);
       
-      debugLog('MBA66777 Saving rate changes:', editedRates);
+      debugLog('MBA66777 Saving rate changes:', ratesToSave);
       debugLog('MBA66777 Using bookingId:', bookingId);
+      debugLog('MBA2oinv5nd Detailed ratesToSave breakdown:', {
+        base_rate: ratesToSave.base_rate,
+        additional_animal_rate: ratesToSave.additional_animal_rate,
+        applies_after: ratesToSave.applies_after,
+        holiday_rate: ratesToSave.holiday_rate,
+        additional_rates: ratesToSave.additional_rates
+      });
       
-      // Create a clean version of editedRates to send to API
-      const cleanEditedRates = {
-        ...editedRates,
-        additional_rates: editedRates.additional_rates && editedRates.additional_rates.length > 0 
-          ? editedRates.additional_rates.map(rate => ({
+      // Create a clean version of ratesToSave to send to API
+      const cleanRates = {
+        ...ratesToSave,
+        additional_rates: ratesToSave.additional_rates && ratesToSave.additional_rates.length > 0 
+          ? ratesToSave.additional_rates.map(rate => ({
               title: rate.name || rate.title, // Always use 'title' for backend
               // Convert empty or string amount values to number
               amount: rate.amount === '' ? 0 : typeof rate.amount === 'string' ? parseFloat(rate.amount) : rate.amount,
@@ -371,11 +425,11 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
           return {
             occurrence_id: occ.occurrence_id,
             rates: {
-              base_rate: editedRates.base_rate === '' ? 0 : typeof editedRates.base_rate === 'string' ? parseFloat(editedRates.base_rate) : editedRates.base_rate,
-              additional_animal_rate: editedRates.additional_animal_rate === '' ? 0 : typeof editedRates.additional_animal_rate === 'string' ? parseFloat(editedRates.additional_animal_rate) : editedRates.additional_animal_rate || 0,
-              applies_after: parseInt(editedRates.applies_after || 1),
-              holiday_rate: editedRates.holiday_rate === '' ? 0 : typeof editedRates.holiday_rate === 'string' ? parseFloat(editedRates.holiday_rate) : editedRates.holiday_rate || 0,
-              additional_rates: cleanEditedRates.additional_rates
+              base_rate: cleanRates.base_rate === '' ? 0 : typeof cleanRates.base_rate === 'string' ? parseFloat(cleanRates.base_rate) : cleanRates.base_rate,
+              additional_animal_rate: cleanRates.additional_animal_rate === '' ? 0 : typeof cleanRates.additional_animal_rate === 'string' ? parseFloat(cleanRates.additional_animal_rate) : cleanRates.additional_animal_rate || 0,
+              applies_after: parseInt(cleanRates.applies_after || 1),
+              holiday_rate: cleanRates.holiday_rate === '' ? 0 : typeof cleanRates.holiday_rate === 'string' ? parseFloat(cleanRates.holiday_rate) : cleanRates.holiday_rate || 0,
+              additional_rates: cleanRates.additional_rates
             }
           };
         }
@@ -397,6 +451,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
       });
       
       debugLog('MBA66777 Sending all occurrences to API:', occurrencesForApi);
+      debugLog('MBA2oinv5nd First occurrence rates being sent to API:', occurrencesForApi[0]?.rates);
       
       // Call the API to update rates using the bookingId prop
       const response = await updateBookingDraftRates(
@@ -529,21 +584,33 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   const updateBaseRate = (value) => {
     // Apply consistent amount sanitization
     const sanitizedValue = sanitizeAmountInput(value);
+    debugLog('MBA2oinv5nd updateBaseRate called with value:', value, 'sanitized to:', sanitizedValue);
+    debugLog('MBA2oinv5nd Current editedRates before update:', editedRates);
     
-    setEditedRates(prev => ({
-      ...prev,
-      base_rate: sanitizedValue
-    }));
+    setEditedRates(prev => {
+      const newRates = {
+        ...prev,
+        base_rate: sanitizedValue
+      };
+      debugLog('MBA2oinv5nd New editedRates after base rate update:', newRates);
+      return newRates;
+    });
   };
 
   const updateAdditionalAnimalRate = (value) => {
     // Apply consistent amount sanitization
     const sanitizedValue = sanitizeAmountInput(value);
+    debugLog('MBA2oinv5nd updateAdditionalAnimalRate called with value:', value, 'sanitized to:', sanitizedValue);
+    debugLog('MBA2oinv5nd Current editedRates before update:', editedRates);
     
-    setEditedRates(prev => ({
-      ...prev,
-      additional_animal_rate: sanitizedValue
-    }));
+    setEditedRates(prev => {
+      const newRates = {
+        ...prev,
+        additional_animal_rate: sanitizedValue
+      };
+      debugLog('MBA2oinv5nd New editedRates after additional animal rate update:', newRates);
+      return newRates;
+    });
   };
 
   const updateHolidayRate = (value) => {
@@ -557,29 +624,44 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
   };
 
   const updateAdditionalRate = (index, field, value) => {
-    if (!editedRates?.additional_rates) return;
+    debugLog('MBA2oinv5nd updateAdditionalRate called with index:', index, 'field:', field, 'value:', value);
+    debugLog('MBA2oinv5nd Current editedRates:', editedRates);
+    
+    if (!editedRates?.additional_rates) {
+      debugLog('MBA2oinv5nd No additional_rates in editedRates, returning early');
+      return;
+    }
     
     const updatedAdditionalRates = [...editedRates.additional_rates];
+    debugLog('MBA2oinv5nd Current additional_rates:', updatedAdditionalRates);
     
     if (field === 'amount') {
       // Apply consistent amount sanitization
       const sanitizedValue = sanitizeAmountInput(value);
+      debugLog('MBA2oinv5nd Updating amount from', updatedAdditionalRates[index]?.amount, 'to', sanitizedValue);
       
       updatedAdditionalRates[index] = {
         ...updatedAdditionalRates[index],
         amount: sanitizedValue === '' ? '' : sanitizedValue
       };
     } else if (field === 'name') {
+      debugLog('MBA2oinv5nd Updating name from', updatedAdditionalRates[index]?.name, 'to', value);
       updatedAdditionalRates[index] = {
         ...updatedAdditionalRates[index],
         name: value
       };
     }
     
-    setEditedRates(prev => ({
-      ...prev,
-      additional_rates: updatedAdditionalRates
-    }));
+    debugLog('MBA2oinv5nd Updated additional_rates:', updatedAdditionalRates);
+    
+    setEditedRates(prev => {
+      const newRates = {
+        ...prev,
+        additional_rates: updatedAdditionalRates
+      };
+      debugLog('MBA2oinv5nd New editedRates after additional rate update:', newRates);
+      return newRates;
+    });
   };
 
   const deleteAdditionalRate = async (index) => {
@@ -1129,7 +1211,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
 
   const renderServiceAndPets = () => {
     return (
-      <View style={[styles.section, { marginTop: 0 }]}>
+      <View style={[styles.section, { marginTop: 0, marginBottom: 16 }]}>
           <Text style={styles.sectionHeader}>Service & Pets</Text>
           <View style={[styles.card, { padding: 16 }]}>
             <View style={styles.serviceContainer}>
@@ -1166,7 +1248,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     debugLog('MBA2394jv340 service.is_overnight:', bookingData?.service?.is_overnight);
     debugLog('MBA2394jv340 occurrences length:', bookingData?.occurrences?.length);
     
-    // Only show for non-overnight services with multiple dates
+    // Only show for non-overnight services that have additional rates available
     if (!bookingData?.service) {
       debugLog('MBA2394jv340 No service found, returning null');
       return null;
@@ -1179,11 +1261,6 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
     
     if (!bookingData?.occurrences) {
       debugLog('MBA2394jv340 No occurrences found, returning null');
-      return null;
-    }
-    
-    if (bookingData.occurrences.length <= 1) {
-      debugLog('MBA2394jv340 Only one or no occurrences, returning null');
       return null;
     }
 
@@ -1205,7 +1282,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
         </View>
         <View style={[styles.card, { paddingTop: 16 }]}>
           <Text style={styles.additionalRatesDescription}>
-            Toggle additional rates to apply or remove them from all {bookingData.occurrences.length} dates in this booking:
+            Toggle additional rates to apply or remove them from {bookingData.occurrences.length === 1 ? 'this booking' : `all ${bookingData.occurrences.length} dates in this booking`}:
           </Text>
           
           {filteredRates.map((serviceRate, index) => {
@@ -1261,7 +1338,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
         <View style={styles.sectionHeaderContainer}>
           <Text style={styles.sectionHeader}>{sectionTitle}</Text>
         </View>
-        <View style={[styles.card, { paddingTop: 16 }]}>
+        <View style={[styles.card, { paddingTop: 16, marginBottom: 16 }]}>
           {isReadOnly ? (
             <Text style={styles.notesTextInputReadOnly}>
               {notesFromPro}
@@ -1466,12 +1543,17 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                               />
                             </View>
                           ) : (
-                            <Text style={styles.rateLabel}>
-                              Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
-                            </Text>
+                            <View>
+                              <Text style={styles.rateLabel}>
+                                Additional Pet Rate (after {occurrence.rates.applies_after} {occurrence.rates.applies_after !== 1 ? 'pets' : 'pet'})
+                              </Text>
+                              <Text style={styles.breakdownCalculation}>
+                                {formatCurrency(occurrence.rates.additional_animal_rate)} / pet / {occurrence.unit_of_time || occurrence.rates?.unit_of_time || 'Per Visit'} × {Math.max(0, (bookingData.pets?.length || 0) - occurrence.rates.applies_after)} additional pets = {formatCurrency(occurrence.rates.additional_animal_rate_total || 0)}
+                              </Text>
+                            </View>
                           )}
                           {editingOccurrenceId === occurrence.occurrence_id ? null : (
-                            <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.additional_animal_rate)}</Text>
+                            <Text style={styles.rateAmount}>{formatCurrency(occurrence.rates.additional_animal_rate_total || 0)}</Text>
                           )}
                         </View>
                       )}
@@ -1810,16 +1892,19 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                   {isEditMode || editingOccurrenceId === occurrence.occurrence_id ? (
                     <View style={styles.amountInputContainer}>
                       <Text style={styles.currencySymbol}>$</Text>
-                      <TextInput
-                        style={styles.rateInput}
-                        keyboardType="decimal-pad"
-                        value={editingOccurrenceId === occurrence.occurrence_id ? 
-                          occurrenceEdits.base_rate?.toString() || '0' : 
-                          editedRates?.base_rate?.toString() || '0'}
-                        onChangeText={editingOccurrenceId === occurrence.occurrence_id ? 
-                          v => handleOccurrenceInputChange('base_rate', v) : 
-                          updateBaseRate}
-                      />
+                                              <TextInput
+                          style={styles.rateInput}
+                          keyboardType="decimal-pad"
+                          value={editingOccurrenceId === occurrence.occurrence_id ? 
+                            occurrenceEdits.base_rate?.toString() || '0' : 
+                            editedRates?.base_rate?.toString() || '0'}
+                          onChangeText={editingOccurrenceId === occurrence.occurrence_id ? 
+                            v => handleOccurrenceInputChange('base_rate', v) : 
+                            (v) => {
+                              debugLog('MBA2oinv5nd Base rate TextInput onChange called with value:', v);
+                              updateBaseRate(v);
+                            }}
+                        />
                     </View>
                   ) : null}
                 </View>
@@ -1835,7 +1920,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
             </View>
             
             {/* Additional Animal Rate */}
-            {occurrence.rates?.additional_animal_rate && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) ? (
+            {occurrence.rates?.additional_animal_rate && parseFloat(occurrence.rates.additional_animal_rate) > 0 ? (
               <View style={styles.breakdownItem}>
                 <View style={styles.breakdownLabelContainer}>
                   <View style={styles.rateNameAmountRow}>
@@ -1848,12 +1933,19 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                         <TextInput
                           style={styles.rateInput}
                           keyboardType="decimal-pad"
-                          value={editingOccurrenceId === occurrence.occurrence_id ? 
-                            occurrenceEdits.additional_animal_rate?.toString() || '0' : 
-                            editedRates?.additional_animal_rate?.toString() || '0'}
+                          value={(() => {
+                            const value = editingOccurrenceId === occurrence.occurrence_id ? 
+                              occurrenceEdits.additional_animal_rate?.toString() || '0' : 
+                              editedRates?.additional_animal_rate?.toString() || '0';
+                            debugLog('MBA2oinv5nd Additional animal rate TextInput value:', value, 'using editingMode:', editingOccurrenceId === occurrence.occurrence_id);
+                            return value;
+                          })()}
                           onChangeText={editingOccurrenceId === occurrence.occurrence_id ? 
                             v => handleOccurrenceInputChange('additional_animal_rate', v) : 
-                            updateAdditionalAnimalRate}
+                            (v) => {
+                              debugLog('MBA2oinv5nd Additional animal rate TextInput onChange called with value:', v);
+                              updateAdditionalAnimalRate(v);
+                            }}
                         />
                         <Text style={styles.inputLabel}> / pet / {(occurrence.unit_of_time) || 
                                                                 (occurrence.rates && occurrence.rates.unit_of_time) || 
@@ -1863,9 +1955,9 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                   </View>
                   {!isEditMode && editingOccurrenceId !== occurrence.occurrence_id && (
                     <Text style={styles.breakdownCalculation}>
-                      ${occurrence.rates?.additional_animal_rate || 0} / pet / {(occurrence.unit_of_time) || 
+                      {formatCurrency(occurrence.rates?.additional_animal_rate || 0)} / pet / {(occurrence.unit_of_time) || 
                                                                               (occurrence.rates && occurrence.rates.unit_of_time) || 
-                                                                              'Per Visit'}
+                                                                              'Per Visit'} × {Math.max(0, (bookingData.pets?.length || 0) - (occurrence.rates?.applies_after || 1))} additional pets = {formatCurrency(occurrence.rates?.additional_animal_rate_total || 0)}
                     </Text>
                   )}
                 </View>
@@ -1873,7 +1965,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                   <Text style={styles.breakdownAmount}>
                     {(occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0)) ? '+' : ''}
                     {(occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0)) 
-                      ? formatCurrency(occurrence.rates?.additional_animal_rate_total || occurrence.rates?.additional_animal_rate || 0) 
+                      ? formatCurrency(occurrence.rates?.additional_animal_rate_total || 0) 
                       : 'NA'}
                   </Text>
                 )}

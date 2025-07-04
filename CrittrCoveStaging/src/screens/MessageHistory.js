@@ -8,7 +8,7 @@ import { AuthContext, getStorage, setStorage, debugLog } from '../context/AuthCo
 import RequestBookingModal from '../components/RequestBookingModal';
 import BookingStepModal from '../components/BookingStepModal';
 import { CURRENT_USER_ID } from '../data/mockData';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config/config';
 import axios from 'axios';
 import BookingMessageCard from '../components/BookingMessageCard';
@@ -863,6 +863,47 @@ const MessageHistory = ({ navigation, route }) => {
   // Keep track of the currently selected conversation to preserve during resizes
   const lastSelectedConversationRef = useRef(null);
   
+  // Add a ref to track screen focus to detect returning to screen
+  const isScreenFocusedRef = useRef(true);
+  const lastFocusRefreshTimeRef = useRef(0);
+  
+  // Use useFocusEffect to detect when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      debugLog('MBA24u45vn: MessageHistory screen focused');
+      isScreenFocusedRef.current = true;
+      
+      // If we're returning to the screen and have existing conversations, refresh them
+      // Skip if this is initial load (initialLoadRef.current = true) or if we have no conversations yet
+      // Also throttle to prevent excessive API calls
+      const now = Date.now();
+      const minTimeBetweenRefresh = 2000; // 2 seconds minimum between focus refreshes
+      
+      if (!initialLoadRef.current && 
+          conversations.length > 0 && 
+          isSignedIn && 
+          (now - lastFocusRefreshTimeRef.current > minTimeBetweenRefresh)) {
+        debugLog('MBA24u45vn: Returning to MessageHistory screen, refreshing conversations');
+        lastFocusRefreshTimeRef.current = now;
+        fetchConversations();
+      } else {
+        debugLog('MBA24u45vn: Screen focused but not refreshing conversations', {
+          isInitialLoad: initialLoadRef.current,
+          hasConversations: conversations.length > 0,
+          conversationsCount: conversations.length,
+          isSignedIn,
+          timeSinceLastRefresh: now - lastFocusRefreshTimeRef.current,
+          minTimeBetweenRefresh
+        });
+      }
+
+      return () => {
+        debugLog('MBA24u45vn: MessageHistory screen blurred');
+        isScreenFocusedRef.current = false;
+      };
+    }, [conversations.length, isSignedIn])
+  );
+  
   // Effect to preserve selected conversation during resizes
   useEffect(() => {
     // Store current selection when it changes
@@ -1155,6 +1196,20 @@ const MessageHistory = ({ navigation, route }) => {
             isProfessional: null,
             clientId: null
           });
+          return;
+        }
+
+        // If conversations are already loaded but we're not coming from route params,
+        // and this is not an initial load, refresh the conversations to get latest data
+        if (conversations.length > 0 && !initialLoadRef.current) {
+          debugLog('MBA24u45vn: Refreshing existing conversations on re-initialization');
+          const conversationsData = await fetchConversations();
+          
+          // Auto-select conversation on desktop if needed
+          if (Platform.OS === 'web' && screenWidth > 900 && conversationsData?.length > 0 && !selectedConversation) {
+            setSelectedConversation(conversationsData[0].conversation_id);
+            setSelectedConversationData(conversationsData[0]);
+          }
           return;
         }
 

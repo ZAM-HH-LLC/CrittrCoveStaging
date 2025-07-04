@@ -106,7 +106,8 @@ def calculate_occurrence_rates(occurrence, service, num_pets):
         # Create rates dictionary
         rates = OrderedDict([
             ('base_rate', str(base_rate)),
-            ('additional_animal_rate', str(service.additional_animal_rate)),
+            ('additional_animal_rate', str(service.additional_animal_rate)),  # Per-unit rate
+            ('additional_animal_rate_total', str(additional_animal_amount)),  # Total calculated amount
             ('additional_animal_rate_applies', additional_animal_rate_applies),
             ('applies_after', applies_after),
             ('unit_of_time', service.unit_of_time),  # Use service's unit_of_time directly
@@ -184,6 +185,7 @@ def create_occurrence_data(occurrence, service, num_pets, user_timezone='UTC'):
             ('rates', OrderedDict([
                 ('base_rate', rate_data['rates']['base_rate']),
                 ('additional_animal_rate', rate_data['rates']['additional_animal_rate']),
+                ('additional_animal_rate_total', rate_data['rates']['additional_animal_rate_total']),
                 ('additional_animal_rate_applies', rate_data['rates']['additional_animal_rate_applies']),
                 ('applies_after', rate_data['rates']['applies_after']),
                 ('unit_of_time', rate_data['rates']['unit_of_time']),
