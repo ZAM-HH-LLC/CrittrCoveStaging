@@ -31,7 +31,7 @@ const MyProfile = () => {
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
   const { screenWidth, isCollapsed, is_DEBUG, userRole, isApprovedProfessional, user, logout } = useContext(AuthContext);
-  const [isMobile, setIsMobile] = useState(screenWidth <= 900);
+  const [isMobileDesktop, setisMobileDesktop] = useState(screenWidth <= 900);
   const [isWideScreen, setIsWideScreen] = useState(screenWidth >= 1200);
   const styles = createStyles(screenWidth, isCollapsed);
   const [activeTab, setActiveTab] = useState('profile_info');
@@ -304,7 +304,7 @@ const MyProfile = () => {
   // Handle screen dimension changes
   useEffect(() => {
     const updateLayout = () => {
-      setIsMobile(screenWidth <= 900);
+      setisMobileDesktop(screenWidth <= 900);
       setIsWideScreen(screenWidth >= 1200);
     };
     updateLayout();
@@ -418,7 +418,7 @@ const MyProfile = () => {
               setHasUnsavedChanges(hasChanges);
             }}
             onSaveComplete={handleSaveComplete}
-            isMobile={isMobile}
+            isMobile={isMobileDesktop}
             rating={profileData?.rating}
             reviews={profileData?.reviews}
             role={userRole}
@@ -441,7 +441,7 @@ const MyProfile = () => {
             onEditHours={() => {}}
             onBlockService={() => {}}
             onPartialDayBlock={() => {}}
-            isMobile={isMobile}
+            isMobile={isMobileDesktop}
           />
         );
       case 'pets_preferences':
@@ -502,7 +502,7 @@ const MyProfile = () => {
               handleUpdateField('preferences', updatedPreferences);
             }}
             userRole={userRole}
-            isMobile={isMobile}
+            isMobile={isMobileDesktop}
           />
         );
       case 'settings_payments':
@@ -543,7 +543,7 @@ const MyProfile = () => {
             }}
             currentPlan={profileData?.currentPlan || currentPlan}
             onSwitchPlan={handleSwitchPlan}
-            isMobile={isMobile}
+            isMobile={isMobileDesktop}
             userRole={userRole}
             isApprovedProfessional={isApprovedProfessional}
           />
@@ -578,7 +578,7 @@ const MyProfile = () => {
       <SafeAreaView style={styles.container}>        
         <View style={styles.content}>
           <View style={styles.mainContent}>
-            <View style={styles.headerSection}>
+            <View style={[styles.headerSection, { paddingTop: isMobileDesktop ? 64 : 24 }]}>
               <Text style={styles.title}>Profile Settings</Text>
               <ScrollView 
                 horizontal 
