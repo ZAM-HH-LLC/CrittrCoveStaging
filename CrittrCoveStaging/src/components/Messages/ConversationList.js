@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../../context/AuthContext';
 import { theme } from '../../styles/theme';
 import ProfilePhoto from './ProfilePhoto';
+import { sanitizeContactDetails, containsContactDetails } from '../../data/contactSanitization';
 
 const ConversationList = ({
   conversations,
@@ -167,9 +168,10 @@ const ConversationList = ({
                   ]} 
                   numberOfLines={1}
                 >
-                  {conv.last_message}
+                  {containsContactDetails(conv.last_message)
+                    ? sanitizeContactDetails(conv.last_message)
+                    : conv.last_message}
                 </Text>
-                
                 {/* Make sure unread indicator is shown when unreadCount > 0 */}
                 {unreadCount > 0 && !isSelected && (
                   <View style={styles.unreadBadge}>

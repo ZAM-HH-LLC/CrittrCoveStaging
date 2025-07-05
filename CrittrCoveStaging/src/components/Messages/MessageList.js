@@ -4,6 +4,30 @@ import { debugLog } from '../../context/AuthContext';
 import MessageDateSeparator from './MessageDateSeparator';
 import { formatMessageDate, groupMessagesByDate } from './messageTimeUtils';
 import moment from 'moment-timezone';
+import { sanitizeContactDetails, containsContactDetails } from '../../data/contactSanitization';
+
+// Component for the contact warning
+const ContactWarning = ({ styles, theme }) => (
+  <View style={{
+    marginTop: 4,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: theme.colors.warning + '20',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.warning,
+  }}>
+    <Text style={{
+      fontSize: 12,
+      color: theme.colors.warning,
+      fontFamily: 'System',
+      fontWeight: '500',
+    }}>
+      ⚠️ Warning: You may not provide contact details for off-platform communication. Violations may result in account suspension.
+    </Text>
+  </View>
+);
 
 const MessageList = forwardRef(({ 
   messages, 
@@ -992,7 +1016,7 @@ const MessageList = forwardRef(({
     return false;
   }, [messages, getDateKey, userTimezone]);
 
-  // Enhanced renderItem function that adds date separators
+  // Enhanced renderItem function that adds date separators and contact warnings
   const renderItemWithDateSeparator = useCallback(({ item, index }) => {
     const isOldestMessage = index === messages.length - 1;
     
@@ -1094,8 +1118,52 @@ const MessageList = forwardRef(({
       }
     }
     
-    // Render the message content
-    const renderedMessage = renderMessage({ item, index });
+    // Check if this is a normal message that needs contact sanitization (for all users)
+    // Normal messages can have type_of_message === 'normal_message' or no type_of_message at all
+    // Exclude image messages and other special message types
+    const isNormalMessage = (!item.type_of_message || item.type_of_message === 'normal_message') && 
+                           item.content && 
+                           item.content.trim().length > 0 &&
+                           !item.image_url &&
+                           !item.image_urls &&
+                           !(item.metadata && item.metadata.image_urls) &&
+                           !(item.metadata && item.metadata.is_attachment);
+    
+    // Check if this is an image message that needs contact sanitization (for all users)
+    const isImageMessage = item.type_of_message === 'image_message' && 
+                          item.content && item.content.trim().length > 0;
+    
+    // Sanitize content for ALL users if contact details are present
+    const shouldSanitizeContent = (isNormalMessage || isImageMessage) && containsContactDetails(item.content);
+    
+    // Only show warning to the SENDER if they sent a message with contact details
+    const shouldShowContactWarning = !item.sent_by_other_user && shouldSanitizeContent;
+
+    // Sanitize content if needed
+    let sanitizedItem = item;
+    if (shouldSanitizeContent) {
+      const sanitizedContent = sanitizeContactDetails(item.content);
+      if (sanitizedContent !== item.content) {
+        sanitizedItem = {
+          ...item,
+          content: sanitizedContent
+        };
+        debugLog('MBA9876: Sanitized contact details in message', {
+          messageId: item.message_id,
+          originalLength: item.content.length,
+          sanitizedLength: sanitizedContent.length
+        });
+      }
+              debugLog('MBA9876: Sanitizing contact details in message', {
+          messageId: item.message_id,
+          content: item.content?.substring(0, 50),
+          shouldSanitizeContent,
+          shouldShowContactWarning
+        });
+    }
+    
+    // Render the message content with sanitized content if needed
+    const renderedMessage = renderMessage({ item: sanitizedItem, index });
     
     // For special message types, add final date verification
     if (item.type_of_message === 'send_approved_message') {
@@ -1136,6 +1204,7 @@ const MessageList = forwardRef(({
           <View>
             {formattedDate && <MessageDateSeparator date={formattedDate} />}
             {renderedMessage}
+            {shouldShowContactWarning && <ContactWarning styles={styles} theme={theme} />}
           </View>
         );
       } else {
@@ -1144,6 +1213,7 @@ const MessageList = forwardRef(({
           <View>
             {formattedDate && <MessageDateSeparator date={formattedDate} />}
             {renderedMessage}
+            {shouldShowContactWarning && <ContactWarning styles={styles} theme={theme} />}
           </View>
         );
       }
@@ -1161,10 +1231,11 @@ const MessageList = forwardRef(({
       return (
         <View>
           {renderedMessage}
+          {shouldShowContactWarning && <ContactWarning styles={styles} theme={theme} />}
         </View>
       );
     }
-  }, [renderMessage, shouldShowDateSeparator, userTimezone, getDateKey, messages.length]);
+  }, [renderMessage, shouldShowDateSeparator, userTimezone, getDateKey, messages.length, styles, theme]);
 
   return (
     <FlatList

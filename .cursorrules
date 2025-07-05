@@ -220,6 +220,52 @@ Cross‑cutting invariants
    - If needed, suggest testing alternatives that don't require a running server
 
 
+### 15. DRY PRINCIPLES & CODE DUPLICATION PREVENTION
+**CRITICAL**: Cursor MUST NEVER duplicate utility functions, validation logic, or business logic across multiple files.
+
+**Before implementing any function or logic:**
+1. **SEARCH FIRST**: Always search the codebase for existing similar functions before writing new ones
+2. **CHECK IMPORTS**: Look for existing utility files in `src/utils/`, `src/data/`, `src/validation/`, etc. Or for the backend: `zenexotics_backend/core/`.
+3. **CREATE SHARED UTILITIES**: If similar logic exists in multiple files or even the same file, extract to a shared utility file
+4. **IMPORT DON'T COPY**: Always import shared functions rather than copying code between files
+
+**When you find duplicated code:**
+1. **IMMEDIATELY REFACTOR**: Create a shared utility file and update all files to import from it
+2. **DOCUMENT USAGE**: Add clear JSDoc comments explaining what the function does and where it's used
+3. **UPDATE IMPORTS**: Replace all duplicated code with imports from the shared utility
+
+**Common places to check for existing utilities:**
+- `src/utils/` - General utility functions
+- `src/data/` - Data processing and sanitization functions  
+- `src/validation/` - Validation logic
+- `src/helpers/` - Helper functions
+- `src/constants/` - Shared constants
+- `zenexotics_backend/core/` - Backend utility functions
+
+**Example of CORRECT approach:**
+```javascript
+// ❌ WRONG - Duplicating sanitization logic
+// File 1: ConversationList.js
+const sanitizeContactDetails = (content) => { /* duplicate logic */ };
+
+// File 2: MessageList.js  
+const sanitizeContactDetails = (content) => { /* duplicate logic */ };
+
+// ✅ CORRECT - Shared utility
+// File: src/data/contactSanitization.js
+export const sanitizeContactDetails = (content) => { /* shared logic */ };
+
+// File 1: ConversationList.js
+import { sanitizeContactDetails } from '../../data/contactSanitization';
+
+// File 2: MessageList.js
+import { sanitizeContactDetails } from '../../data/contactSanitization';
+```
+
+**PENALTY**: If you duplicate code instead of creating shared utilities, you must immediately refactor and create the shared utility file.
+
+---
+
 Design Tips to follow when coding certain frontend components:
 ### Click-Outside-to-Close Dropdown Pattern
 When implementing dropdowns that should close when clicking outside:
