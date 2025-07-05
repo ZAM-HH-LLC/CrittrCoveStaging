@@ -200,6 +200,12 @@ const MessageInput = React.forwardRef(({
 
   const handleSend = useCallback(async () => {
     try {
+      // Prevent multiple simultaneous send operations
+      if (isUploading) {
+        debugLog('MBA5511: Send operation already in progress, ignoring duplicate click');
+        return;
+      }
+      
       // Only continue if we have images or text to send
       if (selectedImages.length === 0 && !messageContent.trim()) {
         return;
@@ -330,7 +336,7 @@ const MessageInput = React.forwardRef(({
       setIsUploading(false);
       debugLog('MBA5511: Error in handleSend, loading indicator stopped:', error);
     }
-  }, [messageContent, onSendMessage, resetInputHeight, selectedImages, selectedConversation]);
+  }, [messageContent, onSendMessage, resetInputHeight, selectedImages, selectedConversation, isUploading]);
 
   const adjustHeight = useCallback(() => {
     if (Platform.OS === 'web' && textInputRef.current) {
@@ -369,9 +375,12 @@ const MessageInput = React.forwardRef(({
   const handleKeyPress = useCallback((e) => {
     if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
       e.preventDefault();
-      handleSend();
+      // Only send if not currently uploading
+      if (!isUploading) {
+        handleSend();
+      }
     }
-  }, [handleSend]);
+  }, [handleSend, isUploading]);
 
   return (
     <View style={styles.inputSection} className="message-input-container">

@@ -3240,6 +3240,12 @@ const MessageHistory = ({ navigation, route }) => {
           }}
           onSendMessage={async (messageContent, imageMessageIds, messageObject, alreadySent) => {
             try {
+              // Prevent multiple simultaneous send operations
+              if (isSending) {
+                debugLog('MBA5511: Send operation already in progress in parent, ignoring duplicate call');
+                return;
+              }
+              
               setIsSending(true);
               
               // If the message was already sent directly through uploadAndSendImageMessage
