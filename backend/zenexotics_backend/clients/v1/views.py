@@ -51,6 +51,23 @@ class ClientListView(generics.ListAPIView):
         logger.info(f"Response data count: {len(response.data)}")
         return response
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_noreply_as_not_spam(request):
+    # Get client profile from logged-in user
+    try:
+        client = request.user.client_profile
+    except Client.DoesNotExist:
+        return Response(
+            {'error': 'User is not registered as a client'},
+                status=status.HTTP_403_FORBIDDEN
+        )
+    # Update marked_noreply_as_not_spam field
+    client.marked_noreply_as_not_spam = True
+    client.save()
+    # Return success response
+    return Response({'message': 'Noreply marked as not spam'}, status=status.HTTP_200_OK)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_client_dashboard(request):
@@ -97,6 +114,7 @@ def get_client_dashboard(request):
 
         # Calculate onboarding progress
         profile_complete = client.calculate_profile_completion()
+        marked_noreply_as_not_spam = client.marked_noreply_as_not_spam
         has_pets = Pet.objects.filter(owner=client.user).exists()
         
         # Log the values for debugging
@@ -107,7 +125,8 @@ def get_client_dashboard(request):
             'profile_complete': profile_complete,
             'has_pets': has_pets,
             'has_payment_method': PaymentMethod.objects.filter(user=client.user, is_primary=True).exists(),
-            'subscription_plan': getattr(client.user, 'current_subscription_plan', 0)  # Default to 0 if not set
+            'subscription_plan': getattr(client.user, 'current_subscription_plan', 0),  # Default to 0 if not set
+            'marked_noreply_as_not_spam': marked_noreply_as_not_spam
         }
 
         # Prepare response data

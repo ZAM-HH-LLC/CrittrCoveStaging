@@ -12,10 +12,11 @@ import CrossPlatformView from '../components/CrossPlatformView';
 import { theme } from '../styles/theme';
 import { navigateToFrom } from '../components/Navigation';
 import ProfessionalServiceCard from '../components/ProfessionalServiceCard';
-import { getProfessionalServices, getProfessionalDashboard, getClientDashboard } from '../api/API';
+import { getProfessionalServices, getProfessionalDashboard, getClientDashboard, markNoreplyAsNotSpam } from '../api/API';
 import BookingCard from '../components/BookingCard';
 import TutorialModal from '../components/TutorialModal';
 import BookingApprovalModal from '../components/BookingApprovalModal';
+import { useToast } from '../components/ToastProvider';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -32,6 +33,7 @@ const Dashboard = ({ navigation }) => {
     handleSkip,
     completeTutorial,
   } = useContext(TutorialContext);
+  const showToast = useToast();
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -465,6 +467,50 @@ const Dashboard = ({ navigation }) => {
         ) : (
           // Owner onboarding cards
           <>
+            {/* Only show noreply card if not marked as not spam */}
+            {!onboardingProgress.marked_noreply_as_not_spam && (
+              <View style={styles.statCard}>
+                <View style={styles.statHeader}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#FEF0DA' }]}>
+                    <MaterialCommunityIcons name="email" size={24} color={theme.colors.primary} />
+                  </View>
+                  <TouchableOpacity 
+                    onPress={async () => {
+                      try {
+                        const response = await markNoreplyAsNotSpam();
+                        if (response) {
+                          debugLog('MBA5677: Marked noreply as not spam', response);
+                          setOnboardingProgress(prev => ({
+                            ...prev,
+                            marked_noreply_as_not_spam: true
+                          }));
+                          
+                          // Show success toast
+                          showToast({
+                            message: 'Success! You have marked our email as not spam and will receive emails about bookings and messages.',
+                            type: 'success',
+                            duration: 4000
+                          });
+                        }
+                      } catch (error) {
+                        debugLog('MBA5677: Error marking noreply as not spam', error);
+                        
+                        // Show error toast
+                        showToast({
+                          message: 'Failed to mark email as not spam. Please try again.',
+                          type: 'error',
+                          duration: 4000
+                        });
+                      }
+                    }}
+                  >
+                    <MaterialCommunityIcons name="close-circle" size={24} color={theme.colors.error} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={dynamicStyles.statValue}>Mark our email as not spam</Text>
+                <Text style={dynamicStyles.statLabel}>We send you emails about your bookings/messsages and other important updates</Text>
+              </View>
+            )}
             {/* Only show profile card if profile is not complete */}
             {onboardingProgress.profile_complete < 1.0 && (
               <TouchableOpacity 

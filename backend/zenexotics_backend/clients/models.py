@@ -20,6 +20,10 @@ class Client(models.Model):
         blank=True,
         help_text='List of emergency contacts'
     )
+    marked_noreply_as_not_spam = models.BooleanField(
+        default=False,
+        help_text='True if client has marked noreply@zenexotics.com as not spam'
+    )
     authorized_household_members = models.JSONField(
         default=default_list,
         blank=True,

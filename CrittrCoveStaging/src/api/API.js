@@ -45,6 +45,16 @@ export const getBookingAvailablePets = async (bookingId) => {
   }
 };
 
+export const markNoreplyAsNotSpam = async () => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/clients/v1/mark-noreply-as-not-spam/`);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA12345 Error marking noreply as not spam:', error);
+    throw error;
+  }
+};
+
 export const approveBooking = async (bookingId, clientAgreedTos = false) => {
   try {
     const response = await axios.post(

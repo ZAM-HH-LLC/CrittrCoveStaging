@@ -7,4 +7,5 @@ urlpatterns = [
     path('profile/', views.ClientProfileEditView.as_view(), name='client-profile-edit'),
     path('<int:client_id>/pets/', views.ClientPetsView.as_view(), name='client-pets'),
     path('get-pets/', views.GetClientPetsView.as_view(), name='get-client-pets'),
+    path('mark-noreply-as-not-spam/', views.mark_noreply_as_not_spam, name='mark-noreply-as-not-spam'),
 ] 
