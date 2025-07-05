@@ -518,9 +518,9 @@ const VerificationModal = ({ visible, onClose, title, type, onProceed }) => {
       case 'elite_pro':
         return {
           icon: 'star-circle',
-          description: 'Congratulations! You\'ve earned Elite Pro status with 10+ bookings and a 5-star average rating.',
+          description: 'Congratulations! You\'ve earned Elite Pro status with 5+ bookings and a 5-star average rating.',
           steps: [
-            'You\'ve completed 10+ successful bookings',
+            'You\'ve completed 5+ successful bookings',
             'You\'ve maintained a 5-star average rating',
             'Your Elite Pro badge is now active on your profile'
           ],
