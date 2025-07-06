@@ -136,7 +136,7 @@ const createLinking = (authContext) => ({
     const url = window.location.href;
     const pathname = window.location.pathname;
     
-    debugLog('MBA2ounf4f LINKING: Checking initial URL for auth protection:', { url, pathname });
+    debugLog('MBAo34invid3w LINKING: Checking initial URL for auth protection:', { url, pathname });
     
     // List of protected paths
     const protectedPaths = [
@@ -163,23 +163,33 @@ const createLinking = (authContext) => ({
       pathname.startsWith(path) || pathname === path
     );
     
+    debugLog('MBAo34invid3w LINKING: Path protection check:', {
+      pathname,
+      isProtectedPath,
+      authContextExists: !!authContext,
+      authContextInitialized: authContext?.isInitialized,
+      authContextSignedIn: authContext?.isSignedIn
+    });
+    
     if (isProtectedPath) {
       // Wait for auth context to be available and initialized
       let waitCount = 0;
       while ((!authContext || !authContext.isInitialized) && waitCount < 50) {
-        debugLog('MBA2ounf4f LINKING: Waiting for auth context...', waitCount);
+        debugLog('MBAo34invid3w LINKING: Waiting for auth context...', waitCount);
         await new Promise(resolve => setTimeout(resolve, 100));
         waitCount++;
       }
       
       if (authContext && !authContext.isSignedIn) {
-        debugLog('MBA2ounf4f LINKING: Protected path accessed without auth, redirecting to signin');
+        debugLog('MBAo34invid3w LINKING: Protected path accessed without auth, redirecting to signin');
         const baseUrl = url.split(pathname)[0];
         return `${baseUrl}/signin`;
+      } else {
+        debugLog('MBAo34invid3w LINKING: Auth context available, user signed in or path not protected');
       }
     }
     
-    debugLog('MBA2ounf4f LINKING: Allowing access to URL:', url);
+    debugLog('MBAo34invid3w LINKING: Allowing access to URL:', url);
     return url;
   },
   config: {
@@ -352,16 +362,24 @@ function AppContent() {
     const initializeApp = async () => {
       // Wait for AuthContext to be fully initialized
       if (!isInitialized) {
+        debugLog('MBAo34invid3w App initialization: AuthContext not yet initialized');
         return;
       }
 
       try {
         let route = 'Home';
 
+        debugLog('MBAo34invid3w App initialization starting:', {
+          inviteToken: !!inviteToken,
+          isSignedIn,
+          userRole,
+          platform: Platform.OS
+        });
+
         // If we have an invite token, go to SignUp
         if (inviteToken) {
           if (authContext.debugLog) {
-            authContext.debugLog('MBA6666 Setting initial route to SignUp with token:', inviteToken);
+            authContext.debugLog('MBAo34invid3w Setting initial route to SignUp with token:', inviteToken);
           }
           route = 'SignUp';
         }
@@ -369,7 +387,7 @@ function AppContent() {
         else if (isSignedIn) {
           route = 'Dashboard'; // Both roles go to Dashboard now
           if (authContext.debugLog) {
-            authContext.debugLog('MBA6666 User authenticated, setting route to:', route, 'for role:', userRole);
+            authContext.debugLog('MBAo34invid3w User authenticated, setting route to:', route, 'for role:', userRole);
           }
         } else {
           // User not signed in - check if they're trying to access a protected route
@@ -399,30 +417,38 @@ function AppContent() {
               currentPath.startsWith(path) || currentPath === path
             );
             
+            debugLog('MBAo34invid3w App initialization: Web route check:', {
+              currentPath,
+              isOnProtectedPath,
+              isSignedIn,
+              platform: Platform.OS
+            });
+            
             if (isOnProtectedPath) {
-              debugLog('MBA6666 Web: User not authenticated but on protected path, redirecting to SignIn');
+              debugLog('MBAo34invid3w Web: User not authenticated but on protected path, redirecting to SignIn');
               route = 'SignIn';
             } else {
               route = 'Home';
               if (authContext.debugLog) {
-                authContext.debugLog('MBA6666 User not authenticated, setting route to Home');
+                authContext.debugLog('MBAo34invid3w User not authenticated, setting route to Home');
               }
             }
           } else {
             route = 'Home';
             if (authContext.debugLog) {
-              authContext.debugLog('MBA6666 User not authenticated, setting route to Home');
+              authContext.debugLog('MBAo34invid3w User not authenticated, setting route to Home');
             }
           }
         }
 
         setInitialRoute(route);
-        debugLog('MBA6666 Final initial route set to:', route);
+        debugLog('MBAo34invid3w Final initial route set to:', route);
       } catch (error) {
         console.error('Error initializing app:', error);
         setInitialRoute(inviteToken ? 'SignUp' : 'Home');
       } finally {
         setIsLoading(false);
+        debugLog('MBAo34invid3w App initialization completed, loading set to false');
       }
     };
 
@@ -463,16 +489,17 @@ function AppContent() {
         currentPath.startsWith(path) || currentPath === path
       );
       
-      debugLog('MBA7777 Route guard check:', {
+      debugLog('MBAo34invid3w Route guard check:', {
         currentPath,
         isOnProtectedPath,
         isSignedIn,
         isInitialized,
-        isLoading
+        isLoading,
+        platform: Platform.OS
       });
       
       if (isOnProtectedPath && !isSignedIn) {
-        debugLog('MBA7777 Route guard: Redirecting unauthenticated user from protected route');
+        debugLog('MBAo34invid3w Route guard: Redirecting unauthenticated user from protected route');
         // Use window.location.href for immediate redirect
         window.location.href = '/signin';
       }
@@ -515,11 +542,12 @@ function AppContent() {
       const currentRoute = state.routes[state.routes.length - 1];
       const routeName = currentRoute.name;
       
-      debugLog('MBA2ounf4f Navigation state change:', {
+      debugLog('MBAo34invid3w Navigation state change:', {
         routeName,
         currentPath: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
         isInitialized,
-        isSignedIn
+        isSignedIn,
+        platform: Platform.OS
       });
       
       // List of protected route names (these are route names, not paths)
@@ -545,13 +573,21 @@ function AppContent() {
       
       const isProtectedRoute = protectedRoutes.includes(routeName);
       
+      debugLog('MBAo34invid3w Navigation protection check:', {
+        routeName,
+        isProtectedRoute,
+        isInitialized,
+        isSignedIn,
+        shouldRedirect: isProtectedRoute && isInitialized && !isSignedIn && routeName !== 'SignIn'
+      });
+      
       // Only redirect if:
       // 1. On a protected route
       // 2. Auth is fully initialized (not still loading)
       // 3. User is definitely not signed in
       // 4. Not already on signin page
       if (isProtectedRoute && isInitialized && !isSignedIn && routeName !== 'SignIn') {
-        debugLog('MBA2ounf4f Web: Protected route accessed without authentication, redirecting to signin');
+        debugLog('MBAo34invid3w Web: Protected route accessed without authentication, redirecting to signin');
         // Use React Navigation instead of window.location to avoid full page reload
         if (navigationRef.current) {
           navigationRef.current.navigate('SignIn');

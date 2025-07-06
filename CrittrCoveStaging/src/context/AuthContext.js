@@ -367,9 +367,9 @@ class AuthService {
   async clearTokens() {
     try {
       if (Platform.OS === 'web') {
-        // Clear from sessionStorage (original behavior)
-        sessionStorage.removeItem('userToken');
-        sessionStorage.removeItem('refreshToken');
+        // Clear from localStorage for authentication tokens
+        localStorage.removeItem('userToken');
+        localStorage.removeItem('refreshToken');
       } else {
         await AsyncStorage.multiRemove(['userToken', 'refreshToken']);
       }
@@ -387,9 +387,9 @@ class AuthService {
       this.refreshToken = refreshToken;
 
       if (Platform.OS === 'web') {
-        // Use sessionStorage for web (original behavior)
-        sessionStorage.setItem('userToken', accessToken);
-        sessionStorage.setItem('refreshToken', refreshToken);
+        // Use localStorage for web (original behavior)
+        localStorage.setItem('userToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
       } else {
         await AsyncStorage.multiSet([
           ['userToken', accessToken],
@@ -501,22 +501,26 @@ export const AuthContext = createContext();
 export const getStorage = async (key) => {
   try {
     if (Platform.OS === 'web') {
-      // For authentication tokens on web, use sessionStorage for session persistence (original behavior)
+      // For authentication tokens on web, use localStorage for persistent authentication (like Airbnb)
       // For other data, check both sessionStorage and localStorage
       if (key === 'userToken' || key === 'refreshToken') {
-        const value = sessionStorage.getItem(key);
+        const value = localStorage.getItem(key);
+        debugLog('MBAo34invid3w getStorage web localStorage (auth):', { key, hasValue: !!value, valueLength: value ? value.length : 0 });
         return value;
       } else {
         // For non-auth data, prefer sessionStorage but fallback to localStorage
         const sessionValue = sessionStorage.getItem(key);
         if (sessionValue) {
+          debugLog('MBAo34invid3w getStorage web sessionStorage (non-auth):', { key, hasValue: !!sessionValue });
           return sessionValue;
         }
         const localValue = localStorage.getItem(key);
+        debugLog('MBAo34invid3w getStorage web localStorage (non-auth):', { key, hasValue: !!localValue });
         return localValue;
       }
     } else {
       const value = await AsyncStorage.getItem(key);
+      debugLog('MBAo34invid3w getStorage mobile AsyncStorage:', { key, hasValue: !!value, valueLength: value ? value.length : 0 });
       return value;
     }
   } catch (error) {
@@ -527,16 +531,20 @@ export const getStorage = async (key) => {
 
 export const setStorage = async (key, value) => {
   try {
+    debugLog('MBAo34invid3w setStorage called:', { key, hasValue: !!value, valueLength: value ? value.length : 0, platform: Platform.OS });
     if (Platform.OS === 'web') {
-      // For authentication tokens on web, use sessionStorage (original behavior)
+      // For authentication tokens on web, use localStorage for persistent authentication (like Airbnb)
       if (key === 'userToken' || key === 'refreshToken') {
-        sessionStorage.setItem(key, value);
+        localStorage.setItem(key, value);
+        debugLog('MBAo34invid3w setStorage web localStorage (auth) completed:', { key });
       } else {
         // For other data, use sessionStorage
         sessionStorage.setItem(key, value);
+        debugLog('MBAo34invid3w setStorage web sessionStorage (non-auth) completed:', { key });
       }
     } else {
       await AsyncStorage.setItem(key, value);
+      debugLog('MBAo34invid3w setStorage mobile AsyncStorage completed:', { key });
     }
   } catch (error) {
     console.error('MBA2ounf4f Error setting storage:', error);
@@ -709,12 +717,12 @@ export const AuthProvider = ({ children }) => {
 
   // Sign out function with comprehensive cleanup and reason tracking
   const signOut = async (reason = 'user_action') => {
-    debugLog('MBA1111 signOut called with reason:', reason);
+    debugLog('MBAo34invid3w signOut called with reason:', reason);
     
     try {
       // Prevent concurrent sign out operations
       if (authService.current.isSigningOut) {
-        debugLog('MBA1111 Sign out already in progress, skipping');
+        debugLog('MBAo34invid3w Sign out already in progress, skipping');
         return;
       }
       
@@ -723,7 +731,7 @@ export const AuthProvider = ({ children }) => {
       // For token expiry or validation failures, immediately set signed out state
       // to prevent user from seeing stale content
       if (reason.includes('validation') || reason.includes('expired') || reason.includes('no_valid')) {
-        debugLog('MBA1111 Immediate state update for auth failure');
+        debugLog('MBAo34invid3w Immediate state update for auth failure');
         setIsSignedIn(false);
         setLoading(false); // Ensure loading is false so redirect can happen
       }
@@ -738,17 +746,19 @@ export const AuthProvider = ({ children }) => {
       try {
         const websocketManager = (await import('../utils/websocket')).default;
         websocketManager.disconnect();
-        debugLog('MBA1111 WebSocket disconnected during signOut');
+        debugLog('MBAo34invid3w WebSocket disconnected during signOut');
       } catch (error) {
-        debugLog('MBA1111 Error disconnecting websocket:', error);
+        debugLog('MBAo34invid3w Error disconnecting websocket:', error);
       }
       
       // Clear tokens and storage
+      debugLog('MBAo34invid3w Clearing tokens and storage during signOut');
       await authService.current.clearTokens();
       await AsyncStorage.multiRemove(['userRole', 'isApprovedProfessional']);
       
       // Clear all storage items for web (both localStorage and sessionStorage)
       if (Platform.OS === 'web') {
+        debugLog('MBAo34invid3w Clearing web storage during signOut');
         // Clear from localStorage
         localStorage.removeItem('userRole');
         localStorage.removeItem('isApprovedProfessional');
@@ -756,17 +766,16 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('userToken');
         localStorage.removeItem('refreshToken');
         
-        // Clear from sessionStorage
+        // Clear from sessionStorage (for non-auth data)
         sessionStorage.removeItem('userRole');
         sessionStorage.removeItem('isApprovedProfessional');
         sessionStorage.removeItem('currentProfessional');
-        sessionStorage.removeItem('userToken');
-        sessionStorage.removeItem('refreshToken');
         // Mark as explicit sign out for web
         sessionStorage.setItem('explicitSignOut', 'true');
+        debugLog('MBAo34invid3w Web storage cleared during signOut');
       }
       
-      debugLog('MBA1111 Storage cleared during sign out');
+      debugLog('MBAo34invid3w Storage cleared during sign out');
       
       // Reset all auth state
       setIsSignedIn(false);
@@ -784,16 +793,18 @@ export const AuthProvider = ({ children }) => {
       authService.current.accessToken = null;
       authService.current.refreshToken = null;
       
+      debugLog('MBAo34invid3w Auth state reset during signOut');
+      
       // Navigate to sign in with platform-specific handling
       const navigateToSignIn = () => {
         try {
-          debugLog('MBA1111 Navigating to SignIn screen due to:', reason);
+          debugLog('MBAo34invid3w Navigating to SignIn screen due to:', reason);
           
           if (Platform.OS === 'web') {
             // For web, use direct URL navigation to avoid conflicts with React Navigation
             if (typeof window !== 'undefined' && window.location) {
               window.location.href = '/signin';
-              debugLog('MBA1111 Web redirect to /signin successful');
+              debugLog('MBAo34invid3w Web redirect to /signin successful');
             } else {
               // Fallback to navigate function
               navigate('SignIn');
@@ -815,17 +826,17 @@ export const AuthProvider = ({ children }) => {
       
       // For auth failures, navigate immediately
       if (reason.includes('validation') || reason.includes('expired') || reason.includes('no_valid') || reason.includes('server_validation')) {
-        debugLog('MBA1111 Immediate navigation for auth failure');
+        debugLog('MBAo34invid3w Immediate navigation for auth failure');
         navigateToSignIn();
       } else {
         // For user-initiated sign outs, small delay
         setTimeout(navigateToSignIn, 0);
       }
       
-      debugLog('MBA1111 Sign out completed successfully');
+      debugLog('MBAo34invid3w Sign out completed successfully');
       
     } catch (error) {
-      debugLog('MBA1111 Error during sign out:', error);
+      debugLog('MBAo34invid3w Error during sign out:', error);
       
       // Even if there's an error, ensure we're in signed out state
       setIsSignedIn(false);
@@ -1062,6 +1073,8 @@ export const AuthProvider = ({ children }) => {
     let focusCheckTimeout = null;
     
     const handleWindowFocus = () => {
+      debugLog('MBAo34invid3w Window focus event triggered');
+      
       // Clear any pending check
       if (focusCheckTimeout) {
         clearTimeout(focusCheckTimeout);
@@ -1069,27 +1082,34 @@ export const AuthProvider = ({ children }) => {
       
       // Debounce the focus check
       focusCheckTimeout = setTimeout(async () => {
-        // debugLog('MBA1111 Window regained focus, checking token');
+        debugLog('MBAo34invid3w Window regained focus, checking token');
         
         if (authService.current && !authService.current.isSigningOut) {
           const token = authService.current.accessToken;
           if (token && authService.current.shouldRefreshToken(token)) {
-            debugLog('MBA1111 Token needs refresh on focus');
+            debugLog('MBAo34invid3w Token needs refresh on focus');
             try {
               await authService.current.refreshTokens();
+              debugLog('MBAo34invid3w Token refresh on focus successful');
             } catch (error) {
-              debugLog('MBA1111 Error refreshing token on focus:', error);
+              debugLog('MBAo34invid3w Error refreshing token on focus:', error);
             }
+          } else {
+            debugLog('MBAo34invid3w Token does not need refresh on focus');
           }
+        } else {
+          debugLog('MBAo34invid3w Auth service not available or signing out during focus check');
         }
       }, 500); // 500ms debounce
     };
     
     // Set up event listeners only for web
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      debugLog('MBAo34invid3w Setting up focus event listeners for web');
       window.addEventListener('focus', handleWindowFocus);
       
       document.addEventListener('visibilitychange', () => {
+        debugLog('MBAo34invid3w Visibility change event:', document.visibilityState);
         if (document.visibilityState === 'visible') {
           handleWindowFocus();
         }
@@ -1121,47 +1141,64 @@ export const AuthProvider = ({ children }) => {
       }
       
       try {
-        debugLog('MBA1111 Initializing auth state');
+        debugLog('MBAo34invid3w Initializing auth state');
         
         const { hasAccessToken, hasRefreshToken } = await authService.current.initialize();
         
+        debugLog('MBAo34invid3w Auth initialization result:', { hasAccessToken, hasRefreshToken });
+        
         if (hasAccessToken || hasRefreshToken) {
-          debugLog('MBA1111 Found stored tokens, validating...');
+          debugLog('MBAo34invid3w Found stored tokens, validating...');
           
           // First, check if we have any valid token WITHOUT attempting refresh
           // This prevents the user from seeing content while being actually logged out
           let storedAccessToken = await getStorage('userToken');
           let storedRefreshToken = await getStorage('refreshToken');
           
+          debugLog('MBAo34invid3w Retrieved stored tokens:', {
+            hasAccessToken: !!storedAccessToken,
+            hasRefreshToken: !!storedRefreshToken,
+            accessTokenLength: storedAccessToken ? storedAccessToken.length : 0,
+            refreshTokenLength: storedRefreshToken ? storedRefreshToken.length : 0
+          });
+          
           let hasValidToken = false;
           
           // Check if access token is valid (not expired)
           if (storedAccessToken) {
             const timeUntilExpiry = authService.current.getTimeUntilExpiry(storedAccessToken);
+            debugLog('MBAo34invid3w Access token expiry check:', {
+              timeUntilExpirySeconds: Math.round(timeUntilExpiry / 1000),
+              isExpired: timeUntilExpiry <= 0
+            });
             if (timeUntilExpiry > 0) {
-              debugLog('MBA1111 Access token is still valid');
+              debugLog('MBAo34invid3w Access token is still valid');
               hasValidToken = true;
             } else {
-              debugLog('MBA1111 Access token is expired');
+              debugLog('MBAo34invid3w Access token is expired');
             }
           }
           
           // If access token is expired, check if refresh token is valid
           if (!hasValidToken && storedRefreshToken) {
             const refreshTimeUntilExpiry = authService.current.getTimeUntilExpiry(storedRefreshToken);
+            debugLog('MBAo34invid3w Refresh token expiry check:', {
+              timeUntilExpirySeconds: Math.round(refreshTimeUntilExpiry / 1000),
+              isExpired: refreshTimeUntilExpiry <= 0
+            });
             if (refreshTimeUntilExpiry > 0) {
-              debugLog('MBA1111 Refresh token is valid, attempting token refresh');
+              debugLog('MBAo34invid3w Refresh token is valid, attempting token refresh');
               try {
                 // Attempt to refresh the token
                 await authService.current.refreshTokens();
                 hasValidToken = true;
-                debugLog('MBA1111 Token refresh successful during initialization');
+                debugLog('MBAo34invid3w Token refresh successful during initialization');
               } catch (error) {
-                debugLog('MBA1111 Token refresh failed during initialization:', error);
+                debugLog('MBAo34invid3w Token refresh failed during initialization:', error);
                 hasValidToken = false;
               }
             } else {
-              debugLog('MBA1111 Refresh token is also expired');
+              debugLog('MBAo34invid3w Refresh token is also expired');
             }
           }
           
@@ -1172,8 +1209,9 @@ export const AuthProvider = ({ children }) => {
               try {
                 // Perform server-side validation to be absolutely sure
                 const isValid = await authService.current.validateToken(token);
+                debugLog('MBAo34invid3w Server-side token validation result:', isValid);
                 if (isValid) {
-                  debugLog('MBA1111 Token validated successfully, setting up user session');
+                  debugLog('MBAo34invid3w Token validated successfully, setting up user session');
                   setIsSignedIn(true);
                   
                   // Fetch user data
@@ -1193,7 +1231,7 @@ export const AuthProvider = ({ children }) => {
                     ? storedRole 
                     : status.suggestedRole;
                   
-                  debugLog('MBA1111 Role selection:', { 
+                  debugLog('MBAo34invid3w Role selection:', { 
                     storedRole, 
                     suggestedRole: status.suggestedRole, 
                     finalRole,
@@ -1204,37 +1242,37 @@ export const AuthProvider = ({ children }) => {
                   setIsApprovedProfessional(status.isApprovedProfessional);
                   await fetchTimeSettings();
                   
-                                    debugLog('MBA1111 User session restored successfully');
+                  debugLog('MBAo34invid3w User session restored successfully');
                 } else {
-                  debugLog('MBA1111 Server-side token validation failed, signing out');
+                  debugLog('MBAo34invid3w Server-side token validation failed, signing out');
                   await signOut('server_validation_failed');
                 }
               } catch (error) {
-                debugLog('MBA1111 Error during token validation, signing out:', error);
+                debugLog('MBAo34invid3w Error during token validation, signing out:', error);
                 await signOut('validation_error');
               }
             } else {
-              debugLog('MBA1111 Could not retrieve access token, signing out');
+              debugLog('MBAo34invid3w Could not retrieve access token, signing out');
               await signOut('no_access_token');
             }
           } else {
-            debugLog('MBA1111 No valid tokens found, signing out');
+            debugLog('MBAo34invid3w No valid tokens found, signing out');
             await signOut('no_valid_tokens');
           }
         } else {
           // No tokens available - this is normal for new users
-          debugLog('MBA1111 No tokens found during initialization - user needs to sign in');
+          debugLog('MBAo34invid3w No tokens found during initialization - user needs to sign in');
           // Don't call signOut here as it would trigger navigation for new users
           // Just ensure they're in the signed out state
           setIsSignedIn(false);
-          debugLog('MBA1111 Set isSignedIn to false due to no tokens');
+          debugLog('MBAo34invid3w Set isSignedIn to false due to no tokens');
         }
       } catch (error) {
         console.error('MBA1111 Error initializing auth state:', error);
         await signOut('initialization_error');
       } finally {
         setLoading(false);
-        debugLog('MBA1111 Auth initialization completed, loading set to false');
+        debugLog('MBAo34invid3w Auth initialization completed, loading set to false');
         
         isInitializedRef.current = true;
         setIsInitialized(true);
@@ -1279,7 +1317,7 @@ export const AuthProvider = ({ children }) => {
       
       setIsApprovedProfessional(is_approved);
       if (Platform.OS === 'web') {
-        sessionStorage.setItem('isApprovedProfessional', String(is_approved));
+        localStorage.setItem('isApprovedProfessional', String(is_approved));
       } else {
         await AsyncStorage.setItem('isApprovedProfessional', String(is_approved));
       }
@@ -1328,7 +1366,7 @@ export const AuthProvider = ({ children }) => {
       
       // Store the role
       if (Platform.OS === 'web') {
-        sessionStorage.setItem('userRole', initialRole);
+        localStorage.setItem('userRole', initialRole);
       } else {
         await AsyncStorage.setItem('userRole', initialRole);
       }
@@ -1362,7 +1400,7 @@ export const AuthProvider = ({ children }) => {
       setUserRole(newRole);
       try {
         if (Platform.OS === "web") {
-          sessionStorage.setItem('userRole', newRole);
+          localStorage.setItem('userRole', newRole);
         } else {
           await AsyncStorage.setItem('userRole', newRole);
         }
@@ -1447,16 +1485,17 @@ export const AuthProvider = ({ children }) => {
         const hasStoredTokens = !!(await getStorage('userToken')) || !!(await getStorage('refreshToken'));
         const hasMemoryTokens = !!(authService.current.accessToken) || !!(authService.current.refreshToken);
         
-        debugLog('MBA1111 State consistency check:', {
+        debugLog('MBAo34invid3w State consistency check:', {
           isSignedIn,
           hasStoredTokens,
           hasMemoryTokens,
-          isSigningOut: authService.current.isSigningOut
+          isSigningOut: authService.current.isSigningOut,
+          platform: Platform.OS
         });
         
         // CRITICAL CHECK: If UI shows signed in but no tokens exist anywhere
         if (isSignedIn && !hasStoredTokens && !hasMemoryTokens && !authService.current.isSigningOut) {
-          debugLog('MBA1111 CRITICAL STATE INCONSISTENCY: UI shows signed in but no tokens exist - immediate redirect');
+          debugLog('MBAo34invid3w CRITICAL STATE INCONSISTENCY: UI shows signed in but no tokens exist - immediate redirect');
           await signOut('state_inconsistency_no_tokens');
           return;
         }
@@ -1468,30 +1507,38 @@ export const AuthProvider = ({ children }) => {
           // Check if stored token is expired
           if (storedToken) {
             const timeUntilExpiry = authService.current.getTimeUntilExpiry(storedToken);
+            debugLog('MBAo34invid3w Token expiry check in consistency:', {
+              timeUntilExpirySeconds: Math.round(timeUntilExpiry / 1000),
+              isExpired: timeUntilExpiry <= 0
+            });
             if (timeUntilExpiry <= 0) {
-              debugLog('MBA1111 CRITICAL STATE INCONSISTENCY: UI shows signed in but token is expired');
+              debugLog('MBAo34invid3w CRITICAL STATE INCONSISTENCY: UI shows signed in but token is expired');
               
               // Check if refresh token can save us
               const refreshToken = await getStorage('refreshToken');
               if (refreshToken) {
                 const refreshTimeUntilExpiry = authService.current.getTimeUntilExpiry(refreshToken);
+                debugLog('MBAo34invid3w Refresh token expiry check in consistency:', {
+                  timeUntilExpirySeconds: Math.round(refreshTimeUntilExpiry / 1000),
+                  isExpired: refreshTimeUntilExpiry <= 0
+                });
                 if (refreshTimeUntilExpiry <= 0) {
-                  debugLog('MBA1111 Refresh token also expired - forcing sign out');
+                  debugLog('MBAo34invid3w Refresh token also expired - forcing sign out');
                   await signOut('state_inconsistency_all_tokens_expired');
                   return;
                 } else {
-                  debugLog('MBA1111 Attempting emergency token refresh');
+                  debugLog('MBAo34invid3w Attempting emergency token refresh');
                   try {
                     await authService.current.refreshTokens();
-                    debugLog('MBA1111 Emergency token refresh successful');
+                    debugLog('MBAo34invid3w Emergency token refresh successful');
                   } catch (error) {
-                    debugLog('MBA1111 Emergency token refresh failed, signing out');
+                    debugLog('MBAo34invid3w Emergency token refresh failed, signing out');
                     await signOut('state_inconsistency_refresh_failed');
                     return;
                   }
                 }
               } else {
-                debugLog('MBA1111 No refresh token available, signing out');
+                debugLog('MBAo34invid3w No refresh token available, signing out');
                 await signOut('state_inconsistency_no_refresh_token');
                 return;
               }
@@ -1501,15 +1548,16 @@ export const AuthProvider = ({ children }) => {
         
         // If we think user is not signed in but tokens exist
         if (!isSignedIn && (hasStoredTokens || hasMemoryTokens) && !authService.current.isSigningOut) {
-          debugLog('MBA1111 STATE INCONSISTENCY DETECTED: UI shows signed out but tokens exist');
+          debugLog('MBAo34invid3w STATE INCONSISTENCY DETECTED: UI shows signed out but tokens exist');
           
           // Try to restore the session
           try {
             const token = await authService.current.getAccessToken();
             if (token) {
               const isValid = await authService.current.validateToken(token);
+              debugLog('MBAo34invid3w Token validation for session restoration:', isValid);
               if (isValid) {
-                debugLog('MBA1111 Restoring session with valid tokens');
+                debugLog('MBAo34invid3w Restoring session with valid tokens');
                 
                 setIsSignedIn(true);
                 await fetchUserName();
@@ -1520,19 +1568,19 @@ export const AuthProvider = ({ children }) => {
               }
             }
           } catch (error) {
-            debugLog('MBA1111 Failed to restore session:', error);
+            debugLog('MBAo34invid3w Failed to restore session:', error);
           }
           
           // If restoration failed, clear everything
           await signOut('state_inconsistency_invalid_tokens');
         }
       } catch (error) {
-        debugLog('MBA1111 Error in state consistency check:', error);
+        debugLog('MBAo34invid3w Error in state consistency check:', error);
         
         // If there's an error in consistency checking and we think we're signed in,
         // be safe and sign out to avoid confused state
         if (isSignedIn) {
-          debugLog('MBA1111 Error during consistency check while signed in - signing out for safety');
+          debugLog('MBAo34invid3w Error during consistency check while signed in - signing out for safety');
           await signOut('state_consistency_check_error');
         }
       }
@@ -1563,25 +1611,32 @@ export const AuthProvider = ({ children }) => {
           const timeUntilExpiry = authService.current.getTimeUntilExpiry(token);
           const shouldRefresh = authService.current.shouldRefreshToken(token);
           
+          debugLog('MBAo34invid3w Token monitor check:', {
+            timeUntilExpirySeconds: Math.round(timeUntilExpiry / 1000),
+            shouldRefresh,
+            isRefreshing: authService.current.isRefreshing,
+            platform: Platform.OS
+          });
+          
           if (timeUntilExpiry < 0) {
-            debugLog('MBA1111 TOKEN EXPIRED DETECTED in monitor');
+            debugLog('MBAo34invid3w TOKEN EXPIRED DETECTED in monitor');
           }
           
           // PROACTIVE REFRESH: If token should be refreshed, trigger it now
           if (shouldRefresh && !authService.current.isRefreshing) {
-            debugLog('MBA1111 Token monitor triggering proactive refresh');
+            debugLog('MBAo34invid3w Token monitor triggering proactive refresh');
             try {
               await authService.current.refreshTokens();
-              debugLog('MBA1111 Proactive token refresh completed successfully');
+              debugLog('MBAo34invid3w Proactive token refresh completed successfully');
             } catch (error) {
-              debugLog('MBA1111 Proactive token refresh failed:', error);
+              debugLog('MBAo34invid3w Proactive token refresh failed:', error);
             }
           }
         } else {
-          debugLog('MBA1111 Token monitor: No token available');
+          debugLog('MBAo34invid3w Token monitor: No token available');
         }
       } catch (error) {
-        debugLog('MBA1111 Error in token monitor:', error);
+        debugLog('MBAo34invid3w Error in token monitor:', error);
       }
     };
     
