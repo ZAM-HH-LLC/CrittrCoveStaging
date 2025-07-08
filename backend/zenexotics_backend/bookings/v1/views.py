@@ -1304,6 +1304,20 @@ class ApproveBookingView(APIView):
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 # Don't fail the overall process if messaging fails
             
+            # Send booking confirmation email to professional
+            try:
+                from core.email_utils import schedule_delayed_email, send_booking_confirmation_email
+                
+                # Schedule the booking confirmation email after a delay
+                def send_booking_email():
+                    send_booking_confirmation_email(booking.booking_id)
+                
+                schedule_delayed_email(send_booking_email, delay_seconds=0)
+                logger.info(f"Scheduled booking confirmation email for booking {booking_id}")
+            except Exception as email_error:
+                logger.error(f"Error scheduling booking confirmation email: {str(email_error)}")
+                # Don't fail the overall process if email scheduling fails
+            
             # Log the interaction
             InteractionLog.objects.create(
                 user=request.user,

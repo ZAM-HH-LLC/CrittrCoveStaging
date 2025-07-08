@@ -3,7 +3,7 @@ from decimal import Decimal
 from datetime import datetime, time
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from core.time_utils import convert_to_utc, convert_from_utc, format_datetime_for_user, get_formatted_times
+from core.time_utils import convert_to_utc, convert_from_utc, format_datetime_for_user, get_formatted_times, format_booking_occurrence
 import logging
 import pytz
 
