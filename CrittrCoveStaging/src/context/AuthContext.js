@@ -423,6 +423,24 @@ class AuthService {
       accessToken = await getStorage('userToken');
       refreshToken = await getStorage('refreshToken');
       
+      // Brave browser recovery: If tokens are missing but we have them in memory, restore them
+      if (Platform.OS === 'web' && (!accessToken || !refreshToken)) {
+        const memoryAccessToken = this.accessToken;
+        const memoryRefreshToken = this.refreshToken;
+        
+        if (memoryAccessToken && !accessToken) {
+          debugLog('MBA2ounf4f BRAVE RECOVERY: Restoring accessToken from memory to localStorage');
+          localStorage.setItem('userToken', memoryAccessToken);
+          accessToken = memoryAccessToken;
+        }
+        
+        if (memoryRefreshToken && !refreshToken) {
+          debugLog('MBA2ounf4f BRAVE RECOVERY: Restoring refreshToken from memory to localStorage');
+          localStorage.setItem('refreshToken', memoryRefreshToken);
+          refreshToken = memoryRefreshToken;
+        }
+      }
+      
       debugLog('MBA2ounf4f Raw tokens retrieved:', {
         accessTokenExists: !!accessToken,
         refreshTokenExists: !!refreshToken,
@@ -509,11 +527,16 @@ export const getStorage = async (key) => {
         return value;
       } else {
         // For non-auth data, prefer sessionStorage but fallback to localStorage
-        const sessionValue = sessionStorage.getItem(key);
-        if (sessionValue) {
-          debugLog('MBAo34invid3w getStorage web sessionStorage (non-auth):', { key, hasValue: !!sessionValue });
-          return sessionValue;
+        try {
+          const sessionValue = sessionStorage.getItem(key);
+          if (sessionValue) {
+            debugLog('MBAo34invid3w getStorage web sessionStorage (non-auth):', { key, hasValue: !!sessionValue });
+            return sessionValue;
+          }
+        } catch (sessionError) {
+          debugLog('MBAo34invid3w getStorage sessionStorage error, falling back to localStorage:', { key, error: sessionError.message });
         }
+        
         const localValue = localStorage.getItem(key);
         debugLog('MBAo34invid3w getStorage web localStorage (non-auth):', { key, hasValue: !!localValue });
         return localValue;
@@ -759,20 +782,25 @@ export const AuthProvider = ({ children }) => {
       // Clear all storage items for web (both localStorage and sessionStorage)
       if (Platform.OS === 'web') {
         debugLog('MBAo34invid3w Clearing web storage during signOut');
-        // Clear from localStorage
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('isApprovedProfessional');
-        localStorage.removeItem('currentProfessional');
+        
+        // Clear auth tokens from localStorage
         localStorage.removeItem('userToken');
         localStorage.removeItem('refreshToken');
         
-        // Clear from sessionStorage (for non-auth data)
+        // Clear user data from localStorage
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('isApprovedProfessional');
+        localStorage.removeItem('currentProfessional');
+        
+        // Clear non-auth data from sessionStorage
         sessionStorage.removeItem('userRole');
         sessionStorage.removeItem('isApprovedProfessional');
         sessionStorage.removeItem('currentProfessional');
+        
         // Mark as explicit sign out for web
         sessionStorage.setItem('explicitSignOut', 'true');
-        debugLog('MBAo34invid3w Web storage cleared during signOut');
+        
+        debugLog('MBAo34invid3w Web storage cleared during signOut - auth tokens from localStorage, user data from both');
       }
       
       debugLog('MBAo34invid3w Storage cleared during sign out');
@@ -1066,7 +1094,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, [is_prototype]);
 
-  // Window focus handling with proper debouncing
+  // Window focus handling with proper debouncing and storage event monitoring
   useEffect(() => {
     if (!isSignedIn || is_prototype) return;
     
@@ -1103,10 +1131,61 @@ export const AuthProvider = ({ children }) => {
       }, 500); // 500ms debounce
     };
     
+    // Storage event handler to detect sessionStorage clearing
+    const handleStorageEvent = (event) => {
+      // Only care about sessionStorage changes that might affect auth
+      if (event.storageArea === sessionStorage) {
+        debugLog('MBAo34invid3w SessionStorage change detected:', {
+          key: event.key,
+          newValue: event.newValue,
+          oldValue: event.oldValue,
+          url: event.url
+        });
+        
+        // If sessionStorage is being cleared (multiple keys removed), log it but don't act
+        if (event.key === null && event.newValue === null) {
+          debugLog('MBAo34invid3w SessionStorage clear detected - checking if localStorage was affected');
+          
+          // Check if localStorage tokens are still there after sessionStorage clear
+          const localStorageUserToken = localStorage.getItem('userToken');
+          const localStorageRefreshToken = localStorage.getItem('refreshToken');
+          
+          debugLog('MBAo34invid3w localStorage check after sessionStorage clear:', {
+            hasUserToken: !!localStorageUserToken,
+            hasRefreshToken: !!localStorageRefreshToken
+          });
+          
+          // If localStorage tokens are missing but we're signed in, this is a Brave browser issue
+          if (!localStorageUserToken && !localStorageRefreshToken && isSignedIn) {
+            debugLog('MBAo34invid3w BRAVE BROWSER ISSUE: sessionStorage.clear() affected localStorage - attempting recovery');
+            
+            // Try to restore tokens from memory if available
+            if (authService.current.accessToken) {
+              localStorage.setItem('userToken', authService.current.accessToken);
+              debugLog('MBAo34invid3w Restored userToken to localStorage from memory');
+            }
+            if (authService.current.refreshToken) {
+              localStorage.setItem('refreshToken', authService.current.refreshToken);
+              debugLog('MBAo34invid3w Restored refreshToken to localStorage from memory');
+            }
+          }
+          
+          return;
+        }
+        
+        // If auth tokens are being removed from sessionStorage, ignore it
+        if ((event.key === 'userToken' || event.key === 'refreshToken') && event.newValue === null) {
+          debugLog('MBAo34invid3w Auth token removed from sessionStorage - ignoring as tokens are in localStorage');
+          return;
+        }
+      }
+    };
+    
     // Set up event listeners only for web
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
-      debugLog('MBAo34invid3w Setting up focus event listeners for web');
+      debugLog('MBAo34invid3w Setting up focus and storage event listeners for web');
       window.addEventListener('focus', handleWindowFocus);
+      window.addEventListener('storage', handleStorageEvent);
       
       document.addEventListener('visibilitychange', () => {
         debugLog('MBAo34invid3w Visibility change event:', document.visibilityState);
@@ -1123,6 +1202,7 @@ export const AuthProvider = ({ children }) => {
       
       if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
         window.removeEventListener('focus', handleWindowFocus);
+        window.removeEventListener('storage', handleStorageEvent);
         document.removeEventListener('visibilitychange', handleWindowFocus);
       }
     };
@@ -1476,12 +1556,18 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // State consistency checker with enhanced detection
+  // State consistency checker with enhanced detection and sessionStorage isolation
   useEffect(() => {
     if (loading || is_prototype) return;
     
     const checkStateConsistency = async () => {
       try {
+        // Get both localStorage and sessionStorage state to understand what's happening
+        const localStorageUserToken = Platform.OS === 'web' ? localStorage.getItem('userToken') : null;
+        const localStorageRefreshToken = Platform.OS === 'web' ? localStorage.getItem('refreshToken') : null;
+        const sessionStorageUserToken = Platform.OS === 'web' ? sessionStorage.getItem('userToken') : null;
+        const sessionStorageRefreshToken = Platform.OS === 'web' ? sessionStorage.getItem('refreshToken') : null;
+        
         const hasStoredTokens = !!(await getStorage('userToken')) || !!(await getStorage('refreshToken'));
         const hasMemoryTokens = !!(authService.current.accessToken) || !!(authService.current.refreshToken);
         
@@ -1489,12 +1575,47 @@ export const AuthProvider = ({ children }) => {
           isSignedIn,
           hasStoredTokens,
           hasMemoryTokens,
+          localStorageUserToken: !!localStorageUserToken,
+          localStorageRefreshToken: !!localStorageRefreshToken,
+          sessionStorageUserToken: !!sessionStorageUserToken,
+          sessionStorageRefreshToken: !!sessionStorageRefreshToken,
           isSigningOut: authService.current.isSigningOut,
           platform: Platform.OS
         });
         
         // CRITICAL CHECK: If UI shows signed in but no tokens exist anywhere
         if (isSignedIn && !hasStoredTokens && !hasMemoryTokens && !authService.current.isSigningOut) {
+          // Additional check: If localStorage has tokens but getStorage() doesn't find them,
+          // this might be a sessionStorage-only issue
+          if (Platform.OS === 'web' && (localStorageUserToken || localStorageRefreshToken)) {
+            debugLog('MBAo34invid3w POTENTIAL SESSIONSTORAGE ISSUE: localStorage has tokens but getStorage() failed - checking...');
+            
+            // Try to restore tokens from localStorage directly
+            if (localStorageUserToken) {
+              authService.current.accessToken = localStorageUserToken;
+            }
+            if (localStorageRefreshToken) {
+              authService.current.refreshToken = localStorageRefreshToken;
+            }
+            
+            debugLog('MBAo34invid3w Restored tokens from localStorage directly - continuing session');
+            return; // Don't sign out, let the session continue
+          }
+          
+          // BRAVE BROWSER RECOVERY: If we're signed in but no tokens anywhere, try to recover from memory
+          if (Platform.OS === 'web' && authService.current.accessToken) {
+            debugLog('MBAo34invid3w BRAVE BROWSER RECOVERY: Attempting to restore tokens from memory');
+            
+            // Restore tokens to localStorage from memory
+            localStorage.setItem('userToken', authService.current.accessToken);
+            if (authService.current.refreshToken) {
+              localStorage.setItem('refreshToken', authService.current.refreshToken);
+            }
+            
+            debugLog('MBAo34invid3w BRAVE BROWSER RECOVERY: Tokens restored from memory to localStorage');
+            return; // Don't sign out, let the session continue
+          }
+          
           debugLog('MBAo34invid3w CRITICAL STATE INCONSISTENCY: UI shows signed in but no tokens exist - immediate redirect');
           await signOut('state_inconsistency_no_tokens');
           return;
@@ -1598,7 +1719,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, [isSignedIn, loading, is_prototype]);
 
-  // Token refresh monitoring with PROACTIVE refresh triggers
+  // Token refresh monitoring with PROACTIVE refresh triggers and localStorage persistence check
   useEffect(() => {
     if (!isSignedIn || is_prototype) return;
     
@@ -1630,6 +1751,22 @@ export const AuthProvider = ({ children }) => {
               debugLog('MBAo34invid3w Proactive token refresh completed successfully');
             } catch (error) {
               debugLog('MBAo34invid3w Proactive token refresh failed:', error);
+            }
+          }
+          
+          // BRAVE BROWSER SAFEGUARD: Ensure tokens are always in localStorage
+          if (Platform.OS === 'web') {
+            const localStorageToken = localStorage.getItem('userToken');
+            const localStorageRefreshToken = localStorage.getItem('refreshToken');
+            
+            if (!localStorageToken && token) {
+              debugLog('MBAo34invid3w BRAVE SAFEGUARD: Token missing from localStorage, restoring');
+              localStorage.setItem('userToken', token);
+            }
+            
+            if (!localStorageRefreshToken && authService.current.refreshToken) {
+              debugLog('MBAo34invid3w BRAVE SAFEGUARD: Refresh token missing from localStorage, restoring');
+              localStorage.setItem('refreshToken', authService.current.refreshToken);
             }
           }
         } else {
