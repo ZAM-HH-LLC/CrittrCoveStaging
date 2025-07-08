@@ -29,8 +29,11 @@ export const formatMessageTime = (timestamp, userTimezone) => {
   try {
     if (!timestamp) return '';
     
+    // Use default timezone if userTimezone is null/undefined
+    const targetTimezone = userTimezone || 'US/Mountain';
+    
     // Check cache first
-    const cacheKey = `${timestamp}:${userTimezone}`;
+    const cacheKey = `${timestamp}:${targetTimezone}`;
     if (formatCache.times.has(cacheKey)) {
       return formatCache.times.get(cacheKey);
     }
@@ -46,7 +49,7 @@ export const formatMessageTime = (timestamp, userTimezone) => {
       const [, dateStr, timeStr] = dateTimeMatch;
       
       // Use the formatFromUTC function to convert and format
-      result = formatFromUTC(dateStr, timeStr, userTimezone, FORMAT_TYPES.TIME_ONLY);
+      result = formatFromUTC(dateStr, timeStr, targetTimezone, FORMAT_TYPES.TIME_ONLY);
     }
     
     // Cache the result
@@ -72,8 +75,11 @@ export const formatMessageDate = (timestamp, userTimezone) => {
   try {
     if (!timestamp) return '';
     
+    // Use default timezone if userTimezone is null/undefined
+    const targetTimezone = userTimezone || 'US/Mountain';
+    
     // Check cache first
-    const cacheKey = `${timestamp}:${userTimezone}`;
+    const cacheKey = `${timestamp}:${targetTimezone}`;
     if (formatCache.dates.has(cacheKey)) {
       return formatCache.dates.get(cacheKey);
     }
@@ -86,7 +92,7 @@ export const formatMessageDate = (timestamp, userTimezone) => {
     // Parse the UTC timestamp properly
     const utcMoment = moment.utc(timestamp);
     // Convert to user's timezone
-    const messageDate = utcMoment.tz(userTimezone);
+    const messageDate = utcMoment.tz(targetTimezone);
     
     // IMPORTANT: For testing purposes, use a fixed "today" date of 2025-06-09 if we're processing test messages
     // This simulates the app running on that date to match our testing data
@@ -96,13 +102,13 @@ export const formatMessageDate = (timestamp, userTimezone) => {
     
     // Use a fixed "today" date of 2025-06-09 to match our test data
     const now = isTestMessage ? 
-                moment('2025-06-09T12:00:00').tz(userTimezone) : 
-                moment().tz(userTimezone);
+                moment('2025-06-09T12:00:00').tz(targetTimezone) : 
+                moment().tz(targetTimezone);
   
     
     // Get today and yesterday in user's timezone
-    const today = moment(Date.now()).tz(userTimezone).startOf('day');
-    const yesterday = moment(Date.now()).tz(userTimezone).subtract(1, 'day').startOf('day');
+    const today = moment(Date.now()).tz(targetTimezone).startOf('day');
+    const yesterday = moment(Date.now()).tz(targetTimezone).subtract(1, 'day').startOf('day');
     const messageDateStartOfDay = messageDate.clone().startOf('day');
     
     // Check if the date is today, yesterday, or another date
@@ -111,7 +117,7 @@ export const formatMessageDate = (timestamp, userTimezone) => {
     // For test messages, use the mock date; for real messages, use the actual current date
     // This allows test messages to show "Today" on the test date while real messages 
     // use the actual current date for Today/Yesterday labels
-    const realToday = moment(Date.now()).tz(userTimezone);
+    const realToday = moment(Date.now()).tz(targetTimezone);
     const realYesterday = realToday.clone().subtract(1, 'day');
     
     // Compare using YYYY-MM-DD format for consistency
@@ -164,6 +170,9 @@ export const groupMessagesByDate = (messages, userTimezone) => {
   try {
     if (!messages || !Array.isArray(messages)) return {};
     
+    // Use default timezone if userTimezone is null/undefined
+    const targetTimezone = userTimezone || 'US/Mountain';
+    
     const groups = {};
     
     // Debug log for specific messages we're troubleshooting
@@ -187,7 +196,7 @@ export const groupMessagesByDate = (messages, userTimezone) => {
         debugLog('MBA3oub497v4: Processing important test message for grouping', {
           messageId: message.message_id,
           timestamp: message.timestamp,
-          userTimezone,
+          userTimezone: targetTimezone,
           content: message.content.substring(0, 20) // Show just the beginning of content
         });
       }
@@ -195,7 +204,7 @@ export const groupMessagesByDate = (messages, userTimezone) => {
       // Properly parse UTC timestamp
       const utcMoment = moment.utc(message.timestamp);
       // Convert to user's timezone
-      const localMoment = utcMoment.tz(userTimezone);
+      const localMoment = utcMoment.tz(targetTimezone);
       // Get the date key in user's timezone
       const dateKey = localMoment.format('YYYY-MM-DD');
       
@@ -209,8 +218,8 @@ export const groupMessagesByDate = (messages, userTimezone) => {
           dateKey,
           utcFullTime: utcMoment.format(),
           localFullTime: localMoment.format(),
-          tzOffset: moment.tz(userTimezone).utcOffset() / 60,
-          userTimezone
+          tzOffset: moment.tz(targetTimezone).utcOffset() / 60,
+          userTimezone: targetTimezone
         });
       }
       

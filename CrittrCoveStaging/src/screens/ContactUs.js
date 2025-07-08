@@ -6,14 +6,24 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { AuthContext, debugLog } from '../context/AuthContext';
-import { useForm, ValidationError } from '@formspree/react';
+// Conditionally import formspree only on web
+let useFormspree, ValidationError;
+if (Platform.OS === 'web') {
+  const formspree = require('@formspree/react');
+  useFormspree = formspree.useForm;
+  ValidationError = formspree.ValidationError;
+} else {
+  // Mock implementations for mobile
+  useFormspree = () => [{}, () => {}];
+  ValidationError = () => null;
+}
 import { validateEmail, validateName, validateMessage, sanitizeInput } from '../validation/validation';
 
 const ContactUs = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { screenWidth, isCollapsed } = useContext(AuthContext);
-  const [state, handleFormspreeSubmit] = useForm("mkgobpro");
+  const [state, handleFormspreeSubmit] = useFormspree ? useFormspree("mkgobpro") : [{}, () => {}];
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');

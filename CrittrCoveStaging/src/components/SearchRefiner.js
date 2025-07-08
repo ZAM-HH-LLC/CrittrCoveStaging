@@ -148,6 +148,8 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       overflow: 'visible',
       // Add top padding when not signed in or on mobile (screenWidth <= 1200)
       paddingTop: (!isSignedIn || screenWidth <= 1200) ? theme.spacing.medium : theme.spacing.medium,
+      // Add bottom padding on mobile to avoid tab navigator overlap
+      paddingBottom: Platform.OS !== 'web' ? 100 : theme.spacing.medium,
     },
     header: {
       flexDirection: 'row',

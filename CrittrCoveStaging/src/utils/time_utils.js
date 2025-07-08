@@ -590,13 +590,35 @@ export const formatFromUTC = (dateStr, timeStr = null, userTimezone, formatType 
   try {
     console.log('MBA134njo0vh02c23 formatFromUTC input:', { dateStr, timeStr, userTimezone, formatType });
     
+    // Validate inputs
+    if (!dateStr) {
+      console.error('MBA134njo0vh02c23 Error in formatFromUTC: dateStr is required');
+      return '';
+    }
+    
+    // Use default timezone if userTimezone is null/undefined
+    const targetTimezone = userTimezone || 'US/Mountain';
+    console.log('MBA134njo0vh02c23 Using timezone:', targetTimezone);
+    
     // Create a moment object in UTC with proper format
     const utcMoment = moment.utc(`${dateStr}T${timeStr || '00:00'}:00Z`);
     console.log('MBA134njo0vh02c23 UTC moment:', utcMoment.format());
+    
+    // Validate the UTC moment
+    if (!utcMoment.isValid()) {
+      console.error('MBA134njo0vh02c23 Error in formatFromUTC: Invalid UTC moment created');
+      return '';
+    }
 
     // Convert to user's timezone
-    const localMoment = utcMoment.tz(userTimezone);
+    const localMoment = utcMoment.tz(targetTimezone);
     console.log('MBA134njo0vh02c23 Local moment:', localMoment.format());
+    
+    // Validate the local moment
+    if (!localMoment.isValid()) {
+      console.error('MBA134njo0vh02c23 Error in formatFromUTC: Invalid local moment created');
+      return '';
+    }
 
     // Get timezone abbreviation
     const tzAbbrev = localMoment.zoneAbbr();

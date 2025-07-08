@@ -64,7 +64,7 @@ import BecomeProfessional from './src/screens/BecomeProfessional';
 import MoreScreen from './src/screens/MoreScreen';
 import AvailabilitySettings from './src/screens/AvailabilitySettings';
 import OwnerHistory from './src/screens/OwnerHistory';
-import MessageHistory from './src/screens/MessageHistory';
+import MessageHistory from './src/components/Messages/MessageHistoryWrapper';
 import Settings from './src/screens/Settings';
 import PrivacyPolicy from './src/screens/PrivacyPolicy';
 import ProfessionalSettings from './src/screens/ProfessionalSettings';
@@ -100,7 +100,7 @@ const screens = [
   { name: 'MessageHistory', component: MessageHistory },
   { name: 'Dashboard', component: Dashboard },
   { name: 'BecomeProfessional', component: BecomeProfessional },
-  { name: 'More', component: MoreScreen },
+  { name: 'MoreScreen', component: MoreScreen },
   { name: 'Owners', component: Owners },
   { name: 'AvailabilitySettings', component: AvailabilitySettings },
   { name: 'Settings', component: Settings },
@@ -145,7 +145,7 @@ const createLinking = (authContext) => ({
       '/MessageHistory', '/message-history',
       '/OwnerHistory', '/owner-history',
       '/BecomeProfessional', '/become-professional',
-      '/More', '/more',
+      '/MoreScreen', '/more-screen',
       '/Owners', '/owners',
       '/AvailabilitySettings', '/availability-settings',
       '/Settings', '/settings',

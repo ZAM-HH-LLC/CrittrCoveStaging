@@ -8,9 +8,9 @@ import {
   Modal,
   TextInput,
   Platform,
-  Dimensions,
-  Picker
+  Dimensions
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { theme } from '../../styles/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debugLog } from '../../context/AuthContext';

@@ -1,5 +1,15 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { View, StyleSheet, Alert, Platform, SafeAreaView, StatusBar } from 'react-native';
+import { 
+  View, 
+  StyleSheet, 
+  Alert, 
+  Platform, 
+  SafeAreaView, 
+  StatusBar, 
+  ScrollView, 
+  Text, 
+  TouchableOpacity 
+} from 'react-native';
 import { List, Divider, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -94,27 +104,40 @@ const MoreScreen = ({ navigation }) => {
 
   const menuItems = {
     notSignedIn: [
+      { title: 'Sign In', icon: 'login', route: 'SignIn' },
+      { title: 'Sign Up', icon: 'account-plus-outline', route: 'SignUp' },
+      { title: 'Search Professionals', icon: 'magnify', route: 'SearchProfessionalsListing' },
+      // { title: 'About', icon: 'information-outline', route: 'AboutScreen' },
+      // { title: 'Help & FAQ', icon: 'help-circle-outline', route: 'HelpFAQ' },
       { title: 'Privacy Policy', icon: 'shield-account', route: 'PrivacyPolicy' },
       { title: 'Terms of Service', icon: 'file-document', route: 'TermsOfService' },
+      { title: 'Contact Us', icon: 'email', route: 'ContactUs' },
     ],
     petOwner: [
-      { title: 'Profile', icon: 'account', route: 'MyProfile' },
-      { title: 'My Bookings', icon: 'calendar-clock', route: 'MyBookings' },
-      { title: 'Payment Methods', icon: 'credit-card', route: 'PaymentMethods' },
+      { title: 'My Profile', icon: 'account-outline', route: 'MyProfile' },
+      // { title: 'My Bookings', icon: 'calendar-check', route: 'MyBookings' },
+      // { title: 'My Contracts', icon: 'file-document-outline', route: 'MyContracts' },
+      // { title: 'Payment Methods', icon: 'credit-card-outline', route: 'PaymentMethods' },
+      { title: 'Connections', icon: 'account-group-outline', route: 'Connections' },
       { title: 'Become a Professional', icon: 'account-tie', route: 'BecomeProfessional' },
-      { title: 'Settings', icon: 'cog', route: 'Settings' },
-      { title: 'Blog', icon: 'post', route: 'Blog' },
+      // { title: 'Settings', icon: 'cog-outline', route: 'Settings' },
+      // { title: 'About', icon: 'information-outline', route: 'AboutScreen' },
+      // { title: 'Help & FAQ', icon: 'help-circle-outline', route: 'HelpFAQ' },
       { title: 'Privacy Policy', icon: 'shield-account', route: 'PrivacyPolicy' },
       { title: 'Terms of Service', icon: 'file-document', route: 'TermsOfService' },
       { title: 'Contact Us', icon: 'email', route: 'ContactUs' },
     ],
     professional: [
-      { title: 'Profile', icon: 'account', route: 'MyProfile' },
-      { title: 'My Services', icon: 'briefcase-outline', route: 'ServiceManager' },
-      { title: 'My Bookings', icon: 'calendar-clock', route: 'MyBookings' },
-      { title: 'Payment Methods', icon: 'credit-card', route: 'PaymentMethods' },
-      { title: 'Settings', icon: 'cog', route: 'Settings' },
-      { title: 'Blog', icon: 'post', route: 'Blog' },
+      { title: 'My Profile', icon: 'account-outline', route: 'MyProfile' },
+      { title: 'My Services', icon: 'briefcase-outline', route: 'ServiceManagerScreen' },
+      // { title: 'Availability Settings', icon: 'calendar-clock', route: 'AvailabilitySettings' },
+      // { title: 'My Bookings', icon: 'calendar-check', route: 'MyBookings' },
+      // { title: 'My Contracts', icon: 'file-document-outline', route: 'MyContracts' },
+      { title: 'Connections', icon: 'account-group-outline', route: 'Connections' },
+      // { title: 'Payment Methods', icon: 'credit-card-outline', route: 'PaymentMethods' },
+      // { title: 'Settings', icon: 'cog-outline', route: 'Settings' },
+      // { title: 'About', icon: 'information-outline', route: 'AboutScreen' },
+      // { title: 'Help & FAQ', icon: 'help-circle-outline', route: 'HelpFAQ' },
       { title: 'Privacy Policy', icon: 'shield-account', route: 'PrivacyPolicy' },
       { title: 'Terms of Service', icon: 'file-document', route: 'TermsOfService' },
       { title: 'Contact Us', icon: 'email', route: 'ContactUs' },
@@ -159,25 +182,76 @@ const MoreScreen = ({ navigation }) => {
   return (
     <View style={styles.mainContainer}>
       <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
-          <View style={styles.webContent}>
-            <List.Section style={styles.listSection}>
-              {renderMenuItems()}
-            </List.Section>
-            {isSignedIn && (
-              <View style={styles.buttonContainer}>
-                <Button 
-                  mode="contained" 
-                  onPress={handleLogout} 
-                  style={[styles.logoutButton]}
-                  labelStyle={styles.buttonText}
-                >
-                  Log Out
-                </Button>
-              </View>
-            )}
+        {/* Mobile Header */}
+        {isMobile && (
+          <View style={styles.mobileHeader}>
+            <Text style={styles.headerTitle}>More</Text>
           </View>
-        </View>
+        )}
+        
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.content}>
+            <View style={styles.webContent}>
+              {/* Role Toggle for Mobile - Only show when signed in and approved professional */}
+              {isSignedIn && isApprovedProfessional && isMobile && (
+                <View style={styles.roleToggleSection}>
+                  <Text style={styles.sectionTitle}>Switch Role</Text>
+                  <View style={styles.roleButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.roleButton,
+                        userRole === 'petOwner' && styles.roleButtonActive
+                      ]}
+                      onPress={() => handleSwitchRole()}
+                    >
+                      <Text
+                        style={[
+                          styles.roleButtonText,
+                          userRole === 'petOwner' && styles.roleButtonTextActive
+                        ]}
+                      >
+                        Pet Owner
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.roleButton,
+                        userRole === 'professional' && styles.roleButtonActive
+                      ]}
+                      onPress={() => handleSwitchRole()}
+                    >
+                      <Text
+                        style={[
+                          styles.roleButtonText,
+                          userRole === 'professional' && styles.roleButtonTextActive
+                        ]}
+                      >
+                        Professional
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              
+              <List.Section style={styles.listSection}>
+                {renderMenuItems()}
+              </List.Section>
+              
+              {isSignedIn && (
+                <View style={styles.buttonContainer}>
+                  <Button 
+                    mode="contained" 
+                    onPress={handleLogout} 
+                    style={[styles.logoutButton]}
+                    labelStyle={styles.buttonText}
+                  >
+                    Log Out
+                  </Button>
+                </View>
+              )}
+            </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -187,18 +261,36 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
   mainContainer: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    height: '100vh',
-    overflow: 'hidden',
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
-    transition: 'margin-left 0.3s ease',
+    ...(Platform.OS === 'web' && screenWidth > 900 && {
+      height: '100vh',
+      overflow: 'hidden',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      marginLeft: isCollapsed ? 70 : 250,
+      transition: 'margin-left 0.3s ease',
+    }),
   },
   container: {
     flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  mobileHeader: {
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  headerTitle: {
+    fontSize: theme.fontSizes.extraLarge,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.header.fontFamily,
   },
   content: {
     flex: 1,
@@ -209,8 +301,50 @@ const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
     width: '100%',
     maxWidth: screenWidth > 900 ? 800 : 600,
     alignSelf: 'center',
-    padding: screenWidth <= 900 ? 10 : 16,
-    paddingTop: screenWidth <= 900 ? 80 : 16,
+    padding: screenWidth <= 900 ? 16 : 16,
+    paddingTop: screenWidth <= 900 ? 16 : 16,
+    paddingBottom: screenWidth <= 900 ? 100 : 16, // Extra bottom padding for mobile to account for tab bar
+  },
+  roleToggleSection: {
+    backgroundColor: theme.colors.surface,
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  sectionTitle: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  roleButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  roleButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    backgroundColor: 'transparent',
+  },
+  roleButtonActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  roleButtonText: {
+    fontSize: theme.fontSizes.medium,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  roleButtonTextActive: {
+    color: theme.colors.surface,
   },
   listSection: {
     backgroundColor: theme.colors.surface,

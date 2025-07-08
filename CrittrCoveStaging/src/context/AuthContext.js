@@ -609,11 +609,11 @@ export const AuthProvider = ({ children }) => {
       
       // This should never execute on web due to early return above, but keeping for safety
       if (Platform.OS === 'web') {
-        const currentPath = currentRouteInfo.path;
+        const currentPath = currentRouteInfo?.path;
         
-        debugLog(`MBA1111 AUTH REDIRECT WEB: Full URL: ${currentRouteInfo.href || 'N/A'}`);
-        debugLog(`MBA1111 AUTH REDIRECT WEB: Route name: ${currentRouteInfo.name}`);
-        debugLog(`MBA1111 AUTH REDIRECT WEB: Path: ${currentPath}`);
+        debugLog(`MBA1111 AUTH REDIRECT WEB: Full URL: ${currentRouteInfo?.href || 'N/A'}`);
+        debugLog(`MBA1111 AUTH REDIRECT WEB: Route name: ${currentRouteInfo?.name || 'Unknown'}`);
+        debugLog(`MBA1111 AUTH REDIRECT WEB: Path: ${currentPath || 'Unknown'}`);
         
         // List of protected paths for web
         const protectedWebPaths = [

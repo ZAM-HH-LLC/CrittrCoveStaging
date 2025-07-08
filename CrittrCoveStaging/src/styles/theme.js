@@ -64,6 +64,7 @@ export const theme = {
     },
     primary: '#6A6C51', // #6A6C51
     secondary: '#516C61', // #516C61
+    warning: '#FFA726', // #FFA726
     background: '#f6f6f6', // #f6f6f6
     backgroundContrast: '#F6F3FC', // #F6F3FC
     calendarColor: '#A99E6B', // #A99E6B

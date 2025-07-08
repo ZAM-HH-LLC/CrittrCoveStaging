@@ -513,6 +513,7 @@ const MyProfile = () => {
           <SettingsPaymentsTab
             {...profileData}
             navigation={navigation}
+            isMobile={isMobileDesktop}
             onUpdateSetting={(id, value) => {
               debugLog('Updating setting:', { id, value });
               // Create an update object with just the changed setting

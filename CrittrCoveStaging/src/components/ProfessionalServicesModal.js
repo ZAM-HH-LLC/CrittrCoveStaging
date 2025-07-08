@@ -151,7 +151,9 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
   // Format date for review display
   const formatReviewDate = (dateString) => {
     try {
-      return formatFromUTC(dateString);
+      // formatFromUTC expects (dateStr, timeStr, userTimezone, formatType)
+      // For date-only formatting, we pass null for timeStr and use a default timezone
+      return formatFromUTC(dateString, null, 'US/Mountain');
     } catch (error) {
       debugLog('MBA6789', 'Error formatting review date:', error);
       return dateString;

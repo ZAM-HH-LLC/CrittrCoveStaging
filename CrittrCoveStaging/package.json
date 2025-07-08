@@ -78,6 +78,7 @@
     "crypto-browserify": "^3.12.1",
     "gh-pages": "^6.3.0",
     "stream-browserify": "^3.0.0",
+    "typescript": "~5.3.3",
     "webpack": "^5.95.0",
     "webpack-dev-server": "^4.11.1"
   },

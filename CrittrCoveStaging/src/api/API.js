@@ -1814,6 +1814,36 @@ export const markBookingCompleted = async (bookingId) => {
 };
 
 /**
+ * Send a text message to a conversation
+ * @param {string|number} conversationId - The conversation ID
+ * @param {string} content - The message text content
+ * @returns {Promise<Object>} - Response containing message data
+ */
+export const sendTextMessage = async (conversationId, content) => {
+  try {
+    debugLog('MBA5511: Sending text message:', {
+      conversationId,
+      contentLength: content?.length || 0
+    });
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/api/messages/v1/send_norm_message/`,
+      {
+        conversation_id: conversationId,
+        content: content.trim()
+      }
+    );
+    
+    debugLog('MBA5511: Text message sent successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA5511: Error sending text message:', error);
+    debugLog('MBA5511: Error details:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
  * Submit a review for a booking
  * @param {object} reviewData - The review data
  * @param {string|number} reviewData.bookingId - ID of the booking to review

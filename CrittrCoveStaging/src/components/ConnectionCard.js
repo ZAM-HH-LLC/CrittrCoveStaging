@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext, debugLog } from '../context/AuthContext';
@@ -183,7 +183,11 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
         )}
 
         {isMobile && (
-          <View style={styles.mobileBtnSection}>
+          <ScrollView 
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.mobileBtnSection}
+          >
             <TouchableOpacity 
               style={[
                 styles.viewProfileButton,
@@ -221,7 +225,7 @@ const ConnectionCard = ({ connection, type, onViewProfile, onCreateBooking }) =>
                 <Text style={styles.createBookingText}>Create Booking In Messages</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </ScrollView>
         )}
       </View>
     </View>

@@ -538,10 +538,10 @@ const BookingMessageCard = ({
               <View style={[styles.buttonContainer, isProfessional ? { flexDirection: 'column', gap: 8 } : {}]}>
                 {/* View Details button - always enabled */}
                 <TouchableOpacity
-                  style={[styles.detailsButton, { flex: 1 }]}
+                  style={[styles.detailsButton, { flex: 1, backgroundColor: theme.colors.surfaceContrast, borderColor: theme.colors.black, borderWidth: 1 }]}
                   onPress={handleOpenApprovalModal}
                 >
-                  <Text style={styles.detailsButtonText}>View Details</Text>
+                  <Text style={[styles.detailsButtonText, { color: theme.colors.black, textColor: theme.colors.black }]}>View Details</Text>
                 </TouchableOpacity>
                 
                 {/* Edit Details button for professionals - disabled if booking is completed */}
@@ -674,6 +674,7 @@ const BookingMessageCard = ({
                 <TouchableOpacity 
                   style={[
                     styles.detailsButton,
+                    { borderColor: theme.colors.black, borderWidth: 1 },
                     // Only disable the button if it's a regular message with the Booking Confirmed overlay
                     // Don't disable for isAfterConfirmation messages (booking updates) or displayType === 'booking_update'
                     (isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update') && styles.disabledButton
@@ -924,10 +925,10 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: theme.colors.primary, // Changed to primary color
+    // backgroundColor: theme.colors.primary, // Changed to primary color
   },
   detailsButtonText: {
-    color: 'white', // Changed text color to white for better contrast
+    // color: 'white', // Changed text color to white for better contrast
     fontSize: 14,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
@@ -937,12 +938,10 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.primary,
   },
   approveButtonText: {
-    color: theme.colors.text,
+    color: theme.colors.whiteText,
     fontSize: 14,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
@@ -1042,7 +1041,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   confirmationContainer: {
-    backgroundColor: theme.colors.success + '15', // Light green background
+    backgroundColor: theme.colors.primary + '15', // Light green background
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
@@ -1055,7 +1054,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   confirmedTitle: {
-    color: theme.colors.success,
+    color: theme.colors.primary,
   },
   confirmationBorder: {
     position: 'absolute',
@@ -1063,19 +1062,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 4,
-    backgroundColor: theme.colors.success,
+    backgroundColor: theme.colors.primary,
   },
   completeButton: {
     flex: 1,
     padding: 8,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: theme.colors.success,
+    backgroundColor: theme.colors.primary,
     borderWidth: 1,
-    borderColor: theme.colors.success,
+    borderColor: theme.colors.primary,
   },
   completeButtonText: {
-    color: 'black',
+    color: 'white',
     fontSize: 14,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,

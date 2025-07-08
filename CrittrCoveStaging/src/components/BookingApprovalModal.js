@@ -78,12 +78,7 @@ const BookingApprovalModal = ({
 
   // Update modal title based on mode
   const getModalTitle = () => {
-    // Debug log to help with modal title decisions
-    debugLog('MBA4321: Modal title decision factors:', {
-      isReadOnly,
-      modalTitle,
-      bookingId
-    });
+    // Removed excessive debug logging for performance
     
     if (isReadOnly) {
       return "Booking Details";
@@ -96,7 +91,7 @@ const BookingApprovalModal = ({
   // Update bookingData when initialData changes
   useEffect(() => {
     if (initialData && !dataLoadedRef.current) {
-      debugLog('MBAio3htg5uohg: Updating bookingData from initialData');
+      // Removed excessive debug logging for performance
       setBookingData(initialData);
       bookingDataRef.current = initialData;
     }
@@ -428,14 +423,7 @@ const BookingApprovalModal = ({
 
   // Footer with action buttons
   const renderFooter = () => {
-    // Log the current state for debugging
-    debugLog('MBA4321: Footer render state:', {
-      hideButtons,
-      isReadOnly,
-      showChangeRequestInput,
-      isProfessional,
-      modalTitle
-    });
+    // Removed excessive debug logging for performance
     
     // Don't render any footer if the buttons should be hidden
     if (hideButtons) {

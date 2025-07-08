@@ -156,7 +156,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     opacity: 0.7,
     marginLeft: 8,
-    whiteSpace: 'nowrap',
   },
   activeStepName: {
     color: theme.colors.mainColors.main,

@@ -1522,7 +1522,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
                       </View>
 
                       {/* Additional Animal Rate */}
-                      {occurrence.rates?.additional_animal_rate && parseFloat(occurrence.rates.additional_animal_rate) > 0 && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 0) && (
+                      {occurrence.rates?.additional_animal_rate && parseFloat(occurrence.rates.additional_animal_rate) > 0 && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 1) && (
                         <View style={styles.rateItem}>
                           {editingOccurrenceId === occurrence.occurrence_id ? (
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -1920,7 +1920,7 @@ const ReviewAndRatesCard = ({ bookingData, onRatesUpdate, bookingId, showEditCon
             </View>
             
             {/* Additional Animal Rate */}
-            {occurrence.rates?.additional_animal_rate && parseFloat(occurrence.rates.additional_animal_rate) > 0 ? (
+            {occurrence.rates?.additional_animal_rate && parseFloat(occurrence.rates.additional_animal_rate) > 0 && occurrence.rates?.applies_after && occurrence.rates.applies_after < (bookingData.pets?.length || 1) ? (
               <View style={styles.breakdownItem}>
                 <View style={styles.breakdownLabelContainer}>
                   <View style={styles.rateNameAmountRow}>

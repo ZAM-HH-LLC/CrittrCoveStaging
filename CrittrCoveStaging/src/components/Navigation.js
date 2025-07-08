@@ -1140,7 +1140,7 @@ const NavigationContent = ({
             styles.navText,
             { color: currentRoute === (isSignedIn ? 'Dashboard' : 'SearchProfessionalsListing') ? theme.colors.secondary : theme.colors.whiteText }
           ]}>
-            {isSignedIn ? 'Home' : 'Search'}
+            {isSignedIn ? 'Dashboard' : 'Search'}
           </Text>
         </TouchableOpacity>
         
@@ -1215,18 +1215,18 @@ const NavigationContent = ({
             
             <TouchableOpacity
               style={styles.navButton}
-              onPress={() => handleNavigation('MyProfile')}
+              onPress={() => handleNavigation('MoreScreen')}
             >
               <MaterialCommunityIcons
-                name="account-outline"
+                name="dots-horizontal"
                 size={24}
-                color={currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText}
+                color={currentRoute === 'MoreScreen' ? theme.colors.secondary : theme.colors.whiteText}
               />
               <Text style={[
                 styles.navText,
-                { color: currentRoute === 'MyProfile' ? theme.colors.secondary : theme.colors.whiteText }
+                { color: currentRoute === 'MoreScreen' ? theme.colors.secondary : theme.colors.whiteText }
               ]}>
-                Profile
+                More
               </Text>
             </TouchableOpacity>
           </>
@@ -1339,18 +1339,31 @@ export default function Navigation(props) {
                                 selectedConversation !== '' &&
                                 selectedConversation !== 'null';
   
-  const shouldHideNavigation = isInMessageHistory && 
-                              hasSelectedConversation && 
-                              screenWidth <= 900 && 
-                              !shouldCheckMessageState;
+  // For mobile platforms (iOS/Android), hide navigation when in MessageHistory with selected conversation
+  const isMobilePlatform = Platform.OS === 'ios' || Platform.OS === 'android';
+  let shouldHideNavigation = false;
+  if (isMobilePlatform) {
+    shouldHideNavigation = isInMessageHistory && hasSelectedConversation;
+  } else {
+    shouldHideNavigation = isInMessageHistory && 
+                           hasSelectedConversation && 
+                           screenWidth <= 900 &&  
+                           !shouldCheckMessageState;
+  }
+  // const shouldHideNavigation = isInMessageHistory && 
+  //                             hasSelectedConversation && 
+  //                             isMobilePlatform ? isMobilePlatform : screenWidth <= 900 && !shouldCheckMessageState;
   
   // Log visibility state
   debugLog('MBAo3hi4g4v: Navigation visibility check', { 
     routeName, 
-    selectedConversation, 
-    screenWidth,
-    shouldCheckMessageState,
-    shouldHideNavigation
+    selectedConversation,
+    isMobilePlatform,
+    platformOS: Platform.OS,
+    shouldHideNavigation,
+    isInMessageHistory,
+    hasSelectedConversation, 
+    shouldCheckMessageState
   });
   
   // We ALWAYS render the NavigationContent component but control visibility

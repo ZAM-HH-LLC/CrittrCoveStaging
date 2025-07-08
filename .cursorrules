@@ -61,7 +61,8 @@ CURSOR PROJECT GUIDELINES
 5. Reduce needless round‑trips (e.g., only save pets/services if modified).
 6. NEVER create new components in the ui or edit the styling of the ui unless explicitly told to do so.
 7. NEVER try to run the frontend server yourself in your responses to me. DO NOT USE THE "npm run start" COMMAND.
-8. ALWAYS make the code compatible on web/ios/android versions. 
+8. ALWAYS make the code compatible on web/ios/android versions.
+9. ALWAYS keep file lengths below 1500 lines of code, and break them up where needed to other files if they exceed that length (except for MessageHistory.js, don't touch this file in terms of breaking it up). 
 
 ---
 
