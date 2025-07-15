@@ -3,14 +3,20 @@ import { View, TouchableOpacity, Text, Modal, FlatList, Platform } from 'react-n
 import { debugLog, AuthContext } from '../../context/AuthContext';
 import { getIncompleteBookings, markBookingCompleted } from '../../api/API';
 import { formatDateTimeRangeFromUTC } from '../../utils/time_utils';
+import Toast from '../Toast';
 
-const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onRefreshMessages }) => {
+const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onRefreshMessages, isProfessional }) => {
   const { timeSettings } = useContext(AuthContext);
   const userTimezone = timeSettings?.timezone || 'America/Denver';
   
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [incompleteBookings, setIncompleteBookings] = useState([]);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
+  
+  // Toast state for error handling
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('error');
 
   // Fetch incomplete bookings when component mounts or conversationId changes
   useEffect(() => {
@@ -31,8 +37,8 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onR
     fetchIncompleteBookings();
   }, [conversationId]);
 
-  // Don't render if no incomplete bookings
-  if (incompleteBookings.length === 0) {
+  // Don't render if not a professional or no incomplete bookings
+  if (!isProfessional || incompleteBookings.length === 0) {
     return null;
   }
 
@@ -69,7 +75,21 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onR
       debugLog('MBA1234: Booking marked as complete successfully');
     } catch (error) {
       debugLog('MBA1234: Error marking booking as complete:', error);
-      // You might want to show an error message to the user here
+      
+      // Extract error message from response
+      let errorMessage = 'Failed to mark booking as completed';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      // Show toast with error message
+      setToastMessage(errorMessage);
+      setToastType('error');
+      setToastVisible(true);
+      
+      // Close modal on error
+      setSelectedBookingId(null);
+      setIsModalVisible(false);
     }
   };
 
@@ -83,7 +103,7 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onR
     >
       <View style={bookingItemStyles.bookingContent}>
         <Text style={[bookingItemStyles.serviceTitle, { color: theme.colors.text }]}>
-          {item.service_type}
+          Service: {item.service_type}
         </Text>
         <Text style={[bookingItemStyles.bookingId, { color: theme.colors.textSecondary }]}>
           Booking ID: {item.booking_id}
@@ -93,15 +113,26 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onR
         </Text>
         {item.last_occurrence_end_date && item.last_occurrence_end_time && (
           <Text style={[bookingItemStyles.endDate, { color: theme.colors.textSecondary }]}>
-            Ends: {formatDateTimeRangeFromUTC({
-              startDate: item.last_occurrence_end_date,
-              startTime: item.last_occurrence_end_time,
-              endDate: item.last_occurrence_end_date,
-              endTime: item.last_occurrence_end_time,
-              userTimezone: userTimezone,
-              includeTimes: true,
-              includeTimezone: true
-            }).split(' - ')[0]}
+            {(() => {
+              const formattedDateTime = formatDateTimeRangeFromUTC({
+                startDate: item.last_occurrence_end_date,
+                startTime: item.last_occurrence_end_time,
+                endDate: item.last_occurrence_end_date,
+                endTime: item.last_occurrence_end_time,
+                userTimezone: userTimezone,
+                includeTimes: true,
+                includeTimezone: true
+              }).split(' - ')[0];
+              
+              // Create date objects for comparison
+              const endDateObj = new Date(`${item.last_occurrence_end_date}T${item.last_occurrence_end_time}Z`);
+              const currentDate = new Date();
+              
+              // Compare if end date is in the past
+              const isInPast = endDateObj < currentDate;
+              
+              return `${isInPast ? 'Ended' : 'Ends'}: ${formattedDateTime}`;
+            })()}
           </Text>
         )}
       </View>
@@ -299,6 +330,15 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onR
           </View>
         </View>
       </Modal>
+
+      <Toast 
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onDismiss={() => setToastVisible(false)}
+        addMarginBottom={40}
+        duration={7000}
+      />
     </>
   );
 };

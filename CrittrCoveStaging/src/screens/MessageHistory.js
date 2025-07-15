@@ -74,7 +74,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [isSending, setIsSending] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const { is_DEBUG, is_prototype, isApprovedProfessional, userRole, timeSettings } = useContext(AuthContext);
+  const { is_DEBUG, is_prototype, userRole, timeSettings } = useContext(AuthContext);
   const [conversations, setConversations] = useState([]);
   const [filteredConversations, setFilteredConversations] = useState([]);
   
@@ -3222,6 +3222,7 @@ const MessageHistory = ({ navigation, route }) => {
                 isLoadingMore={isLoadingMore}
                 onLoadMore={loadMoreMessages}
                 onRefreshMessages={refreshMessages}
+                isProfessional={selectedConversationData?.is_professional}
                 styles={styles}
                 theme={theme}
                 className="message-list-component"

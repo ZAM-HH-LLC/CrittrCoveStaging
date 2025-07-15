@@ -43,7 +43,8 @@ const MessageList = forwardRef(({
   onScrollStart,
   onMarkComplete,
   conversationId,
-  onRefreshMessages
+  onRefreshMessages,
+  isProfessional
 }, ref) => {
   const flatListRef = useRef(null);
   const isUserScrollingRef = useRef(false);
@@ -1286,6 +1287,7 @@ const MessageList = forwardRef(({
         theme={theme}
         onMarkComplete={onMarkComplete}
         onRefreshMessages={onRefreshMessages}
+        isProfessional={isProfessional}
       />
     </View>
   );

@@ -18,6 +18,7 @@ const Toast = ({
   message, 
   type = 'success', 
   onDismiss,
+  addMarginBottom,
   duration = 3000
 }) => {
   const animation = useRef(new Animated.Value(Dimensions.get('window').width)).current;
@@ -128,7 +129,8 @@ const Toast = ({
           {
             backgroundColor: getBackgroundColor(),
             transform: [{ translateX: animation }],
-            opacity: opacity
+            opacity: opacity,
+            marginBottom: addMarginBottom
           }
         ]}
       >
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     paddingHorizontal: 16,
     width: '100%',
-    alignItems: 'flex-end',
+    alignItems: 'flex-end'
   },
   toast: {
     flexDirection: 'row',
