@@ -136,7 +136,6 @@ class WebSocketManager {
     
     // If too many connection attempts, back off
     if (this.connectionAttempts >= this.maxConnectionAttempts) {
-      debugLog(`MBA4321: Too many connection attempts (${this.connectionAttempts}), backing off`);
       setTimeout(() => {
         this.connectionAttempts = 0;
         this.connect();
@@ -148,10 +147,8 @@ class WebSocketManager {
       this.connectionAttempts++;
       
       const wsEndpoint = `${this.wsUrl}/ws/messages/?token=${this.token}`;
-      debugLog(`MBA4321: [MY CONNECTION] Connecting WebSocket at ${wsEndpoint} (attempt ${this.connectionAttempts})`);
       
       this.socket = new WebSocket(wsEndpoint);
-      debugLog('MBA4321: [MY CONNECTION] WebSocket instance created');
       
       // Setup event handlers
       this.socket.onopen = this.handleOpen.bind(this);
@@ -161,7 +158,6 @@ class WebSocketManager {
       
       return true;
     } catch (error) {
-      debugLog(`MBA4321: [MY CONNECTION] WebSocket connection error: ${error.message}`);
       this.scheduleReconnect();
       return false;
     }
@@ -171,7 +167,6 @@ class WebSocketManager {
    * Handle WebSocket connection open
    */
   handleOpen(event) {
-    debugLog('MBA4321: [MY CONNECTION] WebSocket connection established');
     this.isConnected = true;
     this.connectionAttempts = 0; // Reset connection attempts on successful connection
     
@@ -179,7 +174,6 @@ class WebSocketManager {
     this.startHeartbeat();
     
     // Log connection status for debugging
-    debugLog(`MBA4321: [MY CONNECTION] isConnected set to ${this.isConnected}, socket state: ${this.socket?.readyState}`);
     
     // Notify all handlers of connection
     this.notifyHandlers('connection', { 
@@ -190,7 +184,6 @@ class WebSocketManager {
     // Send immediate heartbeat to verify connection on both sides
     setTimeout(() => {
       if (this.isConnected) {
-        debugLog('MBA4321: [MY CONNECTION] Sending initial heartbeat after connection');
         this.send('heartbeat');
       }
     }, 500);
@@ -208,8 +201,6 @@ class WebSocketManager {
     const wasConnected = this.isConnected;
     this.isConnected = false;
     this.socket = null;
-    
-    debugLog(`MBA4321: [MY CONNECTION] WebSocket connection closed: code=${event.code}, reason=${event.reason}`);
     
     // Clear heartbeat
     if (this.heartbeatInterval) {
@@ -236,10 +227,8 @@ class WebSocketManager {
   handleMessage(event) {
     try {
       const message = JSON.parse(event.data);
-      debugLog(`MBA4321: [MY CONNECTION] WebSocket message received: ${message.type}`);
       
       // For detailed message logging, use debugLog instead of is_DEBUG check
-      debugLog(`MBA4321: [MY CONNECTION] WebSocket message content: ${event.data}`);
       
       // For heartbeat responses, just log and return
       if (message.type === 'heartbeat_ack') {
@@ -278,7 +267,6 @@ class WebSocketManager {
    */
   send(type, data = {}) {
     if (!this.isConnected || !this.socket) {
-      debugLog('MBA4321: [MY CONNECTION] Cannot send message, WebSocket not connected');
       return false;
     }
 
@@ -290,7 +278,6 @@ class WebSocketManager {
       });
       
       this.socket.send(message);
-      debugLog(`MBA4321: [MY CONNECTION] Sent ${type} message through connection`);
       return true;
     } catch (error) {
       debugLog(`MBA4321: [MY CONNECTION] Error sending message through connection: ${error.message}`);
@@ -309,7 +296,6 @@ class WebSocketManager {
     }
     
     const delay = Math.min(1000 * Math.pow(2, this.connectionAttempts - 1), 30000);
-    debugLog(`MBA4321: Scheduling reconnect in ${delay}ms (attempt ${this.connectionAttempts})`);
     
     this._reconnectTimeout = setTimeout(() => {
       this._reconnectTimeout = null;
@@ -348,7 +334,7 @@ class WebSocketManager {
    * @param {boolean} force - Whether to force disconnect (true) or allow reconnect on visibility change (false)
    */
   disconnect(force = false) {
-    debugLog(`MBA4321: [MY CONNECTION] Disconnecting WebSocket connection (force=${force})`);
+  
     
     // Set the force disconnect flag if requested
     this.forceDisconnect = force;
@@ -382,8 +368,6 @@ class WebSocketManager {
         // Close the connection
         this.socket.close();
         this.socket = null;
-        
-        debugLog('MBA4321: [MY CONNECTION] WebSocket connection closed successfully');
       } catch (error) {
         debugLog(`MBA4321: [MY CONNECTION] Error closing WebSocket: ${error.message}`);
       }
@@ -395,7 +379,6 @@ class WebSocketManager {
     // Restore token if this wasn't a forced disconnect (just a tab change)
     if (preserveToken && savedToken) {
       this.token = savedToken;
-      debugLog('MBA4321: [MY CONNECTION] Preserved token for reconnection on tab visibility change');
     }
     
     // Notify handlers of the disconnection
@@ -515,7 +498,6 @@ class WebSocketManager {
    * @returns {boolean} Whether a reconnection was attempted
    */
   reconnectIfNeeded() {
-    debugLog('MBA4321: [MY CONNECTION] Checking if WebSocket reconnection needed');
     
     // If we don't have a token or were force disconnected, don't try to reconnect
     if (!this.token || this.forceDisconnect) {
@@ -534,7 +516,6 @@ class WebSocketManager {
     );
     
     if (needsReconnect) {
-      debugLog('MBA4321: [MY CONNECTION] WebSocket needs reconnection, attempting now');
       
       // Reset the force disconnect flag
       this.forceDisconnect = false;
@@ -562,7 +543,6 @@ class WebSocketManager {
     
     // If we're connected, send a heartbeat to verify connection
     if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
-      debugLog('MBA4321: [MY CONNECTION] WebSocket appears connected, sending heartbeat to verify');
       this.send('heartbeat');
       
       // Reset the disconnect timeout to prevent inactivity disconnection

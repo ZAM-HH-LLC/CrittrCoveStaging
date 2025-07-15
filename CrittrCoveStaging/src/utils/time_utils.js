@@ -588,7 +588,6 @@ export const FORMAT_TYPES = {
  */
 export const formatFromUTC = (dateStr, timeStr = null, userTimezone, formatType = FORMAT_TYPES.MEDIUM_DATE) => {
   try {
-    console.log('MBA134njo0vh02c23 formatFromUTC input:', { dateStr, timeStr, userTimezone, formatType });
     
     // Validate inputs
     if (!dateStr) {
@@ -598,11 +597,9 @@ export const formatFromUTC = (dateStr, timeStr = null, userTimezone, formatType 
     
     // Use default timezone if userTimezone is null/undefined
     const targetTimezone = userTimezone || 'US/Mountain';
-    console.log('MBA134njo0vh02c23 Using timezone:', targetTimezone);
     
     // Create a moment object in UTC with proper format
     const utcMoment = moment.utc(`${dateStr}T${timeStr || '00:00'}:00Z`);
-    console.log('MBA134njo0vh02c23 UTC moment:', utcMoment.format());
     
     // Validate the UTC moment
     if (!utcMoment.isValid()) {
@@ -612,7 +609,6 @@ export const formatFromUTC = (dateStr, timeStr = null, userTimezone, formatType 
 
     // Convert to user's timezone
     const localMoment = utcMoment.tz(targetTimezone);
-    console.log('MBA134njo0vh02c23 Local moment:', localMoment.format());
     
     // Validate the local moment
     if (!localMoment.isValid()) {
@@ -622,7 +618,6 @@ export const formatFromUTC = (dateStr, timeStr = null, userTimezone, formatType 
 
     // Get timezone abbreviation
     const tzAbbrev = localMoment.zoneAbbr();
-    console.log('MBA134njo0vh02c23 Timezone abbreviation:', tzAbbrev);
 
     // Format based on type
     switch (formatType) {
@@ -671,38 +666,18 @@ export const formatDateTimeRangeFromUTC = ({
   includeTimezone = true
 }) => {
   try {
-    debugLog('MBA134njo: formatDateTimeRangeFromUTC input:', {
-      startDate,
-      startTime,
-      endDate,
-      endTime,
-      userTimezone,
-      includeTimes,
-      includeTimezone
-    });
 
     if (includeTimes) {
       // Create UTC moments with proper format
       const startUtcMoment = moment.utc(`${startDate}T${startTime}:00Z`);
       const endUtcMoment = moment.utc(`${endDate}T${endTime}:00Z`);
 
-      debugLog('MBA134njo: UTC moments:', {
-        start: startUtcMoment.format(),
-        end: endUtcMoment.format()
-      });
-
       // Convert to local timezone
       const startLocalMoment = startUtcMoment.tz(userTimezone);
       const endLocalMoment = endUtcMoment.tz(userTimezone);
 
-      debugLog('MBA134njo: Local moments:', {
-        start: startLocalMoment.format(),
-        end: endLocalMoment.format()
-      });
-
       // Get timezone abbreviation
       const tzAbbrev = startLocalMoment.zoneAbbr();
-      debugLog('MBA134njo: Timezone abbreviation:', tzAbbrev);
 
       // Format the dates without timezone in the format string
       const startFormatted = startLocalMoment.format("MMM D, YYYY h:mm A");
@@ -711,12 +686,6 @@ export const formatDateTimeRangeFromUTC = ({
       // Add timezone abbreviation if needed
       const finalStart = includeTimezone ? `${startFormatted} ${tzAbbrev}` : startFormatted;
       const finalEnd = includeTimezone ? `${endFormatted} ${tzAbbrev}` : endFormatted;
-
-      debugLog('MBA134njo: Formatted dates:', {
-        startFormatted: finalStart,
-        endFormatted: finalEnd,
-        tzAbbrev
-      });
       
       return `${finalStart} - ${finalEnd}`;
     } else {

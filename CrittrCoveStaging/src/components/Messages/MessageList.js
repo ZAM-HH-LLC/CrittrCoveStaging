@@ -94,11 +94,6 @@ const MessageList = forwardRef(({
   // Reset pagination indices when the message array changes significantly
   React.useEffect(() => {
     if (messages.length > previousMessageCount.current + 10) {
-      debugLog('MBA9876: Message array significantly changed, resetting pagination indices', {
-        prevCount: previousMessageCount.current,
-        newCount: messages.length,
-        difference: messages.length - previousMessageCount.current
-      });
       paginatedIndicesRef.current = new Set();
     }
     
@@ -1153,32 +1148,11 @@ const MessageList = forwardRef(({
           ...item,
           content: sanitizedContent
         };
-        debugLog('MBA9876: Sanitized contact details in message', {
-          messageId: item.message_id,
-          originalLength: item.content.length,
-          sanitizedLength: sanitizedContent.length
-        });
       }
-              debugLog('MBA9876: Sanitizing contact details in message', {
-          messageId: item.message_id,
-          content: item.content?.substring(0, 50),
-          shouldSanitizeContent,
-          shouldShowContactWarning
-        });
     }
     
     // Render the message content with sanitized content if needed
     const renderedMessage = renderMessage({ item: sanitizedItem, index });
-    
-    // For special message types, add final date verification
-    if (item.type_of_message === 'send_approved_message') {
-      debugLog('MBA3oub497v4: Final date display for approval request', {
-        messageId: item.message_id,
-        needsDateSeparator,
-        formattedDate,
-        isOldestMessage
-      });
-    }
     
     // For hidden messages that don't render content
     if (!renderedMessage) {
@@ -1191,17 +1165,6 @@ const MessageList = forwardRef(({
     
     // For all messages with date separators
     if (needsDateSeparator) {
-      // Extra debug logging for specific test messages
-      if (['169', '177', '85', '44'].includes(item.message_id?.toString())) {
-        debugLog('MBA3oub497v4: Rendering message with date separator', {
-          messageId: item.message_id,
-          content: item.content?.substring(0, 15),
-          formattedDate,
-          isOldestMessage,
-          needsDateSeparator,
-          userTimezone
-        });
-      }
       
       if (isOldestMessage) {
         // For oldest message, date goes ABOVE
@@ -1223,15 +1186,6 @@ const MessageList = forwardRef(({
         );
       }
     } else {
-      // For messages without date separators, just render the message
-      if (['169', '177', '85', '44'].includes(item.message_id?.toString())) {
-        debugLog('MBA3oub497v4: Rendering message without date separator', {
-          messageId: item.message_id,
-          content: item.content?.substring(0, 15),
-          needsDateSeparator,
-          userTimezone
-        });
-      }
       
       return (
         <View>

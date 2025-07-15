@@ -145,29 +145,6 @@ const BookingMessageCard = ({
   };
   
   const overlayText = getOverlayText();
-  
-  // Log message state for debugging
-  debugLog('MBA4321: Message state for booking', data.booking_id, {
-    type,
-    displayType,
-    isFromMe,
-    isProfessional,
-    bookingStatus,
-    hasChangeRequest,
-    isNewestMessage,
-    isAfterConfirmation,
-    hasNewerApprovalRequests,
-    shouldShowOverlay,
-    overlayText,
-    messageCreatedAt: messageCreatedAt || 'N/A',
-    // Add detailed logic checks to help debug overlay decisions
-    overlayLogicChecks: {
-      isConfirmedButNotConfirmationMessage: isConfirmed && !isBookingConfirmed,
-      isChangeRequestAndNewestMessage: isChangeRequest && isNewestMessage,
-      isApprovalWithChangeRequest: type === 'approval' && hasChangeRequest && !isNewestMessage,
-      isBookingConfirmedWithNewerApprovals: isBookingConfirmed && hasNewerApprovalRequests
-    }
-  });
 
   const getIcon = () => {
     switch (type) {

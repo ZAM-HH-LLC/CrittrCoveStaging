@@ -523,14 +523,12 @@ export const getStorage = async (key) => {
       // For other data, check both sessionStorage and localStorage
       if (key === 'userToken' || key === 'refreshToken') {
         const value = localStorage.getItem(key);
-        debugLog('MBAo34invid3w getStorage web localStorage (auth):', { key, hasValue: !!value, valueLength: value ? value.length : 0 });
         return value;
       } else {
         // For non-auth data, prefer sessionStorage but fallback to localStorage
         try {
           const sessionValue = sessionStorage.getItem(key);
           if (sessionValue) {
-            debugLog('MBAo34invid3w getStorage web sessionStorage (non-auth):', { key, hasValue: !!sessionValue });
             return sessionValue;
           }
         } catch (sessionError) {
@@ -538,7 +536,6 @@ export const getStorage = async (key) => {
         }
         
         const localValue = localStorage.getItem(key);
-        debugLog('MBAo34invid3w getStorage web localStorage (non-auth):', { key, hasValue: !!localValue });
         return localValue;
       }
     } else {

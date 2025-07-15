@@ -2781,12 +2781,6 @@ const MessageHistory = ({ navigation, route }) => {
     // Skip rendering attachment messages - they should not be displayed directly
     // They're only containers for images that get referenced in actual image messages
     if (isAttachmentMessage) {
-      debugLog('MBA9999: Skipping attachment message (container only):', {
-        messageId: item.message_id,
-        hasImageUrl: !!item.image_url,
-        imageUrl: item.image_url,
-        type: item.type_of_message
-      });
       return null;
     }
     
@@ -2795,12 +2789,6 @@ const MessageHistory = ({ navigation, route }) => {
       const isFromMe = !item.sent_by_other_user;
       
       // For images, first render the caption (if exists) and then the images
-      debugLog('MBA4567: Rendering message with images and possibly caption:', {
-        messageId: item.message_id,
-        hasCaption: item.content && item.content.trim().length > 0,
-        captionText: item.content,
-        isFromMe
-      });
       return (
         <View>
           <MessageTimestamp 
