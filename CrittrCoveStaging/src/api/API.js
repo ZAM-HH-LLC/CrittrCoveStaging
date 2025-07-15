@@ -1271,6 +1271,29 @@ export const getConversationMessages = async (conversationId, page = 1) => {
 };
 
 /**
+ * Get incomplete bookings for a conversation
+ * @param {string|number} conversationId - The ID of the conversation
+ * @returns {Promise<Object>} - Object containing incomplete bookings array
+ */
+export const getIncompleteBookings = async (conversationId) => {
+  if (!conversationId || conversationId === 'undefined' || conversationId === 'null') {
+    debugLog('MBA5678: No conversation ID provided');
+    throw new Error('No conversation ID provided');
+  }
+  try {
+    debugLog('MBA5678: Fetching incomplete bookings for conversation:', conversationId);
+    
+    const response = await axios.get(`${API_BASE_URL}/api/messages/v1/conversation/${conversationId}/incomplete-bookings/`);
+    
+    debugLog('MBA5678: Incomplete bookings fetched successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA5678: Error fetching incomplete bookings:', error);
+    throw error;
+  }
+};
+
+/**
  * Get dashboard data for professionals
  * @returns {Promise<Object>} - Dashboard data including bookings and onboarding progress
  */

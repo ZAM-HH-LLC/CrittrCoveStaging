@@ -982,3 +982,135 @@ def upload_and_send_message(request):
             {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_incomplete_bookings(request, conversation_id):
+    """
+    Get incomplete bookings for a specific conversation.
+    Returns bookings that have been confirmed but not yet marked as completed (no review request message).
+    """
+    try:
+        # Get the conversation and verify the user is a participant
+        conversation = get_object_or_404(Conversation, conversation_id=conversation_id)
+        current_user = request.user
+
+        if current_user not in [conversation.participant1, conversation.participant2]:
+            return Response(
+                {'error': 'You are not a participant in this conversation'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        logger.info(f"Checking for incomplete bookings in conversation {conversation_id}")
+        
+        # Debug: Log all messages in the conversation first
+        all_messages = UserMessage.objects.filter(conversation=conversation)
+        logger.info(f"Total messages in conversation: {all_messages.count()}")
+        
+        booking_related_messages = all_messages.filter(type_of_message='booking_confirmed')
+        logger.info(f"Total booking_confirmed messages: {booking_related_messages.count()}")
+        
+        for msg in booking_related_messages:
+            logger.info(f"Message {msg.message_id}: type={msg.type_of_message}, content='{msg.content}', metadata={msg.metadata}")
+        
+        # Get ALL booking confirmed messages in this conversation (no pagination limit)
+        # Get all booking confirmed messages first, then filter in Python for more reliable results
+        all_booking_messages = UserMessage.objects.filter(
+            conversation=conversation,
+            type_of_message='booking_confirmed',
+            metadata__has_key='booking_id'
+        )
+        
+        # Filter in Python to avoid Django JSONField query issues
+        booking_confirmed_messages = []
+        for msg in all_booking_messages:
+            is_review_request = msg.metadata.get('is_review_request', False)
+            if not is_review_request:
+                booking_confirmed_messages.append(msg)
+        
+        logger.info(f"Found {len(booking_confirmed_messages)} booking confirmed messages")
+        
+        # Debug: Log details of booking confirmed messages
+        for msg in booking_confirmed_messages:
+            logger.info(f"Booking confirmed message {msg.message_id}: booking_id={msg.metadata.get('booking_id')}, is_review_request={msg.metadata.get('is_review_request')}")
+        
+        # Get ALL review request messages (booking confirmed with is_review_request=true)
+        review_messages = UserMessage.objects.filter(
+            conversation=conversation,
+            type_of_message='booking_confirmed',
+            metadata__is_review_request=True
+        )
+        
+        logger.info(f"Found {review_messages.count()} review request messages")
+        
+        # Debug: Log details of review messages
+        for msg in review_messages:
+            logger.info(f"Review message {msg.message_id}: booking_id={msg.metadata.get('booking_id')}, is_review_request={msg.metadata.get('is_review_request')}")
+        
+        # Extract booking IDs that have been reviewed
+        reviewed_booking_ids = set()
+        for review_msg in review_messages:
+            if review_msg.metadata and review_msg.metadata.get('booking_id'):
+                reviewed_booking_ids.add(review_msg.metadata['booking_id'])
+        
+        logger.info(f"Reviewed booking IDs: {reviewed_booking_ids}")
+        
+        # Find incomplete bookings (confirmed but not reviewed)
+        incomplete_bookings = []
+        for booking_msg in booking_confirmed_messages:
+            if booking_msg.metadata and booking_msg.metadata.get('booking_id'):
+                booking_id = booking_msg.metadata['booking_id']
+                
+                if booking_id not in reviewed_booking_ids:
+                    incomplete_booking = {
+                        'booking_id': booking_id,
+                        'service_type': booking_msg.metadata.get('service_type', 'Unknown Service'),
+                        'total_sitter_payout': '0.00',
+                        'last_occurrence_end_date': None
+                    }
+                    
+                    # Try to get cost summary from metadata
+                    if booking_msg.metadata.get('cost_summary'):
+                        cost_summary = booking_msg.metadata['cost_summary']
+                        if isinstance(cost_summary, dict) and 'total_sitter_payout' in cost_summary:
+                            incomplete_booking['total_sitter_payout'] = str(cost_summary['total_sitter_payout'])
+                    
+                    # Try to get the last occurrence end date from the booking
+                    try:
+                        from bookings.models import Booking
+                        booking = Booking.objects.get(booking_id=booking_id)
+                        
+                        # Get the last occurrence (latest end date)
+                        last_occurrence = booking.occurrences.order_by('-end_date', '-end_time').first()
+                        if last_occurrence:
+                            # Format the end date nicely
+                            from datetime import datetime
+                            import pytz
+                            
+                            # Combine date and time
+                            end_datetime = datetime.combine(last_occurrence.end_date, last_occurrence.end_time)
+                            end_datetime_utc = pytz.UTC.localize(end_datetime)
+                            
+                            # Format as readable date string
+                            incomplete_booking['last_occurrence_end_date'] = end_datetime_utc.strftime('%b %d, %Y at %I:%M %p UTC')
+                            
+                            logger.info(f"Found last occurrence end date for booking {booking_id}: {incomplete_booking['last_occurrence_end_date']}")
+                    except Exception as e:
+                        logger.warning(f"Could not get last occurrence end date for booking {booking_id}: {str(e)}")
+                    
+                    incomplete_bookings.append(incomplete_booking)
+                    logger.info(f"Added incomplete booking: {incomplete_booking}")
+        
+        logger.info(f"Total incomplete bookings found: {len(incomplete_bookings)}")
+        
+        return Response({
+            'incomplete_bookings': incomplete_bookings
+        })
+
+    except Exception as e:
+        logger.error(f"Error in get_incomplete_bookings: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return Response(
+            {'error': 'An error occurred while fetching incomplete bookings'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

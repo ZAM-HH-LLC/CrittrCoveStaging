@@ -3207,6 +3207,7 @@ const MessageHistory = ({ navigation, route }) => {
               </Text>
             ) : (
               <MessageList
+                conversationId={selectedConversation}
                 messages={messages}
                 renderMessage={renderMessage}
                 hasMore={hasMore}

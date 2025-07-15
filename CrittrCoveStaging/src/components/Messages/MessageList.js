@@ -5,6 +5,7 @@ import MessageDateSeparator from './MessageDateSeparator';
 import { formatMessageDate, groupMessagesByDate } from './messageTimeUtils';
 import moment from 'moment-timezone';
 import { sanitizeContactDetails, containsContactDetails } from '../../data/contactSanitization';
+import FloatingMarkCompleteButton from './FloatingMarkCompleteButton';
 
 // Component for the contact warning
 const ContactWarning = ({ styles, theme }) => (
@@ -39,7 +40,9 @@ const MessageList = forwardRef(({
   theme,
   className,
   userTimezone,
-  onScrollStart
+  onScrollStart,
+  onMarkComplete,
+  conversationId
 }, ref) => {
   const flatListRef = useRef(null);
   const isUserScrollingRef = useRef(false);
@@ -1238,43 +1241,52 @@ const MessageList = forwardRef(({
   }, [renderMessage, shouldShowDateSeparator, userTimezone, getDateKey, messages.length, styles, theme]);
 
   return (
-    <FlatList
-      ref={flatListRef}
-      data={messages}
-      renderItem={renderItemWithDateSeparator}
-      keyExtractor={keyExtractor}
-      style={[styles.messageList, { minHeight: '100%' }]}
-      onEndReached={handleEndReached}
-      onEndReachedThreshold={0.5} // Increased to 0.5 to trigger pagination earlier
-      scrollEventThrottle={8} // More frequent scroll events for better detection
-      onScroll={handleScroll}
-      onViewableItemsChanged={onViewableItemsChangedRef.current}
-      viewabilityConfig={viewabilityConfigRef.current}
-      onScrollBeginDrag={onScrollBeginDragRef.current}
-      onMomentumScrollEnd={onMomentumScrollEndRef.current}
-      inverted={true}
-      maintainVisibleContentPosition={{
-        minIndexForVisible: 0,
-        autoscrollToTopThreshold: 10
-      }}
-      contentContainerStyle={{
-        flexGrow: 1,
-        justifyContent: 'flex-end',
-        paddingTop: extraPadding, // Much larger padding for web
-      }}
-      ListFooterComponent={isLoadingMore && (
-        <ActivityIndicator 
-          size="small" 
-          color={theme.colors.primary}
-          style={styles.loadingMore}
-        />
-      )}
-      initialNumToRender={20}
-      maxToRenderPerBatch={10}
-      windowSize={15}
-      removeClippedSubviews={false}
-      className={className || "message-list-component"}
-    />
+    <View style={{ flex: 1, position: 'relative' }}>
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderItemWithDateSeparator}
+        keyExtractor={keyExtractor}
+        style={[styles.messageList, { minHeight: '100%' }]}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5} // Increased to 0.5 to trigger pagination earlier
+        scrollEventThrottle={8} // More frequent scroll events for better detection
+        onScroll={handleScroll}
+        onViewableItemsChanged={onViewableItemsChangedRef.current}
+        viewabilityConfig={viewabilityConfigRef.current}
+        onScrollBeginDrag={onScrollBeginDragRef.current}
+        onMomentumScrollEnd={onMomentumScrollEndRef.current}
+        inverted={true}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10
+        }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'flex-end',
+          paddingTop: extraPadding, // Much larger padding for web
+        }}
+        ListFooterComponent={isLoadingMore && (
+          <ActivityIndicator 
+            size="small" 
+            color={theme.colors.primary}
+            style={styles.loadingMore}
+          />
+        )}
+        initialNumToRender={20}
+        maxToRenderPerBatch={10}
+        windowSize={15}
+        removeClippedSubviews={false}
+        className={className || "message-list-component"}
+      />
+      
+      <FloatingMarkCompleteButton
+        conversationId={conversationId}
+        theme={theme}
+        styles={styles}
+        onMarkComplete={onMarkComplete}
+      />
+    </View>
   );
 });
 
