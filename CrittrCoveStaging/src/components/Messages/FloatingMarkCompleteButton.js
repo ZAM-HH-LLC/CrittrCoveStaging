@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, TouchableOpacity, Text, Modal, FlatList, Platform } from 'react-native';
-import { debugLog } from '../../context/AuthContext';
-import { getIncompleteBookings, markBookingAsCompleted } from '../../api/API';
+import { debugLog, AuthContext } from '../../context/AuthContext';
+import { getIncompleteBookings, markBookingCompleted } from '../../api/API';
+import { formatDateTimeRangeFromUTC } from '../../utils/time_utils';
 
-const FloatingMarkCompleteButton = ({ conversationId, theme, styles, onMarkComplete }) => {
+const FloatingMarkCompleteButton = ({ conversationId, theme, onMarkComplete, onRefreshMessages }) => {
+  const { timeSettings } = useContext(AuthContext);
+  const userTimezone = timeSettings?.timezone || 'America/Denver';
+  
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [incompleteBookings, setIncompleteBookings] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
 
   // Fetch incomplete bookings when component mounts or conversationId changes
@@ -14,7 +17,6 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, styles, onMarkCompl
     if (!conversationId) return;
     
     const fetchIncompleteBookings = async () => {
-      setIsLoading(true);
       try {
         debugLog('MBA1234: Fetching incomplete bookings for conversation:', conversationId);
         const response = await getIncompleteBookings(conversationId);
@@ -23,8 +25,6 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, styles, onMarkCompl
       } catch (error) {
         debugLog('MBA1234: Error fetching incomplete bookings:', error);
         setIncompleteBookings([]);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -47,16 +47,19 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, styles, onMarkCompl
     try {
       debugLog('MBA1234: Marking booking as complete', { bookingId: selectedBookingId });
       
-      await markBookingAsCompleted(selectedBookingId);
+      await markBookingCompleted(selectedBookingId);
       
-      // Refresh incomplete bookings list
-      const response = await getIncompleteBookings(conversationId);
-      setIncompleteBookings(response.incomplete_bookings || []);
-      
-      // Call parent callback if provided
+      // Call parent callback if provided (before refresh so we have access to the booking data)
       if (onMarkComplete) {
         const completedBooking = incompleteBookings.find(b => b.booking_id === selectedBookingId);
         onMarkComplete(completedBooking);
+      }
+      
+      // Refresh messages to show new review request message
+      // This will automatically trigger the useEffect to refetch incomplete bookings
+      if (onRefreshMessages) {
+        debugLog('MBA1234: Refreshing messages after marking booking complete');
+        await onRefreshMessages();
       }
       
       // Reset selection and close modal
@@ -88,9 +91,17 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, styles, onMarkCompl
         <Text style={[bookingItemStyles.cost, { color: theme.colors.textSecondary }]}>
           Total Payout: ${item.total_sitter_payout}
         </Text>
-        {item.last_occurrence_end_date && (
+        {item.last_occurrence_end_date && item.last_occurrence_end_time && (
           <Text style={[bookingItemStyles.endDate, { color: theme.colors.textSecondary }]}>
-            Ends: {item.last_occurrence_end_date}
+            Ends: {formatDateTimeRangeFromUTC({
+              startDate: item.last_occurrence_end_date,
+              startTime: item.last_occurrence_end_time,
+              endDate: item.last_occurrence_end_date,
+              endTime: item.last_occurrence_end_time,
+              userTimezone: userTimezone,
+              includeTimes: true,
+              includeTimezone: true
+            }).split(' - ')[0]}
           </Text>
         )}
       </View>
@@ -248,7 +259,7 @@ const FloatingMarkCompleteButton = ({ conversationId, theme, styles, onMarkCompl
             <FlatList
               data={incompleteBookings}
               renderItem={renderBookingItem}
-              keyExtractor={(item) => `booking-${item.booking_id}`}
+              keyExtractor={(item, index) => `booking-${item.booking_id}-${index}`}
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: 300 }}
             />

@@ -2287,6 +2287,14 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [hasMore, currentPage, selectedConversation, messages.length, isLoadingMore]);
 
+  // Function to refresh messages (fetch page 1) - used after marking bookings complete
+  const refreshMessages = useCallback(async () => {
+    if (selectedConversation) {
+      debugLog('MBA9999: Refreshing messages for conversation:', selectedConversation);
+      await fetchMessages(selectedConversation, 1);
+    }
+  }, [selectedConversation, fetchMessages]);
+
   const renderMessage = useCallback(({ item, index }) => {
     // Create a map to keep track of which bookings have change requests and latest message timestamps
     const bookingMessages = groupMessagesByBookingId(messages);
@@ -3213,6 +3221,7 @@ const MessageHistory = ({ navigation, route }) => {
                 hasMore={hasMore}
                 isLoadingMore={isLoadingMore}
                 onLoadMore={loadMoreMessages}
+                onRefreshMessages={refreshMessages}
                 styles={styles}
                 theme={theme}
                 className="message-list-component"

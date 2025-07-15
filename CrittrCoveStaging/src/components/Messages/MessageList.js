@@ -42,7 +42,8 @@ const MessageList = forwardRef(({
   userTimezone,
   onScrollStart,
   onMarkComplete,
-  conversationId
+  conversationId,
+  onRefreshMessages
 }, ref) => {
   const flatListRef = useRef(null);
   const isUserScrollingRef = useRef(false);
@@ -1283,8 +1284,8 @@ const MessageList = forwardRef(({
       <FloatingMarkCompleteButton
         conversationId={conversationId}
         theme={theme}
-        styles={styles}
         onMarkComplete={onMarkComplete}
+        onRefreshMessages={onRefreshMessages}
       />
     </View>
   );

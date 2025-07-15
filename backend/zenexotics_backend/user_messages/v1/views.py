@@ -1057,11 +1057,14 @@ def get_incomplete_bookings(request, conversation_id):
         
         # Find incomplete bookings (confirmed but not reviewed)
         incomplete_bookings = []
+        processed_booking_ids = set()  # To avoid duplicates
+        
         for booking_msg in booking_confirmed_messages:
             if booking_msg.metadata and booking_msg.metadata.get('booking_id'):
                 booking_id = booking_msg.metadata['booking_id']
                 
-                if booking_id not in reviewed_booking_ids:
+                if booking_id not in reviewed_booking_ids and booking_id not in processed_booking_ids:
+                    processed_booking_ids.add(booking_id)  # Mark as processed to avoid duplicates
                     incomplete_booking = {
                         'booking_id': booking_id,
                         'service_type': booking_msg.metadata.get('service_type', 'Unknown Service'),
@@ -1083,18 +1086,11 @@ def get_incomplete_bookings(request, conversation_id):
                         # Get the last occurrence (latest end date)
                         last_occurrence = booking.occurrences.order_by('-end_date', '-end_time').first()
                         if last_occurrence:
-                            # Format the end date nicely
-                            from datetime import datetime
-                            import pytz
+                            # Return raw UTC datetime components for frontend formatting
+                            incomplete_booking['last_occurrence_end_date'] = last_occurrence.end_date.strftime('%Y-%m-%d')
+                            incomplete_booking['last_occurrence_end_time'] = last_occurrence.end_time.strftime('%H:%M')
                             
-                            # Combine date and time
-                            end_datetime = datetime.combine(last_occurrence.end_date, last_occurrence.end_time)
-                            end_datetime_utc = pytz.UTC.localize(end_datetime)
-                            
-                            # Format as readable date string
-                            incomplete_booking['last_occurrence_end_date'] = end_datetime_utc.strftime('%b %d, %Y at %I:%M %p UTC')
-                            
-                            logger.info(f"Found last occurrence end date for booking {booking_id}: {incomplete_booking['last_occurrence_end_date']}")
+                            logger.info(f"Found last occurrence end for booking {booking_id}: {incomplete_booking['last_occurrence_end_date']} {incomplete_booking['last_occurrence_end_time']}")
                     except Exception as e:
                         logger.warning(f"Could not get last occurrence end date for booking {booking_id}: {str(e)}")
                     
