@@ -82,18 +82,18 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 DOMAIN_MAP = {
     'development': ['localhost', '127.0.0.1', '10.0.2.2', '0.0.0.0'],
     'staging': ['staging-ec2.crittrcove.com', '52.15.198.223'],
-    'production': ['beta.crittrcove.com', 'crittrcove.com']
+    'production': ['api.crittrcove.com', 'crittrcove.com']
 }
 
-# # Allow override via environment variable
+# Allow override via environment variable
 # TODO CRITICAL: This is a security risk. We need to uncomment this.
-# ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
-# if ALLOWED_HOSTS_ENV:
-#     ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',')]
-# else:
-#     ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
+ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
+if ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',')]
+else:
+    ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
 
-ALLOWED_HOSTS = ['*']
+# ALLOWED_HOSTS = ['*']
 
 # Always disable DEBUG in staging/production
 DEBUG = IS_DEVELOPMENT
@@ -304,7 +304,7 @@ if IS_STAGING:
     CORS_ALLOWED_ORIGINS.append('http://localhost:19006')
 if IS_PRODUCTION:
     CORS_ALLOWED_ORIGINS.extend([
-        'https://ec2.crittrcove.com',
+        'https://staging.crittrcove.com',
         'https://crittrcove.com'
     ])
 
@@ -331,6 +331,7 @@ if IS_STAGING:
 if IS_PRODUCTION:
     CSRF_TRUSTED_ORIGINS = [
         'https://crittrcove.com',
+        'https://staging.crittrcove.com',
         'https://beta.crittrcove.com'
     ]
 

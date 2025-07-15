@@ -44,6 +44,8 @@ backend/zenexotics_backend/.env
 
 # backend deployment files
 deploy-crittrcove.sh
+deploy-crittrcove-production.sh
+setup-production-server.sh
 DEPLOYMENT.md
 rollback.sh
 

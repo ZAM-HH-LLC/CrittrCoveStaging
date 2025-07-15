@@ -605,3 +605,222 @@ CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103
     except Exception as e:
         logger.error(f"Error sending booking confirmation email: {str(e)}")
         logger.exception("Full booking confirmation email error details:")
+
+def send_booking_reminder_email(occurrence_id):
+    """
+    Send a booking reminder email 2 hours before the occurrence starts
+    Only sends if the occurrence is within the next 3 hours (safety window)
+    """
+    
+    try:
+        # Import models here to avoid circular imports
+        from booking_occurrences.models import BookingOccurrence
+        from users.models import UserSettings
+        from conversations.models import Conversation
+        from django.db.models import Q
+        from datetime import datetime, timedelta
+        
+        # Get occurrence and related data
+        try:
+            occurrence = BookingOccurrence.objects.get(occurrence_id=occurrence_id)
+        except BookingOccurrence.DoesNotExist:
+            logger.error(f"Occurrence {occurrence_id} not found for reminder email")
+            return
+        
+        # SAFETY CHECK: Only send reminders for occurrences starting within 3 hours
+        occurrence_start = timezone.make_aware(
+            datetime.combine(occurrence.start_date, occurrence.start_time)
+        )
+        time_until_start = occurrence_start - timezone.now()
+        hours_until_start = time_until_start.total_seconds() / 3600
+        
+        if hours_until_start > 3 or hours_until_start < 0:
+            logger.warning(f"Skipping reminder for occurrence {occurrence_id} - starts in {hours_until_start:.1f} hours")
+            return
+        
+        logger.info(f"Sending reminder for occurrence {occurrence_id} starting in {hours_until_start:.1f} hours")
+        
+        booking = occurrence.booking
+        professional = booking.professional
+        client = booking.client
+        professional_user = professional.user
+        client_user = client.user
+        
+        # Check if users have email notifications enabled
+        send_to_professional = check_user_email_settings(professional_user)
+        send_to_client = check_user_email_settings(client_user)
+        
+        if not send_to_professional and not send_to_client:
+            logger.info(f"Both professional {professional_user.id} and client {client_user.id} have email notifications disabled")
+            return
+        
+        # Get conversation for link
+        conversation = None
+        try:
+            conversation = Conversation.objects.filter(
+                (Q(participant1=professional_user) & Q(participant2=client_user)) |
+                (Q(participant1=client_user) & Q(participant2=professional_user))
+            ).first()
+        except:
+            logger.warning(f"No conversation found for booking {booking.booking_id}")
+        
+        # Helper function to build email content for reminder
+        def build_reminder_content(recipient_user, other_user, is_professional=True):
+            # Get formatted times for the recipient
+            formatted_times = occurrence.get_formatted_times(recipient_user.id)
+            timezone_info = formatted_times.get('timezone', 'UTC')
+            
+            role_text = "professional" if is_professional else "client"
+            other_role_text = "client" if is_professional else "professional"
+            service_action = "provide service for" if is_professional else "receive service from"
+            
+            content_html = f"""
+            <h1 style="margin-top: 0; color: #333333; font-size: 24px;">Hi {recipient_user.name},</h1>
+            <p><strong>Reminder:</strong> You have a booking scheduled to start in approximately 2 hours.</p>
+            
+            <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                <h2 style="color: #856404; margin-top: 0;">Upcoming Service</h2>
+                <p><strong>Service:</strong> {booking.service_id.service_name if booking.service_id else 'N/A'}</p>
+                <p><strong>Time:</strong> {formatted_times['formatted_start']} - {formatted_times['formatted_end']} <em>({timezone_info})</em></p>
+                <p><strong>{other_role_text.title()}:</strong> {other_user.name}</p>
+                <p><strong>Booking ID:</strong> {booking.booking_id}</p>
+            </div>
+            
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                <h3>Reminder:</h3>
+                <ul>
+                    <li>Please arrive on time for your scheduled service</li>
+                    <li>{"Prepare your materials and review the service details" if is_professional else "Ensure your pet is ready for the service"}</li>
+                    <li>Contact the {other_role_text} if you need to make any changes</li>
+                </ul>
+            </div>
+            """
+            
+            # Add conversation link if available
+            if conversation:
+                content_html += f"""
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{settings.FRONTEND_BASE_URL}/messages?conversationId={conversation.conversation_id}" 
+                    style="display: inline-block; background-color: #008080; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">
+                    Message {other_user.name}
+                    </a>
+                </div>
+                """
+            
+            content_html += f"""
+            <p>Thank you for being part of the CrittrCove community!</p>
+            <p>Best regards,<br>The CrittrCove Team</p>
+            """
+            
+            return content_html
+        
+        # Helper function to build plain text content for reminder
+        def build_reminder_plain_content(recipient_user, other_user, is_professional=True):
+            formatted_times = occurrence.get_formatted_times(recipient_user.id)
+            timezone_info = formatted_times.get('timezone', 'UTC')
+            
+            other_role_text = "client" if is_professional else "professional"
+            
+            plain_content = f"""
+Hi {recipient_user.name},
+
+REMINDER: You have a booking scheduled to start in approximately 2 hours.
+
+UPCOMING SERVICE
+Service: {booking.service_id.service_name if booking.service_id else 'N/A'}
+Time: {formatted_times['formatted_start']} - {formatted_times['formatted_end']} ({timezone_info})
+{other_role_text.title()}: {other_user.name}
+Booking ID: {booking.booking_id}
+
+REMINDER:
+• Please arrive on time for your scheduled service
+• {"Prepare your materials and review the service details" if is_professional else "Ensure your pet is ready for the service"}
+• Contact the {other_role_text} if you need to make any changes
+"""
+            
+            # Add conversation link to plain text
+            if conversation:
+                plain_content += f"""
+To message {other_user.name}, visit:
+{settings.FRONTEND_BASE_URL}/messages?conversationId={conversation.conversation_id}
+"""
+            
+            plain_content += f"""
+Thank you for being part of the CrittrCove community!
+
+Best regards,
+The CrittrCove Team
+
+---
+You're receiving this email because you have an account on CrittrCove and have enabled email notifications.
+Manage your notification preferences: {settings.FRONTEND_BASE_URL}/settings/notifications
+CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103
+© 2025 CrittrCove. All rights reserved.
+"""
+            return plain_content
+        
+        # Send email to professional if enabled
+        if send_to_professional:
+            try:
+                headers = get_common_email_headers(
+                    occurrence.occurrence_id, 
+                    'booking_reminder',
+                    conversation.conversation_id if conversation else None
+                )
+                
+                content_html = build_reminder_content(professional_user, client_user, is_professional=True)
+                plain_content = build_reminder_plain_content(professional_user, client_user, is_professional=True)
+                html_content = build_email_html(content_html, professional_user.name)
+                
+                subject = f"Booking Reminder - Service with {client_user.name} starts in 2 hours"
+                
+                success = send_email_with_retry(
+                    subject=subject,
+                    html_content=html_content,
+                    plain_content=plain_content,
+                    recipient_email=professional_user.email,
+                    headers=headers
+                )
+                
+                if success:
+                    logger.info(f"Booking reminder email sent to professional {professional_user.email} for occurrence {occurrence_id}")
+                else:
+                    logger.error(f"Failed to send booking reminder email to professional {professional_user.email} for occurrence {occurrence_id}")
+                    
+            except Exception as e:
+                logger.error(f"Error sending booking reminder email to professional: {str(e)}")
+        
+        # Send email to client if enabled
+        if send_to_client:
+            try:
+                headers = get_common_email_headers(
+                    occurrence.occurrence_id, 
+                    'booking_reminder',
+                    conversation.conversation_id if conversation else None
+                )
+                
+                content_html = build_reminder_content(client_user, professional_user, is_professional=False)
+                plain_content = build_reminder_plain_content(client_user, professional_user, is_professional=False)
+                html_content = build_email_html(content_html, client_user.name)
+                
+                subject = f"Booking Reminder - Service with {professional_user.name} starts in 2 hours"
+                
+                success = send_email_with_retry(
+                    subject=subject,
+                    html_content=html_content,
+                    plain_content=plain_content,
+                    recipient_email=client_user.email,
+                    headers=headers
+                )
+                
+                if success:
+                    logger.info(f"Booking reminder email sent to client {client_user.email} for occurrence {occurrence_id}")
+                else:
+                    logger.error(f"Failed to send booking reminder email to client {client_user.email} for occurrence {occurrence_id}")
+                    
+            except Exception as e:
+                logger.error(f"Error sending booking reminder email to client: {str(e)}")
+            
+    except Exception as e:
+        logger.error(f"Error sending booking reminder email: {str(e)}")
+        logger.exception("Full booking reminder email error details:")

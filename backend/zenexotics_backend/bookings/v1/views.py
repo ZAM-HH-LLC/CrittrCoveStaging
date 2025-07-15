@@ -1318,6 +1318,9 @@ class ApproveBookingView(APIView):
                 logger.error(f"Error scheduling booking confirmation email: {str(email_error)}")
                 # Don't fail the overall process if email scheduling fails
             
+            # Note: Reminder emails are handled by the cron job running send_booking_reminders
+            logger.info(f"Booking {booking_id} approved - reminder emails will be handled by cron job")
+            
             # Log the interaction
             InteractionLog.objects.create(
                 user=request.user,
