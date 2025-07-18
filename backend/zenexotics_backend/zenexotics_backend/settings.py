@@ -93,7 +93,8 @@ if ALLOWED_HOSTS_ENV:
 else:
     ALLOWED_HOSTS = DOMAIN_MAP.get(ENVIRONMENT, DOMAIN_MAP['development'])
 
-# ALLOWED_HOSTS = ['*']
+if IS_DEVELOPMENT:
+    ALLOWED_HOSTS = ['*']
 
 # Always disable DEBUG in staging/production
 DEBUG = IS_DEVELOPMENT
@@ -288,14 +289,8 @@ FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', FRONTEND_URL_MAP.get(ENV
 # CORS settings by environment
 CORS_ALLOWED_ORIGINS = [FRONTEND_BASE_URL]
 if IS_DEVELOPMENT:
-    # Add Android emulator URLs
-    CORS_ALLOWED_ORIGINS.extend([
-        'http://10.0.2.2:19006',
-        'http://localhost:19006',
-        'http://10.0.0.169:19006',
-        'http://10.0.0.137:19006',  # Current LAN IP
-        'http://127.0.0.1:19006'
-    ])
+    # Allow all origins in development for convenience
+    CORS_ALLOW_ALL_ORIGINS = True
 if IS_STAGING:
     # Always allow both the deployed staging frontend and localhost for testing
     CORS_ALLOWED_ORIGINS.append('https://staging.crittrcove.com')
@@ -311,13 +306,8 @@ if IS_PRODUCTION:
 # CORS/CSRF trusted origins for all environments
 CSRF_TRUSTED_ORIGINS = []
 if IS_DEVELOPMENT:
-    CSRF_TRUSTED_ORIGINS.extend([
-        'http://10.0.2.2:19006',
-        'http://localhost:19006',
-        'http://10.0.0.169:19006',
-        'http://10.0.0.137:19006',  # Current LAN IP
-        'http://127.0.0.1:19006'
-    ])
+    # Allow all origins in development for convenience
+    CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
 if IS_STAGING:
     CSRF_TRUSTED_ORIGINS = [
         'https://staging.crittrcove.com',
@@ -348,6 +338,11 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+# Additional CORS settings for development
+if IS_DEVELOPMENT:
+    CORS_ALLOW_ALL_HEADERS = True
+    CORS_ALLOW_ALL_METHODS = True
 
 # Email configuration
 if IS_DEVELOPMENT:

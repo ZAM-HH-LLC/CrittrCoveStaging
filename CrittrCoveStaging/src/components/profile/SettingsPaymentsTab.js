@@ -366,6 +366,11 @@ const SettingsPaymentsTab = ({
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          {renderLegalSection()}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Time Settings</Text>
           <View style={styles.settingItem}>
             <View style={styles.settingContent}>
@@ -436,6 +441,11 @@ const SettingsPaymentsTab = ({
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Privacy & Security Settings</Text>
         {renderPrivacySettings()}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Legal</Text>
+        {renderLegalSection()}
       </View>
 
       <View style={styles.section}>
@@ -563,6 +573,44 @@ const SettingsPaymentsTab = ({
         </View>
         
         {/* TODO: Add location privacy toggle after MVP launch */}
+      </>
+    );
+  };
+
+  const renderLegalSection = () => {
+    return (
+      <>
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="shield-account" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Privacy Policy</Text>
+              <Text style={styles.settingDescription}>Read our privacy policy and data practices</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
+          >
+            <Text style={styles.actionButtonText}>View</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="file-document" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Terms of Service</Text>
+              <Text style={styles.settingDescription}>Read our terms of service and user agreement</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('TermsOfService')}
+          >
+            <Text style={styles.actionButtonText}>View</Text>
+          </TouchableOpacity>
+        </View>
       </>
     );
   };

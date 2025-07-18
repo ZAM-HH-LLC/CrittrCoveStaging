@@ -217,7 +217,7 @@ def get_professional_services(user):
                 'unit': service.unit_of_time,
                 'isActive': service.is_active,
                 'isOvernight': service.is_overnight,
-                'animal_type': service.animal_type
+                'animal_type': service.animal_types
             })
         return service_data
     except Exception as e:
