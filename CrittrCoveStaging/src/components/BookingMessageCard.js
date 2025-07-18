@@ -660,19 +660,19 @@ const BookingMessageCard = ({
                   disabled={isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update'}
                 >
                   <Text style={styles.detailsButtonText}>
-                    {isBookingConfirmed ? "View Details" : "Review Details"}
+                    {isBookingConfirmed ? "View Details" : isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update' ?  "View Details" : "View to Approve"}
                   </Text>
                 </TouchableOpacity>
                 
                 {/* Approve button - only visible to clients for approval requests */}
-                {type === 'approval' && !isProfessional && !isConfirmed && !hasChangeRequest && (
+                {/* {type === 'approval' && !isProfessional && !isConfirmed && !hasChangeRequest && (
                   <TouchableOpacity 
                     style={styles.approveButton}
                     onPress={handleApprove}
                   >
                     <Text style={styles.approveButtonText}>Approve</Text>
                   </TouchableOpacity>
-                )}
+                )} */}
                 
                 {/* Edit button - visible to pros for booking requests */}
                 {type === 'request' && isProfessional && onEditDraft && !isConfirmed && (
