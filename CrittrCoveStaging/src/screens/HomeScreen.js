@@ -729,13 +729,13 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.socialIconsRow}>
           <TouchableOpacity 
             style={styles.socialIcon} 
-            onPress={() => Linking.openURL('https://www.instagram.com/thezensitter')}
+            onPress={() => Linking.openURL('https://www.instagram.com/crittrcove')}
           >
             <FontAwesome name="instagram" size={24} color="white" />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.socialIcon} 
-            onPress={() => Linking.openURL('https://discord.com/your-profile')}
+            onPress={() => Linking.openURL('https://discord.gg/ZX3sj6w6')}
           >
             <FontAwesome5 name="discord" size={24} color="white" />
           </TouchableOpacity>
