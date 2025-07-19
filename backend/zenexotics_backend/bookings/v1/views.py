@@ -2227,7 +2227,7 @@ class MarkBookingCompletedView(APIView):
                 )
             
             # Get all occurrences for this booking
-            occurrences = BookingOccurrence.objects.filter(booking=booking).order_by('-end_time')
+            occurrences = BookingOccurrence.objects.filter(booking=booking)
             
             if not occurrences.exists():
                 logger.error(f"MBA8675309: No occurrences found for booking {booking_id}")
@@ -2236,19 +2236,31 @@ class MarkBookingCompletedView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Get the latest occurrence's end time
-            latest_occurrence = occurrences.first()
+            # Find the occurrence with the latest end datetime
+            latest_occurrence = None
+            latest_end_datetime = None
+            
+            logger.info(f"MBA8675309: Checking {occurrences.count()} occurrences for booking {booking_id}")
+            
+            for occurrence in occurrences:
+                occurrence_end_datetime = datetime.combine(
+                    occurrence.end_date, 
+                    occurrence.end_time
+                ).replace(tzinfo=pytz.UTC)
+                
+                logger.info(f"MBA8675309: Occurrence {occurrence.occurrence_id} ends at {occurrence_end_datetime}")
+                
+                if latest_end_datetime is None or occurrence_end_datetime > latest_end_datetime:
+                    latest_occurrence = occurrence
+                    latest_end_datetime = occurrence_end_datetime
+                    logger.info(f"MBA8675309: New latest occurrence: {occurrence.occurrence_id} ending at {latest_end_datetime}")
+            
             current_time = timezone.now()
+            logger.info(f"MBA8675309: Current time: {current_time}, Latest occurrence end time: {latest_end_datetime}")
             
             # Check if the latest occurrence has ended
-            # Create a datetime object from the latest occurrence's date and time for comparison
-            latest_occurrence_datetime = datetime.combine(
-                latest_occurrence.end_date, 
-                latest_occurrence.end_time
-            ).replace(tzinfo=pytz.UTC)
-            
-            if latest_occurrence_datetime > current_time:
-                logger.error(f"MBA8675309: Latest occurrence for booking {booking_id} has not ended yet. End time: {latest_occurrence_datetime}")
+            if latest_end_datetime > current_time:
+                logger.error(f"MBA8675309: Latest occurrence for booking {booking_id} has not ended yet. End time: {latest_end_datetime}")
                 return Response(
                     {"error": "Cannot mark booking as completed - all occurrences must have ended"},
                     status=status.HTTP_400_BAD_REQUEST
