@@ -427,17 +427,20 @@ export const privacyPolicyData = {
 
 export const ALL_SERVICES = "All Services";
 export const SERVICE_TYPES = [
-  ALL_SERVICES,
-  "Overnight Cat Sitting (Owner's Home)",
-  "Cat Boarding",
-  "Drop-In Visits (30 min)",
-  "Drop-In Visits (60 min)",
+  "Overnight Sitting (In Owner's Home)",
+  "Overnight Boarding",
+  "Drop-In Visits",
   "Dog Walking",
-  "Doggy Day Care",
+  "Day Care",
   "Pet Boarding",
   "Exotic Pet Care",
   "Daytime Pet Sitting",
   "Ferrier",
+  "Grooming",
+  "Training",
+  "Pet Sitting",
+  "Pet Taxi",
+  "Pet Sitting",
 ];
 
 export const TIME_OPTIONS = [

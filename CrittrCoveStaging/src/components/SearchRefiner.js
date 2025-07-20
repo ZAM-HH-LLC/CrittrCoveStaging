@@ -6,7 +6,8 @@ import Slider from '@react-native-community/slider';
 import { debounce } from 'lodash';
 import { GENERAL_CATEGORIES } from '../data/mockData';
 import { AuthContext, debugLog } from '../context/AuthContext';
-import ServiceTypeSelect from './ServiceTypeSelect';
+import InputSelect from './ServiceTypeSelect';
+import { SERVICE_TYPES, ALL_SERVICES } from '../data/mockData';
 import { searchProfessionals } from '../api/API';
 
 // All available animal types from CategorySelectionStep
@@ -23,67 +24,10 @@ const ALL_ANIMAL_TYPES = [
   'Spider', 'Scorpion', 'Crab', 'Snail', 'Millipede'
 ];
 
-// Supported locations for MVP launch
-const SUPPORTED_LOCATIONS = [
-  // Denver Metro Area
-//   { display: "Denver, Colorado", city: "Denver", state: "Colorado", zips: ["80201", "80202", "80203", "80204", "80205", "80206", "80207", "80208", "80209", "80210", "80211", "80212", "80213", "80214", "80215", "80216", "80217", "80218", "80219", "80220", "80221", "80222", "80223", "80224", "80225", "80226", "80227", "80228", "80229", "80230", "80231", "80232", "80233", "80234", "80235", "80236", "80237", "80238", "80239", "80246", "80247", "80248", "80249", "80250", "80251", "80252", "80256", "80257", "80258", "80259", "80260", "80261", "80262", "80263", "80264", "80265", "80266", "80271", "80273", "80274", "80279", "80280", "80281", "80290", "80291", "80293", "80294", "80295", "80299"] },
-//   { display: "Aurora, Colorado", city: "Aurora", state: "Colorado", zips: ["80010", "80011", "80012", "80013", "80014", "80015", "80016", "80017", "80018", "80019", "80040", "80041", "80042", "80044", "80045", "80046", "80047"] },
-//   { display: "Lakewood, Colorado", city: "Lakewood", state: "Colorado", zips: ["80214", "80215", "80226", "80227", "80228", "80232", "80401"] },
-//   { display: "Thornton, Colorado", city: "Thornton", state: "Colorado", zips: ["80023", "80229", "80233", "80241"] },
-//   { display: "Arvada, Colorado", city: "Arvada", state: "Colorado", zips: ["80001", "80002", "80003", "80004", "80005", "80006", "80007", "80403"] },
-//   { display: "Westminster, Colorado", city: "Westminster", state: "Colorado", zips: ["80003", "80020", "80021", "80030", "80031", "80234"] },
-//   { display: "Centennial, Colorado", city: "Centennial", state: "Colorado", zips: ["80112", "80121", "80122", "80016"] },
-  
-  // Colorado Springs Area
-  { display: "Colorado Springs, Colorado", city: "Colorado Springs", state: "Colorado", zips: ["80901", "80902", "80903", "80904", "80905", "80906", "80907", "80908", "80909", "80910", "80911", "80912", "80913", "80914", "80915", "80916", "80917", "80918", "80919", "80920", "80921", "80922", "80923", "80924", "80925", "80926", "80927", "80928", "80929", "80930", "80931", "80932", "80933", "80934", "80935", "80936", "80937", "80938", "80939", "80941", "80942", "80946", "80947", "80949", "80950", "80951", "80960", "80962", "80970", "80977", "80995", "80997"] },
-  
-  // Boulder Area
-//   { display: "Boulder, Colorado", city: "Boulder", state: "Colorado", zips: ["80301", "80302", "80303", "80304", "80305", "80309", "80310", "80314"] },
-  
-  // Fort Collins Area
-//   { display: "Fort Collins, Colorado", city: "Fort Collins", state: "Colorado", zips: ["80521", "80522", "80523", "80524", "80525", "80526", "80527", "80528"] },
-  
-  // Pueblo Area
-//   { display: "Pueblo, Colorado", city: "Pueblo", state: "Colorado", zips: ["81001", "81002", "81003", "81004", "81005", "81006", "81007", "81008", "81009", "81010", "81011", "81012"] }
+// Simple location suggestions - just strings like services
+const LOCATION_SUGGESTIONS = [
+  "Colorado Springs, Colorado"
 ];
-
-// Create a flat list of all searchable items (cities and zip codes)
-const getAllSearchableLocations = () => {
-  const searchableItems = [];
-  
-  SUPPORTED_LOCATIONS.forEach(location => {
-    // Add the city
-    searchableItems.push({
-      display: location.display,
-      searchText: `${location.city}, ${location.state}`,
-      type: 'city'
-    });
-    
-    // Add all zip codes for this city
-    location.zips.forEach(zip => {
-      searchableItems.push({
-        display: `${zip}, ${location.city}, ${location.state}`,
-        searchText: zip,
-        type: 'zip'
-      });
-    });
-  });
-  
-  return searchableItems;
-};
-
-const ALL_SEARCHABLE_LOCATIONS = getAllSearchableLocations();
-
-// Helper function to check if a location is supported
-const isLocationSupported = (text) => {
-  if (!text) return false;
-  
-  const normalizedText = text.toLowerCase();
-  return ALL_SEARCHABLE_LOCATIONS.some(location => 
-    location.display.toLowerCase().includes(normalizedText) || 
-    location.searchText.toLowerCase().includes(normalizedText)
-  );
-};
 
 const generalCategoriesData = GENERAL_CATEGORIES.map(category => ({
   label: category,
@@ -637,182 +581,7 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
   // Create styles using current context values
   const styles = createStyles(isSignedIn, screenWidth);
 
-  // Create a new simple location input component
-  const LocationInputSimple = ({ value, onChange }) => {
-    const [inputValue, setInputValue] = useState(value);
-    const [suggestions, setSuggestions] = useState([]);
-    const [isFocused, setIsFocused] = useState(false);
-    const inputRef = useRef(null);
-    const suggestionsRef = useRef(null);
-    const containerRef = useRef(null);
-    
-    // Update internal value when prop changes
-    useEffect(() => {
-      debugLog('MBA23o4iuv59', 'Value prop changed:', value);
-      setInputValue(value);
-    }, [value]);
-    
-    // Add click outside handler for web
-    useEffect(() => {
-      if (Platform.OS === 'web') {
-        const handleClickOutside = (event) => {
-          // Check if the click is outside both the input container and suggestions
-          const isOutsideContainer = containerRef.current && !containerRef.current.contains(event.target);
-          
-          debugLog('MBA23o4iuv59', 'Click detected', { 
-            isOutsideContainer,
-            hasSuggestions: suggestions.length > 0,
-            isFocused
-          });
-          
-          if (isOutsideContainer && isFocused) {
-            debugLog('MBA23o4iuv59', 'Click outside detected, closing dropdown');
-            setIsFocused(false);
-            setSuggestions([]);
-          }
-        };
-        
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-          document.removeEventListener('mousedown', handleClickOutside);
-        };
-      }
-    }, [isFocused, suggestions.length]);
-    
-    // Log component state
-    useEffect(() => {
-      debugLog('MBA23o4iuv59', 'Component state:', { 
-        inputValue, 
-        suggestionsCount: suggestions.length,
-        isFocused
-      });
-    }, [inputValue, suggestions, isFocused]);
-    
-    const handleTextChange = (text) => {
-      debugLog('MBA23o4iuv59', 'Text input changed:', text);
-      setInputValue(text);
-      
-      // Search for locations
-      if (text.length < 1) {
-        // Show all supported locations when input is empty
-        debugLog('MBA23o4iuv59', 'Empty input, showing all supported locations');
-        
-        // Get the first few supported locations to show as suggestions
-        const defaultSuggestions = ALL_SEARCHABLE_LOCATIONS
-          .filter(location => location.type === 'city')  // Only show cities in the default list
-          .slice(0, 5);  // Limit to 5 results
-        
-        setSuggestions(defaultSuggestions);
-      } else {
-        // Search through supported locations
-        const filteredLocations = ALL_SEARCHABLE_LOCATIONS.filter(location =>
-          location.searchText.toLowerCase().includes(text.toLowerCase()) ||
-          location.display.toLowerCase().includes(text.toLowerCase())
-        ).slice(0, 5); // Limit to 5 results
-        
-        debugLog('MBA23o4iuv59', 'Search results:', { 
-          query: text, 
-          resultsCount: filteredLocations.length
-        });
-        
-        // If no matches found, show "not supported" message
-        if (filteredLocations.length === 0) {
-          debugLog('MBA23o4iuv59', 'Location not supported:', text);
-          setSuggestions([{
-            display: `We're not available in "${text}" yet - coming soon!`,
-            searchText: text,
-            type: 'not_supported'
-          }]);
-        } else {
-          setSuggestions(filteredLocations);
-        }
-      }
-    };
-    
-    // Direct selection handler without complex state management
-    const selectLocation = (location) => {
-      debugLog('MBA23o4iuv59', 'DIRECT SELECTION of location:', location);
-      
-      if (location.type !== 'not_supported') {
-        // Update both local and parent state immediately
-        const newValue = location.display;
-        setInputValue(newValue);
-        onChange(newValue);
-        debugLog('MBA23o4iuv59', 'Set location value to:', newValue);
-      }
-      
-      // Always clear suggestions and reset focus
-      setSuggestions([]);
-      setIsFocused(false);
-    };
 
-    return (
-      <View 
-        style={styles.locationInputWrapper}
-        ref={containerRef}
-      >
-        <TextInput
-          ref={inputRef}
-          style={styles.locationInput}
-          placeholder="Enter city or zip in Colorado"
-          value={inputValue}
-          onChangeText={handleTextChange}
-          onFocus={() => {
-            debugLog('MBA23o4iuv59', 'Input focused');
-            setIsFocused(true);
-            
-            if (inputValue.length > 0) {
-              handleTextChange(inputValue);
-            } else {
-              // Show all supported locations when input is empty
-              debugLog('MBA23o4iuv59', 'Empty input on focus, showing all supported locations');
-              
-              // Get the first few supported locations to show as suggestions
-              const defaultSuggestions = ALL_SEARCHABLE_LOCATIONS
-                .filter(location => location.type === 'city')  // Only show cities in the default list
-                .slice(0, 5);  // Limit to 5 results
-              
-              setSuggestions(defaultSuggestions);
-            }
-          }}
-        />
-        
-        {suggestions.length > 0 && isFocused && (
-          <View 
-            style={styles.suggestionsWrapper}
-            ref={suggestionsRef}
-          >
-            <ScrollView 
-              style={styles.suggestionsContainer}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled={true}
-            >
-              {suggestions.map((suggestion, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.suggestionItem,
-                    suggestion.type === 'not_supported' && styles.suggestionItemNotSupported
-                  ]}
-                  onPress={() => selectLocation(suggestion)}
-                >
-                  <Text style={[
-                    styles.suggestionText,
-                    suggestion.type === 'not_supported' && styles.suggestionTextNotSupported
-                  ]}>
-                    {suggestion.display}
-                  </Text>
-                  {suggestion.type === 'zip' && (
-                    <Text style={styles.suggestionType}>ZIP Code</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-      </View>
-    );
-  };
 
   const OtherAnimalInput = ({ value, onChange, suggestions, onSuggestionSelect, isVisible, onClose, onAnimalSelect }) => {
     const animalInputRef = useRef(null);
@@ -1107,22 +876,23 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
 
       {/* Location Input */}
       <Text style={styles.label}>Location</Text>
-      <View style={styles.locationContainer}>
-        <LocationInputSimple
-          value={location}
-          onChange={setLocation}
-        />
-        {/* <TouchableOpacity style={[styles.useLocationButton, { marginBottom: 16 }]}>
-          <MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.text} />
-          <Text style={styles.useLocationText}>Use My Location</Text>
-        </TouchableOpacity> */}
-      </View>
+      <InputSelect
+        value={location}
+        onChange={setLocation}
+        suggestions={LOCATION_SUGGESTIONS}
+        placeholder="Enter city in Colorado"
+        zIndex={1100}
+        showNotAvailable={true}
+      />
 
       {/* Service Input */}
       <Text style={styles.label}>What service do you need? (e.g., Dog Walking, Pet Sitting)</Text>
-      <ServiceTypeSelect
+      <InputSelect
         value={service}
         onChange={setService}
+        suggestions={[ALL_SERVICES, ...SERVICE_TYPES]}
+        placeholder="Search services..."
+        zIndex={1000}
       />
 
       {/* Overnight Service */}

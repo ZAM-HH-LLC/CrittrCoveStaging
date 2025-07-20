@@ -1,38 +1,75 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { theme } from '../styles/theme';
-import { SERVICE_TYPES } from '../data/mockData';
 
-const ServiceTypeSelect = ({ value, onChange }) => {
+const InputSelect = ({ value, onChange, suggestions, placeholder, zIndex = 1000, showNotAvailable = false }) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [filteredServices, setFilteredServices] = useState([]);
+  const [filteredSuggestions, setFilteredSuggestions] = useState([]);
 
   const handleTextChange = (text) => {
     onChange(text);
     if (text.length > 0) {
-      const filtered = SERVICE_TYPES.filter(service => 
-        service.toLowerCase().includes(text.toLowerCase())
+      const filtered = suggestions.filter(suggestion => 
+        suggestion.toLowerCase().includes(text.toLowerCase())
       );
-      setFilteredServices(filtered);
+      
+      if (filtered.length === 0 && showNotAvailable) {
+        // Show "not available" message for locations
+        setFilteredSuggestions([`We're not available in "${text}" yet - coming soon!`]);
+      } else {
+        setFilteredSuggestions(filtered);
+      }
       setShowSuggestions(true);
     } else {
       setShowSuggestions(false);
     }
   };
 
-  const handleSelectService = (service) => {
-    onChange(service);
+  const handleSelectSuggestion = (suggestion) => {
+    // Don't select "not available" messages
+    if (!suggestion.startsWith("We're not available in")) {
+      onChange(suggestion);
+    }
     setShowSuggestions(false);
   };
 
+  const handleFocus = () => {
+    // Always show suggestions immediately on focus
+    if (suggestions.length > 0) {
+      if (value.length > 0) {
+        // Filter based on current value
+        const filtered = suggestions.filter(suggestion => 
+          suggestion.toLowerCase().includes(value.toLowerCase())
+        );
+        setFilteredSuggestions(filtered);
+      } else {
+        // Show all suggestions when empty
+        setFilteredSuggestions(suggestions);
+      }
+      setShowSuggestions(true);
+    }
+  };
+
+  // Create dynamic styles with custom zIndex
+  const dynamicStyles = {
+    container: {
+      ...styles.container,
+      zIndex: zIndex,
+    },
+    suggestionsWrapper: {
+      ...styles.suggestionsWrapper,
+      zIndex: zIndex,
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <TextInput
         style={styles.input}
-        placeholder="Search services..."
+        placeholder={placeholder}
         value={value}
         onChangeText={handleTextChange}
-        onFocus={() => value.length > 0 && setShowSuggestions(true)}
+        onFocus={handleFocus}
         onBlur={() => {
           // Delay hiding suggestions to allow for suggestion selection
           setTimeout(() => {
@@ -41,21 +78,29 @@ const ServiceTypeSelect = ({ value, onChange }) => {
         }}
       />
       {showSuggestions && (
-        <View style={styles.suggestionsWrapper}>
+        <View style={dynamicStyles.suggestionsWrapper}>
           <ScrollView 
             style={styles.suggestionsContainer}
             keyboardShouldPersistTaps="always"
             nestedScrollEnabled={true}
           >
-            {filteredServices.map((service, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.suggestionItem}
-                onPress={() => handleSelectService(service)}
-              >
-                <Text>{service}</Text>
-              </TouchableOpacity>
-            ))}
+            {filteredSuggestions.map((suggestion, index) => {
+              const isNotAvailable = suggestion.startsWith("We're not available in");
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.suggestionItem}
+                  onPress={() => handleSelectSuggestion(suggestion)}
+                >
+                  <Text style={[
+                    styles.suggestionText,
+                    isNotAvailable && styles.notAvailableText
+                  ]}>
+                    {suggestion}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
       )}
@@ -108,6 +153,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
+  suggestionText: {
+    fontSize: theme.fontSizes.medium,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  notAvailableText: {
+    color: theme.colors.placeholderText,
+    fontStyle: 'italic',
+  },
 });
 
-export default ServiceTypeSelect; 
+export default InputSelect; 
