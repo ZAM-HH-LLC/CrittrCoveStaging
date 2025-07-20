@@ -419,8 +419,12 @@ const MyProfile = () => {
             }}
             onSaveComplete={handleSaveComplete}
             isMobile={isMobileDesktop}
-            rating={profileData?.rating}
-            reviews={profileData?.reviews}
+            client_reviews={profileData?.client_reviews}
+            professional_reviews={profileData?.professional_reviews}
+            client_rating={profileData?.client_rating}
+            professional_rating={profileData?.professional_rating}
+            client_review_count={profileData?.client_review_count}
+            professional_review_count={profileData?.professional_review_count}
             role={userRole}
             isProfessional={userRole === 'professional'}
             insurance={profileData?.insurance}
@@ -544,7 +548,6 @@ const MyProfile = () => {
             }}
             currentPlan={profileData?.currentPlan || currentPlan}
             onSwitchPlan={handleSwitchPlan}
-            isMobile={isMobileDesktop}
             userRole={userRole}
             isApprovedProfessional={isApprovedProfessional}
           />

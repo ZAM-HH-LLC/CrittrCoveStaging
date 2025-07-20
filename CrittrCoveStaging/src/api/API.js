@@ -1873,6 +1873,7 @@ export const sendTextMessage = async (conversationId, content) => {
  * @param {number} reviewData.rating - Star rating (1-5)
  * @param {string} reviewData.reviewText - Review text content
  * @param {boolean} reviewData.isProfessional - Whether the reviewer is a professional
+ * @param {string|number} reviewData.conversationId - ID of the conversation for this booking
  * @returns {Promise<Object>} - Response from the API
  */
 export const submitBookingReview = async (reviewData) => {
@@ -1884,7 +1885,8 @@ export const submitBookingReview = async (reviewData) => {
       {
         rating: reviewData.rating,
         review_text: reviewData.reviewText,
-        is_professional_review: reviewData.isProfessional
+        is_professional_review: reviewData.isProfessional,
+        conversation_id: reviewData.conversationId
       }
     );
     

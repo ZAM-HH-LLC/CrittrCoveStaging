@@ -2,19 +2,38 @@ import React from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import { formatFromUTC } from '../utils/time_utils';
+import { formatFromUTC, FORMAT_TYPES } from '../utils/time_utils';
 import { debugLog } from '../context/AuthContext';
 import { getMediaUrl } from '../config/config';
+import moment from 'moment-timezone';
 
-const ReviewsModal = ({ visible, onClose, reviews, averageRating, reviewCount, userName, forProfessional }) => {
+const ReviewsModal = ({ visible, onClose, reviews, averageRating, reviewCount, userName, forProfessional, userTimezone }) => {
   // Format date for display
   const formatReviewDate = (dateString) => {
     try {
-      // formatFromUTC expects (dateStr, timeStr, userTimezone, formatType)
-      // For date-only formatting, we pass null for timeStr and use a default timezone
-      return formatFromUTC(dateString, null, 'US/Mountain');
+      if (!dateString) return '';
+      
+      debugLog('MBA3456', 'formatReviewDate input:', dateString);
+      
+      const timezone = userTimezone || 'US/Mountain'; // fallback to default
+      
+      // Use moment to parse the date string directly and convert to user timezone
+      const parsedMoment = moment.utc(dateString);
+      
+      if (!parsedMoment.isValid()) {
+        debugLog('MBA3456', 'Invalid moment created from:', dateString);
+        return dateString;
+      }
+      
+      // Convert to user timezone and format as "MMM D, YYYY"
+      const localMoment = parsedMoment.tz(timezone);
+      const formatted = localMoment.format('MMM D, YYYY');
+      
+      debugLog('MBA3456', 'Successfully formatted date:', { input: dateString, output: formatted });
+      return formatted;
+      
     } catch (error) {
-      debugLog('MBA6789', 'Error formatting review date:', error);
+      debugLog('MBA3456', 'Error formatting review date:', { dateString, error });
       return dateString;
     }
   };
@@ -109,7 +128,7 @@ const ReviewsModal = ({ visible, onClose, reviews, averageRating, reviewCount, u
                         <Text style={styles.serviceName}>•</Text>
                         <MaterialCommunityIcons name="calendar" size={14} color={theme.colors.textSecondary} style={styles.calendarIcon} />
                         <Text style={styles.serviceInfoText}>
-                          {review.last_occurrence_end_date || review.created_at}
+                          {formatReviewDate(review.last_occurrence_end_date || review.created_at)}
                         </Text>
                       </View>
                       <Text style={styles.reviewText}>{review.review_text || 'No comments provided.'}</Text>

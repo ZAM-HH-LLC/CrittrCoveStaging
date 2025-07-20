@@ -2341,6 +2341,8 @@ const MessageHistory = ({ navigation, route }) => {
               service_type: item.metadata?.service_type,
             }}
             isProfessional={selectedConversationData?.is_professional}
+            conversationId={selectedConversation}
+            navigation={navigation}
             onPress={(action) => {
               // Only handle the leave review action since view details now opens the modal directly
               if (action === 'leaveReview') {

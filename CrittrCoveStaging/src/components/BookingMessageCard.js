@@ -652,15 +652,19 @@ const BookingMessageCard = ({
                   style={[
                     styles.detailsButton,
                     { borderColor: theme.colors.black, borderWidth: 1 },
-                    // Only disable the button if it's a regular message with the Booking Confirmed overlay
-                    // Don't disable for isAfterConfirmation messages (booking updates) or displayType === 'booking_update'
-                    (isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update') && styles.disabledButton
+                    // Disable button if booking is confirmed (approved) and this isn't a booking update
+                    (isConfirmed && !isAfterConfirmation && displayType !== 'booking_update') && styles.disabledButton
                   ]}
                   onPress={handleOpenApprovalModal}
-                  disabled={isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update'}
+                  disabled={isConfirmed && !isAfterConfirmation && displayType !== 'booking_update'}
                 >
-                  <Text style={styles.detailsButtonText}>
-                    {isBookingConfirmed ? "View Details" : isConfirmed && !isBookingConfirmed && !isAfterConfirmation && displayType !== 'booking_update' ?  "View Details" : "View to Approve"}
+                  <Text style={[
+                    styles.detailsButtonText,
+                    // Grey out text when disabled
+                    (isConfirmed && !isAfterConfirmation && displayType !== 'booking_update') && styles.disabledButtonText
+                  ]}>
+                    {/* Show "View Details" for professionals or when booking is confirmed, otherwise "View to Approve" for pet owners */}
+                    {isProfessional || (isConfirmed && !isAfterConfirmation && displayType !== 'booking_update') ? "View Details" : "View to Approve"}
                   </Text>
                 </TouchableOpacity>
                 

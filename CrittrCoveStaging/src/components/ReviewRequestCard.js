@@ -13,6 +13,8 @@ import { submitBookingReview } from '../api/API';
 const ReviewRequestCard = ({ 
   data, 
   isProfessional,
+  conversationId,
+  navigation,
   onPress
 }) => {
   // Log the data for debugging
@@ -25,13 +27,115 @@ const ReviewRequestCard = ({
   // State for the review modal
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
-  // Determine the message content based on the user role
-  const getReviewMessage = () => {
-    if (isProfessional) {
-      return "Please review your client";
-    } else {
-      return "Please review your experience";
+  // Determine the message content and button states based on review permissions
+  const getReviewState = () => {
+    const proReviewAllowed = data.pro_review_allowed !== false;
+    const clientReviewAllowed = data.client_review_allowed !== false;
+    const reviewsVisible = data.reviews_visible === true;
+    const past14Days = data.past_14_day_window === true;
+    
+    debugLog('MBA8675309: Review state analysis:', {
+      isProfessional,
+      proReviewAllowed,
+      clientReviewAllowed,
+      reviewsVisible,
+      past14Days,
+      metadata: data
+    });
+
+    // If reviews are visible, both users have reviewed
+    if (reviewsVisible) {
+      return {
+        message: "Reviews have been exchanged",
+        buttonText: "View Review",
+        buttonAction: "viewReviews",
+        canReview: false,
+        subtitle: "Both reviews are now visible. If you wish to dispute a review, please contact support."
+      };
     }
+
+    // If 14-day window has passed
+    if (past14Days) {
+      return {
+        message: "Review window has expired",
+        buttonText: "View Available Review",
+        buttonAction: "viewReviews", 
+        canReview: false,
+        subtitle: "The 14-day review window has passed. Any submitted reviews are now visible."
+      };
+    }
+
+    // Professional user scenarios
+    if (isProfessional) {
+      if (!proReviewAllowed && clientReviewAllowed) {
+        // Pro has reviewed, waiting for client
+        return {
+          message: "You have reviewed your client",
+          buttonText: "Review Submitted",
+          buttonAction: "none",
+          canReview: false,
+          subtitle: "Waiting for your client to leave a review. Once they do, both reviews will be visible."
+        };
+      } else if (proReviewAllowed && !clientReviewAllowed) {
+        // Client has reviewed, pro hasn't
+        return {
+          message: "Your client has reviewed you",
+          buttonText: "Leave Your Review",
+          buttonAction: "leaveReview",
+          canReview: true,
+          subtitle: "Leave a review for your client to see their review of you."
+        };
+      } else if (proReviewAllowed && clientReviewAllowed) {
+        // Neither has reviewed
+        return {
+          message: "Please review your client",
+          buttonText: "Leave a Review",
+          buttonAction: "leaveReview", 
+          canReview: true,
+          subtitle: "Your review won't be visible until your client also leaves a review or 14 days pass."
+        };
+      }
+    } 
+    // Client user scenarios
+    else {
+      if (!clientReviewAllowed && proReviewAllowed) {
+        // Client has reviewed, waiting for pro
+        return {
+          message: "You have reviewed your experience",
+          buttonText: "Review Submitted",
+          buttonAction: "none",
+          canReview: false,
+          subtitle: "Waiting for the professional to leave a review. Once they do, both reviews will be visible."
+        };
+      } else if (clientReviewAllowed && !proReviewAllowed) {
+        // Pro has reviewed, client hasn't
+        return {
+          message: "The professional has reviewed you",
+          buttonText: "Leave Your Review", 
+          buttonAction: "leaveReview",
+          canReview: true,
+          subtitle: "Leave a review for the professional to see their review of you."
+        };
+      } else if (clientReviewAllowed && proReviewAllowed) {
+        // Neither has reviewed
+        return {
+          message: "Please review your experience",
+          buttonText: "Leave a Review",
+          buttonAction: "leaveReview",
+          canReview: true,
+          subtitle: "Your review won't be visible until the professional also leaves a review or 14 days pass."
+        };
+      }
+    }
+
+    // Fallback case
+    return {
+      message: "Review status unavailable",
+      buttonText: "Check Status",
+      buttonAction: "none",
+      canReview: false,
+      subtitle: "Please contact support if you need assistance with reviews."
+    };
   };
   
   // Handle opening the approval modal
@@ -59,6 +163,28 @@ const ReviewRequestCard = ({
   const handleOpenReviewModal = () => {
     setReviewModalVisible(true);
   };
+
+  // Handle button press based on action type
+  const handleButtonPress = (action) => {
+    switch (action) {
+      case 'leaveReview':
+        handleOpenReviewModal();
+        break;
+      case 'viewReviews':
+        debugLog('MBA8675309: Navigating to MyProfile to view reviews');
+        // Navigate to MyProfile with profile_info tab to show reviews
+        if (navigation) {
+          navigation.navigate('MyProfile', { initialTab: 'profile_info' });
+        } else {
+          debugLog('MBA8675309: Navigation object not available');
+        }
+        break;
+      case 'none':
+      default:
+        // Do nothing for disabled buttons
+        break;
+    }
+  };
   
   // Handle submitting a review
   const handleSubmitReview = async (reviewData) => {
@@ -78,6 +204,9 @@ const ReviewRequestCard = ({
       throw error;
     }
   };
+
+  // Get the current review state
+  const reviewState = getReviewState();
 
   return (
     <View style={styles.container}>
@@ -99,7 +228,7 @@ const ReviewRequestCard = ({
             size={24} 
             color={theme.colors.primary} 
           />
-          <Text style={styles.title}>{getReviewMessage()}</Text>
+          <Text style={styles.title}>{reviewState.message}</Text>
         </View>
         
         <View style={styles.content}>
@@ -113,6 +242,13 @@ const ReviewRequestCard = ({
               <Text style={styles.label}>Service:</Text>
               <Text style={styles.value}>{data.service_type || 'N/A'}</Text>
             </View>
+            
+            {/* Subtitle with additional information */}
+            {reviewState.subtitle && (
+              <View style={styles.subtitleContainer}>
+                <Text style={styles.subtitle}>{reviewState.subtitle}</Text>
+              </View>
+            )}
           </View>
           
           <View style={styles.buttonContainer}>
@@ -124,10 +260,19 @@ const ReviewRequestCard = ({
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.reviewButton}
-              onPress={handleOpenReviewModal}
+              style={[
+                styles.reviewButton,
+                !reviewState.canReview && styles.disabledButton
+              ]}
+              onPress={() => handleButtonPress(reviewState.buttonAction)}
+              disabled={!reviewState.canReview && reviewState.buttonAction === 'none'}
             >
-              <Text style={styles.reviewButtonText}>Leave a Review</Text>
+              <Text style={[
+                styles.reviewButtonText,
+                !reviewState.canReview && styles.disabledButtonText
+              ]}>
+                {reviewState.buttonText}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -151,6 +296,7 @@ const ReviewRequestCard = ({
         onClose={() => setReviewModalVisible(false)}
         isProfessional={isProfessional}
         bookingId={data.booking_id}
+        conversationId={conversationId}
         onSubmitReview={handleSubmitReview}
       />
     </View>
@@ -232,6 +378,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  subtitleContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: theme.colors.textSecondary || '#666',
+    fontStyle: 'italic',
+    lineHeight: 18,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
   buttonContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -266,6 +425,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
+  },
+  disabledButtonText: {
+    color: '#999',
   },
 });
 

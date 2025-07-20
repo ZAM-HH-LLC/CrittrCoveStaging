@@ -5,6 +5,9 @@ from professionals.models import Professional
 from pets.models import Pet
 from services.models import Service
 from user_addresses.models import Address, AddressType
+from reviews.models import ClientReview, ProfessionalReview
+from core.common_checks import is_professional
+from django.db.models import Avg
 import requests
 from django.conf import settings
 
@@ -111,6 +114,10 @@ def get_user_profile_data(user):
         
         # Add payment methods structure
         response_data['payment_methods'] = get_user_payment_methods(user)
+        
+        # Add reviews and rating data
+        reviews_data = get_user_reviews_data(user)
+        response_data.update(reviews_data)
         
         logger.debug(f"helpers.py: Successfully retrieved profile data for user {user.id}")
         return response_data
@@ -571,4 +578,132 @@ def get_current_plan_details(user):
             'title': 'Waitlist Signup',
             'nextBilling': 'N/A',
             'connections': {'used': 0, 'total': 'Unlimited'}
+        }
+
+def get_user_reviews_data(user):
+    """
+    Get reviews and rating data for a user.
+    
+    Returns both professional reviews (when user acts as professional) and 
+    client reviews (when user acts as client) so the frontend can display 
+    the appropriate ones based on current role.
+    
+    Args:
+        user: The user object to get reviews for
+        
+    Returns:
+        dict: Dictionary containing client_reviews, professional_reviews, 
+              client_rating, professional_rating, client_review_count, professional_review_count
+    """
+    logger.debug(f"helpers.py: Getting reviews data for user {user.id}")
+    
+    try:
+        # Initialize data structures for both roles
+        client_reviews_data = []
+        professional_reviews_data = []
+        client_average_rating = 0
+        professional_average_rating = 0
+        client_review_count = 0
+        professional_review_count = 0
+        
+        # Get reviews about this user when they act as a PROFESSIONAL (reviews from clients)
+        try:
+            professional = Professional.objects.get(user=user)
+            professional_reviews = ClientReview.objects.filter(
+                professional=professional,
+                status='APPROVED',
+                review_visible=True
+            ).select_related('client', 'client__user', 'booking', 'booking__service_id')
+            
+            # Calculate average rating for professional reviews
+            prof_avg_rating = professional_reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
+            professional_average_rating = float(prof_avg_rating)
+            professional_review_count = professional_reviews.count()
+            
+            # Format professional reviews data (reviews about this user as a professional)
+            for review in professional_reviews:
+                # Get service name
+                service_name = None
+                if review.booking and review.booking.service_id:
+                    service_name = review.booking.service_id.service_name
+                
+                # Get reviewer's profile picture (client who wrote the review)
+                reviewer_profile_picture = None
+                if hasattr(review.client.user, 'profile_picture') and review.client.user.profile_picture:
+                    reviewer_profile_picture = review.client.user.profile_picture.url
+                
+                professional_reviews_data.append({
+                    'review_id': review.review_id,
+                    'client_name': review.client.user.name,
+                    'rating': review.rating,
+                    'review_text': review.review_text,
+                    'created_at': review.created_at.isoformat() if review.created_at else None,
+                    'service_name': service_name,
+                    'reviewer_profile_picture': reviewer_profile_picture
+                })
+            
+            logger.debug(f"helpers.py: Found {professional_review_count} professional reviews for user {user.id}")
+            
+        except Professional.DoesNotExist:
+            logger.debug(f"helpers.py: User {user.id} is not a professional")
+        
+        # Get reviews about this user when they act as a CLIENT (reviews from professionals)
+        try:
+            client = Client.objects.get(user=user)
+            client_reviews = ProfessionalReview.objects.filter(
+                client=client,
+                status='APPROVED',
+                review_visible=True
+            ).select_related('professional', 'professional__user', 'booking', 'booking__service_id')
+            
+            # Calculate average rating for client reviews
+            client_avg_rating = client_reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
+            client_average_rating = float(client_avg_rating)
+            client_review_count = client_reviews.count()
+            
+            # Format client reviews data (reviews about this user as a client)
+            for review in client_reviews:
+                # Get service name
+                service_name = None
+                if review.booking and review.booking.service_id:
+                    service_name = review.booking.service_id.service_name
+                
+                # Get reviewer's profile picture (professional who wrote the review)
+                reviewer_profile_picture = None
+                if hasattr(review.professional.user, 'profile_picture') and review.professional.user.profile_picture:
+                    reviewer_profile_picture = review.professional.user.profile_picture.url
+                
+                client_reviews_data.append({
+                    'review_id': review.review_id,
+                    'professional_name': review.professional.user.name,
+                    'rating': review.rating,
+                    'review_text': review.review_text,
+                    'created_at': review.created_at.isoformat() if review.created_at else None,
+                    'service_name': service_name,
+                    'reviewer_profile_picture': reviewer_profile_picture
+                })
+            
+            logger.debug(f"helpers.py: Found {client_review_count} client reviews for user {user.id}")
+            
+        except Client.DoesNotExist:
+            logger.debug(f"helpers.py: User {user.id} is not a client")
+        
+        return {
+            'client_reviews': client_reviews_data,
+            'professional_reviews': professional_reviews_data,
+            'client_rating': client_average_rating,
+            'professional_rating': professional_average_rating,
+            'client_review_count': client_review_count,
+            'professional_review_count': professional_review_count
+        }
+        
+    except Exception as e:
+        logger.exception(f"helpers.py: Error getting reviews data for user {user.id}: {str(e)}")
+        return {
+            'client_reviews': [],
+            'professional_reviews': [],
+            'client_rating': 0,
+            'professional_rating': 0,
+            'client_review_count': 0,
+            'professional_review_count': 0
         } 

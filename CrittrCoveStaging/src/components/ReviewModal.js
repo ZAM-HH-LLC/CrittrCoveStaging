@@ -21,6 +21,7 @@ const ReviewModal = ({
   onClose, 
   isProfessional,
   bookingId,
+  conversationId,
   onSubmitReview
 }) => {
   const [rating, setRating] = useState(0);
@@ -70,7 +71,8 @@ const ReviewModal = ({
           bookingId,
           rating,
           reviewText,
-          isProfessional
+          isProfessional,
+          conversationId
         });
       }
       

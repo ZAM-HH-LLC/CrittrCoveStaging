@@ -5,7 +5,8 @@ import { theme } from '../../styles/theme';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext, debugLog } from '../../context/AuthContext';
-import { updateProfileInfo, uploadProfilePicture } from '../../api/API';
+import { updateProfileInfo, uploadProfilePicture, getUserReviews } from '../../api/API';
+import { formatFromUTC, FORMAT_TYPES } from '../../utils/time_utils';
 import { useToast } from '../../components/ToastProvider';
 import { geocodeAddressGraceful } from '../../utils/geocoding';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -15,6 +16,7 @@ import ProfilePhotoCropper from './ProfilePhotoCropper';
 import { processImageWithCrop, prepareImageForUpload } from '../../utils/imageCropUtils';
 import SupportButton from '../SupportButton';
 import { sanitizeInput, validateEmail, validateName } from '../../validation/validation';
+import ReviewsModal from '../ReviewsModal';
 
 const FACILITY_PRESETS = [
   { id: 'fenced_yard', icon: 'fence', title: 'Fenced Yard', description: 'Secure outdoor space for pets' },
@@ -640,8 +642,12 @@ const ProfileInfoTab = ({
   setHasUnsavedChanges,
   onSaveComplete,
   isMobile,
-  rating,
-  reviews,
+  client_reviews,
+  professional_reviews,
+  client_rating,
+  professional_rating,
+  client_review_count,
+  professional_review_count,
   role,
   isProfessional,
   insurance = { type: 'none', card: null },
@@ -649,7 +655,7 @@ const ProfileInfoTab = ({
   name,
   navigation,
 }) => {
-  const { name: authName } = useContext(AuthContext);
+  const { name: authName, timeSettings } = useContext(AuthContext);
   
   // Track direct user edits
   const [hasEdits, setHasEdits] = useState(false);
@@ -666,6 +672,13 @@ const ProfileInfoTab = ({
   // Add state for photo cropper
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [showCropper, setShowCropper] = useState(false);
+  
+  // Add state for reviews
+  const [userReviews, setUserReviews] = useState([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
   
   // Add state to track edited values that should display in the UI
   const [displayValues, setDisplayValues] = useState({
@@ -725,6 +738,66 @@ const ProfileInfoTab = ({
     }
   }, [profilePhoto]);
   
+  // Function to fetch user reviews
+  const fetchUserReviews = async () => {
+    setLoadingReviews(true);
+    try {
+      debugLog('MBA4567', 'Processing reviews for current user profile', {
+        isProfessional,
+        userRole: role,
+        hasClientReviews: client_reviews && client_reviews.length > 0,
+        hasProfessionalReviews: professional_reviews && professional_reviews.length > 0,
+        clientReviewCount: client_review_count,
+        professionalReviewCount: professional_review_count
+      });
+      
+      // Choose which reviews to display based on current role
+      let currentReviews = [];
+      let currentRating = 0;
+      let currentReviewCount = 0;
+      
+      if (isProfessional) {
+        // Show professional reviews (reviews about user as a professional)
+        currentReviews = professional_reviews || [];
+        currentRating = professional_rating || 0;
+        currentReviewCount = professional_review_count || 0;
+        debugLog('MBA4567', 'Displaying professional reviews:', {
+          count: currentReviewCount,
+          rating: currentRating
+        });
+      } else {
+        // Show client reviews (reviews about user as a client)  
+        currentReviews = client_reviews || [];
+        currentRating = client_rating || 0;
+        currentReviewCount = client_review_count || 0;
+        debugLog('MBA4567', 'Displaying client reviews:', {
+          count: currentReviewCount,
+          rating: currentRating
+        });
+      }
+      
+      // Update state with the appropriate reviews for current role
+      setUserReviews(currentReviews);
+      setAverageRating(currentRating);
+      setReviewCount(currentReviewCount);
+      
+      debugLog('MBA4567', 'Set reviews state:', {
+        reviewCount: currentReviewCount,
+        averageRating: currentRating,
+        reviewsLength: currentReviews.length
+      });
+      
+    } catch (error) {
+      debugLog('MBA4567', 'Error processing user reviews:', error);
+      // Don't show error to user, just log it
+      setUserReviews([]);
+      setAverageRating(0);
+      setReviewCount(0);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
   // Update the initial useEffect to only run once
   useEffect(() => {
     debugLog('MBA230uvj0834h9', 'ProfileInfoTab mounted with props:', { 
@@ -764,6 +837,9 @@ const ProfileInfoTab = ({
       zip: zip || prevData.zip,
       coordinates: coordinates || prevData.coordinates,
     }));
+    
+    // Fetch reviews when component mounts
+    fetchUserReviews();
   }, []); // Empty dependency array - only run on mount
 
   // Add effect to update bio when isProfessional changes
@@ -780,6 +856,20 @@ const ProfileInfoTab = ({
       about_me 
     });
   }, [isProfessional, bio, about_me]);
+  
+  // Refetch reviews when review props change or when isProfessional changes
+  useEffect(() => {
+    debugLog('MBA4567', 'Review props or role changed, updating reviews state:', {
+      isProfessional,
+      clientReviewCount: client_review_count,
+      professionalReviewCount: professional_review_count,
+      clientRating: client_rating,
+      professionalRating: professional_rating
+    });
+    
+    fetchUserReviews();
+  }, [client_reviews, professional_reviews, client_rating, professional_rating, 
+      client_review_count, professional_review_count, isProfessional]);
   
   // Simplify hasFieldChanged to be more direct
   const hasFieldChanged = (field, value) => {
@@ -1421,12 +1511,14 @@ const ProfileInfoTab = ({
 
   // Check if user qualifies for Elite Pro status
   const checkEliteProStatus = () => {
-    // Mock data for now - in real implementation, this would come from props
-    const totalBookings = reviews?.length || 0;
-    const averageRating = rating || 0;
+    // Use fetched reviews data
+    const totalBookings = userReviews?.length || 0;
+    const avgRating = averageRating || 0;
     
-    return totalBookings >= 10 && averageRating >= 5.0;
+    return totalBookings >= 10 && avgRating >= 5.0;
   };
+
+
 
 
 
@@ -1569,6 +1661,17 @@ const ProfileInfoTab = ({
                 <View style={styles.cameraButton}>
                   <MaterialCommunityIcons name="camera" size={20} color={theme.colors.background} />
                 </View>
+                
+                {/* Rating Badge in top-right corner */}
+                {reviewCount > 0 && (
+                  <TouchableOpacity 
+                    style={styles.ratingBadge}
+                    onPress={() => setShowReviewsModal(true)}
+                  >
+                    <MaterialCommunityIcons name="star" size={16} color={theme.colors.warning} />
+                    <Text style={styles.ratingBadgeText}>{averageRating.toFixed(1)}</Text>
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
               
               <View style={styles.nameSection}>
@@ -1635,7 +1738,7 @@ const ProfileInfoTab = ({
           {/* Right Side Sections */}
           <View style={[styles.sectionsContainer, { paddingBottom: isMobile ? 150 : 0 }, !isMobile && styles.sectionsContainerDesktop]}>
             {/* About Me Section */}
-            <View style={[styles.section, { marginBottom: isMobile ? 0 : 16 }]}>
+            <View style={[styles.section, { marginBottom: isMobile ? 16 : 16 }]}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>{isProfessional ? 'Professional Bio' : 'About Me'}</Text>
                 <TouchableOpacity 
@@ -1715,6 +1818,18 @@ const ProfileInfoTab = ({
         onProceed={handleVerificationProceed}
       />
 
+      {/* Reviews Modal */}
+      <ReviewsModal
+        visible={showReviewsModal}
+        onClose={() => setShowReviewsModal(false)}
+        reviews={userReviews}
+        averageRating={averageRating}
+        reviewCount={reviewCount}
+        userName={displayValues.name}
+        forProfessional={isProfessional}
+        userTimezone={timeSettings?.timezone}
+      />
+
       <EditOverlay
         visible={!!editingField}
         onClose={() => setEditingField(null)}
@@ -1786,6 +1901,30 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     padding: 8,
     borderRadius: 20,
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  ratingBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginLeft: 4,
   },
   profileInfo: {
     alignItems: 'center',
@@ -1956,6 +2095,7 @@ const styles = StyleSheet.create({
     color: theme.colors.secondary,
     fontStyle: 'italic',
   },
+
   bioText: {
     fontSize: 16,
     color: theme.colors.text,

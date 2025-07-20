@@ -2337,6 +2337,9 @@ class MarkBookingCompletedView(APIView):
                     'completed_at': timezone.now().isoformat(),  # Use isoformat for datetime
                     'cost_summary': cost_data,
                     'is_review_request': True,  # Special flag to identify review request messages
+                    'pro_review_allowed': True,  # Initially both users can review
+                    'client_review_allowed': True,  # Initially both users can review
+                    'reviews_visible': False,  # Initially reviews are not visible
                     'client_review': {
                         'review_type': 'client_review',
                         'reviewer_id': client.user.id,
@@ -2409,9 +2412,12 @@ class SubmitBookingReviewView(APIView):
         
         This endpoint:
         1. Validates user access to the booking
-        2. Creates a review record using the appropriate model (ProfessionalReview or ClientReview)
-        3. Updates the corresponding ReviewRequest if it exists
-        4. Returns success response
+        2. Checks if review is within 14-day window
+        3. Creates a review record using the appropriate model (ProfessionalReview or ClientReview)
+        4. Updates the corresponding ReviewRequest if it exists
+        5. Sends email notifications
+        6. Updates the review request message metadata
+        7. Returns success response
         """
         logger.info(f"MBA8675309: Starting SubmitBookingReviewView.post for booking {booking_id}")
         sid = transaction.savepoint()  # Create savepoint for rollback
@@ -2445,6 +2451,7 @@ class SubmitBookingReviewView(APIView):
             rating = request.data.get('rating')
             review_text = request.data.get('review_text', '')
             is_professional_review = request.data.get('is_professional_review', is_professional)
+            conversation_id = request.data.get('conversation_id')
             
             # Validate rating
             try:
@@ -2458,8 +2465,73 @@ class SubmitBookingReviewView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Import the review models
+            # Validate conversation_id
+            if not conversation_id:
+                logger.error(f"MBA8675309: conversation_id is required for booking {booking_id}")
+                return Response(
+                    {"error": "Conversation ID is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Import required models
             from reviews.models import ProfessionalReview, ClientReview, ReviewRequest
+            from user_messages.models import UserMessage
+            from conversations.models import Conversation
+            from core.email_utils import schedule_delayed_email
+            
+            # Get the specific conversation
+            try:
+                conversation = Conversation.objects.get(conversation_id=conversation_id)
+            except Conversation.DoesNotExist:
+                logger.error(f"MBA8675309: Conversation {conversation_id} not found for booking {booking_id}")
+                return Response(
+                    {"error": "Conversation not found"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the conversation involves the booking participants
+            conversation_users = {conversation.participant1.id, conversation.participant2.id}
+            booking_users = {booking.professional.user.id, booking.client.user.id}
+            
+            if conversation_users != booking_users:
+                logger.error(f"MBA8675309: Conversation {conversation_id} does not match booking {booking_id} participants")
+                return Response(
+                    {"error": "Invalid conversation for this booking"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find the review request message
+            review_request_message = UserMessage.objects.filter(
+                conversation=conversation,
+                booking=booking,
+                metadata__is_review_request=True
+            ).first()
+            
+            if not review_request_message:
+                logger.error(f"MBA8675309: No review request message found for booking {booking_id}")
+                return Response(
+                    {"error": "No review request found for this booking"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if we're within the 14-day window
+            message_created = review_request_message.timestamp
+            current_time = timezone.now()
+            days_since_message = (current_time - message_created).days
+            
+            if days_since_message >= 14:
+                logger.info(f"MBA8675309: Review window expired for booking {booking_id}. Days since message: {days_since_message}")
+                
+                # Update the message metadata to indicate both reviews are no longer allowed
+                if review_request_message.metadata:
+                    review_request_message.metadata['pro_review_allowed'] = False
+                    review_request_message.metadata['client_review_allowed'] = False
+                    review_request_message.save()
+                
+                return Response(
+                    {"error": "Review window has expired. Reviews can only be submitted within 14 days of booking completion."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Check if a review already exists
             if is_professional_review:
@@ -2529,12 +2601,14 @@ class SubmitBookingReviewView(APIView):
                     client=booking.client
                 ).first()
             
+            reviews_visible = False
             if other_review:
                 # Make both reviews visible
                 review.review_visible = True
                 other_review.review_visible = True
                 review.save()
                 other_review.save()
+                reviews_visible = True
                 logger.info(f"MBA8675309: Both reviews submitted, making them visible")
             
             # Update the corresponding ReviewRequest if it exists
@@ -2548,6 +2622,139 @@ class SubmitBookingReviewView(APIView):
                 review_request.mark_completed()
                 logger.info(f"MBA8675309: Marked review request {review_request.request_id} as completed")
             
+            # Schedule delayed email notification (send immediately in background)
+            def send_review_notification_email():
+                try:
+                    from core.email_utils import send_email_with_retry, get_common_email_headers, build_email_html
+                    
+                    # Determine the recipient (the person being reviewed)
+                    if is_professional_review:
+                        recipient_user = booking.client.user
+                        reviewer_name = booking.professional.user.name or f"{booking.professional.user.first_name} {booking.professional.user.last_name}"
+                        reviewee_name = recipient_user.name or f"{recipient_user.first_name} {recipient_user.last_name}"
+                    else:
+                        recipient_user = booking.professional.user
+                        reviewer_name = booking.client.user.name or f"{booking.client.user.first_name} {booking.client.user.last_name}"
+                        reviewee_name = recipient_user.name or f"{recipient_user.first_name} {recipient_user.last_name}"
+                    
+                    # Build email content based on whether reviews are visible
+                    if reviews_visible:
+                        # Both reviews are visible - send the actual review content
+                        email_subject = f"{reviewer_name} has reviewed you on CrittrCove"
+                        
+                        # Build star rating display
+                        stars = "★" * rating + "☆" * (5 - rating)
+                        
+                        email_html_content = f"""
+                        <h2>You've been reviewed!</h2>
+                        <p>{reviewer_name} has left you a {rating}-star review on CrittrCove.</p>
+                        
+                        <div style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 24px; color: #FFD700; margin-bottom: 10px;">{stars}</div>
+                            <p style="font-style: italic; margin: 0;">"{review_text}"</p>
+                        </div>
+                        
+                        <p><strong>Booking ID:</strong> {booking.booking_id}</p>
+                        
+                        <p>Thank you for using CrittrCove!</p>
+                        """
+                        
+                        email_plain_content = f"""
+                        You've been reviewed!
+                        
+                        {reviewer_name} has left you a {rating}-star review on CrittrCove.
+                        
+                        Rating: {stars}
+                        Review: "{review_text}"
+                        
+                        Booking ID: {booking.booking_id}
+                        
+                        Thank you for using CrittrCove!
+                        """
+                    else:
+                        # Only one review submitted - send notification without review content
+                        email_subject = f"{reviewer_name} has reviewed you on CrittrCove"
+                        
+                        email_html_content = f"""
+                        <h2>You've been reviewed!</h2>
+                        <p>{reviewer_name} has left you a review on CrittrCove.</p>
+                        
+                        <p><strong>To see the review:</strong></p>
+                        <ul>
+                            <li>Log into your CrittrCove account</li>
+                            <li>Go to your messages with {reviewer_name}</li>
+                            <li>Leave a review for {reviewer_name} to see their review of you</li>
+                            <li>Or wait 14 days and the review will become visible automatically</li>
+                        </ul>
+                        
+                        <p><strong>Booking ID:</strong> {booking.booking_id}</p>
+                        
+                        <p>Thank you for using CrittrCove!</p>
+                        """
+                        
+                        email_plain_content = f"""
+                        You've been reviewed!
+                        
+                        {reviewer_name} has left you a review on CrittrCove.
+                        
+                        To see the review:
+                        - Log into your CrittrCove account
+                        - Go to your messages with {reviewer_name}
+                        - Leave a review for {reviewer_name} to see their review of you
+                        - Or wait 14 days and the review will become visible automatically
+                        
+                        Booking ID: {booking.booking_id}
+                        
+                        Thank you for using CrittrCove!
+                        """
+                    
+                    # Build complete email
+                    complete_html = build_email_html(email_html_content, reviewee_name)
+                    
+                    # Get email headers
+                    headers = get_common_email_headers(booking.booking_id, 'review_notification', conversation.conversation_id)
+                    
+                    # Send email
+                    email_sent = send_email_with_retry(
+                        subject=email_subject,
+                        html_content=complete_html,
+                        plain_content=email_plain_content,
+                        recipient_email=recipient_user.email,
+                        headers=headers
+                    )
+                    
+                    if email_sent:
+                        logger.info(f"MBA8675309: Review notification email sent to {recipient_user.email}")
+                    else:
+                        logger.error(f"MBA8675309: Failed to send review notification email to {recipient_user.email}")
+                        
+                except Exception as e:
+                    logger.error(f"MBA8675309: Error sending review notification email: {str(e)}")
+            
+            # Schedule the email to be sent immediately in a separate thread
+            schedule_delayed_email(send_review_notification_email, delay_seconds=1)
+            
+            # Update the review request message metadata
+            if review_request_message.metadata:
+                # Set the appropriate review allowed field to False based on who is reviewing
+                if is_professional_review:
+                    review_request_message.metadata['pro_review_allowed'] = False
+                    # Keep client_review_allowed as True if it exists, otherwise don't set it
+                    if 'client_review_allowed' not in review_request_message.metadata:
+                        review_request_message.metadata['client_review_allowed'] = True
+                else:
+                    review_request_message.metadata['client_review_allowed'] = False
+                    # Keep pro_review_allowed as True if it exists, otherwise don't set it
+                    if 'pro_review_allowed' not in review_request_message.metadata:
+                        review_request_message.metadata['pro_review_allowed'] = True
+                
+                # If both reviews are visible, mark them as visible
+                if reviews_visible:
+                    review_request_message.metadata['reviews_visible'] = True
+                
+                review_request_message.save()
+                logger.info(f"MBA8675309: Updated review request message metadata")
+            
             # Log the interaction
             InteractionLog.objects.create(
                 user=request.user,
@@ -2558,7 +2765,8 @@ class SubmitBookingReviewView(APIView):
                     'booking_id': booking.booking_id,
                     'review_id': review.review_id,
                     'rating': rating,
-                    'is_professional_review': is_professional_review
+                    'is_professional_review': is_professional_review,
+                    'reviews_visible': reviews_visible
                 }
             )
             
@@ -2569,7 +2777,8 @@ class SubmitBookingReviewView(APIView):
                 'status': 'success',
                 'message': 'Review submitted successfully',
                 'review_id': review.review_id,
-                'is_visible': review.review_visible
+                'is_visible': review.review_visible,
+                'reviews_visible': reviews_visible
             })
             
         except Exception as e:

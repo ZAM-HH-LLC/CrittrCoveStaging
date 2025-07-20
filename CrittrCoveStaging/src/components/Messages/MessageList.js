@@ -451,15 +451,6 @@ const MessageList = forwardRef(({
         scrollStartTimeoutRef.current = setTimeout(() => {
           hasScrollStartedRef.current = false;
         }, 1000);
-      } else {
-        debugLog('MBA8765: Scroll detected but not dismissing keyboard', {
-          scrollDirection,
-          isAtTop,
-          canScrollUp,
-          reason: scrollDirection === 'down' ? 'scrolling down' : 
-                  isAtTop ? 'already at top' : 
-                  !canScrollUp ? 'no room to scroll' : 'unknown'
-        });
       }
     }
     
