@@ -9,7 +9,8 @@ const ProfessionalServiceCard = ({
   item, 
   index, 
   onEdit, 
-  onDelete 
+  onDelete,
+  onUnarchive
 }) => {
   const { screenWidth } = useContext(AuthContext);
   const [isActive, setIsActive] = useState(item.is_active !== false); // Default to true if not specified
@@ -43,10 +44,26 @@ const ProfessionalServiceCard = ({
     return unitOfTime;
   };
 
+  // Check if service is archived
+  const isArchived = item.is_archived || false;
+
   return (
-    <View style={styles.serviceCard}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.serviceName} numberOfLines={2} ellipsizeMode="tail">{item.serviceName}</Text>
+    <View style={[styles.serviceCard, isArchived && styles.archivedCard]}>
+      {isArchived && (
+        <View style={styles.archivedOverlay}>
+          <Text style={styles.archivedText}>Archived due to past bookings</Text>
+          <TouchableOpacity 
+            onPress={onUnarchive} 
+            style={styles.unarchiveButton}
+          >
+            <MaterialCommunityIcons name="restore" size={16} color={theme.colors.primary} />
+            <Text style={styles.unarchiveButtonText}>Unarchive</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      <View style={[styles.cardHeader, isArchived && styles.archivedContent]}>
+        <Text style={[styles.serviceName, isArchived && styles.archivedText]} numberOfLines={2} ellipsizeMode="tail">{item.serviceName}</Text>
         {/* TODO: Add back in after MVP and make it the primary toggle instead of active. 
         <View style={styles.activeToggleContainer}>
           <Text style={isActive ? styles.activeText : styles.inactiveText}>
@@ -65,40 +82,56 @@ const ProfessionalServiceCard = ({
         </View> */}
       </View>
 
-      <View style={[styles.ratesContainer, { backgroundColor: getPricingBackgroundColor() }]}>
+      <View style={[styles.ratesContainer, { backgroundColor: getPricingBackgroundColor() }, isArchived && styles.archivedContent]}>
         <View style={styles.rateRow}>
-          <Text style={styles.rateLabel}>Base Rate</Text>
-          <Text style={styles.rateValue}>${item.rates.base_rate || 'N/A'}/{formatUnitOfTime(item.lengthOfService)}</Text>
+          <Text style={[styles.rateLabel, isArchived && styles.archivedText]}>Base Rate</Text>
+          <Text style={[styles.rateValue, isArchived && styles.archivedText]}>${item.rates.base_rate || 'N/A'}/{formatUnitOfTime(item.lengthOfService)}</Text>
         </View>
         
         {item.rates.additionalAnimalRate && (
           <View style={styles.rateRow}>
-            <Text style={styles.rateLabel}>Additional Animal</Text>
-            <Text style={styles.rateValue}>${item.rates.additionalAnimalRate}</Text>
+            <Text style={[styles.rateLabel, isArchived && styles.archivedText]}>Additional Animal</Text>
+            <Text style={[styles.rateValue, isArchived && styles.archivedText]}>${item.rates.additionalAnimalRate}</Text>
           </View>
         )}
         {item.rates.holidayRate && (
           <View style={styles.rateRow}>
-            <Text style={styles.rateLabel}>Holiday Rate</Text>
-            <Text style={styles.rateValue}>{item.rates.holidayRate}</Text>
+            <Text style={[styles.rateLabel, isArchived && styles.archivedText]}>Holiday Rate</Text>
+            <Text style={[styles.rateValue, isArchived && styles.archivedText]}>{item.rates.holidayRate}</Text>
           </View>
         )}
         {item.additionalRates && item.additionalRates.map((rate, idx) => (
           <View key={idx} style={styles.rateRow}>
-            <Text style={styles.rateLabel}>{rate.label}</Text>
-            <Text style={styles.rateValue}>${rate.value}</Text>
+            <Text style={[styles.rateLabel, isArchived && styles.archivedText]}>{rate.label}</Text>
+            <Text style={[styles.rateValue, isArchived && styles.archivedText]}>${rate.value}</Text>
           </View>
         ))}
       </View>
       
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={() => onDelete(index)} style={styles.deleteButton}>
-          <MaterialCommunityIcons name="trash-can" size={20} color={'#F26969'} />
-          <Text style={styles.deleteButtonText}>Delete</Text>
+      <View style={[styles.buttonContainer, isArchived && styles.archivedContent]}>
+        <TouchableOpacity 
+          onPress={() => onDelete(index)} 
+          style={[styles.deleteButton, isArchived && styles.archivedButton]}
+          disabled={isArchived}
+        >
+          <MaterialCommunityIcons 
+            name="trash-can" 
+            size={20} 
+            color={isArchived ? theme.colors.quaternary : '#F26969'} 
+          />
+          <Text style={[styles.deleteButtonText, isArchived && styles.archivedButtonText]}>Delete</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => onEdit(index)} style={styles.editButton}>
-          <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.surfaceContrast} />
-          <Text style={styles.buttonText}>Edit</Text>
+        <TouchableOpacity 
+          onPress={() => onEdit(index)} 
+          style={[styles.editButton, isArchived && styles.archivedButton]}
+          disabled={isArchived}
+        >
+          <MaterialCommunityIcons 
+            name="pencil" 
+            size={20} 
+            color={isArchived ? theme.colors.quaternary : theme.colors.surfaceContrast} 
+          />
+          <Text style={[styles.buttonText, isArchived && styles.archivedButtonText]}>Edit</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -216,6 +249,57 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#F26969',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  // Archived service styles
+  archivedCard: {
+    opacity: 0.6,
+    backgroundColor: theme.colors.quaternary,
+  },
+  archivedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    zIndex: 1,
+    gap: 8,
+  },
+  archivedText: {
+    color: theme.colors.tertiary,
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '600',
+    textAlign: 'center',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  unarchiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  unarchiveButtonText: {
+    color: theme.colors.primary,
+    fontSize: theme.fontSizes.small,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  archivedContent: {
+    opacity: 0.4,
+  },
+  archivedButton: {
+    opacity: 0.3,
+  },
+  archivedButtonText: {
+    color: theme.colors.quaternary,
   },
 });
 

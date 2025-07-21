@@ -52,6 +52,7 @@ class Service(models.Model):
     unit_of_time = models.CharField(max_length=50, choices=UNIT_OF_TIME_CHOICES)
     is_overnight = models.BooleanField(default=False, help_text='Indicates if this service requires overnight stay')
     is_active = models.BooleanField(default=True, help_text='Indicates if this service is active')
+    is_archived = models.BooleanField(default=False, help_text='Indicates if this service has been archived due to past bookings')
     moderation_status = models.CharField(
         max_length=50, 
         choices=MODERATION_STATUS_CHOICES,

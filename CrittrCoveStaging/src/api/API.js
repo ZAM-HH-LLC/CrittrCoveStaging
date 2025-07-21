@@ -695,6 +695,26 @@ export const deleteService = async (serviceId) => {
   }
 };
 
+/**
+ * Unarchive a previously archived service
+ * @param {number} serviceId - ID of the service to unarchive
+ * @returns {Promise<Object>} Response data with success message or error details
+ */
+export const unarchiveService = async (serviceId) => {
+  try {
+    debugLog('MBA7890: Unarchiving service with ID:', serviceId);
+
+    const response = await axios.patch(`${API_BASE_URL}/api/services/v1/unarchive/${serviceId}/`);
+
+    debugLog('MBA7890: Service unarchived successfully - backend response:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA7890: Error unarchiving service:', error);
+    debugLog('MBA7890: Error response data:', error.response?.data);
+    throw error;
+  }
+};
+
 // Function to update an existing service
 export const updateService = async (serviceData) => {
   try {

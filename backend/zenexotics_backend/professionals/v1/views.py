@@ -220,7 +220,8 @@ def search_professionals(request):
         professionals_query = Professional.objects.filter(
             service__moderation_status='APPROVED',
             service__is_active=True,
-            service__searchable=True
+            service__searchable=True,
+            service__is_archived=False
         ).distinct()
         
         # Apply badge filters
@@ -289,7 +290,8 @@ def search_professionals(request):
                 professional=professional,
                 moderation_status='APPROVED',
                 is_active=True,
-                searchable=True
+                searchable=True,
+                is_archived=False
             )
             
             # Filter by animal types if specified
@@ -517,7 +519,8 @@ def search_professionals(request):
                     professional=professional,
                     moderation_status='APPROVED',
                     is_active=True,
-                    searchable=True
+                    searchable=True,
+                    is_archived=False
                 )
                 
                 # Filter by animal types if specified

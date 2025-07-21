@@ -74,6 +74,7 @@ def get_professional_services_with_rates(request):
                 'unit_of_time': service.unit_of_time,
                 'is_overnight': service.is_overnight,
                 'is_active': service.is_active,
+                'is_archived': service.is_archived,
                 'moderation_status': service.moderation_status,
                 'additional_rates': additional_rates
             }
@@ -270,7 +271,8 @@ def create_service(request):
 @permission_classes([IsAuthenticated])
 def delete_service(request, service_id):
     """
-    Delete a service if it is not being used in any bookings.
+    Archive a service if it only has past bookings, delete if no bookings.
+    Prevent deletion if there are active or future bookings.
     """
     try:
         # Check if user is a professional and owns this service
@@ -281,24 +283,128 @@ def delete_service(request, service_id):
         
         # Check if the service is being used in any bookings
         if service.bookings.exists():
+            from django.utils import timezone
+            from datetime import datetime
+            import pytz
+            
+            # Get current time in UTC
+            current_time = timezone.now()
+            
+            # Check for active or future bookings
+            has_active_future_bookings = False
+            
+            logger.info(f"Checking service {service_id} for active/future bookings. Current time: {current_time}")
+            
+            for booking in service.bookings.all():
+                logger.info(f"Checking booking {booking.booking_id} with status: {booking.status}")
+                
+                # Check if any occurrences are in the future
+                booking_has_future_occurrences = False
+                for occurrence in booking.occurrences.all():
+                    # Combine date and time to create a full datetime for comparison
+                    occurrence_end_datetime = datetime.combine(
+                        occurrence.end_date, 
+                        occurrence.end_time
+                    ).replace(tzinfo=pytz.UTC)
+                    
+                    logger.info(f"Occurrence {occurrence.occurrence_id} ends at: {occurrence_end_datetime}")
+                    
+                    if occurrence_end_datetime > current_time:
+                        logger.info(f"Found future occurrence {occurrence.occurrence_id} ending at {occurrence_end_datetime}")
+                        booking_has_future_occurrences = True
+                        has_active_future_bookings = True
+                        break
+                
+                # If booking has future occurrences, it's definitely active
+                if booking_has_future_occurrences:
+                    break
+                
+                # If booking has no future occurrences, check status
+                # Only prevent archiving if status indicates ongoing business relationship
+                if booking.status in ['Pending Initial Professional Changes', 'Pending Professional Changes', 
+                                    'Pending Client Approval', 'Confirmed Pending Professional Changes',
+                                    'Confirmed Pending Client Approval']:
+                    logger.info(f"Booking {booking.booking_id} has active pending status: {booking.status}")
+                    has_active_future_bookings = True
+                    break
+                
+                # Confirmed, Completed, Cancelled, Denied with past occurrences are OK to archive
+                logger.info(f"Booking {booking.booking_id} with status {booking.status} and past occurrences is OK to archive")
+            
+            if has_active_future_bookings:
+                # Prevent deletion/archiving if there are active or future bookings
+                return Response(
+                    {'error': 'Cannot delete this service as it has active or future bookings'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                # Archive the service if it only has past bookings
+                service.is_archived = True
+                service.save()
+                logger.info(f"Service {service_id} archived due to existing past bookings")
+                
+                return Response(
+                    {
+                        'success': 'Service archived successfully', 
+                        'archived': True,
+                        'reason': 'Service has past bookings only'
+                    },
+                    status=status.HTTP_200_OK
+                )
+        else:
+            # If no bookings exist, permanently delete the service
+            service.delete()
+            logger.info(f"Service {service_id} deleted successfully (no bookings)")
+            
             return Response(
-                {'error': 'Cannot delete this service as it is being used in bookings'},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    'success': 'Service deleted successfully',
+                    'archived': False
+                },
+                status=status.HTTP_200_OK
             )
-        
-        # Delete the service
-        service.delete()
-        logger.info(f"Service {service_id} deleted successfully")
-        
-        return Response(
-            {'success': 'Service deleted successfully'},
-            status=status.HTTP_200_OK
-        )
         
     except Exception as e:
         logger.error(f"Error in delete_service: {str(e)}")
         return Response(
             {'error': f'An error occurred while deleting the service: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def unarchive_service(request, service_id):
+    """
+    Unarchive a previously archived service.
+    """
+    try:
+        # Check if user is a professional and owns this service
+        owns, response, service = owns_service(request, service_id)
+        
+        if not owns:
+            return response
+        
+        # Check if the service is currently archived
+        if not service.is_archived:
+            return Response(
+                {'error': 'Service is not currently archived'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Unarchive the service
+        service.is_archived = False
+        service.save()
+        logger.info(f"Service {service_id} unarchived successfully")
+        
+        return Response(
+            {'success': 'Service unarchived successfully'},
+            status=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in unarchive_service: {str(e)}")
+        return Response(
+            {'error': f'An error occurred while unarchiving the service: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

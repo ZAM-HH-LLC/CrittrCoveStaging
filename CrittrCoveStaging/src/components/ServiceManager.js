@@ -7,7 +7,7 @@ import ProfessionalServiceCard from './ProfessionalServiceCard';
 import ConfirmationModal from './ConfirmationModal';
 import { Portal } from 'react-native-paper';
 import { AuthContext, debugLog } from '../context/AuthContext';
-import { deleteService } from '../api/API';
+import { deleteService, unarchiveService } from '../api/API';
 import { useToast } from './ToastProvider';
 import { supportsHover } from '../utils/deviceUtils';
 
@@ -144,6 +144,48 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
     setShowDeleteModal(true);
   };
 
+  const handleUnarchiveService = async (index) => {
+    try {
+      const serviceToUnarchive = services[index];
+      if (!serviceToUnarchive || !serviceToUnarchive.service_id) {
+        showToast({
+          message: 'Unable to identify service for unarchiving',
+          type: 'error',
+          duration: 3000
+        });
+        return;
+      }
+
+      // Call the API to unarchive the service
+      await unarchiveService(serviceToUnarchive.service_id);
+
+      // Update the service in the UI
+      setServices(prevServices => 
+        prevServices.map((service, i) => 
+          i === index 
+            ? { ...service, is_archived: false }
+            : service
+        )
+      );
+      
+      setHasUnsavedChanges(true);
+      
+      showToast({
+        message: 'Service unarchived successfully',
+        type: 'success',
+        duration: 3000
+      });
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to unarchive service';
+      
+      showToast({
+        message: errorMessage,
+        type: 'error',
+        duration: 3000
+      });
+    }
+  };
+
   const handleSaveService = (updatedService) => {
     // Add debugging log for service data received
     debugLog('MBA8765', 'Service data received from modal:', updatedService);
@@ -271,21 +313,38 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       }
 
       // Call the API to delete the service
-      await deleteService(serviceToRemove.service_id);
+      const response = await deleteService(serviceToRemove.service_id);
 
-      // Remove from UI if successful
-      setServices(prevServices => 
-        prevServices.filter((_, i) => i !== serviceToDelete)
-      );
+      if (response.archived) {
+        // Service was archived, update it in the UI
+        setServices(prevServices => 
+          prevServices.map((service, i) => 
+            i === serviceToDelete 
+              ? { ...service, is_archived: true }
+              : service
+          )
+        );
+        
+        showToast({
+          message: 'Service archived due to existing bookings',
+          type: 'info',
+          duration: 3000
+        });
+      } else {
+        // Service was permanently deleted, remove from UI
+        setServices(prevServices => 
+          prevServices.filter((_, i) => i !== serviceToDelete)
+        );
+        
+        showToast({
+          message: 'Service deleted successfully',
+          type: 'success',
+          duration: 3000
+        });
+      }
       
       setHasUnsavedChanges(true);
       setShowDeleteModal(false);
-      
-      showToast({
-        message: 'Service deleted successfully',
-        type: 'success',
-        duration: 3000
-      });
     } catch (error) {
       // Handle the error case
       const errorMessage = error.response?.data?.error || 'Failed to delete service';
@@ -341,13 +400,20 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       
       // If the item structure already matches what ProfessionalServiceCard expects, use it directly
       if (item.serviceName && item.rates) {
+        // Ensure is_archived is set even for already formatted items
+        const itemWithArchived = {
+          ...item,
+          is_archived: item.is_archived || false
+        };
+        
         return (
           <ProfessionalServiceCard
             key={`service-${index}`}
-            item={item}
+            item={itemWithArchived}
             index={index}
             onEdit={() => handleEditService(index)}
             onDelete={() => handleDeleteService(index)}
+            onUnarchive={() => handleUnarchiveService(index)}
             isCollapsed={collapsedServices.includes(index)}
             onToggleCollapse={() => toggleCollapse(index)}
             isProfessionalTab={isProfessionalTab}
@@ -378,6 +444,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
       description: item.description,
       lengthOfService: item.unit_of_time,
       is_active: item.is_active,
+      is_archived: item.is_archived,
       generalCategories: item.categories?.map(cat => ({
         id: cat.id,
         name: cat.name,
@@ -403,6 +470,7 @@ const ServiceManager = ({ services, setServices, setHasUnsavedChanges, isProfess
         index={index}
         onEdit={() => handleEditService(index)}
         onDelete={() => handleDeleteService(index)}
+        onUnarchive={() => handleUnarchiveService(index)}
         isCollapsed={collapsedServices.includes(index)}
         onToggleCollapse={() => toggleCollapse(index)}
         isProfessionalTab={isProfessionalTab}
