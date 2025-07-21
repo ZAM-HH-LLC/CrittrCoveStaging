@@ -25,6 +25,23 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; style-src 'self' 'unsafe-inline' https: http:; img-src 'self' data: https: http:; font-src 'self' data: https: http:; connect-src 'self' https: http: ws:; media-src 'self' https: http:; object-src 'none'; frame-src 'self' https: http:; worker-src 'self' blob:;" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <title>CrittrCove</title>
+    
+    <!-- Google Analytics - Production Only -->
+    <script>
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        // Google tag (gtag.js)
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=G-L84H7P9FK3';
+        document.head.appendChild(script);
+        
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-L84H7P9FK3');
+      }
+    </script>
+    
     <script type="text/javascript">
       // Handle navigation
       (function() {
