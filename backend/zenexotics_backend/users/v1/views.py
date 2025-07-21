@@ -469,23 +469,25 @@ def upload_profile_picture(request):
                     # Save the old profile picture path for deletion
                     old_picture_path = None
                     if user.profile_picture:
-                        old_picture_path = user.profile_picture.path if hasattr(user.profile_picture, 'path') else None
-                    
+                        # For S3 storage, we need to use the storage backend's delete method
+                        # instead of os.path operations
+                        old_picture_path = user.profile_picture.name if hasattr(user.profile_picture, 'name') else None
+
                     # Create a ContentFile from the image data
                     file_ext = content_type.split('/')[1]
                     image_file = ContentFile(
                         image_data, 
                         name=f"profile_{user.id}_{uuid.uuid4().hex}.{file_ext}"
                     )
-                    
+
                     # Save to user profile
                     user.profile_picture = image_file
                     user.save()
-                    
+
                     # Delete the old profile picture file if it exists
-                    if old_picture_path and os.path.exists(old_picture_path):
+                    if old_picture_path and user.profile_picture.storage.exists(old_picture_path):
                         try:
-                            os.remove(old_picture_path)
+                            user.profile_picture.storage.delete(old_picture_path)
                             logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
                         except Exception as e:
                             logger.warning(f"upload_profile_picture: Failed to delete old profile picture: {str(e)}")
@@ -551,17 +553,19 @@ def upload_profile_picture(request):
             # Save the old profile picture path for deletion
             old_picture_path = None
             if user.profile_picture:
-                old_picture_path = user.profile_picture.path if hasattr(user.profile_picture, 'path') else None
-            
+                # For S3 storage, we need to use the storage backend's delete method
+                # instead of os.path operations
+                old_picture_path = user.profile_picture.name if hasattr(user.profile_picture, 'name') else None
+
             # Save the file to the user's profile
             user.profile_picture = profile_picture
             user.save()
             logger.debug(f"upload_profile_picture: File saved successfully for user {user.id}")
-            
+
             # Delete the old profile picture file if it exists
-            if old_picture_path and os.path.exists(old_picture_path):
+            if old_picture_path and user.profile_picture.storage.exists(old_picture_path):
                 try:
-                    os.remove(old_picture_path)
+                    user.profile_picture.storage.delete(old_picture_path)
                     logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
                 except Exception as e:
                     logger.warning(f"upload_profile_picture: Failed to delete old profile picture: {str(e)}")

@@ -93,14 +93,14 @@ class PetViewSet(viewsets.ModelViewSet):
                 # Extract the relative path from the URL
                 if '/media/' in old_profile_photo_url:
                     media_path = old_profile_photo_url.split('/media/', 1)[1]
-                    old_photo_path = os.path.join(settings.MEDIA_ROOT, media_path)
+                    old_photo_path = media_path  # Use relative path for S3
                     logger.debug(f"Will delete old photo at: {old_photo_path}")
             
             # Keep track of old profile photo path for deletion
             if pet.profile_photo and (pet_photo_base64 or pet_photo):
                 # If we're uploading a new photo, delete the old one after saving
-                if hasattr(pet.profile_photo, 'path'):
-                    old_photo_path = pet.profile_photo.path
+                if hasattr(pet.profile_photo, 'name'):
+                    old_photo_path = pet.profile_photo.name  # Use name instead of path for S3
                     logger.debug(f"Will delete current photo at: {old_photo_path}")
             
             if pet_photo_base64:
@@ -165,9 +165,10 @@ class PetViewSet(viewsets.ModelViewSet):
                 serializer.save()
                 
                 # Now that the new photo is saved, we can delete the old one
-                if old_photo_path and os.path.exists(old_photo_path):
+                if old_photo_path and old_photo_path.startswith('media/'): # Check if it's a media path
                     try:
-                        os.remove(old_photo_path)
+                        from django.core.files.storage import default_storage
+                        default_storage.delete(old_photo_path)
                         logger.debug(f"Deleted old pet photo at {old_photo_path}")
                     except Exception as e:
                         logger.warning(f"Failed to delete old pet photo: {str(e)}")

@@ -41,16 +41,16 @@ def pet_profile_photo_path(instance, filename):
     ext = filename.split('.')[-1]
     # Generate a unique filename
     filename = f"{instance.pet_id}_{secrets.token_hex(8)}.{ext}"
-    # Return the complete path
-    return os.path.join(settings.PET_PROFILE_PHOTOS_DIR, filename)
+    # Return the complete path using forward slashes for S3 compatibility
+    return f"{settings.PET_PROFILE_PHOTOS_DIR}/{filename}"
 
 def pet_gallery_photo_path(instance, filename):
     # Get the file extension
     ext = filename.split('.')[-1]
     # Generate a unique filename
     filename = f"{instance.pet_id}_{secrets.token_hex(8)}.{ext}"
-    # Return the complete path
-    return os.path.join(settings.PET_GALLERY_PHOTOS_DIR, filename)
+    # Return the complete path using forward slashes for S3 compatibility
+    return f"{settings.PET_GALLERY_PHOTOS_DIR}/{filename}"
 
 class Pet(models.Model):
     SPECIES_CHOICES = [
@@ -228,7 +228,8 @@ class Pet(models.Model):
         
         # Delete profile photo
         if self.profile_photo:
-            storage.delete(self.profile_photo.path)
+            # Use name instead of path for S3 compatibility
+            storage.delete(self.profile_photo.name)
         
         # Delete gallery photos
         if self.photo_gallery:

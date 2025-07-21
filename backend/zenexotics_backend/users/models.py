@@ -22,8 +22,8 @@ def user_profile_photo_path(instance, filename):
     ext = filename.split('.')[-1]
     # Generate a unique filename
     filename = f"{instance.user_id}_{secrets.token_hex(8)}.{ext}"
-    # Return the complete path
-    return os.path.join(settings.USER_PROFILE_PHOTOS_DIR, filename)
+    # Return the complete path using forward slashes for S3 compatibility
+    return f"{settings.USER_PROFILE_PHOTOS_DIR}/{filename}"
 
 # Create your models here.
 

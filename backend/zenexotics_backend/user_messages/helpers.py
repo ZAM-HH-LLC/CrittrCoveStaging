@@ -34,8 +34,8 @@ def message_image_path(instance, filename):
     # Get conversation ID for folder structure
     conversation_id = instance.conversation.conversation_id
     
-    # Return the complete path
-    return os.path.join('message_images', str(conversation_id), unique_filename)
+    # Return the complete path using forward slashes for S3 compatibility
+    return f"message_images/{conversation_id}/{unique_filename}"
 
 def process_base64_image(base64_data, conversation_id=None):
     """
