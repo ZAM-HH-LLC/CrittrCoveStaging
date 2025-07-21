@@ -256,7 +256,7 @@ const NavigationContent = ({
   // Add effect to log state changes
   useEffect(() => {
     if (is_DEBUG) {
-      console.log('MBA98386196v Navigation State Update:', {
+      debugLog('MBA98386196v Navigation State Update:', {
         isSignedIn,
         userRole,
         isApprovedProfessional,
@@ -430,7 +430,7 @@ const NavigationContent = ({
         
         // Only log in debug mode, not every time
         if (is_DEBUG && route !== currentRoute) {
-          console.log('MBA98386196v Current Route Updated:', route);
+          debugLog('MBA98386196v Current Route Updated:', route);
         }
         
         // Only update if the route has actually changed

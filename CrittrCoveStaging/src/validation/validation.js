@@ -4,7 +4,7 @@
  */
 
 // Import is_PRODUCTION from AuthContext
-import { IsProduction } from '../context/AuthContext';
+import { IsProduction, debugLog } from '../context/AuthContext';
 
 /**
  * Universal input sanitizer that handles different input types
@@ -15,10 +15,10 @@ import { IsProduction } from '../context/AuthContext';
  * @returns {string} - The sanitized input
  */
 export const sanitizeInput = (input, type = 'general', options = {}) => {
-  console.log(`[SANITIZE DEBUG] Input: "${input}", Type: ${type}`);
+  debugLog(`[SANITIZE DEBUG] Input: "${input}", Type: ${type}`);
   
   if (!input || typeof input !== 'string') {
-    console.log(`[SANITIZE DEBUG] Empty input, returning empty string`);
+    debugLog(`[SANITIZE DEBUG] Empty input, returning empty string`);
     return '';
   }
   
@@ -33,17 +33,17 @@ export const sanitizeInput = (input, type = 'general', options = {}) => {
   const removeSqlKeywords = (str) => str.replace(/(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)/gi, '');
   
   let sanitized = input;
-  console.log(`[SANITIZE DEBUG] Initial sanitized: "${sanitized}"`);
+  debugLog(`[SANITIZE DEBUG] Initial sanitized: "${sanitized}"`);
   
   // Apply common security sanitization to all types
   sanitized = removeScriptTags(sanitized);
-  console.log(`[SANITIZE DEBUG] After removeScriptTags: "${sanitized}"`);
+  debugLog(`[SANITIZE DEBUG] After removeScriptTags: "${sanitized}"`);
   sanitized = removeJavaScriptProtocol(sanitized);
-  console.log(`[SANITIZE DEBUG] After removeJavaScriptProtocol: "${sanitized}"`);
+  debugLog(`[SANITIZE DEBUG] After removeJavaScriptProtocol: "${sanitized}"`);
   sanitized = removeEventHandlers(sanitized);
-  console.log(`[SANITIZE DEBUG] After removeEventHandlers: "${sanitized}"`);
+  debugLog(`[SANITIZE DEBUG] After removeEventHandlers: "${sanitized}"`);
   sanitized = removeDataAttributes(sanitized);
-  console.log(`[SANITIZE DEBUG] After removeDataAttributes: "${sanitized}"`);
+  debugLog(`[SANITIZE DEBUG] After removeDataAttributes: "${sanitized}"`);
   
   // Type-specific sanitization
   switch (type.toLowerCase()) {
@@ -81,12 +81,12 @@ export const sanitizeInput = (input, type = 'general', options = {}) => {
       break;
       
     case 'name':
-      console.log(`[SANITIZE DEBUG] Processing 'name' type, before: "${sanitized}"`);
+      debugLog(`[SANITIZE DEBUG] Processing 'name' type, before: "${sanitized}"`);
       // For names, allow letters, spaces, hyphens, apostrophes, and periods
       sanitized = sanitized.replace(/[^a-zA-Z\s\-'\.]/g, '');
-      console.log(`[SANITIZE DEBUG] After character filter: "${sanitized}"`);
+      debugLog(`[SANITIZE DEBUG] After character filter: "${sanitized}"`);
       sanitized = sanitized.replace(/[<>"]/g, '');
-      console.log(`[SANITIZE DEBUG] After quote removal: "${sanitized}"`);
+      debugLog(`[SANITIZE DEBUG] After quote removal: "${sanitized}"`);
       break;
       
     case 'password':
@@ -149,10 +149,10 @@ export const sanitizeInput = (input, type = 'general', options = {}) => {
   
   // Final security check - remove any remaining dangerous patterns
   sanitized = sanitized.replace(/\0/g, ''); // Remove null bytes
-  console.log(`[SANITIZE DEBUG] After null byte removal: "${sanitized}"`);
+  debugLog(`[SANITIZE DEBUG] After null byte removal: "${sanitized}"`);
   // Note: Control characters are already removed in type-specific sanitization above
   
-  console.log(`[SANITIZE DEBUG] Final result (no trim): "${sanitized}"`);
+  debugLog(`[SANITIZE DEBUG] Final result (no trim): "${sanitized}"`);
   return sanitized;
 };
 
