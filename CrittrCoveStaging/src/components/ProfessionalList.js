@@ -135,7 +135,7 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
   );
 };
 
-const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isMobile, filters, onFilterPress, searchParams = null }) => {
+const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isMobile, filters, onFilterPress, searchParams = null, fallbackMessage = null }) => {
   
   // Function to generate appropriate empty state message
   const getEmptyStateMessage = () => {
@@ -272,6 +272,20 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
   return (
     <View style={styles.container}>
       {renderHeader()}
+      {/* Fallback Message Section */}
+      {fallbackMessage && (
+        <View style={styles.fallbackMessageContainer}>
+          <MaterialCommunityIcons 
+            name="information" 
+            size={24} 
+            color={theme.colors.warning} 
+          />
+          <View style={styles.fallbackTextContainer}>
+            <Text style={styles.fallbackMessageText}>{fallbackMessage}</Text>
+            <Text style={styles.fallbackSubtext}>Showing available professionals in Colorado Springs instead:</Text>
+          </View>
+        </View>
+      )}
       <FlatList
         data={professionals}
         renderItem={({ item, index }) => (
@@ -564,6 +578,34 @@ const styles = StyleSheet.create({
   },
   eliteProBadgeText: {
     color: '#4CAF50',
+  },
+  fallbackMessageContainer: {
+    backgroundColor: theme.colors.warning + '20', // 20% opacity
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.warning,
+    padding: theme.spacing.medium,
+    marginHorizontal: theme.spacing.medium,
+    marginBottom: theme.spacing.medium,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.small,
+  },
+  fallbackTextContainer: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  fallbackMessageText: {
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '600',
+    color: theme.colors.warning,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  fallbackSubtext: {
+    fontSize: theme.fontSizes.small,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    marginTop: theme.spacing.small,
   },
 });
 

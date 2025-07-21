@@ -87,6 +87,20 @@ def calculate_distance(coord1, coord2):
     except Exception:
         return float('inf')
 
+def select_best_service_for_display(services):
+    """
+    Select the best service to display for a professional.
+    Prioritizes by base_rate (highest first), then alphabetically by service_name.
+    """
+    if not services:
+        return None
+    
+    # Sort by base_rate descending, then by service_name ascending
+    sorted_services = sorted(services, 
+                           key=lambda s: (float(s.base_rate), s.service_name), 
+                           reverse=True)
+    return sorted_services[0]
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_professional_dashboard(request):
@@ -198,6 +212,10 @@ def search_professionals(request):
         logger.debug(f"Search parameters: {data}")
         logger.debug(f"Current user: {request.user if request.user.is_authenticated else 'Anonymous'}")
         
+        # Check if service_query is "All Services" or similar
+        is_all_services = service_query.lower() in ['all services', 'all', '']
+        original_service_query = service_query  # Store original for fallback messaging
+        
         # Start with all professionals who have approved services
         professionals_query = Professional.objects.filter(
             service__moderation_status='APPROVED',
@@ -215,16 +233,20 @@ def search_professionals(request):
         
         logger.debug(f"Found {professionals_query.count()} professionals with approved services")
         
-        # Get user coordinates if location is provided
+        # Get user coordinates if location is provided and not empty
         user_coords = None
+        used_location = None
         if location:
             user_coords = geocode_location(location)
-            if not user_coords:
+            if user_coords:
+                used_location = location
+            else:
                 logger.warning(f"Could not geocode location: {location}")
         
-        # If no location provided, default to Colorado Springs for radius search
+        # If no location provided or geocoding failed, default to Colorado Springs
         if not user_coords:
             user_coords = (38.8339, -104.8214)  # Colorado Springs coordinates
+            used_location = "Colorado Springs, Colorado"
         
         # Filter professionals by location (must have coordinates)
         professionals_with_location = []
@@ -306,7 +328,7 @@ def search_professionals(request):
                 
                 # Check service query relevance
                 relevance_score = 0
-                if service_query:
+                if service_query and not is_all_services:
                     service_name_lower = service.service_name.lower()
                     service_desc_lower = service.description.lower()
                     query_lower = service_query.lower()
@@ -322,9 +344,12 @@ def search_professionals(request):
                             for word in query_lower.split()):
                         relevance_score = 1
                     
-                    # If no relevance and we have a service query, skip this service
+                    # If no relevance and we have a specific service query, skip this service
                     if relevance_score == 0:
                         continue
+                elif is_all_services:
+                    # For "All Services", include all services with high relevance
+                    relevance_score = 3
                 
                 service_data = {
                     'service': service,
@@ -333,7 +358,7 @@ def search_professionals(request):
                 }
                 
                 # Categorize as exact or fuzzy match
-                if is_exact_match and (not service_query or relevance_score >= 2):
+                if is_exact_match and (is_all_services or relevance_score >= 2):
                     exact_matches.append(service_data)
                 else:
                     fuzzy_matches.append(service_data)
@@ -440,16 +465,180 @@ def search_professionals(request):
         
         logger.debug(f"Found {len(results)} professionals with matching services")
         
+        # Check if we need to fallback due to no results
+        fallback_message = None
+        if len(results) == 0 and not is_all_services and original_service_query:
+            # Log the failed search
+            logger.warning(f"No professionals found for service query: '{original_service_query}' in location: '{used_location}'")
+            
+            # Perform fallback search with "All Services" in default location (Colorado Springs)
+            fallback_message = f"No professionals found for '{original_service_query}'"
+            logger.info(f"Performing fallback search for all services in Colorado Springs")
+            
+            # Reset search to Colorado Springs with all services
+            user_coords = (38.8339, -104.8214)  # Colorado Springs coordinates
+            used_location = "Colorado Springs, Colorado"
+            
+            # Re-run the location filtering for fallback
+            professionals_with_location = []
+            for professional in professionals_query:
+                try:
+                    address = Address.objects.get(
+                        user=professional.user,
+                        address_type=AddressType.SERVICE
+                    )
+                    
+                    if address.coordinates and isinstance(address.coordinates, dict):
+                        prof_lat = address.coordinates.get('latitude')
+                        prof_lng = address.coordinates.get('longitude')
+                        
+                        if prof_lat and prof_lng:
+                            prof_coords = (float(prof_lat), float(prof_lng))
+                            distance = calculate_distance(user_coords, prof_coords)
+                            
+                            if distance <= radius_miles:
+                                professionals_with_location.append({
+                                    'professional': professional,
+                                    'address': address,
+                                    'distance': distance,
+                                    'coordinates': prof_coords
+                                })
+                except Address.DoesNotExist:
+                    continue
+            
+            # Re-run service filtering for fallback (all services)
+            results = []
+            for prof_data in professionals_with_location:
+                professional = prof_data['professional']
+                address = prof_data['address']
+                
+                # Get all approved services for this professional
+                services = Service.objects.filter(
+                    professional=professional,
+                    moderation_status='APPROVED',
+                    is_active=True,
+                    searchable=True
+                )
+                
+                # Filter by animal types if specified
+                if animal_types:
+                    animal_filtered_services = []
+                    for service in services:
+                        if service.animal_types and isinstance(service.animal_types, dict):
+                            service_animals = list(service.animal_types.keys())
+                            if any(animal.lower() in [sa.lower() for sa in service_animals] for animal in animal_types):
+                                animal_filtered_services.append(service)
+                    services = animal_filtered_services
+                
+                # Filter by price range
+                price_filtered_services = [
+                    service for service in services
+                    if price_min <= float(service.base_rate) <= price_max
+                ]
+                services = price_filtered_services
+                
+                if not services:
+                    continue
+                
+                # For fallback, select the best service for display (highest price first)
+                best_service = select_best_service_for_display(services)
+                
+                # Format location string
+                location_parts = []
+                if address.city:
+                    location_parts.append(address.city)
+                if address.state:
+                    location_parts.append(address.state)
+                location_str = ', '.join(location_parts)
+                
+                # Get profile picture URL
+                profile_picture_url = None
+                if professional.user.profile_picture:
+                    profile_picture_url = professional.user.profile_picture.url
+                
+                # Ensure coordinates are valid before including in result
+                coord_lat = address.coordinates.get('latitude')
+                coord_lng = address.coordinates.get('longitude')
+                
+                if coord_lat is None or coord_lng is None:
+                    continue  # Skip this professional if coordinates are invalid
+                
+                # Get review data for this professional
+                reviews = ClientReview.objects.filter(
+                    professional=professional,
+                    status='APPROVED',
+                    review_visible=True
+                )
+                
+                # Calculate average rating and count
+                avg_rating = reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
+                review_count = reviews.count()
+                
+                # Format the average rating
+                formatted_avg_rating = 5.0 if avg_rating >= 4.995 else round(avg_rating, 2)
+                
+                # Get the latest highest-rated review text
+                latest_review_text = None
+                latest_review_author_profile_pic = None
+                
+                if review_count > 0:
+                    highest_rating = 5
+                    while highest_rating > 0 and latest_review_text is None:
+                        highest_reviews = reviews.filter(rating=highest_rating).order_by('-created_at')
+                        if highest_reviews.exists():
+                            latest_review = highest_reviews.first()
+                            latest_review_text = latest_review.review_text
+                            
+                            if latest_review.client and latest_review.client.user and hasattr(latest_review.client.user, 'profile_picture') and latest_review.client.user.profile_picture:
+                                latest_review_author_profile_pic = str(latest_review.client.user.profile_picture.url) if hasattr(latest_review.client.user.profile_picture, 'url') else None
+                            
+                            break
+                        highest_rating -= 1
+                
+                result = {
+                    'professional_id': professional.professional_id,
+                    'name': professional.user.name,
+                    'profile_picture_url': profile_picture_url,
+                    'location': location_str,
+                    'coordinates': {
+                        'latitude': float(coord_lat),
+                        'longitude': float(coord_lng)
+                    },
+                    'primary_service': {
+                        'service_id': best_service.service_id,
+                        'service_name': best_service.service_name,
+                        'price_per_visit': float(best_service.base_rate),
+                        'unit_of_time': best_service.unit_of_time,
+                        'is_overnight': best_service.is_overnight
+                    },
+                    'match_type': 'fallback',
+                    'distance': prof_data['distance'],
+                    'reviews': {
+                        'average_rating': formatted_avg_rating,
+                        'review_count': review_count,
+                        'latest_highest_review_text': latest_review_text,
+                        'latest_review_author_profile_pic': latest_review_author_profile_pic
+                    },
+                    'badges': {
+                        'is_background_checked': professional.is_background_checked,
+                        'is_insured': professional.is_insured,
+                        'is_elite_pro': professional.is_elite_pro
+                    }
+                }
+                results.append(result)
+        
         # Separate exact and fuzzy matches for randomization
         exact_results = [r for r in results if r['match_type'] == 'exact']
         fuzzy_results = [r for r in results if r['match_type'] == 'fuzzy']
+        fallback_results = [r for r in results if r['match_type'] == 'fallback']
         
         # Randomize each group separately
         random.shuffle(exact_results)
         random.shuffle(fuzzy_results)
+        random.shuffle(fallback_results)
         
-        # Combine with exact matches first
-        final_results = exact_results + fuzzy_results
+        # Combine with exact matches first, then fuzzy, then fallback
+        final_results = exact_results + fuzzy_results + fallback_results
         
         # Apply pagination
         start_idx = (page - 1) * page_size
@@ -466,7 +655,9 @@ def search_professionals(request):
             'total_count': len(final_results),
             'has_more': end_idx < len(final_results),
             'page': page,
-            'page_size': page_size
+            'page_size': page_size,
+            'fallback_message': fallback_message,
+            'search_location': used_location
         }
         
         return Response(response_data)

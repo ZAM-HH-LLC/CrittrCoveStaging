@@ -25,6 +25,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState(null);
   const [currentSearchParams, setCurrentSearchParams] = useState(null);
+  const [fallbackMessage, setFallbackMessage] = useState(null);
   const [region, setRegion] = useState({
     latitude: 38.8339,
     longitude: -104.8214,
@@ -190,6 +191,14 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     debugLog('MBA9999', 'Received search results:', results);
     setSearchResults(results);
     setProfessionals(results.professionals || []);
+    
+    // Handle fallback message
+    if (results.fallback_message) {
+      setFallbackMessage(results.fallback_message);
+      debugLog('MBA9999', 'Fallback message set:', results.fallback_message);
+    } else {
+      setFallbackMessage(null);
+    }
     
     if (searchParams) {
       setCurrentSearchParams(searchParams);
@@ -436,6 +445,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
               isMobile={isMobile}
               filters={activeFilters}
               searchParams={currentSearchParams}
+              fallbackMessage={fallbackMessage}
               onFilterPress={(view) => {
                 if (view === 'map') {
                   setActiveView('map');
@@ -493,6 +503,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
               isMobile={isSingleView}
               filters={activeFilters}
               searchParams={currentSearchParams}
+              fallbackMessage={fallbackMessage}
               onFilterPress={(view) => {
                 if (view === 'map') {
                   setActiveView('map');

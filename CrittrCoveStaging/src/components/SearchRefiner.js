@@ -7,7 +7,7 @@ import { debounce } from 'lodash';
 import { GENERAL_CATEGORIES } from '../data/mockData';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import InputSelect from './ServiceTypeSelect';
-import { SERVICE_TYPES, ALL_SERVICES } from '../data/mockData';
+import { SERVICE_TYPES } from '../data/mockData';
 import { searchProfessionals } from '../api/API';
 
 // All available animal types from CategorySelectionStep
@@ -751,8 +751,8 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       // Prepare search parameters
       const searchParams = {
         animal_types: selectedAnimals,
-        location: location.trim(),
-        service_query: service.trim(),
+        location: location.trim(), // Empty location will be handled by backend
+        service_query: service.trim(), // "All Services" will be handled by backend
         overnight_service: overnightService,
         price_min: 0,
         price_max: priceRange,
@@ -768,6 +768,11 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       const results = await searchProfessionals(searchParams);
       
       debugLog('MBA9999', 'Search completed successfully:', results);
+
+      // Check if there's a fallback message and log it
+      if (results.fallback_message) {
+        debugLog('MBA9999', 'Fallback message received:', results.fallback_message);
+      }
 
       // Pass results and search parameters to parent component
       if (onSearchResults) {
@@ -890,7 +895,7 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       <InputSelect
         value={service}
         onChange={setService}
-        suggestions={[ALL_SERVICES, ...SERVICE_TYPES]}
+        suggestions={['All Services', ...SERVICE_TYPES]}
         placeholder="Search services..."
         zIndex={1000}
       />
