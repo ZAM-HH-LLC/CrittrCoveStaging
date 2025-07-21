@@ -282,7 +282,7 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
           />
           <View style={styles.fallbackTextContainer}>
             <Text style={styles.fallbackMessageText}>{fallbackMessage}</Text>
-            <Text style={styles.fallbackSubtext}>Showing available professionals in Colorado Springs instead:</Text>
+            <Text style={styles.fallbackSubtext}>Showing available professionals in Colorado Springs instead below. Please select different professionals to see all their services:</Text>
           </View>
         </View>
       )}

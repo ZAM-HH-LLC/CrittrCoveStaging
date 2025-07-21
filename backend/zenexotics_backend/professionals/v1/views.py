@@ -14,7 +14,7 @@ from bookings.constants import BookingStates
 from services.models import Service
 from django.shortcuts import get_object_or_404
 from payment_methods.models import PaymentMethod
-from django.db.models import Q
+from django.db.models import Q, Count
 from user_addresses.models import Address, AddressType
 from geopy.distance import geodesic
 import requests
@@ -191,6 +191,17 @@ def get_professional_dashboard(request):
 def search_professionals(request):
     """
     Search for professionals based on various criteria
+    
+    Performance optimizations:
+    - Uses select_related and prefetch_related to minimize database queries
+    - Batch fetches services, addresses, and reviews to avoid N+1 queries
+    - Pre-aggregates review data to avoid individual calculations
+    
+    Recommended database indexes for optimal performance:
+    - (professional_id, moderation_status, is_active, searchable, is_archived) on services table
+    - (user_id, address_type) on addresses table
+    - (professional_id, status, review_visible, rating) on reviews table
+    - Coordinates field should be indexed for geospatial queries
     """
     try:
         # Get search parameters
@@ -216,8 +227,10 @@ def search_professionals(request):
         is_all_services = service_query.lower() in ['all services', 'all', '']
         original_service_query = service_query  # Store original for fallback messaging
         
-        # Start with all professionals who have approved services
-        professionals_query = Professional.objects.filter(
+        # Start with all professionals who have approved services - optimized with select_related
+        professionals_query = Professional.objects.select_related('user').prefetch_related(
+            'service_set'
+        ).filter(
             service__moderation_status='APPROVED',
             service__is_active=True,
             service__searchable=True,
@@ -249,35 +262,101 @@ def search_professionals(request):
             user_coords = (38.8339, -104.8214)  # Colorado Springs coordinates
             used_location = "Colorado Springs, Colorado"
         
-        # Filter professionals by location (must have coordinates)
+        # Filter professionals by location (must have coordinates) - optimized batch query
         professionals_with_location = []
+        
+        # Pre-fetch all addresses in a single query
+        addresses_dict = {}
+        addresses = Address.objects.filter(
+            user__in=[p.user for p in professionals_query],
+            address_type=AddressType.SERVICE
+        ).select_related('user')
+        
+        for address in addresses:
+            addresses_dict[address.user.id] = address
+        
         for professional in professionals_query:
-            try:
-                address = Address.objects.get(
-                    user=professional.user,
-                    address_type=AddressType.SERVICE
-                )
-                
-                if address.coordinates and isinstance(address.coordinates, dict):
-                    prof_lat = address.coordinates.get('latitude')
-                    prof_lng = address.coordinates.get('longitude')
-                    
-                    if prof_lat and prof_lng:
-                        prof_coords = (float(prof_lat), float(prof_lng))
-                        distance = calculate_distance(user_coords, prof_coords)
-                        
-                        if distance <= radius_miles:
-                            professionals_with_location.append({
-                                'professional': professional,
-                                'address': address,
-                                'distance': distance,
-                                'coordinates': prof_coords
-                            })
-            except Address.DoesNotExist:
+            address = addresses_dict.get(professional.user.id)
+            if not address:
                 continue
+                
+            if address.coordinates and isinstance(address.coordinates, dict):
+                prof_lat = address.coordinates.get('latitude')
+                prof_lng = address.coordinates.get('longitude')
+                
+                if prof_lat and prof_lng:
+                    prof_coords = (float(prof_lat), float(prof_lng))
+                    distance = calculate_distance(user_coords, prof_coords)
+                    
+                    if distance <= radius_miles:
+                        professionals_with_location.append({
+                            'professional': professional,
+                            'address': address,
+                            'distance': distance,
+                            'coordinates': prof_coords
+                        })
         
         logger.debug(f"Found {len(professionals_with_location)} professionals within {radius_miles} miles")
         
+        # Pre-fetch all services and reviews in batch queries to avoid N+1 queries
+        professional_ids = [prof_data['professional'].professional_id for prof_data in professionals_with_location]
+        
+        # Batch fetch all services
+        all_services = Service.objects.filter(
+            professional__professional_id__in=professional_ids,
+            moderation_status='APPROVED',
+            is_active=True,
+            searchable=True,
+            is_archived=False
+        ).select_related('professional')
+        
+        # Group services by professional
+        services_by_professional = {}
+        for service in all_services:
+            prof_id = service.professional.professional_id
+            if prof_id not in services_by_professional:
+                services_by_professional[prof_id] = []
+            services_by_professional[prof_id].append(service)
+        
+        # Batch fetch all reviews with aggregation
+        reviews_data = ClientReview.objects.filter(
+            professional__professional_id__in=professional_ids,
+            status='APPROVED',
+            review_visible=True
+        ).values('professional__professional_id').annotate(
+            avg_rating=Avg('rating'),
+            review_count=Count('review_id')
+        )
+        
+        # Create reviews lookup dict
+        reviews_by_professional = {}
+        for review_data in reviews_data:
+            reviews_by_professional[review_data['professional__professional_id']] = {
+                'avg_rating': review_data['avg_rating'] or 0,
+                'review_count': review_data['review_count']
+            }
+        
+        # Batch fetch latest highest reviews
+        latest_reviews = ClientReview.objects.filter(
+            professional__professional_id__in=professional_ids,
+            status='APPROVED',
+            review_visible=True,
+            rating=5
+        ).select_related('client__user').order_by('professional__professional_id', '-created_at').distinct('professional__professional_id')
+        
+        latest_reviews_by_professional = {}
+        for review in latest_reviews:
+            prof_id = review.professional.professional_id
+            latest_reviews_by_professional[prof_id] = {
+                'text': review.review_text,
+                'author_profile_pic': review.client.user.profile_picture.url if (
+                    review.client and 
+                    review.client.user and 
+                    hasattr(review.client.user, 'profile_picture') and 
+                    review.client.user.profile_picture
+                ) else None
+            }
+
         # Now filter services for each professional
         results = []
         
@@ -285,14 +364,8 @@ def search_professionals(request):
             professional = prof_data['professional']
             address = prof_data['address']
             
-            # Get all approved services for this professional
-            services = Service.objects.filter(
-                professional=professional,
-                moderation_status='APPROVED',
-                is_active=True,
-                searchable=True,
-                is_archived=False
-            )
+            # Get services from pre-fetched data
+            services = services_by_professional.get(professional.professional_id, [])
             
             # Filter by animal types if specified
             if animal_types:
@@ -399,39 +472,18 @@ def search_professionals(request):
                 if coord_lat is None or coord_lng is None:
                     continue  # Skip this professional if coordinates are invalid
                 
-                # Get review data for this professional
-                reviews = ClientReview.objects.filter(
-                    professional=professional,
-                    status='APPROVED',
-                    review_visible=True
-                )
-                
-                # Calculate average rating and count
-                avg_rating = reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
-                review_count = reviews.count()
+                # Get review data from pre-fetched data
+                review_data = reviews_by_professional.get(professional.professional_id, {'avg_rating': 0, 'review_count': 0})
+                avg_rating = review_data['avg_rating']
+                review_count = review_data['review_count']
                 
                 # Format the average rating (5.0 if >= 4.995, otherwise round to 2 decimal places)
                 formatted_avg_rating = 5.0 if avg_rating >= 4.995 else round(avg_rating, 2)
                 
-                # Get the latest highest-rated review text
-                latest_review_text = None
-                latest_review_author_profile_pic = None
-                
-                if review_count > 0:
-                    # First try to get the latest 5-star review
-                    highest_rating = 5
-                    while highest_rating > 0 and latest_review_text is None:
-                        highest_reviews = reviews.filter(rating=highest_rating).order_by('-created_at')
-                        if highest_reviews.exists():
-                            latest_review = highest_reviews.first()
-                            latest_review_text = latest_review.review_text
-                            
-                            # Get the profile picture URL of the client who wrote the review
-                            if latest_review.client and latest_review.client.user and hasattr(latest_review.client.user, 'profile_picture') and latest_review.client.user.profile_picture:
-                                latest_review_author_profile_pic = str(latest_review.client.user.profile_picture.url) if hasattr(latest_review.client.user.profile_picture, 'url') else None
-                            
-                            break
-                        highest_rating -= 1
+                # Get the latest highest-rated review text from pre-fetched data
+                latest_review_data = latest_reviews_by_professional.get(professional.professional_id, {'text': None, 'author_profile_pic': None})
+                latest_review_text = latest_review_data['text']
+                latest_review_author_profile_pic = latest_review_data['author_profile_pic']
                 
                 result = {
                     'professional_id': professional.professional_id,
@@ -566,37 +618,18 @@ def search_professionals(request):
                 if coord_lat is None or coord_lng is None:
                     continue  # Skip this professional if coordinates are invalid
                 
-                # Get review data for this professional
-                reviews = ClientReview.objects.filter(
-                    professional=professional,
-                    status='APPROVED',
-                    review_visible=True
-                )
-                
-                # Calculate average rating and count
-                avg_rating = reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
-                review_count = reviews.count()
+                # Get review data from pre-fetched data (fallback section)
+                review_data = reviews_by_professional.get(professional.professional_id, {'avg_rating': 0, 'review_count': 0})
+                avg_rating = review_data['avg_rating']
+                review_count = review_data['review_count']
                 
                 # Format the average rating
                 formatted_avg_rating = 5.0 if avg_rating >= 4.995 else round(avg_rating, 2)
                 
-                # Get the latest highest-rated review text
-                latest_review_text = None
-                latest_review_author_profile_pic = None
-                
-                if review_count > 0:
-                    highest_rating = 5
-                    while highest_rating > 0 and latest_review_text is None:
-                        highest_reviews = reviews.filter(rating=highest_rating).order_by('-created_at')
-                        if highest_reviews.exists():
-                            latest_review = highest_reviews.first()
-                            latest_review_text = latest_review.review_text
-                            
-                            if latest_review.client and latest_review.client.user and hasattr(latest_review.client.user, 'profile_picture') and latest_review.client.user.profile_picture:
-                                latest_review_author_profile_pic = str(latest_review.client.user.profile_picture.url) if hasattr(latest_review.client.user.profile_picture, 'url') else None
-                            
-                            break
-                        highest_rating -= 1
+                # Get the latest highest-rated review text from pre-fetched data
+                latest_review_data = latest_reviews_by_professional.get(professional.professional_id, {'text': None, 'author_profile_pic': None})
+                latest_review_text = latest_review_data['text']
+                latest_review_author_profile_pic = latest_review_data['author_profile_pic']
                 
                 result = {
                     'professional_id': professional.professional_id,
@@ -630,18 +663,35 @@ def search_professionals(request):
                 }
                 results.append(result)
         
-        # Separate exact and fuzzy matches for randomization
+        # Separate exact and fuzzy matches for badge-aware sorting
         exact_results = [r for r in results if r['match_type'] == 'exact']
         fuzzy_results = [r for r in results if r['match_type'] == 'fuzzy']
         fallback_results = [r for r in results if r['match_type'] == 'fallback']
         
-        # Randomize each group separately
-        random.shuffle(exact_results)
-        random.shuffle(fuzzy_results)
-        random.shuffle(fallback_results)
+        # Helper function to check if professional has any badges
+        def has_badges(result):
+            badges = result['badges']
+            return badges['is_background_checked'] or badges['is_insured'] or badges['is_elite_pro']
+        
+        # Sort each group by badges, then randomize within badge groups
+        def sort_by_badges_and_randomize(results_list):
+            with_badges = [r for r in results_list if has_badges(r)]
+            without_badges = [r for r in results_list if not has_badges(r)]
+            
+            # Randomize within each badge group
+            random.shuffle(with_badges)
+            random.shuffle(without_badges)
+            
+            # Return with badges first, then without badges
+            return with_badges + without_badges
+        
+        # Apply badge-aware sorting to each match type group
+        sorted_exact_results = sort_by_badges_and_randomize(exact_results)
+        sorted_fuzzy_results = sort_by_badges_and_randomize(fuzzy_results)
+        sorted_fallback_results = sort_by_badges_and_randomize(fallback_results)
         
         # Combine with exact matches first, then fuzzy, then fallback
-        final_results = exact_results + fuzzy_results + fallback_results
+        final_results = sorted_exact_results + sorted_fuzzy_results + sorted_fallback_results
         
         # Apply pagination
         start_idx = (page - 1) * page_size
