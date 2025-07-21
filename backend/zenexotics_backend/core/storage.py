@@ -11,9 +11,10 @@ class ACLDisabledS3Storage(S3Boto3Storage):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Ensure we don't try to set ACLs
+        # Ensure we don't try to set ACLs - remove ACL parameter entirely
         self.object_parameters = self.object_parameters or {}
-        self.object_parameters['ACL'] = None
+        if 'ACL' in self.object_parameters:
+            del self.object_parameters['ACL']
     
     def exists(self, name):
         """

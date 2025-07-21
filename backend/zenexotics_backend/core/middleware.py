@@ -98,7 +98,7 @@ class AuthenticationLoggingMiddleware:
                 # Parse the token
                 access_token = AccessToken(token)
                 user_info['token_status'] = 'token_valid'
-                user_info['token_expiry'] = datetime.fromtimestamp(access_token.payload.get('exp', 0))
+                user_info['token_expiry'] = datetime.fromtimestamp(access_token.payload.get('exp', 0)).isoformat()
                 
                 # Get user info
                 user_id = access_token.payload.get('user_id')
@@ -141,9 +141,16 @@ class AuthenticationLoggingMiddleware:
             'user_info': user_info
         }
         
+        # Ensure all datetime objects in user_info are converted to strings
+        if 'token_expiry' in user_info and isinstance(user_info['token_expiry'], datetime):
+            user_info['token_expiry'] = user_info['token_expiry'].isoformat()
+        
         # Log authentication issues specifically
         if user_info['token_status'] not in ['no_token', 'token_valid']:
-            logger.warning(f"🔐 AUTH_ISSUE: {json.dumps(log_data, indent=2)}")
+            try:
+                logger.warning(f"🔐 AUTH_ISSUE: {json.dumps(log_data, indent=2)}")
+            except (TypeError, ValueError) as e:
+                logger.warning(f"🔐 AUTH_ISSUE: Failed to serialize log data: {str(e)}")
         else:
             logger.info(f"🔐 API_REQUEST: {request.method} {request.path} | User: {user_info.get('email', 'anonymous')} | Token: {user_info['token_status']}")
 
@@ -172,7 +179,10 @@ class AuthenticationLoggingMiddleware:
                 pass
                 
         elif response.status_code >= 500:
-            logger.error(f"🔐 SERVER_ERROR: {json.dumps(log_data, indent=2)}")
+            try:
+                logger.error(f"🔐 SERVER_ERROR: {json.dumps(log_data, indent=2)}")
+            except (TypeError, ValueError) as e:
+                logger.error(f"🔐 SERVER_ERROR: Failed to serialize log data: {str(e)}")
         else:
             logger.info(f"🔐 API_RESPONSE: {response.status_code} | {duration_ms:.1f}ms | {request.method} {request.path}")
 
@@ -184,6 +194,10 @@ class AuthenticationLoggingMiddleware:
             
         user_info = getattr(request, '_auth_user_info', {})
         
+        # Ensure all datetime objects in user_info are converted to strings
+        if 'token_expiry' in user_info and isinstance(user_info['token_expiry'], datetime):
+            user_info['token_expiry'] = user_info['token_expiry'].isoformat()
+        
         log_data = {
             'event_type': 'API_EXCEPTION',
             'timestamp': now().isoformat(),
@@ -194,5 +208,8 @@ class AuthenticationLoggingMiddleware:
             'user_info': user_info
         }
         
-        logger.error(f"🔐 API_EXCEPTION: {json.dumps(log_data, indent=2)}")
+        try:
+            logger.error(f"🔐 API_EXCEPTION: {json.dumps(log_data, indent=2)}")
+        except (TypeError, ValueError) as e:
+            logger.error(f"🔐 API_EXCEPTION: Failed to serialize log data: {str(e)}")
         return None 

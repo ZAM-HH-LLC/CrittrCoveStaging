@@ -54,8 +54,8 @@ if not IS_DEVELOPMENT:
     
     # Additional settings for ACL-disabled buckets
     AWS_S3_OBJECT_PARAMETERS = {
-        'CacheControl': 'max-age=86400',
-        'ACL': None  # Explicitly set ACL to None for ACL-disabled buckets
+        'CacheControl': 'max-age=86400'
+        # ACL parameter removed entirely for ACL-disabled buckets
     }
     
     # S3 as default storage - use custom backend for ACL-disabled buckets
