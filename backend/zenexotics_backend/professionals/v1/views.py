@@ -186,6 +186,39 @@ def get_professional_dashboard(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+# search_pros ordering:
+# Current Search Result Ordering:
+
+#   1. Exact Match + Has Badges (randomized within this group)
+#   2. Exact Match + No Badges (randomized within this group)
+#   3. Fuzzy Match + Has Badges (randomized within this group)
+#   4. Fuzzy Match + No Badges (randomized within this group)
+#   5. Fallback + Has Badges (randomized within this group)
+#   6. Fallback + No Badges (randomized within this group)
+
+#   Match Type Definitions:
+
+#   - Exact Match: Service meets overnight requirements (if
+#   requested) AND has high service query relevance (score >= 2) OR
+#    is "All Services"
+#   - Fuzzy Match: Service doesn't fully meet overnight
+#   requirements OR has lower service query relevance (score = 1)
+#   - Fallback: Only appears when no results found for original
+#   search - shows all services in Colorado Springs
+
+#   Badge Criteria:
+
+#   A professional "Has Badges" if they have ANY of:
+#   - is_background_checked = True
+#   - is_insured = True
+#   - is_elite_pro = True
+
+#   Randomization:
+
+#   Within each of the 6 groups above, results are completely
+#   randomized to ensure fairness and prevent any particular
+#   professional from always appearing first.
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def search_professionals(request):
