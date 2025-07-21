@@ -67,3 +67,5 @@ def debug_log(request):
     except Exception as e:
         logger.error(f"[MOBILE DEBUG] Error in debug_log: {str(e)}")
         return Response({'error': str(e)}, status=400) 
+
+ 

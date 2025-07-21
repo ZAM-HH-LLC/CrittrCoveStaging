@@ -41,7 +41,6 @@ if not IS_DEVELOPMENT:
     # If you need public access, configure it through bucket policies instead
     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
     AWS_LOCATION = 'media'
-    AWS_S3_FILE_OVERWRITE = True
     
     # Additional S3 settings to fix path issues
     AWS_S3_ADDRESSING_STYLE = 'virtual'

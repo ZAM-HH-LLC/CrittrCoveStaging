@@ -48,4 +48,10 @@ class ACLDisabledS3Storage(S3Boto3Storage):
         if hasattr(content, 'content_type'):
             content.content_type = content.content_type or 'application/octet-stream'
         
-        return super().save(name, content, max_length) 
+        return super().save(name, content, max_length)
+    
+    def url(self, name):
+        """
+        Return the direct S3 URL for the file.
+        """
+        return super().url(name) 
