@@ -94,12 +94,12 @@ const ProfessionalServiceCard = ({
             <Text style={[styles.rateValue, isArchived && styles.archivedText]}>${item.rates.additionalAnimalRate}</Text>
           </View>
         )}
-        {item.rates.holidayRate && (
+        {/* {item.rates.holidayRate && (
           <View style={styles.rateRow}>
             <Text style={[styles.rateLabel, isArchived && styles.archivedText]}>Holiday Rate</Text>
             <Text style={[styles.rateValue, isArchived && styles.archivedText]}>{item.rates.holidayRate}</Text>
           </View>
-        )}
+        )} */}
         {item.additionalRates && item.additionalRates.map((rate, idx) => (
           <View key={idx} style={styles.rateRow}>
             <Text style={[styles.rateLabel, isArchived && styles.archivedText]}>{rate.label}</Text>
