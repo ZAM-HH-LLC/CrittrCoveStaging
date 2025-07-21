@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { theme } from '../../styles/theme';
 import { debugLog } from '../../context/AuthContext';
+import InputSelect from '../ServiceTypeSelect';
+import { SERVICE_TYPES } from '../../data/mockData';
 import { sanitizeInput } from '../../validation/validation';
 
-const MAX_SERVICE_NAME_LENGTH = 30;
+const MAX_SERVICE_NAME_LENGTH = 35;
 const MAX_DESCRIPTION_LENGTH = 300;
 
 const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
@@ -33,9 +35,13 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
       setNameError('');
     }
     
+    // Auto-toggle overnight service if "Owner's Home" is selected
+    const shouldToggleOvernight = sanitized.includes("Overnight") || sanitized.includes("overnight") || sanitized.includes("over night");
+    
     setServiceData(prev => ({
       ...prev,
-      serviceName: sanitized
+      serviceName: sanitized,
+      isOvernight: shouldToggleOvernight || prev.isOvernight
     }));
   };
 
@@ -71,19 +77,16 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
     <View style={styles.container}>
       <Text style={styles.title}>Service Details</Text>
       
-      <View style={styles.inputGroup}>
+      <View style={[styles.inputGroup, styles.dropdownContainer]}>
         <Text style={styles.label}>Service Name</Text>
-        <TextInput
-          style={[styles.input, nameError ? styles.inputError : null]}
+        <InputSelect
           value={serviceData.serviceName}
-          onChangeText={handleServiceNameChange}
-          placeholder="e.g. Premium Pet Grooming"
-          placeholderTextColor={theme.colors.placeHolderText}
-          maxLength={MAX_SERVICE_NAME_LENGTH}
+          onChange={handleServiceNameChange}
+          suggestions={SERVICE_TYPES}
+          placeholder="e.g. Dog Walking"
+          placeHolderTextColor={theme.colors.placeHolderText}
+          zIndex={1000}
         />
-        <Text style={styles.characterCount}>
-          {serviceData.serviceName.length}/{MAX_SERVICE_NAME_LENGTH}
-        </Text>
         {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
       </View>
       
@@ -198,6 +201,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'right',
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  dropdownContainer: {
+    zIndex: 1000,
   },
 });
 

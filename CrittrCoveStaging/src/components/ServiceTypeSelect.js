@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { theme } from '../styles/theme';
 
-const InputSelect = ({ value, onChange, suggestions, placeholder, zIndex = 1000, showNotAvailable = false }) => {
+const InputSelect = ({ value, onChange, suggestions, placeholder, zIndex = 1000, showNotAvailable = false, placeHolderTextColor }) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
 
@@ -67,6 +67,7 @@ const InputSelect = ({ value, onChange, suggestions, placeholder, zIndex = 1000,
       <TextInput
         style={styles.input}
         placeholder={placeholder}
+        placeholderTextColor={placeHolderTextColor}
         value={value}
         onChangeText={handleTextChange}
         onFocus={handleFocus}

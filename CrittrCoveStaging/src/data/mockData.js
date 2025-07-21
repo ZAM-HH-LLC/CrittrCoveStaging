@@ -427,7 +427,7 @@ export const privacyPolicyData = {
 
 export const ALL_SERVICES = "All Services";
 export const SERVICE_TYPES = [
-  "Overnight Sitting (In Owner's Home)",
+  "Overnight Sitting - Owner's Home",
   "Overnight Boarding",
   "Drop-In Visits",
   "Dog Walking",
