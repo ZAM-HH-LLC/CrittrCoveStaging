@@ -196,8 +196,14 @@ class Pet(models.Model):
         if path in self.photo_gallery:
             # Remove from storage
             storage = self.profile_photo.storage
-            if storage.exists(path):
-                storage.delete(path)
+            try:
+                if storage.exists(path):
+                    storage.delete(path)
+            except Exception as e:
+                # Log but don't fail the removal
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to delete gallery photo {path} for pet {self.pet_id}: {str(e)}")
             
             # Remove from gallery
             gallery = self.photo_gallery
@@ -216,8 +222,14 @@ class Pet(models.Model):
         valid_paths = []
         
         for path in self.photo_gallery:
-            if storage.exists(path):
-                valid_paths.append(path)
+            try:
+                if storage.exists(path):
+                    valid_paths.append(path)
+            except Exception as e:
+                # Log but continue processing other paths
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to check gallery photo {path} for pet {self.pet_id}: {str(e)}")
         
         self.photo_gallery = valid_paths
         self.save()
@@ -229,12 +241,25 @@ class Pet(models.Model):
         # Delete profile photo
         if self.profile_photo:
             # Use name instead of path for S3 compatibility
-            storage.delete(self.profile_photo.name)
+            try:
+                if storage.exists(self.profile_photo.name):
+                    storage.delete(self.profile_photo.name)
+            except Exception as e:
+                # Log but don't fail the deletion
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to delete profile photo for pet {self.pet_id}: {str(e)}")
         
         # Delete gallery photos
         if self.photo_gallery:
             for path in self.photo_gallery:
-                if storage.exists(path):
-                    storage.delete(path)
+                try:
+                    if storage.exists(path):
+                        storage.delete(path)
+                except Exception as e:
+                    # Log but don't fail the deletion
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to delete gallery photo {path} for pet {self.pet_id}: {str(e)}")
         
         super().delete(*args, **kwargs)

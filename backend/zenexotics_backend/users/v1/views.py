@@ -481,14 +481,25 @@ def upload_profile_picture(request):
                     )
 
                     # Save to user profile
-                    user.profile_picture = image_file
-                    user.save()
+                    try:
+                        user.profile_picture = image_file
+                        user.save()
+                        logger.debug(f"upload_profile_picture: Base64 image saved successfully for user {user.id}")
+                    except Exception as e:
+                        logger.error(f"upload_profile_picture: Failed to save base64 image: {str(e)}")
+                        return Response({
+                            "error": "Failed to save image. Please try again."
+                        }, status=500)
 
                     # Delete the old profile picture file if it exists
-                    if old_picture_path and user.profile_picture.storage.exists(old_picture_path):
+                    if old_picture_path:
                         try:
-                            user.profile_picture.storage.delete(old_picture_path)
-                            logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
+                            # Check if file exists before attempting to delete
+                            if user.profile_picture.storage.exists(old_picture_path):
+                                user.profile_picture.storage.delete(old_picture_path)
+                                logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
+                            else:
+                                logger.debug(f"upload_profile_picture: Old profile picture file not found: {old_picture_path}")
                         except Exception as e:
                             logger.warning(f"upload_profile_picture: Failed to delete old profile picture: {str(e)}")
                     
@@ -558,15 +569,25 @@ def upload_profile_picture(request):
                 old_picture_path = user.profile_picture.name if hasattr(user.profile_picture, 'name') else None
 
             # Save the file to the user's profile
-            user.profile_picture = profile_picture
-            user.save()
-            logger.debug(f"upload_profile_picture: File saved successfully for user {user.id}")
+            try:
+                user.profile_picture = profile_picture
+                user.save()
+                logger.debug(f"upload_profile_picture: File saved successfully for user {user.id}")
+            except Exception as e:
+                logger.error(f"upload_profile_picture: Failed to save file: {str(e)}")
+                return Response({
+                    "error": "Failed to save image. Please try again."
+                }, status=500)
 
             # Delete the old profile picture file if it exists
-            if old_picture_path and user.profile_picture.storage.exists(old_picture_path):
+            if old_picture_path:
                 try:
-                    user.profile_picture.storage.delete(old_picture_path)
-                    logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
+                    # Check if file exists before attempting to delete
+                    if user.profile_picture.storage.exists(old_picture_path):
+                        user.profile_picture.storage.delete(old_picture_path)
+                        logger.debug(f"upload_profile_picture: Deleted old profile picture file: {old_picture_path}")
+                    else:
+                        logger.debug(f"upload_profile_picture: Old profile picture file not found: {old_picture_path}")
                 except Exception as e:
                     logger.warning(f"upload_profile_picture: Failed to delete old profile picture: {str(e)}")
             

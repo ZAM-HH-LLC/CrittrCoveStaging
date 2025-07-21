@@ -168,8 +168,12 @@ class PetViewSet(viewsets.ModelViewSet):
                 if old_photo_path and old_photo_path.startswith('media/'): # Check if it's a media path
                     try:
                         from django.core.files.storage import default_storage
-                        default_storage.delete(old_photo_path)
-                        logger.debug(f"Deleted old pet photo at {old_photo_path}")
+                        # Check if file exists before attempting to delete
+                        if default_storage.exists(old_photo_path):
+                            default_storage.delete(old_photo_path)
+                            logger.debug(f"Deleted old pet photo at {old_photo_path}")
+                        else:
+                            logger.debug(f"Old pet photo not found: {old_photo_path}")
                     except Exception as e:
                         logger.warning(f"Failed to delete old pet photo: {str(e)}")
                 

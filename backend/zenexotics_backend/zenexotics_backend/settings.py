@@ -49,8 +49,17 @@ if not IS_DEVELOPMENT:
     AWS_QUERYSTRING_AUTH = False
     AWS_S3_VERIFY = True
     
-    # S3 as default storage
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    # Disable file overwrite to avoid HeadObject permission issues with ACL-disabled buckets
+    AWS_S3_FILE_OVERWRITE = False
+    
+    # Additional settings for ACL-disabled buckets
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+        'ACL': None  # Explicitly set ACL to None for ACL-disabled buckets
+    }
+    
+    # S3 as default storage - use custom backend for ACL-disabled buckets
+    DEFAULT_FILE_STORAGE = 'core.storage.ACLDisabledS3Storage'
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
 else:
     # Local storage settings
