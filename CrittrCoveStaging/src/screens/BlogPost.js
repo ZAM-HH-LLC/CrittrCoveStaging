@@ -38,8 +38,14 @@ const BlogPost = ({ route, navigation }) => {
   useEffect(() => {
     const loadPost = async () => {
       try {
-        // Try to get post from route params first
-        if (route?.params?.post && isValidPost(route.params.post)) {
+        let postId = null;
+
+        // First priority: Get postId from route params
+        if (route?.params?.postId) {
+          postId = route.params.postId;
+        }
+        // Second priority: Get post object from route params (legacy support)
+        else if (route?.params?.post && isValidPost(route.params.post)) {
           setPost(route.params.post);
           // Store the post data
           if (Platform.OS === 'web') {
@@ -49,8 +55,28 @@ const BlogPost = ({ route, navigation }) => {
           }
           return;
         }
+        // Third priority: Get postId from URL params on web
+        else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          postId = urlParams.get('post') || urlParams.get('postId');
+        }
 
-        // If no route params or invalid post, try to load from storage
+        // If we have a postId, find the post in BLOG_POSTS
+        if (postId) {
+          const foundPost = BLOG_POSTS.find(p => p.id === postId);
+          if (foundPost && isValidPost(foundPost)) {
+            setPost(foundPost);
+            // Store the post data
+            if (Platform.OS === 'web') {
+              sessionStorage.setItem('currentBlogPost', JSON.stringify(foundPost));
+            } else {
+              await AsyncStorage.setItem('currentBlogPost', JSON.stringify(foundPost));
+            }
+            return;
+          }
+        }
+
+        // If no postId found, try to load from storage
         let storedPost;
         if (Platform.OS === 'web') {
           storedPost = sessionStorage.getItem('currentBlogPost');
@@ -62,15 +88,6 @@ const BlogPost = ({ route, navigation }) => {
           const parsedPost = JSON.parse(storedPost);
           if (isValidPost(parsedPost)) {
             setPost(parsedPost);
-            return;
-          }
-        }
-
-        // If no valid post found in storage, try to find it in BLOG_POSTS
-        if (route?.params?.postId) {
-          const foundPost = BLOG_POSTS.find(p => p.id === route.params.postId);
-          if (foundPost && isValidPost(foundPost)) {
-            setPost(foundPost);
             return;
           }
         }

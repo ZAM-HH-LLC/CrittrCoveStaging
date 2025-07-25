@@ -288,3 +288,33 @@ Example:
 </Modal>
 ```
 ```
+
+### Blog and SEO Management
+1. **Sitemap Updates**: Every time a new blog post is added to the system:
+   - Add the blog URL to the sitemap.xml file
+   - Format: `<url><loc>https://crittrcove.com/blog/[post-slug]</loc><lastmod>[YYYY-MM-DD]</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>`
+   - Update the `lastmod` date of the sitemap
+
+2. **Google Search Console Integration**:
+   - After updating the sitemap, submit it to Google Search Console
+   - Command: `curl -X GET "https://www.google.com/ping?sitemap=https://crittrcove.com/sitemap.xml"`
+   - Or manually submit through the Google Search Console dashboard
+
+3. **Blog Post SEO Requirements**:
+   - Every blog post must include:
+     - Meta title (60-70 characters)
+     - Meta description (150-160 characters)
+     - At least 3 relevant tags/categories
+     - Featured image with alt text
+     - URL slug that matches the post title in kebab-case
+
+4. **Implementation Checklist**:
+   - Update sitemap.xml
+   - Ping search engines
+   - Verify blog post includes all required SEO elements
+   - Check that all internal links are working
+
+5. **Automated Testing**:
+   - Run SEO validation tests after adding new blog content
+   - Verify sitemap includes the new URL
+   - Check for broken links and proper metadata

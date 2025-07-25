@@ -22,7 +22,7 @@ const BlogScreen = ({ navigation }) => {
   const [filteredPosts, setFilteredPosts] = useState(BLOG_POSTS);
 
   const handleBack = () => {
-    navigation.navigate('More');
+    navigation.navigate('Home');
   };
 
   const handleSearch = useCallback((query) => {
@@ -43,7 +43,7 @@ const BlogScreen = ({ navigation }) => {
       <TouchableOpacity
         key={post.id}
         style={[styles.blogCard, { backgroundColor: theme.colors.surface }]}
-        onPress={() => navigateToFrom(navigation, 'Blog', 'BlogPost', { post })}
+        onPress={() => navigateToFrom(navigation, 'BlogPost', 'Blog', { postId: post.id })}
       >
         <View style={styles.authorContainer}>
           <Image

@@ -71,7 +71,7 @@ export default function HomeScreen({ navigation }) {
   // Add state for social media popup visibility
   const [isUserScrolling, setIsUserScrolling] = useState(false);
 
-  const AutoScrollSection = ({ data, renderItem, title, cardWidth = 320 }) => {
+  const AutoScrollSection = ({ data, renderItem, title, cardWidth = 320, onTitlePress }) => {
     const scrollViewRef = React.useRef(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [userScrolling, setUserScrolling] = useState(false);
@@ -136,7 +136,13 @@ export default function HomeScreen({ navigation }) {
 
     return (
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{title}</Text>
+        {onTitlePress ? (
+          <TouchableOpacity onPress={onTitlePress}>
+            <Text style={[styles.sectionTitle, { textDecorationLine: 'underline' }]}>{title}</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.sectionTitle}>{title}</Text>
+        )}
         <View style={styles.scrollContainer}>
           <ScrollView
             ref={scrollViewRef}
@@ -227,7 +233,7 @@ export default function HomeScreen({ navigation }) {
           styles.blogCard,
           { marginRight: index === BLOG_POSTS.length - 1 ? 0 : 10 }
         ]} 
-        onPress={() => navigateToFrom(navigation, 'BlogPost', 'Home', { post })}
+        onPress={() => navigateToFrom(navigation, 'BlogPost', 'Home', { postId: post.id })}
       >
         <View style={styles.authorContainer}>
           {/* Add safety check for image source */}
@@ -293,6 +299,7 @@ export default function HomeScreen({ navigation }) {
         renderItem={renderBlogPost}
         title="Blog"
         cardWidth={320}
+        onTitlePress={() => navigateToFrom(navigation, 'Blog', 'Home')}
       />
     );
   };
