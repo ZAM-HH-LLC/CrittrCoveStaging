@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /blog
+Allow: /blog-post*
+
+Sitemap: https://crittrcove.com/sitemap.xml
