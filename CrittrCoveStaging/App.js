@@ -84,6 +84,18 @@ import Waitlist from './src/screens/Waitlist';
 import TestToast from './src/screens/TestToast';
 import Connections from './src/screens/Connections';
 
+// SEO Landing Pages
+import DogBoardingColoradoSprings from './src/screens/seo/DogBoardingColoradoSprings';
+import DogWalkerColoradoSprings from './src/screens/seo/DogWalkerColoradoSprings';
+import CatSittingColoradoSprings from './src/screens/seo/CatSittingColoradoSprings';
+import ExoticPetCareColoradoSprings from './src/screens/seo/ExoticPetCareColoradoSprings';
+import FerretSitterColoradoSprings from './src/screens/seo/FerretSitterColoradoSprings';
+import BirdBoardingColoradoSprings from './src/screens/seo/BirdBoardingColoradoSprings';
+import HorseSittingColorado from './src/screens/seo/HorseSittingColorado';
+import ReptileSitterColoradoSprings from './src/screens/seo/ReptileSitterColoradoSprings';
+import PetBoardingColoradoSprings from './src/screens/seo/PetBoardingColoradoSprings';
+import DogSittingColoradoSprings from './src/screens/seo/DogSittingColoradoSprings';
+
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -119,6 +131,18 @@ const screens = [
   { name: 'Waitlist', component: Waitlist },
   { name: 'TestToast', component: TestToast },
   { name: 'Connections', component: Connections },
+  
+  // SEO Landing Pages
+  { name: 'DogBoardingColoradoSprings', component: DogBoardingColoradoSprings },
+  { name: 'DogWalkerColoradoSprings', component: DogWalkerColoradoSprings },
+  { name: 'CatSittingColoradoSprings', component: CatSittingColoradoSprings },
+  { name: 'ExoticPetCareColoradoSprings', component: ExoticPetCareColoradoSprings },
+  { name: 'FerretSitterColoradoSprings', component: FerretSitterColoradoSprings },
+  { name: 'BirdBoardingColoradoSprings', component: BirdBoardingColoradoSprings },
+  { name: 'HorseSittingColorado', component: HorseSittingColorado },
+  { name: 'ReptileSitterColoradoSprings', component: ReptileSitterColoradoSprings },
+  { name: 'PetBoardingColoradoSprings', component: PetBoardingColoradoSprings },
+  { name: 'DogSittingColoradoSprings', component: DogSittingColoradoSprings },
 ];
 
 const createLinking = (authContext) => ({
@@ -250,6 +274,18 @@ const createLinking = (authContext) => ({
       Waitlist: 'waitlist',
       TestToast: 'test-toast',
       Connections: 'connections',
+      
+      // SEO Landing Pages
+      DogBoardingColoradoSprings: 'dog-boarding-colorado-springs',
+      DogWalkerColoradoSprings: 'dog-walker-colorado-springs', 
+      CatSittingColoradoSprings: 'cat-sitting-colorado-springs',
+      ExoticPetCareColoradoSprings: 'exotic-pet-care-colorado-springs',
+      FerretSitterColoradoSprings: 'ferret-sitter-colorado-springs',
+      BirdBoardingColoradoSprings: 'bird-boarding-colorado-springs',
+      HorseSittingColorado: 'horse-sitting-colorado',
+      ReptileSitterColoradoSprings: 'reptile-sitter-colorado-springs',
+      PetBoardingColoradoSprings: 'pet-boarding-colorado-springs',
+      DogSittingColoradoSprings: 'dog-sitting-colorado-springs',
     }
   }
 });

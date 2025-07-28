@@ -642,6 +642,79 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
+  // SEO Service Links Section Component
+  const ServiceLinksSection = () => {
+    const serviceLinks = [
+      {
+        title: "Dog Boarding",
+        description: "Overnight care for your dog in Colorado Springs",
+        route: "DogBoardingColoradoSprings"
+      },
+      {
+        title: "Exotic Pet Care", 
+        description: "Specialized care for reptiles, birds, and unique pets",
+        route: "ExoticPetCareColoradoSprings"
+      },
+      {
+        title: "Cat Sitting",
+        description: "In-home care for your feline friends",
+        route: "CatSittingColoradoSprings"
+      },
+      {
+        title: "Dog Walking",
+        description: "Professional dog walking services",
+        route: "DogWalkerColoradoSprings"
+      },
+      {
+        title: "Pet Boarding",
+        description: "Boarding for all types of pets",
+        route: "PetBoardingColoradoSprings"
+      },
+      {
+        title: "Bird Boarding",
+        description: "Specialized avian care services",
+        route: "BirdBoardingColoradoSprings"
+      }
+    ];
+
+    return (
+      <View style={styles.serviceLinksSection}>
+        <Text style={styles.serviceLinksTitle}>Find Pet Care Services in Colorado Springs</Text>
+        <Text style={styles.serviceLinksSubtitle}>Connect with trusted professionals for all your pet care needs</Text>
+        
+        <View style={[styles.serviceLinksGrid, { 
+          flexDirection: isMobileView ? 'column' : 'row',
+          flexWrap: isMobileView ? 'nowrap' : 'wrap',
+        }]}>
+          {serviceLinks.map((service, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[styles.serviceLinkCard, {
+                width: isMobileView ? '90%' : '31%',
+                marginBottom: 15,
+                marginRight: isMobileView ? 0 : '1.5%',
+              }]}
+              onPress={() => navigateToFrom(navigation, service.route, 'Home')}
+            >
+              <Text style={styles.serviceLinkTitle}>{service.title}</Text>
+              <Text style={styles.serviceLinkDescription}>{service.description}</Text>
+              <View style={styles.serviceLinkArrow}>
+                <MaterialCommunityIcons name="arrow-right" size={16} color={theme.colors.primary} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.viewAllServicesButton}
+          onPress={() => navigateToFrom(navigation, 'SearchProfessionalsListing', 'Home')}
+        >
+          <Text style={styles.viewAllServicesText}>View All Services</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <ScrollView 
       style={styles.container}
@@ -702,6 +775,9 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
 
+      {/* SEO Service Links Section */}
+      <ServiceLinksSection />
+      
       <Features />
       <ReviewsSection />
       <BlogSection />
@@ -1364,5 +1440,78 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 20,
     width: '100%',
+  },
+  // SEO Service Links Section Styles
+  serviceLinksSection: {
+    padding: 30,
+    backgroundColor: '#f8f9fa',
+    width: '100%',
+    alignItems: 'center',
+  },
+  serviceLinksTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
+  serviceLinksSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 30,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  serviceLinksGrid: {
+    width: '100%',
+    maxWidth: 1200,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  serviceLinkCard: {
+    backgroundColor: '#ffffff',
+    padding: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  serviceLinkTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 8,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  serviceLinkDescription: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 10,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  serviceLinkArrow: {
+    position: 'absolute',
+    bottom: 15,
+    right: 15,
+  },
+  viewAllServicesButton: {
+    marginTop: 20,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  viewAllServicesText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.fonts.regular.fontFamily,
   },
 });
