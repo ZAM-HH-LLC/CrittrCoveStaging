@@ -1,0 +1,49 @@
+# SEO Landing Pages - Redirect to index.html for client-side routing
+/dog-boarding-colorado-springs    /index.html   200
+/dog-walker-colorado-springs      /index.html   200
+/cat-sitting-colorado-springs     /index.html   200
+/exotic-pet-care-colorado-springs /index.html   200
+/ferret-sitter-colorado-springs   /index.html   200
+/bird-boarding-colorado-springs   /index.html   200
+/horse-sitting-colorado           /index.html   200
+/reptile-sitter-colorado-springs  /index.html   200
+/pet-boarding-colorado-springs    /index.html   200
+/dog-sitting-colorado-springs     /index.html   200
+
+# Main app routes
+/signin                              /index.html   200
+/signup                              /index.html   200
+/SearchProfessionalsListing          /index.html   200
+/dashboard                           /index.html   200
+/message-history                     /index.html   200
+/search-professionals                /index.html   200
+/my-profile                          /index.html   200
+/contact-us                          /index.html   200
+/blog                                /index.html   200
+/privacy-policy                      /index.html   200
+/terms-of-service                    /index.html   200
+/help-faq                            /index.html   200
+/waitlist                            /index.html   200
+/become-professional                 /index.html   200
+/service-manager                     /index.html   200
+/my-contracts                        /index.html   200
+/my-bookings                         /index.html   200
+/change-password                     /index.html   200
+/availability-settings               /index.html   200
+/settings                            /index.html   200
+/professional-settings               /index.html   200
+/professional-profile                /index.html   200
+/connections                         /index.html   200
+/test-toast                          /index.html   200
+/owners                              /index.html   200
+/more                                /index.html   200
+
+# Sitemap routes
+/site-map                            /index.html   200
+/site-map.html                       /site-map.html   200
+
+# Blog post routes
+/blog-post                           /index.html   200
+
+# Catch all - redirect to index.html for SPA routing
+/*    /index.html   200 
