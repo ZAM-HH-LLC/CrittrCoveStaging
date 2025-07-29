@@ -469,6 +469,30 @@ function AppContent() {
               // since they have proper React components
             ];
             
+            // Known SEO paths that have React components and should be handled by React Navigation
+            const knownSEOPaths = [
+              '/dog-boarding-colorado-springs',
+              '/dog-boarding-colorado-springs/',
+              '/dog-walker-colorado-springs', 
+              '/dog-walker-colorado-springs/',
+              '/dog-sitting-colorado-springs',
+              '/dog-sitting-colorado-springs/',
+              '/cat-sitting-colorado-springs',
+              '/cat-sitting-colorado-springs/',
+              '/pet-boarding-colorado-springs',
+              '/pet-boarding-colorado-springs/',
+              '/exotic-pet-care-colorado-springs',
+              '/exotic-pet-care-colorado-springs/',
+              '/ferret-sitter-colorado-springs',
+              '/ferret-sitter-colorado-springs/',
+              '/reptile-sitter-colorado-springs',
+              '/reptile-sitter-colorado-springs/',
+              '/bird-boarding-colorado-springs',
+              '/bird-boarding-colorado-springs/',
+              '/horse-sitting-colorado',
+              '/horse-sitting-colorado/'
+            ];
+            
             const isOnProtectedPath = protectedPaths.some(path => 
               currentPath.startsWith(path) || currentPath === path
             );
@@ -477,10 +501,15 @@ function AppContent() {
               currentPath.startsWith(path) || currentPath === path
             );
             
+            const isOnKnownSEOPath = knownSEOPaths.some(path => 
+              currentPath.startsWith(path) || currentPath === path
+            );
+            
             debugLog('MBAo34invid3w App initialization: Web route check:', {
               currentPath,
               isOnProtectedPath,
               isOnSEOPage,
+              isOnKnownSEOPath,
               isSignedIn,
               platform: Platform.OS
             });
@@ -490,6 +519,10 @@ function AppContent() {
               route = 'SignIn';
             } else if (isOnSEOPage) {
               debugLog('MBAo34invid3w Web: User on SEO page, letting React Navigation handle routing');
+              // Don't set a route - let React Navigation handle it based on the URL
+              route = null;
+            } else if (isOnKnownSEOPath) {
+              debugLog('MBAo34invid3w Web: User on known SEO page, letting React Navigation handle routing');
               // Don't set a route - let React Navigation handle it based on the URL
               route = null;
             } else {
@@ -588,7 +621,32 @@ function AppContent() {
     }
   }, [initialRoute, isLoading]);
 
-  if (!isInitialized || isLoading || !initialRoute) {
+  // Check if we're on a known SEO path where initialRoute is intentionally null
+  const isOnKnownSEOPath = Platform.OS === 'web' && typeof window !== 'undefined' && 
+    [
+      '/dog-boarding-colorado-springs',
+      '/dog-boarding-colorado-springs/',
+      '/dog-walker-colorado-springs', 
+      '/dog-walker-colorado-springs/',
+      '/dog-sitting-colorado-springs',
+      '/dog-sitting-colorado-springs/',
+      '/cat-sitting-colorado-springs',
+      '/cat-sitting-colorado-springs/',
+      '/pet-boarding-colorado-springs',
+      '/pet-boarding-colorado-springs/',
+      '/exotic-pet-care-colorado-springs',
+      '/exotic-pet-care-colorado-springs/',
+      '/ferret-sitter-colorado-springs',
+      '/ferret-sitter-colorado-springs/',
+      '/reptile-sitter-colorado-springs',
+      '/reptile-sitter-colorado-springs/',
+      '/bird-boarding-colorado-springs',
+      '/bird-boarding-colorado-springs/',
+      '/horse-sitting-colorado',
+      '/horse-sitting-colorado/'
+    ].some(path => window.location.pathname.startsWith(path) || window.location.pathname === path);
+
+  if (!isInitialized || isLoading || (!initialRoute && !isOnKnownSEOPath)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
         <ActivityIndicator size="large" color={theme.colors.primary} />

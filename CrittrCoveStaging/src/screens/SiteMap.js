@@ -1,10 +1,33 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { debugLog } from '../utils/logging';
 
 const SiteMap = () => {
   const [isLoading, setIsLoading] = React.useState(true);
+  const navigation = useNavigation();
+
+  // Handle navigation for SEO pages
+  const handleSEONavigation = (url) => {
+    // Map URLs to React Navigation route names
+    const routeMap = {
+      '/dog-boarding-colorado-springs': 'DogBoardingColoradoSprings',
+      '/dog-walker-colorado-springs': 'DogWalkerColoradoSprings',
+      '/dog-sitting-colorado-springs': 'DogSittingColoradoSprings',
+      '/cat-sitting-colorado-springs': 'CatSittingColoradoSprings',
+      '/pet-boarding-colorado-springs': 'PetBoardingColoradoSprings',
+      '/exotic-pet-care-colorado-springs': 'ExoticPetCareColoradoSprings',
+      '/ferret-sitter-colorado-springs': 'FerretSitterColoradoSprings',
+      '/reptile-sitter-colorado-springs': 'ReptileSitterColoradoSprings',
+      '/bird-boarding-colorado-springs': 'BirdBoardingColoradoSprings',
+      '/horse-sitting-colorado': 'HorseSittingColorado'
+    };
+    
+    const routeName = routeMap[url];
+    if (routeName) {
+      navigation.navigate(routeName);
+    }
+  };
 
   // Debug logging to track component lifecycle
   React.useEffect(() => {
@@ -138,9 +161,13 @@ const SiteMap = () => {
               {seoPages.map((item, index) => (
                 <li key={index} style={webStyles.linkItem}>
                   <a 
-                    href={item.url} 
+                    href="#" 
                     style={webStyles.link}
                     title={`Navigate to ${item.title}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSEONavigation(item.url);
+                    }}
                   >
                     {item.title}
                   </a>
