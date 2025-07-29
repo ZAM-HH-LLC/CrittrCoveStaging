@@ -64,75 +64,20 @@
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root">
-        <!-- Pre-rendered content for SEO -->
-        <div style="font-family: Arial, sans-serif; background: white; color: #333; min-height: 100vh;">
-            <!-- Header -->
-            <header style="background: white; padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-size: 24px; font-weight: bold; color: #4CAF50;">CrittrCove</div>
-                <div style="font-size: 18px;">☰</div>
-            </header>
-            
-            <!-- Main Content -->
-            <main style="max-width: 1200px; margin: 0 auto; padding: 40px 20px;">
-                <h1 style="font-size: 2.5em; color: #333; margin-bottom: 30px; text-align: center;">Trusted Dog Boarding in Colorado Springs</h1>
-                
-                <div style="max-width: 800px; margin: 0 auto;">
-                    <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px; color: #666; text-align: center;">
-                        Find trusted dog boarding professionals in Colorado Springs with CrittrCove. Our network connects you with 
-                        experienced pet sitters who may provide overnight care and companionship for your furry friends in the 
-                        comfort of their own homes or in loving host families.
-                    </p>
-                    
-                    <p style="font-size: 18px; line-height: 1.6; margin-bottom: 40px; color: #666; text-align: center;">
-                        Whether you need short-term boarding for a weekend getaway or extended care for business travel, 
-                        Colorado Springs dog boarding professionals on our platform aim to provide personalized attention and care.
-                    </p>
-                    
-                    <h2 style="font-size: 2em; color: #333; margin-bottom: 30px; text-align: center;">Why Choose CrittrCove?</h2>
-                    
-                    <div style="margin-bottom: 40px;">
-                        <h3 style="font-size: 1.3em; color: #333; margin-bottom: 15px;"><strong>Professional Overnight Care:</strong></h3>
-                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #666;">
-                            Unlike traditional kennels, the dog boarding professionals on our platform provide home-like environments where your dog receives individual attention and maintains their regular routine. These experienced sitters offer overnight stays in comfortable, safe settings.
-                        </p>
-                        
-                        <h3 style="font-size: 1.3em; color: #333; margin-bottom: 15px;"><strong>Local Colorado Springs Knowledge:</strong></h3>
-                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #666;">
-                            Many boarding professionals on our platform are familiar with the local area, including dog-friendly parks, emergency veterinary clinics, and exercise locations specific to Colorado Springs. We recommend discussing local knowledge with potential caregivers.
-                        </p>
-                        
-                        <h3 style="font-size: 1.3em; color: #333; margin-bottom: 15px;"><strong>No Platform Fees During Beta:</strong></h3>
-                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #666;">
-                            During our beta period, professionals collect payment directly from you (typically via Venmo, cash, or their preferred method) rather than through the app. This eliminates payment processor fees and platform charges, keeping costs lower for everyone.
-                        </p>
-                    </div>
-                    
-                    <h2 style="font-size: 2em; color: #333; margin-bottom: 30px; text-align: center;">Frequently Asked Questions</h2>
-                    
-                    <div style="margin-bottom: 40px;">
-                        <h3 style="font-size: 1.3em; color: #333; margin-bottom: 15px;"><strong>How much does dog boarding cost in Colorado Springs?</strong></h3>
-                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #666;">
-                            Estimated dog boarding rates in Colorado Springs typically range from $35-75 per night, as professionals set their own pricing based on care level and services included. Factors like dog size, special needs, and additional services affect pricing. No platform fees during beta - professionals collect payment directly.
-                        </p>
-                        
-                        <h3 style="font-size: 1.3em; color: #333; margin-bottom: 15px;"><strong>What's included in overnight dog boarding services?</strong></h3>
-                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #666;">
-                            Dog boarding services often include overnight supervision, regular feeding, exercise, playtime, and companionship. Many professionals also offer additional services like walks, medication administration, and daily photo updates. Since each professional sets their own service packages, we recommend discussing specific care needs and confirming what's included before booking.
-                        </p>
-                        
-                        <h3 style="font-size: 1.3em; color: #333; margin-bottom: 15px;"><strong>How do I choose the right boarding sitter for my dog?</strong></h3>
-                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #666;">
-                            Review professional profiles to find experience matching your dog's needs, read reviews from other Colorado Springs pet owners, and schedule a meet-and-greet before booking. Look for caregivers with experience handling your dog's size, breed, and temperament, and verify their comfort level with your specific dog's needs.
-                        </p>
-                    </div>
-                    
-                    <div style="text-align: center; margin-top: 40px;">
-                        <a href="/" style="background: #4CAF50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin: 10px;">Get Started Today</a>
-                        <a href="/contact-us" style="background: transparent; color: #4CAF50; padding: 15px 30px; text-decoration: none; border: 2px solid #4CAF50; border-radius: 5px; font-weight: bold; display: inline-block; margin: 10px;">Contact Us</a>
-                    </div>
-                </div>
-            </main>
+        <!-- Loading indicator for React app -->
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: Arial, sans-serif; background: white;">
+            <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: bold; color: #4CAF50; margin-bottom: 20px;">CrittrCove</div>
+                <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #4CAF50; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                <div style="margin-top: 20px; color: #666;">Loading...</div>
+            </div>
         </div>
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
     </div>
     
     <!-- Load the React app -->
