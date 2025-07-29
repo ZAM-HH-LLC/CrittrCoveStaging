@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { useEffect } from 'react';
+import { debugLog } from './logging';
 
 /**
  * SEO utility for React Native Web
@@ -15,6 +16,14 @@ import { useEffect } from 'react';
  */
 export const useSEO = (title, description, additionalMeta = {}) => {
   useEffect(() => {
+    debugLog("MBA2iovno5rn: useSEO hook triggered", {
+      platform: Platform.OS,
+      title,
+      description,
+      additionalMeta,
+      hasDocument: typeof document !== 'undefined'
+    });
+    
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       // Set document title
       if (title) {

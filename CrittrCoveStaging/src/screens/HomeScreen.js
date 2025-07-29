@@ -826,6 +826,9 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.footerLinksRow}>
           <Text style={styles.footerLink} onPress={() => navigateToFrom(navigation, 'PrivacyPolicy', 'Home')}>Privacy Policy</Text>
           <Text style={styles.footerLink} onPress={() => navigateToFrom(navigation, 'TermsOfService', 'Home')}>Terms of Service</Text>
+          <TouchableOpacity onPress={() => navigateToFrom(navigation, 'SiteMap', 'Home')}>
+            <Text style={styles.footerLink}>Site Map</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </ScrollView>

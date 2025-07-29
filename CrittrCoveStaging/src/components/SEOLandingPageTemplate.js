@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native
 import { useNavigation } from '@react-navigation/native';
 import { theme } from '../styles/theme';
 import { useSEO, addStructuredData } from '../utils/seoUtils';
+import { debugLog } from '../utils/logging';
 
 /**
  * Reusable SEO Landing Page Template
@@ -19,6 +20,34 @@ const SEOLandingPageTemplate = ({
 }) => {
   const navigation = useNavigation();
 
+  debugLog("MBA2iovno5rn: SEOLandingPageTemplate component rendering", {
+    platform: Platform.OS,
+    seoConfigTitle: seoConfig?.title,
+    mainHeading,
+    hasIntroContent: !!introContent,
+    hasWhyCrittrCoveContent: !!whyCrittrCoveContent,
+    faqItemsCount: faqItems?.length || 0,
+    internalLinksCount: internalLinks?.length || 0,
+    hasStructuredData: !!structuredData
+  });
+
+  // Ensure we have valid data to prevent white screens
+  if (!seoConfig || !mainHeading) {
+    debugLog("MBA2iovno5rn: Missing required props for SEO template", {
+      hasSeoConfig: !!seoConfig,
+      hasMainHeading: !!mainHeading
+    });
+    
+    return (
+      <View style={styles.container}>
+        <View style={styles.contentContainer}>
+          <Text style={styles.mainHeading}>Loading...</Text>
+          <Text>Please wait while we load the page content.</Text>
+        </View>
+      </View>
+    );
+  }
+
   // Apply SEO meta tags
   useSEO(seoConfig.title, seoConfig.description, {
     keywords: seoConfig.keywords,
@@ -28,39 +57,79 @@ const SEOLandingPageTemplate = ({
 
   // Add structured data for local business
   React.useEffect(() => {
+    debugLog("MBA2iovno5rn: SEOLandingPageTemplate useEffect triggered", {
+      hasStructuredData: !!structuredData,
+      structuredDataType: typeof structuredData
+    });
+    
     if (structuredData) {
       addStructuredData(structuredData);
     }
   }, [structuredData]);
 
   const handleCTAPress = (route) => {
+    debugLog("MBA2iovno5rn: CTA button pressed", { route });
     navigation.navigate(route);
   };
 
   const handleInternalLinkPress = (route) => {
+    debugLog("MBA2iovno5rn: Internal link pressed", { route });
     navigation.navigate(route);
   };
 
-  return (
-    <ScrollView 
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      accessibilityRole={Platform.OS === 'web' ? 'main' : undefined}
-    >
-      {/* Hero Section */}
-      <View style={styles.heroSection}>
-        <Text 
-          style={styles.mainHeading}
-          accessibilityRole={Platform.OS === 'web' ? 'heading' : 'header'}
-          accessibilityLevel={1}
-        >
-          {mainHeading}
-        </Text>
-        <View style={styles.introContainer}>
-          {introContent}
-        </View>
-      </View>
+  debugLog("MBA2iovno5rn: SEOLandingPageTemplate about to render ScrollView", {
+    containerStyle: styles.container,
+    contentContainerStyle: styles.contentContainer,
+    accessibilityRole: Platform.OS === 'web' ? 'main' : undefined
+  });
 
+    try {
+    debugLog("MBA2iovno5rn: Rendering SEO template with ScrollView", {
+      containerStyle: styles.container,
+      contentContainerStyle: styles.contentContainer
+    });
+    
+    return (
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        accessibilityRole={Platform.OS === 'web' ? 'main' : undefined}
+      >
+        {debugLog("MBA2iovno5rn: ScrollView children starting to render", {
+          mainHeading,
+          hasIntroContent: !!introContent,
+          hasWhyCrittrCoveContent: !!whyCrittrCoveContent
+        })}
+        
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          {debugLog("MBA2iovno5rn: Hero section rendering", {
+            mainHeading,
+            heroSectionStyle: styles.heroSection
+          })}
+          
+          <Text 
+            style={styles.mainHeading}
+            accessibilityRole={Platform.OS === 'web' ? 'heading' : 'header'}
+            accessibilityLevel={1}
+          >
+            {mainHeading}
+          </Text>
+          
+          {debugLog("MBA2iovno5rn: Main heading rendered, now rendering intro container", {
+            introContainerStyle: styles.introContainer
+          })}
+          
+          <View style={styles.introContainer}>
+            {introContent}
+          </View>
+        </View>
+
+      {debugLog("MBA2iovno5rn: Hero section completed, now rendering Why CrittrCove section", {
+        sectionStyle: styles.section,
+        hasWhyCrittrCoveContent: !!whyCrittrCoveContent
+      })}
+      
       {/* Why CrittrCove Section */}
       <View 
         style={styles.section}
@@ -79,6 +148,10 @@ const SEOLandingPageTemplate = ({
         </View>
       </View>
 
+      {debugLog("MBA2iovno5rn: Why CrittrCove section completed, now rendering FAQ section", {
+        faqItemsCount: faqItems?.length || 0
+      })}
+      
       {/* FAQ Section */}
       <View 
         style={styles.section}
@@ -93,18 +166,24 @@ const SEOLandingPageTemplate = ({
           Frequently Asked Questions
         </Text>
         <View style={styles.faqContainer}>
-          {faqItems.map((faq, index) => (
-            <View key={index} style={styles.faqItem}>
-              <Text 
-                style={styles.faqQuestion}
-                accessibilityRole={Platform.OS === 'web' ? 'heading' : 'header'}
-                accessibilityLevel={3}
-              >
-                {faq.question}
-              </Text>
-              <Text style={styles.faqAnswer}>{faq.answer}</Text>
-            </View>
-          ))}
+          {faqItems.map((faq, index) => {
+            debugLog(`MBA2iovno5rn: Rendering FAQ item ${index}`, {
+              question: faq.question,
+              answerLength: faq.answer?.length || 0
+            });
+            return (
+              <View key={index} style={styles.faqItem}>
+                <Text 
+                  style={styles.faqQuestion}
+                  accessibilityRole={Platform.OS === 'web' ? 'heading' : 'header'}
+                  accessibilityLevel={3}
+                >
+                  {faq.question}
+                </Text>
+                <Text style={styles.faqAnswer}>{faq.answer}</Text>
+              </View>
+            );
+          })}
         </View>
       </View>
 
@@ -164,10 +243,24 @@ const SEOLandingPageTemplate = ({
             <Text style={styles.primaryCTAText}>Sign Up Today</Text>
           </TouchableOpacity>
         </View>
+              </View>
+      </ScrollView>
+    );
+  } catch (error) {
+    debugLog("MBA2iovno5rn: Error rendering SEOLandingPageTemplate", {
+      error: error.message,
+      stack: error.stack
+    });
+    
+    // Fallback simple view
+    return (
+      <View style={styles.container}>
+        <Text style={styles.mainHeading}>Error Loading Page</Text>
+        <Text>Please try refreshing the page.</Text>
       </View>
-    </ScrollView>
-  );
-};
+    );
+  }
+  };
 
 const styles = {
   container: {

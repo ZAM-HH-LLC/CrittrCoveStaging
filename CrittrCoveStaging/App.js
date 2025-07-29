@@ -44,6 +44,7 @@ import { ToastProvider } from './src/components/ToastProvider';
 import platformNavigation from './src/utils/platformNavigation';
 import { loadFonts } from './src/styles/fonts';
 import { ActivityIndicator } from 'react-native-paper';
+import { initializePreRendering } from './src/utils/preRenderUtils';
 
 // Import CSS fixes for mobile browsers
 if (Platform.OS === 'web') {
@@ -95,6 +96,7 @@ import HorseSittingColorado from './src/screens/seo/HorseSittingColorado';
 import ReptileSitterColoradoSprings from './src/screens/seo/ReptileSitterColoradoSprings';
 import PetBoardingColoradoSprings from './src/screens/seo/PetBoardingColoradoSprings';
 import DogSittingColoradoSprings from './src/screens/seo/DogSittingColoradoSprings';
+import SiteMap from './src/screens/SiteMap';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -143,6 +145,7 @@ const screens = [
   { name: 'ReptileSitterColoradoSprings', component: ReptileSitterColoradoSprings },
   { name: 'PetBoardingColoradoSprings', component: PetBoardingColoradoSprings },
   { name: 'DogSittingColoradoSprings', component: DogSittingColoradoSprings },
+  { name: 'SiteMap', component: SiteMap },
 ];
 
 const createLinking = (authContext) => ({
@@ -286,6 +289,7 @@ const createLinking = (authContext) => ({
       ReptileSitterColoradoSprings: 'reptile-sitter-colorado-springs',
       PetBoardingColoradoSprings: 'pet-boarding-colorado-springs',
       DogSittingColoradoSprings: 'dog-sitting-colorado-springs',
+      SiteMap: 'site-map',
     }
   }
 });
@@ -369,6 +373,14 @@ function AppContent() {
   const [isVisible, setIsVisible] = useState(true);
   const [inviteToken, setInviteToken] = useState(null);
 
+  // Initialize pre-rendering utilities
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const preRenderInfo = initializePreRendering();
+      debugLog('MBA9999: Pre-rendering initialized', preRenderInfo);
+    }
+  }, []);
+
   // Check for invitation in the URL
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -449,13 +461,26 @@ function AppContent() {
               '/Connections', '/connections'
             ];
             
+            // SEO pages that should not redirect to Home
+            // NOTE: Removed all SEO pages as they are now proper React components
+            // and should use normal React Navigation routing
+            const seoPages = [
+              // No longer treating landing pages as special SEO pages
+              // since they have proper React components
+            ];
+            
             const isOnProtectedPath = protectedPaths.some(path => 
+              currentPath.startsWith(path) || currentPath === path
+            );
+            
+            const isOnSEOPage = seoPages.some(path => 
               currentPath.startsWith(path) || currentPath === path
             );
             
             debugLog('MBAo34invid3w App initialization: Web route check:', {
               currentPath,
               isOnProtectedPath,
+              isOnSEOPage,
               isSignedIn,
               platform: Platform.OS
             });
@@ -463,6 +488,10 @@ function AppContent() {
             if (isOnProtectedPath) {
               debugLog('MBAo34invid3w Web: User not authenticated but on protected path, redirecting to SignIn');
               route = 'SignIn';
+            } else if (isOnSEOPage) {
+              debugLog('MBAo34invid3w Web: User on SEO page, letting React Navigation handle routing');
+              // Don't set a route - let React Navigation handle it based on the URL
+              route = null;
             } else {
               route = 'Home';
               if (authContext.debugLog) {
@@ -477,8 +506,12 @@ function AppContent() {
           }
         }
 
-        setInitialRoute(route);
-        debugLog('MBAo34invid3w Final initial route set to:', route);
+        if (route !== null) {
+          setInitialRoute(route);
+          debugLog('MBAo34invid3w Final initial route set to:', route);
+        } else {
+          debugLog('MBAo34invid3w No initial route set - letting React Navigation handle URL routing');
+        }
       } catch (error) {
         console.error('Error initializing app:', error);
         setInitialRoute(inviteToken ? 'SignUp' : 'Home');

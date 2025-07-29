@@ -1,0 +1,67 @@
+{
+  "rewrites": [
+    {
+      "source": "/dog-boarding-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/dog-walker-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cat-sitting-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/exotic-pet-care-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/ferret-sitter-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/bird-boarding-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/horse-sitting-colorado",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reptile-sitter-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pet-boarding-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/dog-sitting-colorado-springs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    }
+  ]
+} 

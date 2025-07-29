@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="CrittrCove - Professional pet care services in Colorado Springs. Find trusted dog walkers, cat sitters, and exotic pet care professionals." />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://crittrcove.com/" />
+    <meta property="og:title" content="CrittrCove - Professional Pet Care Services" />
+    <meta property="og:description" content="Find trusted pet care professionals in Colorado Springs. Dog walking, cat sitting, and exotic pet care services." />
+    <meta property="og:image" content="https://crittrcove.com/og-image.jpg" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://crittrcove.com/" />
+    <meta property="twitter:title" content="CrittrCove - Professional Pet Care Services" />
+    <meta property="twitter:description" content="Find trusted pet care professionals in Colorado Springs. Dog walking, cat sitting, and exotic pet care services." />
+    <meta property="twitter:image" content="https://crittrcove.com/og-image.jpg" />
+
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <title>CrittrCove - Professional Pet Care Services in Colorado Springs</title>
+    
+    <!-- Structured Data for Local Business -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "CrittrCove",
+      "description": "Professional pet care services in Colorado Springs",
+      "url": "https://crittrcove.com",
+      "telephone": "+1-719-555-0123",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Colorado Springs",
+        "addressRegion": "CO",
+        "addressCountry": "US"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 38.8339,
+        "longitude": -104.8214
+      },
+      "openingHours": "Mo-Su 00:00-23:59",
+      "priceRange": "$$",
+      "serviceArea": {
+        "@type": "City",
+        "name": "Colorado Springs"
+      },
+      "hasOfferCatalog": {
+        "@type": "OfferCatalog",
+        "name": "Pet Care Services",
+        "itemListElement": [
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Dog Walking",
+              "description": "Professional dog walking services"
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Cat Sitting",
+              "description": "In-home cat sitting services"
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Exotic Pet Care",
+              "description": "Specialized care for exotic pets"
+            }
+          }
+        ]
+      }
+    }
+    </script>
+</head>
+<body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root">
+        <!-- Pre-rendered content will be inserted here by react-snap -->
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: Arial, sans-serif;">
+            <div style="text-align: center;">
+                <h1 style="color: #4CAF50; margin-bottom: 20px;">CrittrCove</h1>
+                <p style="color: #666; margin-bottom: 10px;">Professional Pet Care Services</p>
+                <p style="color: #999; font-size: 14px;">Loading...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- This script will be replaced by the build process -->
+    <script>
+        // Fallback for when JavaScript is disabled
+        if (typeof window !== 'undefined') {
+            // Add loading state management
+            window.addEventListener('load', function() {
+                const root = document.getElementById('root');
+                if (root && root.children.length === 1) {
+                    // App has loaded, remove loading state
+                    const loadingDiv = root.querySelector('div');
+                    if (loadingDiv) {
+                        loadingDiv.style.display = 'none';
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

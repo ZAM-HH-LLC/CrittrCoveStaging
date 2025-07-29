@@ -3,8 +3,17 @@ import { View, Text, Platform } from 'react-native';
 import SEOLandingPageTemplate from '../../components/SEOLandingPageTemplate';
 import { seoConfigs } from '../../utils/seoUtils';
 import { theme } from '../../styles/theme';
+import { debugLog } from '../../utils/logging';
 
 const DogBoardingColoradoSprings = () => {
+  debugLog("MBA2iovno5rn: DogBoardingColoradoSprings component rendering", {
+    platform: Platform.OS,
+    seoConfig: seoConfigs.dogBoarding,
+    hasIntroContent: true,
+    hasWhyCrittrCoveContent: true,
+    faqItemsCount: 3,
+    internalLinksCount: 4
+  });
   const introContent = (
     <View style={styles.introContent}>
       <Text style={styles.introText}>
@@ -62,6 +71,14 @@ const DogBoardingColoradoSprings = () => {
     { text: "Pet Boarding Colorado Springs", route: "PetBoardingColoradoSprings" },
     { text: "Cat Sitting Colorado Springs", route: "CatSittingColoradoSprings" }
   ];
+
+  debugLog("MBA2iovno5rn: DogBoardingColoradoSprings about to render SEOLandingPageTemplate", {
+    mainHeading: "Trusted Dog Boarding in Colorado Springs",
+    introContentType: typeof introContent,
+    whyCrittrCoveContentType: typeof whyCrittrCoveContent,
+    faqItemsLength: faqItems.length,
+    internalLinksLength: internalLinks.length
+  });
 
   return (
     <SEOLandingPageTemplate
