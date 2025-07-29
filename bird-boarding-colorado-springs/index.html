@@ -102,6 +102,17 @@
             );
           }
         }(window.location))
+        
+        // Ensure React app takes over after loading
+        window.addEventListener('load', function() {
+          // Remove the pre-rendered content and let React hydrate
+          setTimeout(function() {
+            const root = document.getElementById('root');
+            if (root) {
+              root.innerHTML = '';
+            }
+          }, 100);
+        });
     </script>
     
     <!-- Load React app scripts -->
