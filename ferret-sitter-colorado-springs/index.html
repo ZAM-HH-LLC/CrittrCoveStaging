@@ -90,10 +90,23 @@
     
     <!-- Load the React app -->
     <script>
-        // Redirect to the main app after a brief delay to show pre-rendered content
-        setTimeout(function() {
-            window.location.href = '/ferret-sitter-colorado-springs';
-        }, 2000);
+        // Single Page Apps for GitHub Pages
+        // MIT License - https://github.com/rafgraph/spa-github-pages
+        (function(l) {
+          if (l.search[1] === '/' ) {
+            var decoded = l.search.slice(1).split('&').map(function(s) { 
+              return s.replace(/~and~/g, '&')
+            }).join('?');
+            window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+            );
+          }
+        }(window.location))
     </script>
+    
+    <!-- Load React app scripts -->
+    <script defer="defer" src="/static/js/174.a88fdf84.js"></script>
+    <script defer="defer" src="/static/js/main.e1ca551d.js"></script>
+    <link href="/static/css/main.60d5a690.css" rel="stylesheet">
 </body>
 </html>
