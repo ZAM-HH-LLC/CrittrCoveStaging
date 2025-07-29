@@ -143,4 +143,20 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
+  
+  <!-- Site Map Page -->
+  <url>
+    <loc>https://crittrcove.com/site-map</loc>
+    <lastmod>2024-01-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <!-- Static HTML Sitemap -->
+  <url>
+    <loc>https://crittrcove.com/site-map.html</loc>
+    <lastmod>2024-01-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
 </urlset> 
