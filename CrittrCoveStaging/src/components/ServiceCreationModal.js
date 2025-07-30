@@ -266,10 +266,13 @@ const ServiceCreationModal = ({
         return serviceData.animalTypes?.length > 0;
       
       case STEPS.SERVICE_DETAILS.id:
-        return (
-          serviceData.serviceName?.trim() &&
-          serviceData.serviceDescription?.trim()
-        );
+        // Check for both presence and length validation
+        const hasValidServiceName = serviceData.serviceName?.trim() && 
+          serviceData.serviceName.length <= 35;
+        const hasValidDescription = serviceData.serviceDescription?.trim() && 
+          serviceData.serviceDescription.length <= 300;
+        
+        return hasValidServiceName && hasValidDescription;
       
       case STEPS.RATES_AND_REVIEW.id:
         const hasValidBaseRate = serviceData.rates?.base_rate && 
