@@ -302,7 +302,7 @@ const ProfessionalServicesModal = ({ visible, onClose, professional, primaryServ
     return (
       <ScrollView style={styles.reviewsList} contentContainerStyle={styles.reviewsContent}>
         {[...reviews].sort((a, b) => b.rating - a.rating).map((review) => (
-          <View key={review.id} style={styles.reviewCard}>
+          <View key={review.review_id} style={styles.reviewCard}>
             <View style={styles.reviewUserInfo}>
               <View style={styles.profileContainer}>
                 {renderProfilePicture(review.reviewer_profile_picture)}
