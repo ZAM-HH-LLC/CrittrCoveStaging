@@ -45,6 +45,7 @@ import platformNavigation from './src/utils/platformNavigation';
 import { loadFonts } from './src/styles/fonts';
 import { ActivityIndicator } from 'react-native-paper';
 import { initializePreRendering } from './src/utils/preRenderUtils';
+import { trackPageView, initializeAnalytics } from './src/utils/analytics';
 
 // Import CSS fixes for mobile browsers
 if (Platform.OS === 'web') {
@@ -664,6 +665,18 @@ function AppContent() {
         .catch(error => console.error('Error storing route:', error));
     }
     
+    // Track page view for Google Analytics
+    if (state?.routes?.length > 0) {
+      const currentRoute = state.routes[state.routes.length - 1];
+      const routeName = currentRoute.name;
+      
+      // Track page view for web platform
+      if (Platform.OS === 'web') {
+        const currentPath = typeof window !== 'undefined' ? window.location.pathname : null;
+        trackPageView(routeName, currentPath);
+      }
+    }
+    
     // Web route protection - only redirect if clearly unauthenticated on protected route
     if (Platform.OS === 'web' && state?.routes?.length > 0) {
       const currentRoute = state.routes[state.routes.length - 1];
@@ -843,6 +856,9 @@ export default function App() {
       }
       setFontsLoaded(true);
     };
+
+    // Initialize Google Analytics tracking
+    initializeAnalytics();
 
     initializeFonts();
   }, []);
