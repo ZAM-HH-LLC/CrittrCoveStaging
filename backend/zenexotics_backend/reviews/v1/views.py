@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 import logging
 from core.common_checks import is_professional
 from reviews.models import ProfessionalReview, ClientReview
@@ -58,6 +59,7 @@ class GetUserReviewsView(APIView):
     """
     API endpoint to get reviews for a user based on conversation ID
     """
+    permission_classes = [AllowAny]
 
     def get(self, request):
         conversation_id = request.query_params.get('conversation_id')
