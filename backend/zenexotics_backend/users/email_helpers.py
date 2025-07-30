@@ -213,7 +213,7 @@ def send_welcome_email(user, invitation=None):
                             </ul>
                             <div style="text-align: center; margin: 20px 0;">
                                 <a href="{settings.FRONTEND_BASE_URL}/become-professional" 
-                                style="display: inline-block; background-color: #ffa500; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">
+                                style="display: inline-block; background-color: #ffa500; color: #e67e00; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">
                                 Learn About Becoming a Professional
                                 </a>
                             </div>
@@ -234,7 +234,7 @@ def send_welcome_email(user, invitation=None):
                     <td style="padding: 20px; text-align: center; background-color: #f5f5f5; font-size: 12px;">
                         <p>You're receiving this email because you just created an account on CrittrCove.</p>
                         <p><a href="{settings.FRONTEND_BASE_URL}/settings/notifications" style="color: #008080; text-decoration: underline;">Manage your notification preferences</a> | <a href="{settings.FRONTEND_BASE_URL}" style="color: #008080; text-decoration: underline;">Visit CrittrCove</a></p>
-                        <p>CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103</p>
+                        <p>CrittrCove LLC. • Colorado Springs, CO</p>
                         <p>&copy; 2025 CrittrCove. All rights reserved.</p>
                     </td>
                 </tr>

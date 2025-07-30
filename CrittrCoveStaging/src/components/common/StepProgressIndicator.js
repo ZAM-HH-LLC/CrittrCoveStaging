@@ -6,7 +6,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { theme } from '../../styles/theme';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext, debugLog } from '../../context/AuthContext';
 
 /**
  * @typedef {Object} StepProgressIndicatorProps
@@ -24,15 +24,13 @@ const StepProgressIndicator = props => {
     style,
   } = props;
   
-  const { screenWidth, is_DEBUG } = useContext(AuthContext);
+  const { screenWidth } = useContext(AuthContext);
   const isDesktop = screenWidth > 768;
 
-  if (is_DEBUG) {
-    console.log("MBA1234 - Screen width:", screenWidth);
-    console.log("MBA1234 - Is desktop:", isDesktop);
-    console.log("MBA1234 - Steps:", steps);
-    console.log("MBA1234 - Current step:", currentStep);
-  }
+  debugLog("MBA1234 - Screen width:", screenWidth);
+  debugLog("MBA1234 - Is desktop:", isDesktop);
+  debugLog("MBA1234 - Steps:", steps);
+  debugLog("MBA1234 - Current step:", currentStep);
 
   // Helper function to determine what type of line to render between steps
   const renderLine = (stepIndex) => {

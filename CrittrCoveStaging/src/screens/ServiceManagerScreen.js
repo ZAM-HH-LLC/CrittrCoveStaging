@@ -36,7 +36,7 @@ const ServiceManagerScreen = () => {
       if (userRole === 'professional') {
         setIsLoading(true);
         const data = await getProfessionalServices();
-        if (is_DEBUG) console.log('MBA7890: Fetched services:', data);
+        debugLog('MBA7890: Fetched services:', data);
         setServices(data);
       }
     } catch (error) {

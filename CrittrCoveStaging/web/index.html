@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1.00001, viewport-fit=cover" />
     <!-- Primary Meta Tags -->
     <meta name="title" content="CrittrCove - All Pets Services" />
-    <meta name="description" content="Connect with professional exotic pet service providers for all your pet care needs." />
+    <meta name="description" content="CrittrCove - Connect with professional pet service providers for all your pet care needs." />
+    <meta name="keywords" content="CrittrCove, pet sitting, exotic pet care, Colorado Springs pet services, dog boarding, cat care, reptile sitting">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
@@ -27,7 +28,7 @@
     <link rel="shortcut icon" type="image/png" href="/favicon.png">
     <title>CrittrCove</title>
     
-    <!-- Google Analytics - Production Only -->
+    <!-- Google Analytics 4 - Production Only -->
     <script>
       if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
         // Google tag (gtag.js)
@@ -40,6 +41,12 @@
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
         gtag('config', 'G-L84H7P9FK3');
+        
+        // Send initial page view for GA4
+        gtag('event', 'page_view', {
+          page_path: window.location.pathname,
+          page_title: document.title
+        });
       }
     </script>
     
