@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CrittrCove - Redirecting</title>
+    <script>
+        // Redirect to the main app with the route as a query parameter
+        (function() {
+            var currentPath = window.location.pathname;
+            var newUrl = window.location.origin + '/?route=' + encodeURIComponent(currentPath) + window.location.hash;
+            window.location.replace(newUrl);
+        })();
+    </script>
+</head>
+<body>
+    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: Arial, sans-serif;">
+        <div style="text-align: center;">
+            <h1 style="color: #4CAF50; margin-bottom: 20px;">CrittrCove</h1>
+            <p style="color: #666; margin-bottom: 10px;">Redirecting...</p>
+            <p style="color: #999; font-size: 14px;">If you're not redirected automatically, <a href="/">click here</a>.</p>
+        </div>
+    </div>
+</body>
+</html>
