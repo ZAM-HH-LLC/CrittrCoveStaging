@@ -3,4 +3,5 @@ Allow: /
 Allow: /blog
 Allow: /blog-post*
 
+# Sitemap
 Sitemap: https://crittrcove.com/sitemap.xml
