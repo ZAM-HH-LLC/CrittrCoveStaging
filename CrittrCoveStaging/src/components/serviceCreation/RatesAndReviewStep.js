@@ -202,26 +202,42 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
 
   // Enhanced numeric input formatter with validation
   const formatNumericInput = (text, fieldType = 'amount') => {
-    debugLog('MBA1234', `Formatting numeric input for ${fieldType}:`, text);
+    debugLog('MBA7777', `Formatting numeric input for ${fieldType}:`, text);
     
-    // Don't apply real-time sanitization during typing - this interferes with user experience
-    // Only block extremely dangerous content in real-time
-    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(text);
-    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(text);
+    // First sanitize using the centralized sanitization function
+    const sanitized = sanitizeInput(text, 'amount', { maxLength: 10 });
     
-    if (hasScriptTags || hasSqlInjection) {
-      debugLog('MBA1234', `Dangerous content detected in ${fieldType}:`, text);
-      return null; // Return null to indicate invalid input
+    // Allow empty string for user to clear input
+    if (sanitized === '') {
+      return '';
     }
     
-    return text;
+    // Remove any non-numeric characters except decimal point
+    const numericOnly = sanitized.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = numericOnly.split('.');
+    if (parts.length > 2) {
+      // If there are multiple decimal points, keep only the first one
+      return `${parts[0]}.${parts.slice(1).join('')}`;
+    }
+    
+    // Limit to 2 decimal places
+    if (parts.length === 2 && parts[1].length > 2) {
+      return `${parts[0]}.${parts[1].substring(0, 2)}`;
+    }
+    
+    return numericOnly;
   };
 
   const handleBaseRateChange = (text) => {
+    debugLog('MBA7777', 'Base rate input change:', text);
+    
     const processed = formatNumericInput(text, 'base rate');
     
-    if (processed === null) {
-      setBaseRateError('Invalid characters detected in base rate');
+    // Validate the processed input
+    if (processed !== '' && (isNaN(Number(processed)) || Number(processed) < 0)) {
+      setBaseRateError('Base rate must be a valid positive number');
       return;
     }
     
@@ -257,10 +273,13 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
   };
 
   const handleAdditionalAnimalRateChange = (text) => {
+    debugLog('MBA7777', 'Additional animal rate input change:', text);
+    
     const processed = formatNumericInput(text, 'additional animal rate');
     
-    if (processed === null) {
-      setAdditionalRateError('Invalid characters detected in additional animal rate');
+    // Validate the processed input
+    if (processed !== '' && (isNaN(Number(processed)) || Number(processed) < 0)) {
+      setAdditionalRateError('Additional animal rate must be a valid positive number');
       return;
     }
     
@@ -290,10 +309,13 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
   };
 
   const handleHolidayRateChange = (text) => {
+    debugLog('MBA7777', 'Holiday rate input change:', text);
+    
     const processed = formatNumericInput(text, 'holiday rate');
     
-    if (processed === null) {
-      setHolidayRateError('Invalid characters detected in holiday rate');
+    // Validate the processed input
+    if (processed !== '' && (isNaN(Number(processed)) || Number(processed) < 0)) {
+      setHolidayRateError('Holiday rate must be a valid positive number');
       return;
     }
     
@@ -346,13 +368,14 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
   };
 
   const handleCustomRateChange = (field, value) => {
-    debugLog('MBA1234', `Custom rate ${field} change:`, value);
+    debugLog('MBA7777', `Custom rate ${field} change:`, value);
     
     if (field === 'rate') {
       const processed = formatNumericInput(value, 'custom rate amount');
       
-      if (processed === null) {
-        setCustomRateAmountError('Invalid characters detected in rate amount');
+      // Validate the processed input
+      if (processed !== '' && (isNaN(Number(processed)) || Number(processed) < 0)) {
+        setCustomRateAmountError('Rate amount must be a valid positive number');
         return;
       }
       
@@ -366,46 +389,36 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
         [field]: processed
       }));
     } else if (field === 'title') {
-      // Don't apply real-time sanitization during typing
-      // Only block extremely dangerous content in real-time
-      const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
-      const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
+      // Sanitize the input using the centralized sanitization function
+      const sanitized = sanitizeInput(value, 'service_name', { maxLength: 50 });
       
-      if (hasScriptTags || hasSqlInjection) {
-        debugLog('MBA1234', 'Dangerous content detected in custom rate title:', value);
-        setCustomRateTitleError('Invalid characters detected in title');
-        return;
-      }
-      
-      // Clear error when user starts typing normally
-      if (customRateTitleError) {
+      // Business logic validation
+      if (sanitized.length > 0 && sanitized.length < 2) {
+        setCustomRateTitleError('Title must be at least 2 characters long');
+      } else if (sanitized.length > 50) {
+        setCustomRateTitleError('Title must be no more than 50 characters long');
+      } else {
         setCustomRateTitleError('');
       }
       
       setNewCustomRate(prev => ({
         ...prev,
-        [field]: value
+        [field]: sanitized
       }));
     } else if (field === 'description') {
-      // Don't apply real-time sanitization during typing
-      // Only block extremely dangerous content in real-time
-      const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
-      const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
+      // Sanitize the input using the centralized sanitization function
+      const sanitized = sanitizeInput(value, 'service_description', { maxLength: 200 });
       
-      if (hasScriptTags || hasSqlInjection) {
-        debugLog('MBA1234', 'Dangerous content detected in custom rate description:', value);
-        setCustomRateDescriptionError('Invalid characters detected in description');
-        return;
-      }
-      
-      // Clear error when user starts typing normally
-      if (customRateDescriptionError) {
+      // Business logic validation
+      if (sanitized.length > 200) {
+        setCustomRateDescriptionError('Description must be no more than 200 characters long');
+      } else {
         setCustomRateDescriptionError('');
       }
       
       setNewCustomRate(prev => ({
         ...prev,
-        [field]: value
+        [field]: sanitized
       }));
     }
   };
@@ -424,7 +437,7 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
 
     // Check for validation errors
     if (customRateTitleError || customRateAmountError || customRateDescriptionError) {
-      debugLog('MBA1234', 'Cannot save custom rate due to validation errors');
+      debugLog('MBA7777', 'Cannot save custom rate due to validation errors');
       return;
     }
 
@@ -432,6 +445,13 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
     if (!newCustomRate.title.trim()) {
       setCustomRateTitleError('Title is required');
       debugLog('MBAno34othg0v', 'Missing custom rate title');
+      return;
+    }
+    
+    // Validate title length
+    if (newCustomRate.title.trim().length < 2) {
+      setCustomRateTitleError('Title must be at least 2 characters long');
+      debugLog('MBAno34othg0v', 'Custom rate title too short');
       return;
     }
     
@@ -452,17 +472,17 @@ const RatesAndReviewStep = ({ serviceData, setServiceData, isUpdatingService, se
 
     debugLog('MBAno34othg0v', 'Saving custom rate successfully:', newCustomRate);
     
-    // Sanitize the data before saving
-    const sanitizedRate = {
-      title: sanitizeInput(newCustomRate.title, 'name', { maxLength: 50 }).trim(),
-      rate: newCustomRate.rate, // Rate is already numeric, no need to sanitize
-      description: sanitizeInput(newCustomRate.description, 'description', { maxLength: 200 }).trim()
+    // Data is already sanitized in real-time, just prepare for saving
+    const customRate = {
+      title: newCustomRate.title.trim(),
+      rate: newCustomRate.rate, // Rate is already validated as numeric
+      description: newCustomRate.description.trim()
     };
     
-    // Save the sanitized custom rate to the service data
+    // Save the custom rate to the service data
     setServiceData(prev => ({
       ...prev,
-      additionalRates: [...(prev.additionalRates || []), sanitizedRate]
+      additionalRates: [...(prev.additionalRates || []), customRate]
     }));
     
     // Reset the form state
