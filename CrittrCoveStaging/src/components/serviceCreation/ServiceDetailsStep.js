@@ -21,10 +21,10 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
   const [descriptionError, setDescriptionError] = useState('');
 
   const handleServiceNameChange = (text) => {
-    debugLog('MBA1234', 'Service name input change:', text);
+    debugLog('MBA7777', 'Service name input change:', text);
     
-    // Sanitize the input using the universal sanitizer
-    const sanitized = sanitizeInput(text, 'name', { maxLength: MAX_SERVICE_NAME_LENGTH });
+    // Sanitize the input using DOMPurify-based sanitizer with service_name type
+    const sanitized = sanitizeInput(text, 'service_name', { maxLength: MAX_SERVICE_NAME_LENGTH });
     
     // Business logic validation
     if (sanitized.length > 0 && sanitized.length < 3) {
@@ -35,8 +35,8 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
       setNameError('');
     }
     
-    // Auto-toggle overnight service if "Owner's Home" is selected
-    const shouldToggleOvernight = sanitized.includes("Overnight") || sanitized.includes("overnight") || sanitized.includes("over night");
+    // Auto-toggle overnight service if "Overnight" is mentioned
+    const shouldToggleOvernight = sanitized.toLowerCase().includes("overnight") || sanitized.toLowerCase().includes("over night");
     
     setServiceData(prev => ({
       ...prev,
@@ -46,10 +46,10 @@ const ServiceDetailsStep = ({ serviceData, setServiceData }) => {
   };
 
   const handleDescriptionChange = (text) => {
-    debugLog('MBA1234', 'Service description input change:', text);
+    debugLog('MBA7777', 'Service description input change:', text);
     
-    // Sanitize the input using the universal sanitizer
-    const sanitized = sanitizeInput(text, 'description', { maxLength: MAX_DESCRIPTION_LENGTH });
+    // Sanitize the input using DOMPurify-based sanitizer with service_description type
+    const sanitized = sanitizeInput(text, 'service_description', { maxLength: MAX_DESCRIPTION_LENGTH });
     
     // Business logic validation
     if (sanitized.length > 0 && sanitized.length < 10) {

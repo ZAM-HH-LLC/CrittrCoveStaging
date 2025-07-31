@@ -350,6 +350,8 @@ export default function SignUp() {
 
   // Enhanced input handlers with real-time sanitization
   const handleFirstNameChange = (text) => {
+    debugLog('MBA7777: First name input change:', text);
+    
     // Apply real-time sanitization for names
     const sanitizedText = sanitizeInput(text, 'name');
     
@@ -357,19 +359,22 @@ export default function SignUp() {
     const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
     
     if (removalPercentage > 30 && text.length > 3) {
-      debugLog('MBA1234: Potentially malicious first name input detected:', {
+      debugLog('MBA7777: Potentially malicious first name input detected:', {
         original: text,
         sanitized: sanitizedText,
         removalPercentage
       });
-      return; // Don't update if too much was removed
+      // Still update with sanitized version, don't block completely
     }
     
+    // Always update with sanitized version to ensure UI reflects sanitization
     setFirstName(sanitizedText);
     setFirstNameError('');
   };
 
   const handleLastNameChange = (text) => {
+    debugLog('MBA7777: Last name input change:', text);
+    
     // Apply real-time sanitization for names
     const sanitizedText = sanitizeInput(text, 'name');
     
@@ -377,19 +382,22 @@ export default function SignUp() {
     const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
     
     if (removalPercentage > 30 && text.length > 3) {
-      debugLog('MBA1234: Potentially malicious last name input detected:', {
+      debugLog('MBA7777: Potentially malicious last name input detected:', {
         original: text,
         sanitized: sanitizedText,
         removalPercentage
       });
-      return; // Don't update if too much was removed
+      // Still update with sanitized version, don't block completely
     }
     
+    // Always update with sanitized version to ensure UI reflects sanitization
     setLastName(sanitizedText);
     setLastNameError('');
   };
 
   const handleEmailChange = (text) => {
+    debugLog('MBA7777: Email input change:', text);
+    
     // Apply real-time sanitization for emails
     const sanitizedText = sanitizeInput(text, 'email');
     
@@ -397,19 +405,22 @@ export default function SignUp() {
     const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
     
     if (removalPercentage > 20 && text.length > 5) {
-      debugLog('MBA1234: Potentially malicious email input detected:', {
+      debugLog('MBA7777: Potentially malicious email input detected:', {
         original: text,
         sanitized: sanitizedText,
         removalPercentage
       });
-      return; // Don't update if too much was removed
+      // Still update with sanitized version, don't block completely
     }
     
+    // Always update with sanitized version to ensure UI reflects sanitization
     setEmail(sanitizedText);
     setEmailError('');
   };
 
   const handlePasswordChange = (text) => {
+    debugLog('MBA7777: Password input change:', text);
+    
     // For passwords, we're more lenient with sanitization during typing
     // Full validation happens on form submission
     const sanitizedText = sanitizeInput(text, 'password');
@@ -418,19 +429,22 @@ export default function SignUp() {
     const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
     
     if (removalPercentage > 50 && text.length > 8) {
-      debugLog('MBA1234: Potentially malicious password input detected:', {
+      debugLog('MBA7777: Potentially malicious password input detected:', {
         original: text,
         sanitized: sanitizedText,
         removalPercentage
       });
-      return; // Don't update if too much was removed
+      // Still update with sanitized version, don't block completely
     }
     
+    // Always update with sanitized version to ensure UI reflects sanitization
     setPassword(sanitizedText);
     setPasswordError('');
   };
 
   const handleConfirmPasswordChange = (text) => {
+    debugLog('MBA7777: Confirm password input change:', text);
+    
     // For confirm password, we don't sanitize as much since it needs to match exactly
     // But we still prevent obvious XSS attempts
     const sanitizedText = sanitizeInput(text, 'password');
@@ -438,14 +452,15 @@ export default function SignUp() {
     const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
     
     if (removalPercentage > 50 && text.length > 8) {
-      debugLog('MBA1234: Potentially malicious confirm password input detected:', {
+      debugLog('MBA7777: Potentially malicious confirm password input detected:', {
         original: text,
         sanitized: sanitizedText,
         removalPercentage
       });
-      return; // Don't update if too much was removed
+      // Still update with sanitized version, don't block completely
     }
     
+    // Always update with sanitized version to ensure UI reflects sanitization
     setConfirmPassword(sanitizedText);
     setConfirmPasswordError('');
   };

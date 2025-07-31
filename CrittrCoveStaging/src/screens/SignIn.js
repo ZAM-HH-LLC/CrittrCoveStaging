@@ -47,37 +47,43 @@ export default function SignIn() {
 
   // Enhanced input handlers with real-time sanitization
   const handleEmailChange = (text) => {
+    debugLog('MBA7777: Email input change:', text);
+    
     const sanitizedText = sanitizeInput(text, 'email');
     
     const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
     
     if (removalPercentage > 20 && text.length > 5) {
-      debugLog('MBA1234: Potentially malicious email input detected in SignIn:', {
+      debugLog('MBA7777: Potentially malicious email input detected in SignIn:', {
         original: text,
         sanitized: sanitizedText,
         removalPercentage
       });
-      return;
+      // Still update with sanitized version, don't block completely
     }
     
+    // Always update with sanitized version to ensure UI reflects sanitization
     setEmail(sanitizedText);
     setEmailError('');
   };
 
   const handlePasswordChange = (text) => {
+    debugLog('MBA7777: Password input change:', text);
+    
     const sanitizedText = sanitizeInput(text, 'password');
     
     const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
     
     if (removalPercentage > 50 && text.length > 8) {
-      debugLog('MBA1234: Potentially malicious password input detected in SignIn:', {
+      debugLog('MBA7777: Potentially malicious password input detected in SignIn:', {
         original: text,
         sanitized: sanitizedText,
         removalPercentage
       });
-      return;
+      // Still update with sanitized version, don't block completely
     }
     
+    // Always update with sanitized version to ensure UI reflects sanitization
     setPassword(sanitizedText);
     setPasswordError('');
   };

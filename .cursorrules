@@ -15,12 +15,13 @@ CURSOR PROJECT GUIDELINES
 ### 1. Logging & Debugging  
 1. When adding `console.log` in **JS/TS** files, use:  
    ```js
-   debugLog("MBA<NNNN>: <message>", data);
+   debugLog("MBA<NNNNNNNNNNLSS>: <message>", data);
    ```  
-   * Use the same X‑digit `<NNNN>` for **all** logs added in one change or in one chat session if that whole session is discussing the same issue.  
-   * DO NOT use the MBA3210 anymore. 
+   * Use the same X‑digit `<NNNNNNNNNNLSS>` for **all** logs added in one change or in one chat session if that whole session is discussing the same issue.  
+   * DO NOT use the only digits.
+   * USE numbers letters, and special symbols all in the same string and randomize the numbers/letters/symbols. 
    * DO NOT use the debugLog function in the backend.
-2. Remind me to filter logs with `MBA<NNNN>` in your explanation of what you changed at the end.
+2. Remind me to filter logs with `MBA<NNNNNNNNNNLSS>` in your explanation of what you changed at the end.
 3. Replace all use cases of is_DEBUG with the debugLog function. 
 
 ---

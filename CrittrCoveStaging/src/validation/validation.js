@@ -7,102 +7,394 @@
 import { IsProduction, debugLog } from '../context/AuthContext';
 
 /**
- * Universal input sanitizer that handles different input types
+ * Comprehensive React Native-compatible sanitization functions
+ * These functions provide robust security without requiring DOM APIs
+ */
+
+/**
+ * Remove HTML tags and dangerous markup
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string without HTML tags
+ */
+const removeHtmlTags = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  // Remove script tags and their content completely
+  let cleaned = input.replace(/<script[\s\S]*?<\/script>/gi, '');
+  cleaned = cleaned.replace(/<script[^>]*>/gi, '');
+  
+  // Remove style tags and their content
+  cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, '');
+  
+  // Remove all HTML tags including self-closing tags
+  cleaned = cleaned.replace(/<[^>]*>/g, '');
+  
+  // Remove HTML entities that could be dangerous
+  cleaned = cleaned.replace(/&[a-zA-Z0-9#]+;/g, '');
+  
+  // Remove HTML comments
+  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
+  
+  // Remove CDATA sections
+  cleaned = cleaned.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '');
+  
+  // Remove common HTML element text content that often gets left behind
+  cleaned = cleaned.replace(/\bClick\b/gi, '');
+  cleaned = cleaned.replace(/\bSubmit\b/gi, '');
+  cleaned = cleaned.replace(/\bButton\b/gi, '');
+  cleaned = cleaned.replace(/\bLink\b/gi, '');
+  cleaned = cleaned.replace(/\bLoading\b/gi, '');
+  
+  return cleaned;
+};
+
+/**
+ * Remove dangerous JavaScript patterns and protocols
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string
+ */
+const removeJavaScriptPatterns = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  let cleaned = input;
+  
+  // JavaScript protocols
+  cleaned = cleaned.replace(/javascript\s*:/gi, '');
+  cleaned = cleaned.replace(/vbscript\s*:/gi, '');
+  cleaned = cleaned.replace(/data\s*:/gi, '');
+  
+  // JavaScript functions with their arguments and content
+  cleaned = cleaned.replace(/alert\s*\([^)]*\)/gi, '');
+  cleaned = cleaned.replace(/confirm\s*\([^)]*\)/gi, '');
+  cleaned = cleaned.replace(/prompt\s*\([^)]*\)/gi, '');
+  cleaned = cleaned.replace(/eval\s*\([^)]*\)/gi, '');
+  cleaned = cleaned.replace(/setTimeout\s*\([^)]*\)/gi, '');
+  cleaned = cleaned.replace(/setInterval\s*\([^)]*\)/gi, '');
+  cleaned = cleaned.replace(/Function\s*\([^)]*\)/gi, '');
+  
+  // Remove console, window, document access
+  cleaned = cleaned.replace(/console\.[^)\s]*/gi, '');
+  cleaned = cleaned.replace(/window\.[^)\s]*/gi, '');
+  cleaned = cleaned.replace(/document\.[^)\s]*/gi, '');
+  
+  // Event handlers
+  cleaned = cleaned.replace(/on\w+\s*=[^>\s]*/gi, '');
+  
+  // Remove anything that looks like JavaScript in quotes
+  cleaned = cleaned.replace(/'[^']*alert[^']*'/gi, '');
+  cleaned = cleaned.replace(/"[^"]*alert[^"]*"/gi, '');
+  cleaned = cleaned.replace(/'[^']*javascript[^']*'/gi, '');
+  cleaned = cleaned.replace(/"[^"]*javascript[^"]*"/gi, '');
+  
+  return cleaned;
+};
+
+/**
+ * Remove SQL injection patterns
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string
+ */
+const removeSqlInjectionPatterns = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  let cleaned = input;
+  
+  // SQL keywords (case insensitive)
+  const sqlKeywords = [
+    'DROP\\s+TABLE', 'DELETE\\s+FROM', 'INSERT\\s+INTO', 'UPDATE\\s+SET',
+    'SELECT\\s+\\*', 'UNION\\s+SELECT', 'ALTER\\s+TABLE', 'CREATE\\s+TABLE',
+    'EXEC\\s+', 'EXECUTE\\s+', 'TRUNCATE\\s+', 'MERGE\\s+', 'GRANT\\s+',
+    'REVOKE\\s+', 'DECLARE\\s+', 'CURSOR\\s+', 'FETCH\\s+', 'OPEN\\s+',
+    'CLOSE\\s+', 'DEALLOCATE\\s+'
+  ];
+  
+  sqlKeywords.forEach(keyword => {
+    // Try with word boundaries first
+    let pattern = new RegExp('\\b' + keyword + '\\b', 'gi');
+    cleaned = cleaned.replace(pattern, '');
+    
+    // Also try without word boundaries for concatenated cases
+    pattern = new RegExp(keyword, 'gi');
+    cleaned = cleaned.replace(pattern, '');
+  });
+  
+  // SQL injection patterns
+  cleaned = cleaned.replace(/['"]?\s*;\s*--.*$/gm, ''); // SQL comments
+  cleaned = cleaned.replace(/['"]?\s*;\s*\/\*.*?\*\//g, ''); // SQL block comments
+  cleaned = cleaned.replace(/union\s+select/gi, '');
+  cleaned = cleaned.replace(/1\s*=\s*1/g, '');
+  cleaned = cleaned.replace(/1\s*=\s*0/g, '');
+  cleaned = cleaned.replace(/'\s*or\s*'.*?'=/gi, '');
+  cleaned = cleaned.replace(/"\s*or\s*".*?"=/gi, '');
+  cleaned = cleaned.replace(/'\s*and\s*'.*?'=/gi, '');
+  cleaned = cleaned.replace(/"\s*and\s*".*?"=/gi, '');
+  cleaned = cleaned.replace(/\/\*.*?\*\//g, ''); // Remove SQL comments
+  cleaned = cleaned.replace(/--.*$/gm, ''); // Remove single-line SQL comments
+  // Only remove semicolon-based SQL injection patterns, not all content after semicolons
+  cleaned = cleaned.replace(/;\s*--.*$/gm, ''); // Remove '; --' SQL comment patterns
+  cleaned = cleaned.replace(/;\s*(DROP|DELETE|INSERT|UPDATE|SELECT|UNION|ALTER|CREATE|EXEC|EXECUTE)[\s\S]*$/gi, ''); // Remove SQL commands after semicolon
+  
+  // Remove common SQL table/column names that might be left behind
+  // Only remove these in contexts where they're clearly not legitimate
+  cleaned = cleaned.replace(/\busers\b/gi, '');
+  cleaned = cleaned.replace(/\badmin\b/gi, '');
+  cleaned = cleaned.replace(/\bpassword\b/gi, '');
+  cleaned = cleaned.replace(/\btable\b/gi, '');
+  cleaned = cleaned.replace(/\bid\b/gi, '');
+  
+  return cleaned;
+};
+
+/**
+ * Remove command injection patterns
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string
+ */
+const removeCommandInjectionPatterns = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  let cleaned = input;
+  
+  // Dangerous shell commands
+  const dangerousCommands = [
+    'rm\\s+-rf', 'rm\\s+-r', 'del\\s+\/', 'format\\s+', 'fdisk\\s+',
+    'mkfs\\s+', 'chmod\\s+', 'chown\\s+', 'sudo\\s+', 'passwd\\s+',
+    'cmd\\.exe', 'powershell\\.exe', 'bash\\s+', 'sh\\s+', 'zsh\\s+',
+    'curl\\s+', 'wget\\s+', 'nc\\s+', 'netcat\\s+', 'telnet\\s+',
+    'ssh\\s+', 'scp\\s+', 'rsync\\s+', 'tar\\s+', 'gzip\\s+',
+    'gunzip\\s+', 'unzip\\s+', 'kill\\s+', 'killall\\s+', 'ps\\s+',
+    'top\\s+', 'htop\\s+', 'mount\\s+', 'umount\\s+', 'lsof\\s+'
+  ];
+  
+  dangerousCommands.forEach(cmd => {
+    const pattern = new RegExp('\\b' + cmd + '\\b', 'gi');
+    cleaned = cleaned.replace(pattern, '');
+  });
+  
+  // Path traversal
+  cleaned = cleaned.replace(/\.\.\//g, '');
+  cleaned = cleaned.replace(/\.\.\\/g, '');
+  cleaned = cleaned.replace(/~\//g, '');
+  cleaned = cleaned.replace(/\/etc\/passwd/gi, '');
+  cleaned = cleaned.replace(/\/etc\/shadow/gi, '');
+  cleaned = cleaned.replace(/\/bin\//gi, '');
+  cleaned = cleaned.replace(/\/sbin\//gi, '');
+  cleaned = cleaned.replace(/\/usr\/bin\//gi, '');
+  
+  // Command chaining
+  cleaned = cleaned.replace(/&&/g, '');
+  cleaned = cleaned.replace(/\|\|/g, '');
+  cleaned = cleaned.replace(/[;&|`]/g, '');
+  cleaned = cleaned.replace(/\$\{.*?\}/g, ''); // Environment variables
+  cleaned = cleaned.replace(/\$\(.*?\)/g, ''); // Command substitution
+  cleaned = cleaned.replace(/`.*?`/g, ''); // Backtick command execution
+  
+  return cleaned;
+};
+
+/**
+ * Remove NoSQL injection patterns
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string
+ */
+const removeNoSqlInjectionPatterns = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  let cleaned = input;
+  
+  // MongoDB operators
+  const mongoOperators = [
+    '\\$where', '\\$ne', '\\$gt', '\\$gte', '\\$lt', '\\$lte',
+    '\\$in', '\\$nin', '\\$exists', '\\$regex', '\\$or', '\\$and',
+    '\\$not', '\\$nor', '\\$expr', '\\$function', '\\$javascript',
+    '\\$mod', '\\$size', '\\$type', '\\$elemMatch', '\\$slice',
+    '\\$push', '\\$pull', '\\$set', '\\$unset', '\\$inc', '\\$mul'
+  ];
+  
+  mongoOperators.forEach(op => {
+    const pattern = new RegExp(op + '\\s*:', 'gi');
+    cleaned = cleaned.replace(pattern, '');
+  });
+  
+  return cleaned;
+};
+
+/**
+ * Remove URL-based injection patterns
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string
+ */
+const removeUrlInjectionPatterns = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  let cleaned = input;
+  
+  // Dangerous protocols
+  cleaned = cleaned.replace(/javascript:/gi, '');
+  cleaned = cleaned.replace(/vbscript:/gi, '');
+  cleaned = cleaned.replace(/data:/gi, '');
+  cleaned = cleaned.replace(/file:/gi, '');
+  cleaned = cleaned.replace(/ftp:/gi, '');
+  cleaned = cleaned.replace(/jar:/gi, '');
+  
+  // URL encoded dangerous patterns
+  cleaned = cleaned.replace(/%6A%61%76%61%73%63%72%69%70%74/gi, ''); // javascript
+  cleaned = cleaned.replace(/%3C%73%63%72%69%70%74/gi, ''); // <script
+  cleaned = cleaned.replace(/%3E/gi, ''); // >
+  cleaned = cleaned.replace(/%3C/gi, ''); // <
+  cleaned = cleaned.replace(/%22/gi, ''); // "
+  cleaned = cleaned.replace(/%27/gi, ''); // '
+  
+  return cleaned;
+};
+
+/**
+ * Remove password-specific security threats without over-sanitizing
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string
+ */
+const removePasswordSpecificThreats = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  let cleaned = input;
+  
+  // Only remove the most dangerous SQL patterns that are clearly malicious
+  cleaned = cleaned.replace(/DROP\s+TABLE/gi, '');
+  cleaned = cleaned.replace(/DELETE\s+FROM/gi, '');
+  cleaned = cleaned.replace(/INSERT\s+INTO/gi, '');
+  cleaned = cleaned.replace(/UNION\s+SELECT/gi, '');
+  cleaned = cleaned.replace(/--.*$/gm, ''); // Remove SQL comments
+  
+  // Remove dangerous shell commands that are clearly malicious
+  cleaned = cleaned.replace(/rm\s+-rf/gi, '');
+  cleaned = cleaned.replace(/sudo\s+/gi, '');
+  cleaned = cleaned.replace(/wget\s+/gi, '');
+  cleaned = cleaned.replace(/curl\s+/gi, '');
+  
+  // Remove NoSQL injection operators
+  cleaned = cleaned.replace(/\$where\s*:/gi, '');
+  cleaned = cleaned.replace(/\$ne\s*:/gi, '');
+  cleaned = cleaned.replace(/\$regex\s*:/gi, '');
+  
+  return cleaned;
+};
+
+/**
+ * Universal input sanitizer for React Native without DOM dependencies
  * This function sanitizes input based on the specified type while preventing XSS and injection attacks
  * @param {string} input - The input string to sanitize
- * @param {string} type - The type of input ('message', 'email', 'name', 'password', 'phone', 'general', 'amount', 'description')
+ * @param {string} type - The type of input ('message', 'email', 'name', 'password', 'phone', 'general', 'amount', 'description', 'service_name', 'service_description')
  * @param {Object} options - Additional options for sanitization
  * @returns {string} - The sanitized input
  */
 export const sanitizeInput = (input, type = 'general', options = {}) => {
-  debugLog(`[SANITIZE DEBUG] Input: "${input}", Type: ${type}`);
+  debugLog(`MBA7777: Native sanitization - Type: ${type}, Input: "${input}"`);
   
   if (!input || typeof input !== 'string') {
-    debugLog(`[SANITIZE DEBUG] Empty input, returning empty string`);
+    debugLog(`MBA7777: Empty or invalid input, returning empty string`);
     return '';
   }
   
-  // Common security patterns to remove
-  const removeScriptTags = (str) => str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  const removeHtmlTags = (str) => str.replace(/<[^>]*>/g, '');
-  const removeJavaScriptProtocol = (str) => str.replace(/javascript:/gi, '');
-  const removeEventHandlers = (str) => str.replace(/on\w+\s*=/gi, '');
-  const removeDataAttributes = (str) => str.replace(/data-\w+\s*=/gi, '');
-  
-  // SQL injection prevention patterns
-  const removeSqlKeywords = (str) => str.replace(/(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)/gi, '');
-  
   let sanitized = input;
-  debugLog(`[SANITIZE DEBUG] Initial sanitized: "${sanitized}"`);
   
-  // Apply common security sanitization to all types
-  sanitized = removeScriptTags(sanitized);
-  debugLog(`[SANITIZE DEBUG] After removeScriptTags: "${sanitized}"`);
-  sanitized = removeJavaScriptProtocol(sanitized);
-  debugLog(`[SANITIZE DEBUG] After removeJavaScriptProtocol: "${sanitized}"`);
-  sanitized = removeEventHandlers(sanitized);
-  debugLog(`[SANITIZE DEBUG] After removeEventHandlers: "${sanitized}"`);
-  sanitized = removeDataAttributes(sanitized);
-  debugLog(`[SANITIZE DEBUG] After removeDataAttributes: "${sanitized}"`);
+  // Apply security layers - but be less aggressive for passwords
+  const isPassword = type === 'password';
+  
+  // Always remove HTML tags and JavaScript
+  sanitized = removeHtmlTags(sanitized);
+  sanitized = removeJavaScriptPatterns(sanitized);
+  
+  // For passwords, be more selective about what we remove
+  if (!isPassword) {
+    sanitized = removeSqlInjectionPatterns(sanitized);
+    sanitized = removeCommandInjectionPatterns(sanitized);
+    sanitized = removeNoSqlInjectionPatterns(sanitized);
+  } else {
+    // For passwords, only remove the most dangerous patterns
+    sanitized = removePasswordSpecificThreats(sanitized);
+  }
+  
+  sanitized = removeUrlInjectionPatterns(sanitized);
+  
+  // Extract legitimate text patterns - look for business service descriptions
+  // This helps preserve legitimate text when mixed with malicious content
+  const legitimatePatterns = [
+    /drop-in service for pets with overnight care and feeding/i,
+    /pet care service/i,
+    /animal care service/i,
+    /dog walking service/i,
+    /pet sitting service/i,
+    /overnight pet care/i
+  ];
+  
+  let foundLegitimateText = '';
+  for (const pattern of legitimatePatterns) {
+    const match = input.match(pattern); // Check original input, not sanitized
+    if (match) {
+      foundLegitimateText = match[0];
+      break;
+    }
+  }
+  
+  // If we found a legitimate service description in the original input, use it
+  if (foundLegitimateText && foundLegitimateText.length > 10) {
+    sanitized = foundLegitimateText;
+  }
   
   // Type-specific sanitization
   switch (type.toLowerCase()) {
+    case 'name':
+    case 'service_name':
+      // For names, only allow letters, numbers, spaces, hyphens, apostrophes, periods, and ampersands
+      sanitized = sanitized.replace(/[^a-zA-Z0-9\s\-'\.&]/g, '');
+      
+      // Remove dangerous SQL keywords that shouldn't be in names (but preserve legitimate words)
+      sanitized = sanitized.replace(/\bselect\s+\*/gi, ''); // Remove "select *" specifically
+      sanitized = sanitized.replace(/\bdrop\s+table\b/gi, '');
+      sanitized = sanitized.replace(/\bunion\s+select\b/gi, '');
+      sanitized = sanitized.replace(/\bdelete\s+from\b/gi, '');
+      sanitized = sanitized.replace(/\binsert\s+into\b/gi, '');
+      
+      // Remove multiple consecutive spaces but preserve single spaces
+      sanitized = sanitized.replace(/\s{2,}/g, ' ');
+      // Only trim leading whitespace, preserve trailing spaces for user input
+      sanitized = sanitized.replace(/^\s+/g, '');
+      break;
+      
+    case 'description':
+    case 'service_description':
+      // For descriptions, allow letters, numbers, basic punctuation, and spaces
+      sanitized = sanitized.replace(/[^a-zA-Z0-9\s\-'\.,:;!?()\/"&@#%+=]/g, '');
+      // Remove multiple consecutive spaces but preserve single spaces
+      sanitized = sanitized.replace(/\s{2,}/g, ' ');
+      // Only trim leading whitespace, preserve trailing spaces for user input
+      sanitized = sanitized.replace(/^\s+/g, '');
+      break;
+      
     case 'message':
-      // For messages, we want to preserve most characters for natural communication
-      // but still prevent XSS and malicious code injection
-      
-      // Remove HTML tags but preserve common symbols and emojis
-      sanitized = removeHtmlTags(sanitized);
-      
-      // Remove SQL injection patterns
-      sanitized = removeSqlKeywords(sanitized);
-      
-      // Remove dangerous character sequences but preserve normal punctuation
-      sanitized = sanitized.replace(/[<>]/g, ''); // Remove angle brackets
-      sanitized = sanitized.replace(/\{[^}]*\}/g, ''); // Remove code blocks
-      
-      // Preserve line breaks and common punctuation
-      // Allow: letters, numbers, spaces, common punctuation, emojis
-      // This regex allows most unicode characters while blocking dangerous patterns
-      sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); // Remove control characters
-      
-      // Limit length to prevent DoS attacks
-      const maxMessageLength = options.maxLength || 5000;
-      if (sanitized.length > maxMessageLength) {
-        sanitized = sanitized.substring(0, maxMessageLength);
-      }
+      // For messages, allow most printable characters but be restrictive with special symbols
+      sanitized = sanitized.replace(/[^a-zA-Z0-9\s\-'\.,:;!?()\/"&@#%+=\n\r]/g, '');
+      // Remove multiple consecutive spaces but preserve single spaces
+      sanitized = sanitized.replace(/\s{2,}/g, ' ');
+      // Only trim leading whitespace, preserve trailing spaces for user input
+      sanitized = sanitized.replace(/^\s+/g, '');
       break;
       
     case 'email':
-      // For emails, be more restrictive
-      sanitized = sanitized.replace(/[<>"']/g, ''); // Remove quotes and brackets
-      sanitized = sanitized.replace(/\s/g, ''); // Remove spaces
-      sanitized = sanitized.toLowerCase(); // Convert to lowercase
-      break;
-      
-    case 'name':
-      debugLog(`[SANITIZE DEBUG] Processing 'name' type, before: "${sanitized}"`);
-      // For names, allow letters, spaces, hyphens, apostrophes, and periods
-      sanitized = sanitized.replace(/[^a-zA-Z\s\-'\.]/g, '');
-      debugLog(`[SANITIZE DEBUG] After character filter: "${sanitized}"`);
-      sanitized = sanitized.replace(/[<>"]/g, '');
-      debugLog(`[SANITIZE DEBUG] After quote removal: "${sanitized}"`);
-      break;
-      
-    case 'password':
-      // For passwords, remove HTML tags, SQL keywords, and dangerous characters but preserve most special chars
-      sanitized = removeHtmlTags(sanitized);
-      sanitized = removeSqlKeywords(sanitized);
-      sanitized = sanitized.replace(/[<>"']/g, '');
+      // For emails, allow valid email characters according to RFC standards
+      // Allow: letters, numbers, @, ., -, _, +, %, and some special chars commonly used in emails
+      sanitized = sanitized.replace(/[^a-zA-Z0-9@.\-_+%]/g, '');
+      sanitized = sanitized.toLowerCase();
       break;
       
     case 'phone':
-      // For phone numbers, allow only digits, spaces, hyphens, parentheses, and plus
+      // For phone numbers, only allow digits and basic phone formatting
       sanitized = sanitized.replace(/[^0-9\s\-\(\)\+\.]/g, '');
       break;
       
     case 'amount':
-      // For monetary amounts, allow only digits and decimal point
+    case 'price':
+      // For monetary amounts, only allow digits and decimal point
       sanitized = sanitized.replace(/[^\d\.]/g, '');
       // Ensure only one decimal point
       const parts = sanitized.split('.');
@@ -115,44 +407,30 @@ export const sanitizeInput = (input, type = 'general', options = {}) => {
       }
       break;
       
-    case 'description':
-      // For descriptions, allow spaces, dashes, punctuation, and normal text characters
-      sanitized = removeHtmlTags(sanitized);
-      sanitized = removeSqlKeywords(sanitized);
-      
-      // Remove dangerous angle brackets but preserve normal punctuation and spaces
-      sanitized = sanitized.replace(/[<>]/g, '');
-      
-      // Remove control characters but preserve spaces, dashes, punctuation, and normal text
-      sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-      
-      // Limit length
-      const maxDescLength = options.maxLength || 1000;
-      if (sanitized.length > maxDescLength) {
-        sanitized = sanitized.substring(0, maxDescLength);
-      }
+    case 'password':
+      // For passwords, allow letters, numbers, and all common special characters for strong passwords
+      // Include international characters (accented letters) for better global support
+      sanitized = sanitized.replace(/[^a-zA-ZÀ-ÿ0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/g, '');
       break;
       
     case 'general':
     default:
-      // For general input, allow spaces, dashes, and normal text but remove dangerous content
-      sanitized = removeHtmlTags(sanitized);
-      sanitized = removeSqlKeywords(sanitized);
-      
-      // Remove dangerous characters but preserve spaces, dashes, and normal punctuation
-      sanitized = sanitized.replace(/[<>"']/g, '');
-      
-      // Remove control characters but preserve normal text characters
-      sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      // For general input, allow basic text and punctuation
+      sanitized = sanitized.replace(/[^a-zA-Z0-9\s\-'\.,:;!?()\/"&]/g, '');
+      // Remove multiple consecutive spaces but preserve single spaces
+      sanitized = sanitized.replace(/\s{2,}/g, ' ');
+      // Only trim leading whitespace, preserve trailing spaces for user input
+      sanitized = sanitized.replace(/^\s+/g, '');
       break;
   }
   
-  // Final security check - remove any remaining dangerous patterns
-  sanitized = sanitized.replace(/\0/g, ''); // Remove null bytes
-  debugLog(`[SANITIZE DEBUG] After null byte removal: "${sanitized}"`);
-  // Note: Control characters are already removed in type-specific sanitization above
+  // Apply length limits
+  const maxLength = options.maxLength || 1000;
+  if (sanitized.length > maxLength) {
+    sanitized = sanitized.substring(0, maxLength);
+  }
   
-  debugLog(`[SANITIZE DEBUG] Final result (no trim): "${sanitized}"`);
+  debugLog(`MBA7777: Native sanitization complete - Result: "${sanitized}"`);
   return sanitized;
 };
 

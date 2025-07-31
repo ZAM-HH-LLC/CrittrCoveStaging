@@ -320,10 +320,10 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
   };
 
   const handleCustomAnimalInputChange = (text) => {
-    debugLog('MBA1234', 'Custom animal input change:', text);
+    debugLog('MBA7777', 'Custom animal input change:', text);
     
-    // Sanitize the input using the universal sanitizer
-    const sanitized = sanitizeInput(text, 'name', { maxLength: 30 });
+    // Sanitize the input using the universal sanitizer with service_name type to allow spaces
+    const sanitized = sanitizeInput(text, 'service_name', { maxLength: 30 });
     
     // Validate the sanitized input
     const validation = validateName(sanitized);
@@ -365,7 +365,7 @@ const CategorySelectionStep = ({ serviceData, setServiceData }) => {
       return;
     }
 
-    debugLog('MBA1234', 'Adding custom animal with validated input:', customAnimalInput.trim());
+    debugLog('MBA7777', 'Adding custom animal with validated input:', customAnimalInput.trim());
 
     // Find the category name for the custom animal
     let categoryName = 'Other';
