@@ -6,6 +6,7 @@ import { getTimeSettings, updateTimeSettings } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
 import { useToast } from '../../components/ToastProvider';
 import { USER_TIMEZONE_OPTIONS, getTimezoneDisplayName, searchTimezones, getGroupedTimezones } from '../../data/Timezones';
+import { sanitizeInput } from '../../validation/validation';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -198,7 +199,11 @@ const SettingsPaymentsTab = ({
               style={styles.searchInput}
               placeholder="Search timezones (e.g., 'Texas', 'Central Time', 'Mountain')..."
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => {
+                debugLog('MBA7777', 'Timezone search input change:', text);
+                const sanitized = sanitizeInput(text, 'service_name', { maxLength: 50 });
+                setSearchQuery(sanitized);
+              }}
               placeholderTextColor={theme.colors.secondary}
             />
             

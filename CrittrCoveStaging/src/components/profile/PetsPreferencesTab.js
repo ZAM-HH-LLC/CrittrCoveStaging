@@ -851,71 +851,41 @@ const PetsPreferencesTab = ({
   };
 
   const validatePetInput = (field, value, petId) => {
-    debugLog('MBA1234', 'Validating pet input:', { field, value, petId });
+    debugLog('MBA7777', 'Validating pet input:', { field, value, petId });
     
     let sanitized = value;
     let error = '';
     
     // Skip validation for dropdown/boolean fields
-    if (['childrenFriendly', 'catFriendly', 'dogFriendly', 'spayedNeutered', 'houseTrained', 'microchipped', 'canBeLeftAlone', 'energyLevel', 'sex', 'type'].includes(field)) {
+    if (['childrenFriendly', 'catFriendly', 'dogFriendly', 'spayedNeutered', 'houseTrained', 'microchipped', 'canBeLeftAlone', 'energyLevel', 'sex'].includes(field)) {
       return { sanitized, error };
     }
     
-    // First check for dangerous content that should always be blocked
-    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
-    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
-    
-    if (hasScriptTags || hasSqlInjection) {
-      debugLog('MBA1234', 'Dangerous content detected and blocked:', { field, value });
-      return { sanitized: '', error: 'Invalid content detected and removed' };
-    }
+    // Sanitization is handled by the centralized sanitizeInput function
     
     // Sanitize based on field type
     if (field === 'name') {
-      sanitized = sanitizeInput(value, 'name', { maxLength: 50 });
+      sanitized = sanitizeInput(value, 'service_name', { maxLength: 50 });
       
-      // Check for malicious content
-      const originalLength = value.length;
-      const sanitizedLength = sanitized.length;
-      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
-      
-      if (removalPercentage > 30 && originalLength > 3) {
-        debugLog('MBA1234', 'Malicious content detected in pet name:', { originalLength, sanitizedLength, removalPercentage });
-        error = 'Invalid characters detected in pet name';
-      } else {
-        const nameValidation = validateName(sanitized);
-        if (!nameValidation.isValid && sanitized.length > 0) {
-          error = nameValidation.message;
-        } else if (sanitized.length > 0 && sanitized.length < 2) {
-          error = 'Pet name must be at least 2 characters long';
-        }
+      if (sanitized.length > 0 && sanitized.length < 2) {
+        error = 'Pet name must be at least 2 characters long';
       }
     } else if (field === 'breed' || field === 'color') {
-      sanitized = sanitizeInput(value, 'name', { maxLength: 50 });
+      sanitized = sanitizeInput(value, 'service_name', { maxLength: 50 });
       
-      // Check for malicious content
-      const originalLength = value.length;
-      const sanitizedLength = sanitized.length;
-      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
-      
-      if (removalPercentage > 30 && originalLength > 3) {
-        debugLog('MBA1234', `Malicious content detected in pet ${field}:`, { originalLength, sanitizedLength, removalPercentage });
-        error = `Invalid characters detected in pet ${field}`;
-      } else if (sanitized.length > 0 && sanitized.length < 2) {
+      if (sanitized.length > 0 && sanitized.length < 2) {
         error = `Pet ${field} must be at least 2 characters long`;
       }
+    } else if (field === 'type') {
+      sanitized = sanitizeInput(value, 'service_name', { maxLength: 50 });
+      
+      if (sanitized.length > 0 && sanitized.length < 2) {
+        error = 'Animal type must be at least 2 characters long';
+      }
     } else if (['specialInstructions', 'medicalConditions', 'feedingInstructions', 'medicalNotes', 'pottyBreakSchedule', 'specialCareInstructions', 'medications'].includes(field)) {
-      sanitized = sanitizeInput(value, 'description', { maxLength: 500 });
+      sanitized = sanitizeInput(value, 'service_description', { maxLength: 500 });
       
-      // Check for malicious content
-      const originalLength = value.length;
-      const sanitizedLength = sanitized.length;
-      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
-      
-      if (removalPercentage > 30 && originalLength > 10) {
-        debugLog('MBA1234', `Malicious content detected in pet ${field}:`, { originalLength, sanitizedLength, removalPercentage });
-        error = `Invalid characters detected in ${field}`;
-      } else if (sanitized.length > 500) {
+      if (sanitized.length > 500) {
         error = `${field} must be no more than 500 characters long`;
       }
     } else if (field === 'weight') {
@@ -932,28 +902,16 @@ const PetsPreferencesTab = ({
         }
       }
     } else if (['vetName', 'insuranceProvider'].includes(field)) {
-      sanitized = sanitizeInput(value, 'general', { maxLength: 100 });
+      sanitized = sanitizeInput(value, 'service_name', { maxLength: 100 });
       
-      // Check for malicious content
-      const originalLength = value.length;
-      const sanitizedLength = sanitized.length;
-      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
-      
-      if (removalPercentage > 30 && originalLength > 3) {
-        debugLog('MBA1234', `Malicious content detected in ${field}:`, { originalLength, sanitizedLength, removalPercentage });
-        error = `Invalid characters detected in ${field}`;
+      if (sanitized.length > 0 && sanitized.length < 2) {
+        error = `${field} must be at least 2 characters long`;
       }
     } else if (['vetAddress'].includes(field)) {
-      sanitized = sanitizeInput(value, 'description', { maxLength: 200 });
+      sanitized = sanitizeInput(value, 'service_description', { maxLength: 200 });
       
-      // Check for malicious content
-      const originalLength = value.length;
-      const sanitizedLength = sanitized.length;
-      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
-      
-      if (removalPercentage > 30 && originalLength > 5) {
-        debugLog('MBA1234', `Malicious content detected in ${field}:`, { originalLength, sanitizedLength, removalPercentage });
-        error = `Invalid characters detected in ${field}`;
+      if (sanitized.length > 200) {
+        error = `${field} must be no more than 200 characters long`;
       }
     } else if (field === 'vetPhone') {
       // For vet phone, be more restrictive - only allow numbers and format as XXX-XXX-XXXX
@@ -1012,7 +970,7 @@ const PetsPreferencesTab = ({
 
   const handleEditChange = (petId, field, value) => {
     // For compatibility fields, no need to validate
-    if (['childrenFriendly', 'catFriendly', 'dogFriendly', 'spayedNeutered', 'houseTrained', 'microchipped', 'canBeLeftAlone', 'energyLevel', 'sex', 'type'].includes(field)) {
+    if (['childrenFriendly', 'catFriendly', 'dogFriendly', 'spayedNeutered', 'houseTrained', 'microchipped', 'canBeLeftAlone', 'energyLevel', 'sex'].includes(field)) {
       // Store the direct selected value ("Yes", "No", "N/A") in the edit state
       setEditedPetsData(prev => ({
         ...prev,
@@ -1049,14 +1007,9 @@ const PetsPreferencesTab = ({
         }));
       }
     } else {
-      // For text fields, only block extremely dangerous content in real-time
-      const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
-      const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
-      
-      if (hasScriptTags || hasSqlInjection) {
-        debugLog('MBA1234', 'Dangerous content detected and blocked in pet input:', { field, value });
-        return; // Don't update the input if it contains dangerous content
-      }
+      // For text fields, apply real-time sanitization
+      const { sanitized } = validatePetInput(field, value, petId);
+      value = sanitized;
       
       // For phone fields, apply formatting
       let processedValue = value;
@@ -1622,7 +1575,7 @@ const PetsPreferencesTab = ({
                         style={styles.editInput}
                         value={editedPetData.breed || ''}
                         onChangeText={(text) => handleEditChange(pet.id, 'breed', text)}
-                        placeholder="Enter breed - ex: Golden Retriever"
+                        placeholder="Ex: Golden Retriever"
                         placeholderTextColor={theme.colors.placeholder}
                       />
                     </View>
@@ -1637,7 +1590,7 @@ const PetsPreferencesTab = ({
                           style={styles.editInput}
                           value={editedPetData.type || ''}
                           onChangeText={(text) => handleEditChange(pet.id, 'type', text)}
-                          placeholder="Enter type - ex: Dog"
+                          placeholder="Ex: Dog"
                           placeholderTextColor={theme.colors.placeholder}
                         />
                       </View>
@@ -2319,29 +2272,16 @@ const PetsPreferencesTab = ({
   };
 
   const validateContactInput = (field, value, type) => {
-    debugLog('MBA1234', 'Validating contact input:', { field, value, type });
+    debugLog('MBA7777', 'Validating contact input:', { field, value, type });
     
     let sanitized = value;
     let error = '';
     
     if (field === 'name') {
-      sanitized = sanitizeInput(value, 'name', { maxLength: 50 });
+      sanitized = sanitizeInput(value, 'service_name', { maxLength: 50 });
       
-      // Check for malicious content
-      const originalLength = value.length;
-      const sanitizedLength = sanitized.length;
-      const removalPercentage = originalLength > 0 ? ((originalLength - sanitizedLength) / originalLength) * 100 : 0;
-      
-      if (removalPercentage > 30 && originalLength > 3) {
-        debugLog('MBA1234', `Malicious content detected in ${type} name:`, { originalLength, sanitizedLength, removalPercentage });
-        error = `Invalid characters detected in ${type} name`;
-      } else {
-        const nameValidation = validateName(sanitized);
-        if (!nameValidation.isValid && sanitized.length > 0) {
-          error = nameValidation.message;
-        } else if (sanitized.length > 0 && sanitized.length < 2) {
-          error = `${type} name must be at least 2 characters long`;
-        }
+      if (sanitized.length > 0 && sanitized.length < 2) {
+        error = `${type} name must be at least 2 characters long`;
       }
     } else if (field === 'phone') {
       // For contact phone, be more restrictive - only allow numbers and format as XXX-XXX-XXXX
@@ -2373,14 +2313,7 @@ const PetsPreferencesTab = ({
   };
 
   const handleContactInputChange = (field, value, type) => {
-    // First check for dangerous content that should always be blocked
-    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(value);
-    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(value);
-    
-    if (hasScriptTags || hasSqlInjection) {
-      debugLog('MBA1234', 'Dangerous content detected and blocked in contact input:', { field, value, type });
-      return; // Don't update the input if it contains dangerous content
-    }
+    debugLog('MBA7777', 'Contact input change:', { field, value, type });
     
     const { sanitized, error } = validateContactInput(field, value, type);
     
@@ -2418,7 +2351,7 @@ const PetsPreferencesTab = ({
     const phoneError = contactValidationErrors.emergency_phone;
     
     if (nameError || phoneError) {
-      debugLog('MBA1234', 'Cannot add emergency contact due to validation errors:', { nameError, phoneError });
+      debugLog('MBA7777', 'Cannot add emergency contact due to validation errors:', { nameError, phoneError });
       return;
     }
     
@@ -2445,7 +2378,7 @@ const PetsPreferencesTab = ({
     const phoneError = contactValidationErrors.household_phone;
     
     if (nameError || phoneError) {
-      debugLog('MBA1234', 'Cannot add household member due to validation errors:', { nameError, phoneError });
+      debugLog('MBA7777', 'Cannot add household member due to validation errors:', { nameError, phoneError });
       return;
     }
     

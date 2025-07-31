@@ -106,54 +106,47 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
   }, [visible]); // Only depend on visibility changing - nothing else
 
   const handleTextInputChange = (text) => {
-    debugLog('MBA1234', 'Profile text input change:', { title, text });
+    debugLog('MBA7777', 'Profile text input change:', { title, text });
     
-    // Don't apply real-time sanitization during typing - this interferes with user experience
-    // Only block extremely dangerous content in real-time
-    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(text);
-    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(text);
-    
-    if (hasScriptTags || hasSqlInjection) {
-      debugLog('MBA1234', 'Dangerous content detected and blocked in real-time:', text);
-      setValidationError('Invalid content detected in input');
-      return;
-    }
-    
-    // Determine the input type based on the title for validation (not sanitization)
+    // Determine the input type based on the title
     let inputType = 'general';
     let maxLength = 1000;
     
     if (title.toLowerCase().includes('name')) {
-      inputType = 'name';
+      inputType = 'service_name'; // Use service_name for better sanitization
       maxLength = 50;
     } else if (title.toLowerCase().includes('email')) {
       inputType = 'email';
       maxLength = 254;
     } else if (title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) {
-      inputType = 'description';
+      inputType = 'service_description'; // Use service_description for better sanitization
       maxLength = isMultiline ? 1000 : 500;
+    } else if (title.toLowerCase().includes('phone')) {
+      inputType = 'phone';
+      maxLength = 20;
     }
     
-    // Perform field-specific validation on the original text (not sanitized)
-    if (title.toLowerCase().includes('email') && text.length > 0) {
-      // For email, we can validate format without sanitizing during typing
+    // Apply real-time sanitization using centralized function
+    const sanitized = sanitizeInput(text, inputType, { maxLength });
+    
+    // Perform field-specific validation on the sanitized text
+    if (title.toLowerCase().includes('email') && sanitized.length > 0) {
       const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      if (!emailRegex.test(text)) {
+      if (!emailRegex.test(sanitized)) {
         setValidationError('Please enter a valid email address');
       } else {
         setValidationError('');
       }
-    } else if (title.toLowerCase().includes('name') && text.length > 0) {
-      // For names, check basic requirements without removing content
-      if (text.length < 2) {
+    } else if (title.toLowerCase().includes('name') && sanitized.length > 0) {
+      if (sanitized.length < 2) {
         setValidationError('Name must be at least 2 characters long');
       } else {
         setValidationError('');
       }
-    } else if ((title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) && text.length > 0) {
-      if (text.length < 10) {
+    } else if ((title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) && sanitized.length > 0) {
+      if (sanitized.length < 10) {
         setValidationError('Description must be at least 10 characters long');
-      } else if (text.length > maxLength) {
+      } else if (sanitized.length > maxLength) {
         setValidationError(`Description must be no more than ${maxLength} characters long`);
       } else {
         setValidationError('');
@@ -162,14 +155,14 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
       setValidationError('');
     }
     
-    // Set the original text (not sanitized) - sanitization will happen at save time
-    setLocalValue(text);
+    // Set the sanitized text for real-time display
+    setLocalValue(sanitized);
   };
 
   const handleSave = () => {
     // Check for validation errors before saving
     if (validationError) {
-      debugLog('MBA1234', 'Cannot save due to validation error:', validationError);
+      debugLog('MBA7777', 'Cannot save due to validation error:', validationError);
       Alert.alert('Validation Error', validationError);
       return;
     }
@@ -189,33 +182,15 @@ const EditOverlay = ({ visible, onClose, title, value, onSave, isLocation, isMul
         return;
       }
       // Pass the selected address object with all components and coordinates
-      debugLog('MBA8901', 'Saving location with selected address:', selectedAddress);
+      debugLog('MBA7777', 'Saving location with selected address:', selectedAddress);
       onSave(selectedAddress);
     } else {
-      // Sanitize the value before saving based on field type
-      let inputType = 'general';
-      let maxLength = 1000;
-      
-      if (title.toLowerCase().includes('name')) {
-        inputType = 'name';
-        maxLength = 50;
-      } else if (title.toLowerCase().includes('email')) {
-        inputType = 'email';
-        maxLength = 254;
-      } else if (title.toLowerCase().includes('bio') || title.toLowerCase().includes('about')) {
-        inputType = 'description';
-        maxLength = isMultiline ? 1000 : 500;
-      }
-      
-      const sanitizedValue = sanitizeInput(localValue, inputType, { maxLength });
-      
-      // Final validation before saving
-      debugLog('MBA1234', 'Saving profile field with sanitized value:', {
-        original: localValue,
-        sanitized: sanitizedValue,
-        type: inputType
+      // Value is already sanitized in real-time, just save it
+      debugLog('MBA7777', 'Saving profile field with sanitized value:', {
+        value: localValue,
+        title: title
       });
-      onSave(sanitizedValue);
+      onSave(localValue);
     }
     onClose();
   };
