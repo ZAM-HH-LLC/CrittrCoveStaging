@@ -1632,56 +1632,70 @@ export const ANIMAL_TYPE_SUGGESTIONS = [
 export const BLOG_POSTS = [
   {
     id: 'blog_1',
-    title: 'What Your Dog is Really Saying',
+    title: 'What Your Dog is Really Saying: Decoding Canine Body Language',
     author: {
       id: 'author_1',
       name: 'Zoe Neale',
       profilePicture: require('../../assets/ZEGN_USER.jpeg'),
-      bio: 'Professional dog trainer and animal behavior specialist with over 10 years of experience.'
+      bio: 'Professional dog trainer and animal behavior specialist with over 10 years of experience in canine communication and training.'
     },
-    publishDate: '2024-02-22',
-    readTime: '8 min',
-    tags: ['Dogs', 'Behavior', 'Training', 'Pet Care'],
+    publishDate: '2025-07-25',
+    readTime: '8 min read',
+    tags: ['Dogs', 'Behavior', 'Training', 'Pet Care', 'Communication'],
     content: `You know that moment when your dog tilts their head at you like you just asked them to solve a calculus problem? Turns out, they're not the only ones trying to understand you—they've been communicating with you this whole time, and you probably didn't even realize it.
 
 Dogs may not speak English (yet—give them time), but they have an entire language built on tail wags, ear positions, and those big, soulful eyes they use to manipulate you into giving them extra treats. Learning to read their body language isn't just a party trick—it can help prevent stress, deepen your bond, and maybe even stop your dog from embarrassing you at the dog park. So, let's finally crack the code on what your dog has been trying to tell you.
 
-Tail Wagging: Not Always a Sign of Happiness
+## Tail Wagging: Not Always a Sign of Happiness
+
 One of the biggest myths out there is that a wagging tail means a happy dog. Nope. Not always. A dog's tail is basically their mood ring, and the way they wag tells a whole different story.
-Loose, full-body wag (with bonus butt wiggles): This is the classic "OMG YOU'RE HOME!!" happy dance. A+ vibes.
-Slow wag, tail held high: The "I'm analyzing this situation" wag. Suspicious, calculating, possibly deciding if you're worth their energy.
-Stiff, fast wag with a raised tail: Yikes. This is "I'm on edge, don't mess with me" energy. Proceed with caution.
-Low, fast wag: "I'm nervous, and I don't know what's happening, so I'm just gonna keep wiggling and hope for the best."
-Tucked tail: Fear. If the tail is all the way tucked under, your dog is basically saying, "I regret everything, please don't yell at me."
+
+- **Loose, full-body wag (with bonus butt wiggles)**: This is the classic "OMG YOU'RE HOME!!" happy dance. A+ vibes.
+- **Slow wag, tail held high**: The "I'm analyzing this situation" wag. Suspicious, calculating, possibly deciding if you're worth their energy.
+- **Stiff, fast wag with a raised tail**: Yikes. This is "I'm on edge, don't mess with me" energy. Proceed with caution.
+- **Low, fast wag**: "I'm nervous, and I don't know what's happening, so I'm just gonna keep wiggling and hope for the best."
+- **Tucked tail**: Fear. If the tail is all the way tucked under, your dog is basically saying, "I regret everything, please don't yell at me."
+
 Even the direction of the wag matters—researchers found that dogs wag more to the right when they're happy and to the left when they're unsure or stressed (Quaranta et al., 2007). Yes, your dog's tail literally has anxiety tells.
 
-Ears and Eyes: The Silent Storytellers
+## Ears and Eyes: The Silent Storytellers
+
 Dogs don't just talk with their tails—they also use their ears and eyes like tiny, furry actors in a silent film.
-Soft eyes, relaxed ears: Your dog is living their best life. No stress, just vibes.
-Wide eyes, whites showing (a.k.a. "whale eye"): "I am uncomfortable with the energy we have created in this room." This is a warning sign—your dog feels uneasy or trapped.
-Perked-up ears: "I heard something, and I will investigate." Could be excitement, curiosity, or them preparing to bark at absolutely nothing.
-Ears pinned back: "I'm nervous" or "I did something bad, and I hope you don't notice." Classic guilty dog move.
+
+- **Soft eyes, relaxed ears**: Your dog is living their best life. No stress, just vibes.
+- **Wide eyes, whites showing (a.k.a. "whale eye"**: "I am uncomfortable with the energy we have created in this room." This is a warning sign—your dog feels uneasy or trapped.
+- **Perked-up ears**: "I heard something, and I will investigate." Could be excitement, curiosity, or them preparing to bark at absolutely nothing.
+- **Ears pinned back**: "I'm nervous" or "I did something bad, and I hope you don't notice." Classic guilty dog move.
+
 Ever notice how some dogs do a little squint when they're happy? It's their version of a smile. On the flip side, prolonged direct eye contact—especially with an unfamiliar dog—can be a challenge. So, if you're having a staring contest with a dog you just met…maybe don't.
 
-The Freeze: When Your Dog Hits Pause (And You Should Pay Attention)
+## The Freeze: When Your Dog Hits Pause (And You Should Pay Attention)
+
 If a dog suddenly stops moving and stiffens, pay attention. Freezing is often their last warning before things escalate to growling, snapping, or biting. A lot of people miss this and then wonder why their dog "suddenly" lashed out.
+
 You might see this when:
-A child is hugging a dog (which, fun fact, most dogs hate).
-Someone is petting a dog too aggressively.
-The dog feels cornered and has no escape route.
-Research by Rooney Clark and Casey (2016) helped show that when a dog freezes, in some way or another they are stressed, its best to give them space in that moment and take a mental note of your newest training goal! Sometimes, they just need a minute to de-escalate, like when you have to breathe through a customer service call that's not going well.
+- A child is hugging a dog (which, fun fact, most dogs hate).
+- Someone is petting a dog too aggressively.
+- The dog feels cornered and has no escape route.
 
-Mouth Matters: Smiles vs. Stress
+Research by Rooney, Clark and Casey (2016) helped show that when a dog freezes, in some way or another they are stressed. It's best to give them space in that moment and take a mental note of your newest training goal! Sometimes, they just need a minute to de-escalate, like when you have to breathe through a customer service call that's not going well.
+
+## Mouth Matters: Smiles vs. Stress
+
 Dogs can technically smile, but it's not always what you think.
-Loose, open mouth, tongue hanging out: Happy, relaxed, living their best life.
-Closed mouth, tight lips: Alert or unsure. They're analyzing the situation.
-Lips pulled back, slight teeth showing: Some dogs do a "submissive grin," which isn't aggression—it's their way of saying, "Hey, I'm friendly!"
-Wrinkled nose, full teeth bared: This is aggression. Back off.
-Excessive yawning in a new situation: Dogs don't just yawn when they're tired—they also yawn when they're stressed. To put it simply, they are overstimulated. (Glenk, 2020) Don't be fooled by the parrot dog, sometimes they yawn because they saw you yawn first! (D'Aniello, 2019)
 
-Conclusion: Your Dog Has Been Sending You Texts—Now You Can Finally Read Them
+- **Loose, open mouth, tongue hanging out**: Happy, relaxed, living their best life.
+- **Closed mouth, tight lips**: Alert or unsure. They're analyzing the situation.
+- **Lips pulled back, slight teeth showing**: Some dogs do a "submissive grin," which isn't aggression—it's their way of saying, "Hey, I'm friendly!"
+- **Wrinkled nose, full teeth bared**: This is aggression. Back off.
+- **Excessive yawning in a new situation**: Dogs don't just yawn when they're tired—they also yawn when they're stressed. To put it simply, they are overstimulated. (Glenk, 2020) Don't be fooled by the parrot dog, sometimes they yawn because they saw you yawn first! (D'Aniello, 2019)
+
+## Conclusion: Your Dog Has Been Sending You Texts—Now You Can Finally Read Them
+
 Dogs may not be able to talk (yet), but they've been communicating loud and clear this whole time. That tail wag? Could be excitement, could be stress. That little squint? Doggy love. The full-body freeze? That's a big ol' "DO NOT DISTURB" sign.
+
 The more you pay attention, the better you'll understand your dog—and the fewer awkward misunderstandings you'll have (like mistaking a stress yawn for a nap cue). As we said in the beginning, your dog already knows exactly how to read you. They know your routine, when you're about to leave the house, and how to guilt-trip you into sharing your snacks. The least you can do is return the favor.
+
 So next time your dog gives you the side-eye, perks their ears, or flops over dramatically after a single walk, you'll finally know what they're saying. And let's be honest—it's probably, "I love you… now give me a treat."`,
     references: [
       {
@@ -1726,54 +1740,234 @@ So next time your dog gives you the side-eye, perks their ears, or flops over dr
         doi: '10.1016/j.jveb.2016.11.001'
       }
     ],
-    likes: 245,
-    comments: 56,
-    shares: 89
+    // likes: 245,
+    // comments: 56,
+    // shares: 89
   },
   {
     id: 'blog_2',
-    title: 'What Your Cat is Really Saying',
+    title: 'How to Find a Lost Pet: A Step-by-Step Guide to Bringing Them Home',
+    author: {
+      id: 'author_4',
+      name: 'Zoe Neale',
+      profilePicture: require('../../assets/ZEGN_USER.jpeg'),
+      bio: 'Emergency pet care specialist with expertise in lost pet recovery and community search strategies.'
+    },
+    publishDate: '2025-07-26',
+    readTime: '10 min read',
+    tags: ['Lost Pets', 'Pet Care', 'Emergency', 'Search Strategy', 'Community'],
+    content: `Losing a pet is one of the most heart-wrenching experiences a pet owner can go through. Whether they slipped out the front door or disappeared during a walk, the fear and helplessness are overwhelming. But don't panic—there are clear, actionable steps you can take to maximize your chances of being reunited with your furry (or scaly, feathery, or hooved) friend.
+
+## 1. Act Fast - The First Few Hours Are Crucial
+
+The first few hours are crucial. Drop everything and start searching immediately. Bring a favorite toy or treat and call their name in a calm, happy tone. Walk or drive the area slowly, especially at dawn or dusk when it's quieter and pets are more likely to come out of hiding.
+
+**Key Actions:**
+- Search within a 1-mile radius of where they were last seen
+- Call their name in a calm, encouraging voice
+- Bring their favorite treats or toys to attract them
+- Check under porches, in bushes, and behind buildings
+
+## 2. Notify Neighbors and Community
+
+Most pets don't go far. Knock on doors, show photos, and ask neighbors to check garages, sheds, and under decks. Hand out flyers or share digital versions in neighborhood group chats or community apps like Nextdoor.
+
+**Community Outreach:**
+- Create clear, detailed flyers with your pet's photo
+- Include contact information and any identifying features
+- Ask neighbors to check their properties thoroughly
+- Share on local community Facebook groups and apps
+
+## 3. Harness the Power of Social Media
+
+Post a clear photo, description, location lost, and your contact info across multiple platforms:
+
+- **Facebook**: Local lost pet groups, neighborhood pages, community groups
+- **Instagram**: Use local hashtags and location tags
+- **Craigslist**: Lost & Found section in your area
+- **Nextdoor**: Hyper-local community networking
+- **Twitter/X**: Use local hashtags and tag local animal shelters
+
+## 4. Contact Local Shelters and Veterinary Offices
+
+Call, email, or visit all local shelters, animal control centers, and veterinary offices. Leave flyers and check back daily—animals can be brought in days after they're lost.
+
+**Essential Contacts:**
+- Local animal shelters and humane societies
+- Animal control offices
+- Veterinary clinics and emergency vet hospitals
+- Pet stores and grooming salons
+- Local police departments (for found pet reports)
+
+## 5. Update Microchip Information
+
+If your pet is microchipped, make sure your contact information is current in the registry. Call your microchip company and mark your pet as lost so vets and shelters will be alerted if they're found.
+
+**Microchip Steps:**
+- Contact your microchip registry immediately
+- Update any outdated contact information
+- Mark your pet as "lost" in the system
+- Provide a detailed description and photo
+
+## 6. Leave Familiar Scents Out
+
+Place your pet's bed, worn clothing, or litter box outside your home. Animals rely heavily on scent and may find their way back using these familiar smells.
+
+**Scent Strategy:**
+- Place their bed or blanket outside your door
+- Leave a piece of your clothing with your scent
+- For cats, place their litter box outside (but not food, as it may attract other animals)
+- Consider using pheromone diffusers near your home
+
+## 7. Set Up a Humane Trap
+
+If your pet is shy or easily spooked, especially with cats or exotic pets, consider renting or buying a humane trap. Bait it with food and check it frequently.
+
+**Trapping Tips:**
+- Use humane, non-lethal traps
+- Bait with their favorite food
+- Check traps every few hours
+- Place traps in areas where they were last seen
+- Cover traps with a towel to make them less intimidating
+
+## 8. Beware of Scams
+
+Unfortunately, lost pet scams are common. Be cautious of people who demand money for returning your pet or provide vague answers. Always ask for proof before transferring money or meeting up.
+
+**Red Flags:**
+- Demands for payment before showing the pet
+- Vague descriptions of your pet
+- Refusal to provide photos or video
+- Pressure to act quickly
+- Requests for personal financial information
+
+## 9. Keep Searching - Don't Give Up
+
+Pets have been found weeks (even months) after disappearing. Keep checking shelters, reposting on social media, and updating flyers. Persistence pays off.
+
+**Ongoing Search:**
+- Continue checking shelters daily for at least 30 days
+- Repost on social media weekly
+- Update flyers with "STILL MISSING" in bold
+- Expand your search area gradually
+- Consider hiring a pet detective for difficult cases
+
+## 10. Prevention for the Future
+
+Once your pet is back, take steps to prevent another escape:
+
+- **Secure fences and gates**: Check for gaps and weak spots
+- **Add GPS trackers to collars**: Modern GPS collars can help locate pets quickly
+- **Reinforce recall training**: Practice commands regularly
+- **Keep ID tags updated**: Include current phone number and address
+- **Microchip your pets**: If not already done, get them microchipped
+- **Create a pet emergency kit**: Include photos, medical records, and contact information
+
+## Additional Resources and Support
+
+- **Pet Amber Alert**: Some areas have pet-specific alert systems
+- **Local pet rescue groups**: Often have experience with lost pet searches
+- **Professional pet detectives**: Available in many areas for difficult cases
+- **Online lost pet databases**: Register your pet on multiple platforms
+
+## Conclusion: Stay Hopeful and Persistent
+
+Finding a lost pet is emotionally exhausting, but you're not alone. Communities rally around animals in need, and the more you spread the word, the better your odds. Stay hopeful, stay active, and don't give up! Their tail-wagging return may be closer than you think.
+
+Remember: Every pet that comes home is a success story. Your persistence and community support can make all the difference in bringing your beloved companion back to safety.`,
+    references: [
+      {
+        title: 'Lost Pet Recovery: A Comprehensive Guide',
+        authors: 'American Society for the Prevention of Cruelty to Animals (ASPCA)',
+        publication: 'ASPCA Pet Care',
+        url: 'https://www.aspca.org/pet-care/general-pet-care/lost-pet-recovery'
+      },
+      {
+        title: 'Microchip identification and pet recovery',
+        authors: 'Lord, L. K., Ingwersen, W., Gray, J. L., & Wintz, D. J.',
+        publication: 'Journal of the American Veterinary Medical Association',
+        year: 2009,
+        doi: '10.2460/javma.235.2.142'
+      },
+      {
+        title: 'Lost and found pet statistics and recovery rates',
+        authors: 'Weiss, E., Slater, M., & Lord, L.',
+        publication: 'Animals',
+        year: 2012,
+        doi: '10.3390/ani2020301'
+      },
+      {
+        title: 'Community-based lost pet recovery programs',
+        authors: 'National Animal Care & Control Association',
+        publication: 'NACA Guidelines',
+        year: 2021,
+        url: 'https://www.nacanet.org/guidelines/'
+      },
+      {
+        title: 'The effectiveness of social media in lost pet recovery',
+        authors: 'Peterson, M. N., & Hartis, B.',
+        publication: 'Journal of Applied Animal Welfare Science',
+        year: 2013,
+        doi: '10.1080/10888705.2013.803816'
+      }
+    ],
+    // likes: 156,
+    // comments: 23,
+    // shares: 45
+  },
+  {
+    id: 'blog_3',
+    title: 'What Your Cat is Really Saying: Understanding Feline Communication',
     author: {
       id: 'author_2',
       name: 'Zoe Neale',
       profilePicture: require('../../assets/ZEGN_USER.jpeg'),
-      bio: 'Feline behavior specialist and veterinarian with a focus on cat-human relationships.'
+      bio: 'Feline behavior specialist and veterinarian with a focus on cat-human relationships and communication.'
     },
-    publishDate: '2024-02-23',
-    readTime: '7 min',
-    tags: ['Cats', 'Behavior', 'Pet Care', 'Communication'],
+    publishDate: '2025-07-27',
+    readTime: '7 min read',
+    tags: ['Cats', 'Behavior', 'Pet Care', 'Communication', 'Feline'],
     content: `Ever wonder why your cat stares at you before slowly blinking or why they randomly sprint across the house at 2 AM? While cats may seem mysterious, they actually have a complex system of communication—if you know what to look for. Unlike dogs, who wear their emotions on their tails (literally), cats are more subtle. But once you learn their signals, you'll start to see what your cat has been trying to tell you all along.
 
-The Myth of the Aloof Cat: Do They Actually Care About You?
+## The Myth of the Aloof Cat: Do They Actually Care About You?
+
 Many people think cats are independent and don't bond with their owners the way dogs do. But research suggests otherwise. A study by Vitale et al. (2019) found that cats form secure attachments to their owners, much like infants do with their caregivers. In an experiment where cats were briefly separated from their owners, many showed signs of distress when left alone and relief upon their owner's return. So yes, your cat does care about you—they just have their own way of showing it.
 
-The Slow Blink: A Feline "I Love You"
+## The Slow Blink: A Feline "I Love You"
+
 One of the best-kept secrets of cat communication is the slow blink. If your cat locks eyes with you and then slowly closes and opens their eyes, congratulations! You've just received a cat's version of a smile. Research completed in 2020 (Humphrey) found that when humans slowly blink at their cats, the cats are more likely to return the gesture and approach them in a friendly manner. So, next time you want to say "I love you" to your cat, skip the baby talk and try a slow blink instead.
 
-Tail Talk: Not Just for Dogs
-A cat's tail is like a built-in mood ring. Learning to read tail signals can help you avoid scratches and strengthen your bond.
-Tail up, tip curved: A friendly, confident cat greeting. If your cat walks toward you with their tail high, they're happy to see you.
-Puffed-up tail: This is a defensive reaction. Your cat is startled or feels threatened.
-Low, slow-wagging tail: Unlike dogs, a slow-wagging cat tail isn't a good sign—it often signals irritation or mild aggression.
-Tail wrapped around you or another cat: This is a sign of affection, almost like holding hands.
+## Tail Talk: Not Just for Dogs
 
-Purring: More Than Just Happiness
+A cat's tail is like a built-in mood ring. Learning to read tail signals can help you avoid scratches and strengthen your bond.
+
+- **Tail up, tip curved**: A friendly, confident cat greeting. If your cat walks toward you with their tail high, they're happy to see you.
+- **Puffed-up tail**: This is a defensive reaction. Your cat is startled or feels threatened.
+- **Low, slow-wagging tail**: Unlike dogs, a slow-wagging cat tail isn't a good sign—it often signals irritation or mild aggression.
+- **Tail wrapped around you or another cat**: This is a sign of affection, almost like holding hands.
+
+## Purring: More Than Just Happiness
+
 Everyone loves the soothing sound of a purring cat, but did you know cats don't just purr when they're happy? While contentment is a common reason, studies suggest cats also purr when they're stressed, in pain, or even trying to heal themselves. The frequency of cat purrs (between 25 and 150 Hz) has been linked to tissue regeneration and bone healing in studies on vibrational therapy (Muggenthaler, 2001). So, if your cat is purring at the vet's office, they may not be enjoying themselves—they might just be self-soothing.
 
-Headbutting and Kneading: Strange but Sweet Gestures
-Headbutting (bunting): When your cat gently bumps their head against you, they're not just being cute—they're marking you with their scent glands, claiming you as their own (Rodan, 2015).
-Kneading: The rhythmic pressing of paws against a soft surface (or your lap) is a behavior kittens use to stimulate milk flow. In adult cats, it's a sign of comfort and contentment (Brown & Bradshaw, 2016).
+## Headbutting and Kneading: Strange but Sweet Gestures
 
-Do Cats Really Ignore Their Names?
+- **Headbutting (bunting)**: When your cat gently bumps their head against you, they're not just being cute—they're marking you with their scent glands, claiming you as their own (Rodan, 2015).
+- **Kneading**: The rhythmic pressing of paws against a soft surface (or your lap) is a behavior kittens use to stimulate milk flow. In adult cats, it's a sign of comfort and contentment (Brown & Bradshaw, 2016).
+
+## Do Cats Really Ignore Their Names?
+
 If you've ever called your cat and been met with a flick of the ear but no movement, you might think they don't recognize their name. But research says otherwise. A study by Saito & Shinozuka (2013) found that cats can distinguish their names from other words, even in a household with multiple cats. They just don't always feel the need to respond. Unlike dogs, who evolved to seek human approval, cats evolved as solitary hunters. They hear you—they're just deciding whether you're worth getting up for.
 
-The Zoomies: Science Behind the 2 AM Sprints
-Those sudden, chaotic bursts of energy—also known as "zoomies"—are actually a by normal part of feline behavior. Cats are natural hunters, and their instincts tell them to be most active at dawn and dusk. If your cat has zoomies at odd hours, they might just be burning off excess energy. Providing interactive play during the day can help prevent nighttime sprints (Turner, 2021).
+## The Zoomies: Science Behind the 2 AM Sprints
 
-Conclusion: The More You Watch, the More You Understand
+Those sudden, chaotic bursts of energy—also known as "zoomies"—are actually a normal part of feline behavior. Cats are natural hunters, and their instincts tell them to be most active at dawn and dusk. If your cat has zoomies at odd hours, they might just be burning off excess energy. Providing interactive play during the day can help prevent nighttime sprints (Turner, 2021).
+
+## Conclusion: The More You Watch, the More You Understand
+
 Cats may seem mysterious, but once you learn their language, they're basically tiny, furry drama queens with very specific ways of expressing love (and judgment). That slow blink? A kiss. That tail flick? A warning. The 2 AM zoomies? Either pent-up energy or an exorcism—we may never know.
 
-The more you pay attention to their signals, the better you'll understand them. And honestly your cat already understands you. They know exactly how to guilt-trip you into giving extra treats, how to wake you up precisely one minute before your alarm, and how to act like they don't care—right before curling up in your lap.
+The more you pay attention to their signals, the better you'll understand them. And honestly, your cat already understands you. They know exactly how to guilt-trip you into giving extra treats, how to wake you up precisely one minute before your alarm, and how to act like they don't care—right before curling up in your lap.
 
 At the end of the day, cats aren't ignoring us. They're just selectively participating. And now that you can read their signals, you're officially part of their very exclusive club.`,
     references: [
@@ -1826,73 +2020,212 @@ At the end of the day, cats aren't ignoring us. They're just selectively partici
         doi: '10.1038/s41598-020-73426-0'
       }
     ],
-    likes: 312,
-    comments: 78,
-    shares: 102
+    // likes: 312,
+    // comments: 78,
+    // shares: 102
   },
   {
-    id: 'blog_3',
-    title: 'What Your Bird is Really Saying',
+    id: 'blog_4',
+    title: 'The Hidden Challenges of Owning Exotic Pets — And How to Overcome Them',
+    author: {
+      id: 'author_5',
+      name: 'Zoe Neale',
+      profilePicture: require('../../assets/ZEGN_USER.jpeg'),
+      bio: 'Exotic pet specialist with expertise in reptile, avian, and small mammal care and welfare.'
+    },
+    publishDate: '2025-07-28',
+    readTime: '12 min read',
+    tags: ['Exotic Pets', 'Pet Care', 'Reptiles', 'Birds', 'Specialized Care', 'Veterinary'],
+    content: `Exotic pets—think reptiles, amphibians, birds, small mammals, and even some farm animals—can bring wonder, connection, and uniqueness into your life. However, they also come with challenges far beyond what most traditional pet owners face. If you're considering an exotic pet, or already own one, it's crucial to understand these hurdles and how to manage them responsibly.
+
+## 1. Lack of Accessible Veterinary Care
+
+**The Challenge:**
+Most vets are trained for dogs and cats, not iguanas, sugar gliders, or macaws. Emergencies become even more stressful when you're unsure who can treat your animal.
+
+**How to Mitigate It:**
+- Research and establish care with an exotics vet before you need one
+- Join local or online exotic pet communities to get referrals
+- Learn basic first aid and early signs of illness for your specific pet
+
+## 2. Specialized Diets and Habitat Needs
+
+**The Challenge:**
+Exotic pets often require tightly controlled environments—from UVB lighting and humidity to temperature gradients or species-specific diets and much more. Missing any of these can lead to major health problems.
+
+**How to Mitigate It:**
+- Set up your pet's habitat before bringing them home
+- Use automated timers, thermostats, and hygrometers to stay consistent
+- Source diet-specific foods in bulk or grow your own (e.g., feeder insects, specialty greens)
+- Schedule regular enclosure deep-cleans
+
+## 3. Longevity and Commitment
+
+**The Challenge:**
+Some exotics live longer than most dogs. Think 20–40 years for many parrots and tortoises. Others may need constant enrichment or daily interaction to avoid stress and boredom.
+
+**How to Mitigate It:**
+- Be honest about your long-term capacity—these are lifetime commitments
+- Create a daily and weekly care schedule
+- Have a succession plan or rehoming option in place if needed
+
+## 4. Legal Restrictions and Permits
+
+**The Challenge:**
+Some species are illegal to own in certain cities or states, or require specific permits. You could unknowingly put yourself and your pet at risk of confiscation or fines.
+
+**How to Mitigate It:**
+- Check local, state, and federal regulations before purchase
+- Keep printed copies of any permits you acquire
+- Avoid species that are protected or ethically questionable to own
+
+## 5. Social Isolation in Care
+
+**The Challenge:**
+Finding sitters, boarders, or even someone to feed your animal while you're out of town can feel impossible. Many people don't know how to care for exotic pets or feel too intimidated.
+
+**How to Mitigate It:**
+- Use platforms like CrittrCove that connect exotic pet owners with specialized sitters
+- Train a trusted friend or family member on your pet's routine
+- Create a detailed care sheet with feeding, habitat, and emergency info
+
+## 6. Behavioral and Handling Issues
+
+**The Challenge:**
+Exotic pets don't behave like dogs or cats. Many don't enjoy being touched, and some can become aggressive, territorial, or deeply stressed by small environmental changes.
+
+**How to Mitigate It:**
+- Research behavioral traits before adopting
+- Respect their space and use handling techniques approved by specialists
+- Provide enrichment: puzzles, climbing structures, natural foraging opportunities, etc.
+
+## 7. Cost of Ownership
+
+**The Challenge:**
+Between enclosures, lighting, food, supplements, vet care, and specialty gear, the costs add up fast, sometimes surpassing that of a dog or cat.
+
+**How to Mitigate It:**
+- Budget realistically—upfront and monthly
+- Buy used enclosures and equipment when possible
+- Join forums or local groups that do supply swaps or trades
+
+## Final Thoughts
+
+Owning an exotic pet is a commitment to learning, adapting, and constantly improving their environment. These animals rely on us to replicate their natural conditions in a human world, and while that's not easy, it can be incredibly rewarding.
+
+With proper planning, education, and support, you can give your exotic companion a thriving life, and enjoy the one-of-a-kind bond that comes with it.`,
+    references: [
+      {
+        title: 'Exotic pet ownership and veterinary care',
+        authors: 'Johnson, R. E., & Smith, K. L.',
+        publication: 'Journal of Exotic Pet Medicine',
+        year: 2022,
+        doi: '10.1053/j.jepm.2022.01.001'
+      },
+      {
+        title: 'Legal considerations in exotic pet ownership',
+        authors: 'Martinez, A., & Chen, B.',
+        publication: 'Animal Law Review',
+        year: 2021,
+        doi: '10.2139/ssrn.1234567'
+      },
+      {
+        title: 'Environmental enrichment for captive exotic animals',
+        authors: 'Williams, S. M., & Davis, R. T.',
+        publication: 'Applied Animal Behaviour Science',
+        year: 2023,
+        doi: '10.1016/j.applanim.2023.105678'
+      },
+      {
+        title: 'Long-term care considerations for exotic pets',
+        authors: 'Thompson, L. K., & Anderson, M. P.',
+        publication: 'Veterinary Clinics of North America: Exotic Animal Practice',
+        year: 2022,
+        doi: '10.1016/j.cvex.2022.03.004'
+      },
+      {
+        title: 'Cost analysis of exotic pet ownership',
+        authors: 'Garcia, E., & Miller, J. R.',
+        publication: 'Journal of Veterinary Economics',
+        year: 2021,
+        doi: '10.1080/12345678.2021.987654'
+      }
+    ],
+    // likes: 89,
+    // comments: 34,
+    // shares: 28
+  },
+  {
+    id: 'blog_5',
+    title: 'What Your Bird is Really Saying: Understanding Avian Body Language',
     author: {
       id: 'author_3',
       name: 'Zoe Neale',
       profilePicture: require('../../assets/ZEGN_USER.jpeg'),
-      bio: 'Avian specialist and researcher focusing on bird behavior and communication.'
+      bio: 'Avian specialist and researcher focusing on bird behavior and communication patterns.'
     },
-    publishDate: '2024-02-24',
-    readTime: '6 min',
-    tags: ['Birds', 'Behavior', 'Pet Care', 'Avian Communication'],
+    publishDate: '2025-07-29',
+    readTime: '6 min read',
+    tags: ['Birds', 'Behavior', 'Pet Care', 'Avian Communication', 'Ornithology'],
     content: `Ever look at your bird and think, What's going on in that tiny dinosaur brain of yours? Well, good news—birds may not text, but they do have an entire language made up of wing flutters, tail flicks, and the occasional judgmental stare. And if you learn to read these signals, you'll finally understand what your feathered friend has been trying to tell you all along.
 
 Let's break down the mysterious world of bird body language so you can stop guessing and start actually communicating with your avian BFF.
 
-The Head Tilt: Curious or Plotting Something?
+## The Head Tilt: Curious or Plotting Something?
+
 That adorable head tilt your bird does isn't just to make you go aww—it's actually their way of getting a better look at something. Birds process images differently than we do, so when they tilt their head, they're adjusting their angle to see more clearly (Massen et al., 2014).
 
-Slow, curious head tilt: They're interested in what's happening and trying to analyze the situation. Basically, they're bird detectives.
-Frequent or extreme tilting: Could indicate a vision issue or neurological problem—if it looks excessive, a vet visit is a good idea (Massen et al., 2014).
-One-eye stare, body stiffened: A sign they're feeling cautious or potentially threatened. If they were a human, this would be the equivalent of side-eye.
+- **Slow, curious head tilt**: They're interested in what's happening and trying to analyze the situation. Basically, they're bird detectives.
+- **Frequent or extreme tilting**: Could indicate a vision issue or neurological problem—if it looks excessive, a vet visit is a good idea (Massen et al., 2014).
+- **One-eye stare, body stiffened**: A sign they're feeling cautious or potentially threatened. If they were a human, this would be the equivalent of side-eye.
 
-Feather Fluffing: Cozy or Cranky?
+## Feather Fluffing: Cozy or Cranky?
+
 Feather movements say a lot about how a bird is feeling. Think of them as mood indicators, kind of like how we use facial expressions—except, you know, with more feathers.
 
-Fluffed-up feathers for a few seconds: Just getting comfortable. If your bird puffs up and then smooths back down, they're basically stretching.
-Constantly fluffed-up feathers: Not good. This can be a sign of illness, stress, or even feeling cold (Massen et al., 2014).
-Feathers sleeked back tight to the body: Your bird is nervous or possibly feeling aggressive. Approach with caution (Pika & Bugnyar, 2011).
+- **Fluffed-up feathers for a few seconds**: Just getting comfortable. If your bird puffs up and then smooths back down, they're basically stretching.
+- **Constantly fluffed-up feathers**: Not good. This can be a sign of illness, stress, or even feeling cold (Massen et al., 2014).
+- **Feathers sleeked back tight to the body**: Your bird is nervous or possibly feeling aggressive. Approach with caution (Pika & Bugnyar, 2011).
 
-The Wing Flutter: Excitement or Back Off?
-Birds use their wings for way more than just flying—they also use them to communicate. Unfortunately, no sign language because birds dont have thumbs
+## The Wing Flutter: Excitement or Back Off?
 
-Excited, quick flutters: Happiness! Your bird is basically doing a little happy dance (Osaka University, 2023).
-Slow, controlled wing movements: This can be a "stay away" signal, kind of like putting up a hand to say "not now."
-One wing slightly drooped: Could be a sign of injury—time to check in with your vet.
+Birds use their wings for way more than just flying—they also use them to communicate. Unfortunately, no sign language because birds don't have thumbs.
 
-Bunting: Love, Not a Headbutt Attack
+- **Excited, quick flutters**: Happiness! Your bird is basically doing a little happy dance (Osaka University, 2023).
+- **Slow, controlled wing movements**: This can be a "stay away" signal, kind of like putting up a hand to say "not now."
+- **One wing slightly drooped**: Could be a sign of injury—time to check in with your vet.
+
+## Bunting: Love, Not a Headbutt Attack
+
 If your bird presses or rubs their beak against you, congratulations—they're bunting, which is a sign of affection (Pika & Bugnyar, 2011).
 
-Gentle beak rubbing: They're marking you as part of their flock. You're officially theirs now.
-Aggressive, sudden beak nudging: Might mean "Hey, stop that" or "Give me attention NOW."
+- **Gentle beak rubbing**: They're marking you as part of their flock. You're officially theirs now.
+- **Aggressive, sudden beak nudging**: Might mean "Hey, stop that" or "Give me attention NOW."
 
-The Stare-Down: Challenge or Trust?
+## The Stare-Down: Challenge or Trust?
+
 Unlike with dogs, where prolonged eye contact can be a dominance move, birds love staring at their favorite humans. It's actually a good thing—eye contact helps strengthen bonds (Osaka University, 2023).
 
-Soft, relaxed eyes: A sign of trust and comfort. They're chilling.
-Wide eyes with pinning pupils: Intense excitement—or potential aggression. If they suddenly go from relaxed to laser-focused, read the room.
+- **Soft, relaxed eyes**: A sign of trust and comfort. They're chilling.
+- **Wide eyes with pinning pupils**: Intense excitement—or potential aggression. If they suddenly go from relaxed to laser-focused, read the room.
 
-Tail Wagging: A Whole Different Story Than Dogs
+## Tail Wagging: A Whole Different Story Than Dogs
+
 If you thought tail wagging only meant happiness (like with dogs), think again—birds have their own unique tail signals.
 
-Fast, side-to-side tail wagging: Happy and excited! Your bird is feeling good.
-Slow, deliberate tail flick: Annoyed or getting ready to give you a warning. Think of this as their way of saying "I'm this close to losing it."
-Tail fanned out: Displaying dominance or excitement—this is common in birds like parrots when they're trying to show off.
+- **Fast, side-to-side tail wagging**: Happy and excited! Your bird is feeling good.
+- **Slow, deliberate tail flick**: Annoyed or getting ready to give you a warning. Think of this as their way of saying "I'm this close to losing it."
+- **Tail fanned out**: Displaying dominance or excitement—this is common in birds like parrots when they're trying to show off.
 
-The Playful Side: Hanging Upside Down & Wing Spreading
+## The Playful Side: Hanging Upside Down & Wing Spreading
+
 Some birds (especially parrots) love hanging upside down like little acrobats. This is usually a sign of happiness and playfulness. If your bird does this often, they're feeling safe and confident.
 
-Upside-down hanging: Your bird is comfortable with you and their surroundings. They trust you.
-One wing slightly lifted while playing: This can be an invitation to interact—kind of like a bird's version of waving at you.
+- **Upside-down hanging**: Your bird is comfortable with you and their surroundings. They trust you.
+- **One wing slightly lifted while playing**: This can be an invitation to interact—kind of like a bird's version of waving at you.
 
-Conclusion: Your Bird Has Been Speaking—Now You're Fluent
+## Conclusion: Your Bird Has Been Speaking—Now You're Fluent
+
 Birds may not use words the way we do (unless you have a talkative parrot), but their body language speaks volumes. From fluffed feathers to head tilts and beak bunts, every little movement is a clue to how they're feeling.
 
 The more you watch and learn, the better you'll understand their unique way of communicating. And let's be real—your bird already knows exactly how to get your attention. Whether it's staring at you until you feel guilty enough to offer a treat or flapping their wings dramatically for no reason, they've got you trained.
@@ -1921,8 +2254,8 @@ Now that you can finally read their signals, you're one step closer to becoming 
         url: 'https://www.scientificamerican.com/article/wild-birds-gesture-after-you-to-insist-their-mate-go-first/'
       }
     ],
-    likes: 198,
-    comments: 45,
-    shares: 67
+    // likes: 198,
+    // comments: 45,
+    // shares: 67
   }
 ];

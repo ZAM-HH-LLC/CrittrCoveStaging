@@ -141,13 +141,69 @@ const BlogPost = ({ route, navigation }) => {
     }
   };
 
+  // Function to render formatted content with markdown-like styling
+  const renderFormattedContent = (content) => {
+    const lines = content.split('\n');
+    return lines.map((line, index) => {
+      if (line.startsWith('## ')) {
+        // Subheading
+        return (
+          <Text key={index} style={[styles.subheading, { color: theme.colors.primary }]}>
+            {line.replace('## ', '')}
+          </Text>
+        );
+      } else if (line.startsWith('- **') && line.includes('**:')) {
+        // Bold list item
+        const parts = line.split('**:');
+        const boldPart = parts[0].replace('- **', '');
+        const rest = parts[1] || '';
+        return (
+          <View key={index} style={styles.listItem}>
+            <Text style={[styles.bulletPoint, { color: theme.colors.primary }]}>•</Text>
+            <Text style={[styles.content, { color: theme.colors.text, flex: 1 }]}>
+              <Text style={[styles.boldText, { color: theme.colors.primary }]}>{boldPart}</Text>
+              {rest}
+            </Text>
+          </View>
+        );
+      } else if (line.startsWith('- ')) {
+        // Regular list item
+        return (
+          <View key={index} style={styles.listItem}>
+            <Text style={[styles.bulletPoint, { color: theme.colors.primary }]}>•</Text>
+            <Text style={[styles.content, { color: theme.colors.text, flex: 1 }]}>
+              {line.replace('- ', '')}
+            </Text>
+          </View>
+        );
+      } else if (line.startsWith('**') && line.endsWith('**')) {
+        // Bold text
+        return (
+          <Text key={index} style={[styles.boldText, { color: theme.colors.primary }]}>
+            {line.replace(/\*\*/g, '')}
+          </Text>
+        );
+      } else if (line.trim() === '') {
+        // Empty line for spacing
+        return <View key={index} style={styles.emptyLine} />;
+      } else {
+        // Regular paragraph
+        return (
+          <Text key={index} style={[styles.content, { color: theme.colors.text }]}>
+            {line}
+          </Text>
+        );
+      }
+    });
+  };
+
   return (
     <View style={[styles.mainContainer, { backgroundColor: theme.colors.background }]}>
       <BackHeader 
         title={post.title}
         onBackPress={() => handleBack(navigation)}
       />
-      <ScrollView style={styles.container}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.authorContainer}>
             <Image
@@ -158,11 +214,17 @@ const BlogPost = ({ route, navigation }) => {
               <Text style={[styles.authorName, { color: theme.colors.secondary }]}>
                 {post.author.name}
               </Text>
-              <Text style={styles.authorBio}>{post.author.bio}</Text>
+              <Text style={[styles.authorBio, { color: theme.colors.textSecondary }]}>
+                {post.author.bio}
+              </Text>
               <View style={styles.postInfo}>
-                <Text style={styles.date}>{post.publishDate}</Text>
-                <Text style={styles.dot}> • </Text>
-                <Text style={styles.readTime}>{post.readTime}</Text>
+                <Text style={[styles.date, { color: theme.colors.textSecondary }]}>
+                  {post.publishDate}
+                </Text>
+                <Text style={[styles.dot, { color: theme.colors.textSecondary }]}> • </Text>
+                <Text style={[styles.readTime, { color: theme.colors.textSecondary }]}>
+                  {post.readTime}
+                </Text>
               </View>
             </View>
           </View>
@@ -172,29 +234,33 @@ const BlogPost = ({ route, navigation }) => {
           {post.tags.map((tag, index) => (
             <View 
               key={index} 
-              style={[styles.tag, { backgroundColor: theme.colors.primary + '20' }]}
+              style={[styles.tag, { backgroundColor: theme.colors.primary + '15' }]}
             >
               <Text style={[styles.tagText, { color: theme.colors.primary }]}>{tag}</Text>
             </View>
           ))}
         </View>
 
-        <Text style={[styles.content, { color: theme.colors.text }]}>{post.content}</Text>
+        <View style={styles.contentContainer}>
+          {renderFormattedContent(post.content)}
+        </View>
 
-        <View style={styles.stats}>
+        {/* Engagement metrics removed - they were fake
+        <View style={[styles.stats, { borderTopColor: theme.colors.border }]}>
           <TouchableOpacity style={styles.stat}>
             <MaterialCommunityIcons name="heart-outline" size={24} color={theme.colors.secondary} />
-            <Text style={styles.statText}>{post.likes}</Text>
+            <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>{post.likes}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.stat}>
             <MaterialCommunityIcons name="comment-outline" size={24} color={theme.colors.secondary} />
-            <Text style={styles.statText}>{post.comments}</Text>
+            <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>{post.comments}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.stat}>
             <MaterialCommunityIcons name="share-outline" size={24} color={theme.colors.secondary} />
-            <Text style={styles.statText}>{post.shares}</Text>
+            <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>{post.shares}</Text>
           </TouchableOpacity>
         </View>
+        */}
 
         <View style={styles.references}>
           <Text style={[styles.referencesTitle, { color: theme.colors.primary }]}>References</Text>
@@ -204,7 +270,7 @@ const BlogPost = ({ route, navigation }) => {
               style={styles.reference}
               onPress={() => handleReferencePress(reference)}
             >
-              <Text style={styles.referenceText}>
+              <Text style={[styles.referenceText, { color: theme.colors.textSecondary }]}>
                 {reference.authors} ({reference.year || 'n.d.'}). {reference.title}. {reference.publication}.
                 {reference.doi && ` DOI: ${reference.doi}`}
               </Text>
@@ -224,31 +290,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 16,
+    padding: 20,
+    paddingBottom: 16,
   },
   authorContainer: {
     flexDirection: 'row',
     marginBottom: 16,
   },
   authorImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: 16,
   },
   authorInfo: {
     flex: 1,
   },
   authorName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 6,
     fontFamily: theme.fonts.header.fontFamily,
   },
   authorBio: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    lineHeight: 20,
+    marginBottom: 8,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   postInfo: {
@@ -257,24 +324,21 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 14,
-    color: '#666',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   dot: {
-    marginHorizontal: 4,
-    color: '#666',
+    marginHorizontal: 6,
     fontFamily: theme.fonts.regular.fontFamily,
   },
   readTime: {
     fontSize: 14,
-    color: '#666',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 16,
-    paddingTop: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
   },
   tag: {
     paddingHorizontal: 12,
@@ -284,23 +348,55 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   tagText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     fontFamily: theme.fonts.regular.fontFamily,
   },
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
   content: {
     fontSize: 16,
-    lineHeight: 24,
-    padding: 16,
+    lineHeight: 26,
+    marginBottom: 16,
     fontFamily: theme.fonts.regular.fontFamily,
+  },
+  subheading: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 24,
+    marginBottom: 12,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
+  boldText: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 26,
+    marginBottom: 16,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
+  listItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    paddingLeft: 8,
+  },
+  bulletPoint: {
+    fontSize: 16,
+    marginRight: 12,
+    marginTop: 2,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  emptyLine: {
+    height: 16,
   },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    padding: 16,
+    padding: 20,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#eee',
+    marginHorizontal: 20,
   },
   stat: {
     flexDirection: 'row',
@@ -309,24 +405,26 @@ const styles = StyleSheet.create({
   statText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#666',
     fontFamily: theme.fonts.regular.fontFamily,
   },
   references: {
-    padding: 16,
+    padding: 20,
+    paddingTop: 16,
   },
   referencesTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 16,
     fontFamily: theme.fonts.header.fontFamily,
   },
   reference: {
     marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
   },
   referenceText: {
     fontSize: 14,
-    color: '#444',
     lineHeight: 20,
     fontFamily: theme.fonts.regular.fontFamily,
   },

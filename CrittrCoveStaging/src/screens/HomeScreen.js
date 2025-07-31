@@ -43,7 +43,7 @@ const reviews = [
   {
     image: require('../../assets/user3.png'),
     text: "\"Found the perfect sitter for my exotic pets!",
-    author: "Sudhakar Vuluvala"
+    author: "Raj Patel"
   },
   {
     image: require('../../assets/user4.png'),
