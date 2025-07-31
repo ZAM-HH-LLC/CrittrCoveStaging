@@ -4,44 +4,22 @@
     <meta charset="utf-8">
     <title>CrittrCove - Page Not Found</title>
     <script>
-        // Simplified SPA redirect for better SEO
-        // This script handles client-side routing more efficiently
-        (function() {
-            var l = window.location;
-            var path = l.pathname;
-            
-            // Don't redirect if we're already at the root
-            if (path === '/' || path === '/index.html') {
-                return;
-            }
-            
-            // Check if this is a known route that should work
-            var knownRoutes = [
-                '/signin', '/signup', '/dashboard', '/message-history',
-                '/search-professionals', '/my-profile', '/contact-us',
-                '/site-map', '/blog', '/privacy-policy', '/terms-of-service',
-                '/help-faq', '/waitlist', '/become-professional',
-                '/service-manager', '/my-contracts', '/my-bookings',
-                '/change-password', '/availability-settings', '/settings',
-                '/professional-settings', '/professional-profile',
-                '/connections', '/test-toast', '/owners', '/more',
-                '/dog-boarding-colorado-springs', '/dog-walker-colorado-springs',
-                '/cat-sitting-colorado-springs', '/exotic-pet-care-colorado-springs',
-                '/ferret-sitter-colorado-springs', '/bird-boarding-colorado-springs',
-                '/horse-sitting-colorado', '/reptile-sitter-colorado-springs',
-                '/pet-boarding-colorado-springs', '/dog-sitting-colorado-springs'
-            ];
-            
-            // If it's a known route, redirect to index.html with the path as a query parameter
-            if (knownRoutes.indexOf(path) !== -1) {
-                var newUrl = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + '/?path=' + encodeURIComponent(path) + l.hash;
-                window.location.replace(newUrl);
-                return;
-            }
-            
-            // For unknown routes, redirect to home
-            window.location.replace('/');
-        })();
+        // Single Page Apps for GitHub Pages
+        // MIT License
+        // https://github.com/rafgraph/spa-github-pages
+        // This script takes the current url and converts the path and query
+        // string into just a query string, and then redirects the browser
+        // to the new url with only a query string and hash fragment.
+        var pathSegmentsToKeep = 0;
+
+        var l = window.location;
+        l.replace(
+            l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+            l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+            l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+            (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+            l.hash
+        );
     </script>
 </head>
 <body>
