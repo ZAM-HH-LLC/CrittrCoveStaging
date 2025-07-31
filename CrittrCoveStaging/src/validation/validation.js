@@ -280,6 +280,71 @@ const removePasswordSpecificThreats = (input) => {
 };
 
 /**
+ * Remove message-specific security threats without over-sanitizing
+ * @param {string} input - The input string to clean
+ * @returns {string} - The cleaned string
+ */
+const removeMessageSpecificThreats = (input) => {
+  if (!input || typeof input !== 'string') return '';
+  
+  let cleaned = input;
+  
+  // Only remove the most dangerous patterns that are clearly malicious
+  // Be very selective to preserve legitimate chat content
+  
+  // Remove script tags and their content completely (but preserve other HTML)
+  cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, '');
+  cleaned = cleaned.replace(/<script[^>]*>/gi, '');
+  
+  // Remove dangerous JavaScript protocols and functions
+  cleaned = cleaned.replace(/javascript\s*:/gi, '');
+  cleaned = cleaned.replace(/vbscript\s*:/gi, '');
+  cleaned = cleaned.replace(/data\s*:/gi, '');
+  
+  // Only remove JavaScript functions if they're clearly malicious
+  cleaned = cleaned.replace(/alert\s*\([^)]*\)/gi, '');
+  cleaned = cleaned.replace(/eval\s*\([^)]*\)/gi, '');
+  
+  // Remove dangerous SQL patterns - be more comprehensive
+  // Remove SQL keywords that are clearly commands (not legitimate words)
+  cleaned = cleaned.replace(/\bSELECT\s+\*\s+FROM\s+[\w\s]+/gi, '');
+  cleaned = cleaned.replace(/\bDROP\s+TABLE\s+[\w\s]+/gi, '');
+  cleaned = cleaned.replace(/\bDELETE\s+FROM\s+[\w\s]+/gi, '');
+  cleaned = cleaned.replace(/\bINSERT\s+INTO\s+[\w\s]+/gi, '');
+  cleaned = cleaned.replace(/\bUNION\s+SELECT\s+[\w\s\*]+/gi, '');
+  cleaned = cleaned.replace(/\bUPDATE\s+\w+\s+SET\s+[\w\s='",]+/gi, '');
+  cleaned = cleaned.replace(/\bCREATE\s+TABLE\s+[\w\s]+/gi, '');
+  cleaned = cleaned.replace(/\bALTER\s+TABLE\s+[\w\s]+/gi, '');
+  
+  // Remove SQL with quotes (classic injection patterns) - more comprehensive
+  cleaned = cleaned.replace(/';?\s*DROP\s+TABLE[\w\s;]*/gi, '');
+  cleaned = cleaned.replace(/';?\s*DELETE\s+FROM[\w\s;]*/gi, '');
+  cleaned = cleaned.replace(/';?\s*INSERT\s+INTO[\w\s;()'"=,]*/gi, '');
+  cleaned = cleaned.replace(/';?\s*UNION\s+SELECT[\w\s;]*/gi, '');
+  cleaned = cleaned.replace(/';?\s*SELECT\s+\*[\w\s;]*/gi, '');
+  cleaned = cleaned.replace(/';?\s*UPDATE\s+[\w\s;='",]*/gi, '');
+  
+  cleaned = cleaned.replace(/--.*$/gm, ''); // Remove SQL comments
+  
+  // Remove dangerous shell commands - more comprehensive
+  cleaned = cleaned.replace(/;\s*rm\s+-rf[\w\s\/]*/gi, '');
+  cleaned = cleaned.replace(/;\s*sudo\s+[\w\s-]*/gi, '');
+  cleaned = cleaned.replace(/&&\s*rm\s+-rf[\w\s\/]*/gi, '');
+  cleaned = cleaned.replace(/&&\s*sudo\s+[\w\s-]*/gi, '');
+  
+  // Additional shell command patterns
+  cleaned = cleaned.replace(/\brm\s+-rf\s+[\w\s\/]*/gi, '');
+  cleaned = cleaned.replace(/\bsudo\s+[\w\s-]+/gi, '');
+  
+  // Remove NoSQL injection operators
+  cleaned = cleaned.replace(/\$where\s*:/gi, '');
+  cleaned = cleaned.replace(/\$ne\s*:/gi, '');
+  cleaned = cleaned.replace(/\$regex\s*:/gi, '');
+  
+  return cleaned;
+};
+
+/**
  * Universal input sanitizer for React Native without DOM dependencies
  * This function sanitizes input based on the specified type while preventing XSS and injection attacks
  * @param {string} input - The input string to sanitize
@@ -297,24 +362,29 @@ export const sanitizeInput = (input, type = 'general', options = {}) => {
   
   let sanitized = input;
   
-  // Apply security layers - but be less aggressive for passwords
+  // Apply security layers - but be less aggressive for passwords and messages
   const isPassword = type === 'password';
+  const isMessage = type === 'message';
   
-  // Always remove HTML tags and JavaScript
-  sanitized = removeHtmlTags(sanitized);
-  sanitized = removeJavaScriptPatterns(sanitized);
-  
-  // For passwords, be more selective about what we remove
-  if (!isPassword) {
+  // For passwords and messages, be more selective about what we remove
+  if (!isPassword && !isMessage) {
+    // Full security for other input types
+    sanitized = removeHtmlTags(sanitized);
+    sanitized = removeJavaScriptPatterns(sanitized);
     sanitized = removeSqlInjectionPatterns(sanitized);
     sanitized = removeCommandInjectionPatterns(sanitized);
     sanitized = removeNoSqlInjectionPatterns(sanitized);
-  } else {
-    // For passwords, only remove the most dangerous patterns
+    sanitized = removeUrlInjectionPatterns(sanitized);
+  } else if (isPassword) {
+    // For passwords, remove HTML/JS but use specific threats for others
+    sanitized = removeHtmlTags(sanitized);
+    sanitized = removeJavaScriptPatterns(sanitized);
     sanitized = removePasswordSpecificThreats(sanitized);
+    sanitized = removeUrlInjectionPatterns(sanitized);
+  } else if (isMessage) {
+    // For messages, only remove the most dangerous patterns
+    sanitized = removeMessageSpecificThreats(sanitized);
   }
-  
-  sanitized = removeUrlInjectionPatterns(sanitized);
   
   // Extract legitimate text patterns - look for business service descriptions
   // This helps preserve legitimate text when mixed with malicious content
@@ -372,12 +442,14 @@ export const sanitizeInput = (input, type = 'general', options = {}) => {
       break;
       
     case 'message':
-      // For messages, allow most printable characters but be restrictive with special symbols
-      sanitized = sanitized.replace(/[^a-zA-Z0-9\s\-'\.,:;!?()\/"&@#%+=\n\r]/g, '');
+      // For messages, be very permissive - allow all printable characters
+      // Security is handled by the security layers, not character filtering
+      // Only remove control characters and other non-printable characters
+      sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
       // Remove multiple consecutive spaces but preserve single spaces
-      sanitized = sanitized.replace(/\s{2,}/g, ' ');
+      // sanitized = sanitized.replace(/\s{2,}/g, ' ');
       // Only trim leading whitespace, preserve trailing spaces for user input
-      sanitized = sanitized.replace(/^\s+/g, '');
+      // sanitized = sanitized.replace(/^\s+/g, '');
       break;
       
     case 'email':

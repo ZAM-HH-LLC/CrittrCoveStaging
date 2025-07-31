@@ -211,25 +211,14 @@ const MessageInput = React.forwardRef(({
         return;
       }
       
-      // Validate and sanitize message content if there's text
+      // Use the already sanitized message content
       let validatedMessage = '';
       if (messageContent.trim()) {
-        const validation = validateMessage(messageContent, { 
-          maxLength: 5000, 
-          allowEmpty: selectedImages.length > 0 // Allow empty if we have images
-        });
-        
-        if (!validation.isValid) {
-          debugLog('MBA5511: Message validation failed:', validation.message);
-          Alert.alert('Invalid Message', validation.message);
-          return;
-        }
-        
-        validatedMessage = validation.sanitizedInput;
-        debugLog('MBA5511: Message validated and sanitized', {
-          original: messageContent,
-          sanitized: validatedMessage,
-          lengthDiff: messageContent.length - validatedMessage.length
+        // Since we're already sanitizing in real-time, just use the content
+        validatedMessage = messageContent.trim();
+        debugLog('MBA5511: Using sanitized message content', {
+          message: validatedMessage,
+          length: validatedMessage.length
         });
       }
       
@@ -353,20 +342,25 @@ const MessageInput = React.forwardRef(({
   }, []);
 
   const handleChange = useCallback((text) => {
-    // Don't apply real-time sanitization during typing - this interferes with user experience
-    // Sanitization will happen at send time in handleSend function
+    debugLog('MBA7777: Message input change:', text);
     
-    // Only block extremely dangerous content in real-time
-    const hasScriptTags = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(text);
-    const hasSqlInjection = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT)\b/gi.test(text);
+    // Apply real-time sanitization for messages using the full sanitizeInput function
+    const sanitizedText = sanitizeInput(text, 'message');
     
-    if (hasScriptTags || hasSqlInjection) {
-      debugLog('MBA5511: Dangerous content detected and blocked in real-time:', text);
-      return; // Don't update the input if it contains dangerous content
+    // Check if sanitization removed too much content (potential attack)
+    const removalPercentage = text.length > 0 ? ((text.length - sanitizedText.length) / text.length) * 100 : 0;
+    
+    if (removalPercentage > 50 && text.length > 10) {
+      debugLog('MBA7777: Potentially malicious message input detected:', {
+        original: text,
+        sanitized: sanitizedText,
+        removalPercentage
+      });
+      // Still update with sanitized version, don't block completely
     }
     
-    // Allow normal typing with spaces, punctuation, etc.
-    setMessageContent(text);
+    // Always update with sanitized version to ensure UI reflects sanitization
+    setMessageContent(sanitizedText);
     if (Platform.OS === 'web') {
       adjustHeight();
     }
