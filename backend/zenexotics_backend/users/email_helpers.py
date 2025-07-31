@@ -37,13 +37,34 @@ def send_new_user_notification(user):
     try:
         subject = f"New User Signup: {user.email}"
         
+        # Get how_did_you_hear information
+        how_did_you_hear = getattr(user, 'how_did_you_hear', 'Not specified')
+        how_did_you_hear_other = getattr(user, 'how_did_you_hear_other', '')
+        
+        # Format the how_did_you_hear display
+        if how_did_you_hear == 'other' and how_did_you_hear_other:
+            how_did_you_hear_display = f"Other: {how_did_you_hear_other}"
+        elif how_did_you_hear:
+            # Convert the choice to a readable format
+            choice_map = {
+                'instagram': 'Instagram',
+                'google': 'Google',
+                'reddit': 'Reddit',
+                'nextdoor': 'Nextdoor',
+                'other': 'Other'
+            }
+            how_did_you_hear_display = choice_map.get(how_did_you_hear, how_did_you_hear)
+        else:
+            how_did_you_hear_display = 'Not specified'
+        
         # Context for the email template
         context = {
             'user_email': user.email,
             'user_name': user.name,
             'signup_date': user.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
             'user_id': user.user_id,
-            'location': getattr(user, 'location', 'Not specified')
+            'location': getattr(user, 'location', 'Not specified'),
+            'how_did_you_hear': how_did_you_hear_display
         }
         
         # Create HTML message
@@ -91,6 +112,10 @@ def send_new_user_notification(user):
                     <tr>
                         <td>Location</td>
                         <td>{context['location']}</td>
+                    </tr>
+                    <tr>
+                        <td>How did they hear about us?</td>
+                        <td>{context['how_did_you_hear']}</td>
                     </tr>
                 </table>
                 

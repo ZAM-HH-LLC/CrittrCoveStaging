@@ -76,6 +76,27 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Payment related
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
     
+    # Marketing and referral tracking
+    how_did_you_hear = models.CharField(
+        max_length=50,
+        choices=[
+            ('instagram', 'Instagram'),
+            ('google', 'Google'),
+            ('reddit', 'Reddit'),
+            ('nextdoor', 'Nextdoor'),
+            ('other', 'Other')
+        ],
+        blank=True,
+        null=True,
+        help_text="How the user heard about CrittrCove"
+    )
+    how_did_you_hear_other = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Custom text when 'other' is selected for how_did_you_hear"
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(null=True, blank=True)

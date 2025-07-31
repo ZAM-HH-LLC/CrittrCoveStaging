@@ -29,10 +29,28 @@ class RegisterSerializer(serializers.ModelSerializer):
     timezone = serializers.CharField(required=False, default='UTC')
     use_military_time = serializers.BooleanField(required=False, default=False)
     invitation_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    how_did_you_hear = serializers.ChoiceField(
+        choices=[
+            ('instagram', 'Instagram'),
+            ('google', 'Google'),
+            ('reddit', 'Reddit'),
+            ('nextdoor', 'Nextdoor'),
+            ('other', 'Other')
+        ],
+        required=True,
+        help_text="How the user heard about CrittrCove"
+    )
+    how_did_you_hear_other = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=255,
+        help_text="Custom text when 'other' is selected"
+    )
 
     class Meta:
         model = User
-        fields = ('email', 'password', 'password2', 'name', 'phone_number', 'timezone', 'use_military_time', 'invitation_token')
+        fields = ('email', 'password', 'password2', 'name', 'phone_number', 'timezone', 'use_military_time', 'invitation_token', 'how_did_you_hear', 'how_did_you_hear_other')
         extra_kwargs = {
             'name': {'required': True},
             'phone_number': {'required': True}
@@ -43,6 +61,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"password": "Password fields didn't match."}
             )
+        
+        # Validate how_did_you_hear_other when "other" is selected
+        how_did_you_hear = attrs.get('how_did_you_hear')
+        how_did_you_hear_other = attrs.get('how_did_you_hear_other')
+        
+        if how_did_you_hear == 'other':
+            if not how_did_you_hear_other or not how_did_you_hear_other.strip():
+                raise serializers.ValidationError({
+                    "how_did_you_hear_other": "Please specify how you heard about us when selecting 'Other'."
+                })
         
         # Handle invitation token validation, if provided
         invitation_token = attrs.get('invitation_token')
@@ -90,6 +118,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         
         # Remove password2 from validated_data
         validated_data.pop('password2')
+        
+        # Handle how_did_you_hear fields - they're already in validated_data and will be saved to the model
+        # No need to pop them as they should be saved directly to the User model
         
         # Create the user
         user = User.objects.create_user(**validated_data)
