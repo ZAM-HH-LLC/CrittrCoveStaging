@@ -823,9 +823,30 @@ const MessageList = forwardRef(({
         `;
         document.head.appendChild(styleTag);
         
+        
         // Function to handle keyboard showing
         const handleFocusIn = (e) => {
           if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+            // Skip processing for React Native Modal inputs (they have specific data attributes)
+            const isReactNativeModal = e.target.closest('[data-focusable="true"]') ||
+                                     e.target.closest('[data-testid*="modal"]') ||
+                                     e.target.hasAttribute('data-focusable') ||
+                                     // Check if any React Native modal is currently visible
+                                     document.querySelector('[role="dialog"]') ||
+                                     // Check for React Native Web modal container
+                                     e.target.closest('[style*="position: fixed"]');
+            
+            // Also check for BookingStepModal specific elements
+            const isBookingModal = document.body.innerHTML.includes('BookingStepModal') ||
+                                 document.querySelector('[class*="modal"]') ||
+                                 e.target.closest('[class*="Modal"]');
+            
+            if (isReactNativeModal || isBookingModal) {
+              debugLog('MBA9876: Skipping iOS input handling for modal input');
+              return; // Skip processing for modal inputs
+            }
+            
+            
             debugLog('MBA9876: iOS input focused');
             
             // Add classes for keyboard open state
