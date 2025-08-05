@@ -593,12 +593,20 @@ const BookingStepModal = ({
         Object.keys(timeData).forEach(key => {
           if (key.match(/^\d{4}-\d{2}-\d{2}$/)) {
             debugLog('MBAoi1h34ghnvo: Processing date key:', key, timeData[key]);
-            // Ensure we preserve the exact time data for each date
-            individualTimes[key] = {
-              startTime: timeData[key].startTime,
-              endTime: timeData[key].endTime,
-              isOvernightForced: timeData[key].isOvernightForced
-            };
+            // Preserve the exact time data for each date - handle both single object and array formats
+            if (Array.isArray(timeData[key])) {
+              // Multiple time slots - preserve the array
+              individualTimes[key] = [...timeData[key]];
+              debugLog('MBAoi1h34ghnvo: Preserved array of time slots for date:', key, individualTimes[key]);
+            } else {
+              // Single time slot - convert to array format for consistency
+              individualTimes[key] = [{
+                startTime: timeData[key].startTime,
+                endTime: timeData[key].endTime,
+                isOvernightForced: timeData[key].isOvernightForced
+              }];
+              debugLog('MBAoi1h34ghnvo: Converted single time slot to array for date:', key, individualTimes[key]);
+            }
           }
         });
           
@@ -955,8 +963,10 @@ const BookingStepModal = ({
               debugLog('MBA53212co2v3nvoub5 Generated dates from range:', dates.map(d => d.toISOString().split('T')[0]));
               debugLog('MBA53212co2v3nvoub5 Time settings:', bookingData.times);
               
-              // Format dates and determine times for each day
-              const formattedDates = dates.map(date => {
+              // Format dates and determine times for each day - handle multiple time slots per date
+              const formattedDates = [];
+              
+              dates.forEach(date => {
                 const dateKey = date.toISOString().split('T')[0];
                 debugLog('MBA53212co2v3nvoub5 Processing date:', dateKey);
                 
@@ -970,93 +980,101 @@ const BookingStepModal = ({
                   debugLog('MBA53212co2v3nvoub5 Using default times for date:', dateKey, dayTimes);
                 }
                 
-                // Format the start time
-                let startTime;
-                if (typeof dayTimes.startTime === 'string') {
-                  startTime = dayTimes.startTime;
-                } else if (dayTimes.startTime?.hours !== undefined) {
-                  startTime = `${String(dayTimes.startTime.hours).padStart(2, '0')}:${String(dayTimes.startTime.minutes || 0).padStart(2, '0')}`;
-                } else {
-                  // Default time if missing
-                  startTime = '09:00';
-                }
+                // Check if dayTimes is an array of time slots or a single time object
+                const timeSlots = Array.isArray(dayTimes) ? dayTimes : [dayTimes];
+                debugLog('MBA53212co2v3nvoub5 Time slots for date:', dateKey, timeSlots);
                 
-                // Format the end time
-                let endTime;
-                if (typeof dayTimes.endTime === 'string') {
-                  endTime = dayTimes.endTime;
-                } else if (dayTimes.endTime?.hours !== undefined) {
-                  endTime = `${String(dayTimes.endTime.hours).padStart(2, '0')}:${String(dayTimes.endTime.minutes || 0).padStart(2, '0')}`;
-                } else {
-                  // Default time if missing
-                  endTime = '17:00';
-                }
-                
-                debugLog('MBA53212co2v3nvoub5 Formatted times for date:', dateKey, { startTime, endTime });
-                
-                // Format the date
-                const formattedDate = formatDateForAPI(date);
-                debugLog('MBA53212co2v3nvoub5 Formatted date:', formattedDate);
-                
-                // Determine if the end time might cross to the next day
-                // Check if end time is midnight or earlier than start time, indicating day boundary crossing
-                const needsNextDayDate = endTime === '00:00' || 
-                                        (parseInt(endTime.split(':')[0], 10) < parseInt(startTime.split(':')[0], 10)) ||
-                                        (parseInt(endTime.split(':')[0], 10) === parseInt(startTime.split(':')[0], 10) && 
-                                         parseInt(endTime.split(':')[1], 10) < parseInt(startTime.split(':')[1], 10));
-                
-                // Calculate end date - either same day or next day
-                const endDateObj = needsNextDayDate 
-                  ? new Date(date.getTime() + 24*60*60*1000) // Next day if crossing midnight
-                  : new Date(date);
+                // Process each time slot for this date
+                timeSlots.forEach((timeSlot, slotIndex) => {
+                  // Format the start time
+                  let startTime;
+                  if (typeof timeSlot.startTime === 'string') {
+                    startTime = timeSlot.startTime;
+                  } else if (timeSlot.startTime?.hours !== undefined) {
+                    startTime = `${String(timeSlot.startTime.hours).padStart(2, '0')}:${String(timeSlot.startTime.minutes || 0).padStart(2, '0')}`;
+                  } else {
+                    // Default time if missing
+                    startTime = '09:00';
+                  }
                   
-                const formattedEndDate = formatDateForAPI(endDateObj);
-                
-                debugLog('MBA53212co2v3nvoub5 End date calculation:', {
-                  needsNextDayDate,
-                  startTime,
-                  endTime,
-                  originalDate: formattedDate,
-                  calculatedEndDate: formattedEndDate
+                  // Format the end time
+                  let endTime;
+                  if (typeof timeSlot.endTime === 'string') {
+                    endTime = timeSlot.endTime;
+                  } else if (timeSlot.endTime?.hours !== undefined) {
+                    endTime = `${String(timeSlot.endTime.hours).padStart(2, '0')}:${String(timeSlot.endTime.minutes || 0).padStart(2, '0')}`;
+                  } else {
+                    // Default time if missing
+                    endTime = '17:00';
+                  }
+                  
+                  debugLog('MBA53212co2v3nvoub5 Formatted times for slot', slotIndex, 'on date:', dateKey, { startTime, endTime });
+                  
+                  // Format the date
+                  const formattedDate = formatDateForAPI(date);
+                  debugLog('MBA53212co2v3nvoub5 Formatted date:', formattedDate);
+                  
+                  // Determine if the end time might cross to the next day
+                  // Check if end time is midnight or earlier than start time, indicating day boundary crossing
+                  const needsNextDayDate = endTime === '00:00' || 
+                                          (parseInt(endTime.split(':')[0], 10) < parseInt(startTime.split(':')[0], 10)) ||
+                                          (parseInt(endTime.split(':')[0], 10) === parseInt(startTime.split(':')[0], 10) && 
+                                           parseInt(endTime.split(':')[1], 10) < parseInt(startTime.split(':')[1], 10));
+                  
+                  // Calculate end date - either same day or next day
+                  const endDateObj = needsNextDayDate 
+                    ? new Date(date.getTime() + 24*60*60*1000) // Next day if crossing midnight
+                    : new Date(date);
+                    
+                  const formattedEndDate = formatDateForAPI(endDateObj);
+                  
+                  debugLog('MBA53212co2v3nvoub5 End date calculation for slot', slotIndex, ':', {
+                    needsNextDayDate,
+                    startTime,
+                    endTime,
+                    originalDate: formattedDate,
+                    calculatedEndDate: formattedEndDate
+                  });
+                  
+                  // IMPORTANT: Crossing midnight or having a different end date due to 00:00 end time
+                  // should NOT force overnight mode - that should only be based on the service type
+                  // We're just calculating the correct end date for API payload
+                  
+                  // Get user's timezone from context
+                  const userTz = timeSettings?.timezone || 'US/Mountain';
+                  debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion in forEach function:', userTz);
+                  
+                  // Convert local times to UTC for start time and date
+                  const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+                    formattedDate,
+                    startTime,
+                    userTz
+                  );
+                  
+                  // Convert end time to UTC with potentially different end date
+                  const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+                    formattedEndDate,
+                    endTime,
+                    userTz
+                  );
+                  
+                  debugLog('MBA53212co2v3nvoub5 Converted UTC times for slot', slotIndex, ':', { 
+                    utcStartDate, 
+                    utcStartTime, 
+                    utcEndDate, 
+                    utcEndTime,
+                    isDifferentDates: utcStartDate !== utcEndDate
+                  });
+                  
+                  // Add each time slot as a separate occurrence
+                  formattedDates.push({
+                    date: utcStartDate,
+                    startTime: utcStartTime,
+                    endDate: utcEndDate,  // Always include endDate
+                    endTime: utcEndTime,
+                    is_overnight: needsNextDayDate
+                  });
                 });
-                
-                // IMPORTANT: Crossing midnight or having a different end date due to 00:00 end time
-                // should NOT force overnight mode - that should only be based on the service type
-                // We're just calculating the correct end date for API payload
-                
-                // Get user's timezone from context
-                const userTz = timeSettings?.timezone || 'US/Mountain';
-                debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion in map function:', userTz);
-                
-                // Convert local times to UTC for start time and date
-                const { date: utcStartDate, time: utcStartTime } = convertToUTC(
-                  formattedDate,
-                  startTime,
-                  userTz
-                );
-                
-                // Convert end time to UTC with potentially different end date
-                const { date: utcEndDate, time: utcEndTime } = convertToUTC(
-                  formattedEndDate,
-                  endTime,
-                  userTz
-                );
-                
-                debugLog('MBA53212co2v3nvoub5 Converted UTC times:', { 
-                  utcStartDate, 
-                  utcStartTime, 
-                  utcEndDate, 
-                  utcEndTime,
-                  isDifferentDates: utcStartDate !== utcEndDate
-                });
-                
-                // Return structured data with separate start and end dates
-                return {
-                  date: utcStartDate,
-                  startTime: utcStartTime,
-                  endDate: utcEndDate,  // Always include endDate
-                  endTime: utcEndTime
-                };
               });
               
               debugLog('MBA53212co2v3nvoub5 - Converted UTC dates:', formattedDates);
@@ -1143,18 +1161,127 @@ const BookingStepModal = ({
               }
             }
           } else if (bookingData.dateRangeType === 'multiple-days') {
-            // Handle multiple individual days
+            // Handle multiple individual days - support multiple time slots per date
             debugLog('MBA53212co2v3nvoub5 Multiple days selection:', {
               dates: bookingData.dates,
               times: bookingData.times
             });
 
+            // Format dates with multiple time slots support
+            const formattedDates = [];
+            
+            if (bookingData.dates && bookingData.dates.length > 0) {
+              bookingData.dates.forEach(dateObj => {
+                // Handle different date formats
+                let date;
+                if (typeof dateObj === 'string') {
+                  date = new Date(dateObj);
+                } else if (dateObj && dateObj.date) {
+                  date = new Date(dateObj.date);
+                } else {
+                  date = new Date(dateObj);
+                }
+                
+                const dateKey = date.toISOString().split('T')[0];
+                debugLog('MBA53212co2v3nvoub5 Processing individual date:', dateKey);
+                
+                let dayTimes = bookingData.times;
+                
+                // If there are individual time settings for this day, use those
+                if (bookingData.times[dateKey] && bookingData.times.hasIndividualTimes) {
+                  dayTimes = bookingData.times[dateKey];
+                  debugLog('MBA53212co2v3nvoub5 Using individual times for date:', dateKey, dayTimes);
+                } else {
+                  debugLog('MBA53212co2v3nvoub5 Using default times for date:', dateKey, dayTimes);
+                }
+                
+                // Check if dayTimes is an array of time slots or a single time object
+                const timeSlots = Array.isArray(dayTimes) ? dayTimes : [dayTimes];
+                debugLog('MBA53212co2v3nvoub5 Time slots for individual date:', dateKey, timeSlots);
+                
+                // Process each time slot for this date
+                timeSlots.forEach((timeSlot, slotIndex) => {
+                  // Format the start time
+                  let startTime;
+                  if (typeof timeSlot.startTime === 'string') {
+                    startTime = timeSlot.startTime;
+                  } else if (timeSlot.startTime?.hours !== undefined) {
+                    startTime = `${String(timeSlot.startTime.hours).padStart(2, '0')}:${String(timeSlot.startTime.minutes || 0).padStart(2, '0')}`;
+                  } else {
+                    startTime = '09:00';
+                  }
+                  
+                  // Format the end time
+                  let endTime;
+                  if (typeof timeSlot.endTime === 'string') {
+                    endTime = timeSlot.endTime;
+                  } else if (timeSlot.endTime?.hours !== undefined) {
+                    endTime = `${String(timeSlot.endTime.hours).padStart(2, '0')}:${String(timeSlot.endTime.minutes || 0).padStart(2, '0')}`;
+                  } else {
+                    endTime = '17:00';
+                  }
+                  
+                  debugLog('MBA53212co2v3nvoub5 Formatted times for slot', slotIndex, 'on individual date:', dateKey, { startTime, endTime });
+                  
+                  // Format the date
+                  const formattedDate = formatDateForAPI(date);
+                  
+                  // Determine if the end time might cross to the next day
+                  const needsNextDayDate = endTime === '00:00' || 
+                                          (parseInt(endTime.split(':')[0], 10) < parseInt(startTime.split(':')[0], 10)) ||
+                                          (parseInt(endTime.split(':')[0], 10) === parseInt(startTime.split(':')[0], 10) && 
+                                           parseInt(endTime.split(':')[1], 10) < parseInt(startTime.split(':')[1], 10));
+                  
+                  // Calculate end date
+                  const endDateObj = needsNextDayDate 
+                    ? new Date(date.getTime() + 24*60*60*1000)
+                    : new Date(date);
+                    
+                  const formattedEndDate = formatDateForAPI(endDateObj);
+                  
+                  // Get user's timezone from context
+                  const userTz = timeSettings?.timezone || 'US/Mountain';
+                  
+                  // Convert local times to UTC
+                  const { date: utcStartDate, time: utcStartTime } = convertToUTC(
+                    formattedDate,
+                    startTime,
+                    userTz
+                  );
+                  
+                  const { date: utcEndDate, time: utcEndTime } = convertToUTC(
+                    formattedEndDate,
+                    endTime,
+                    userTz
+                  );
+                  
+                  debugLog('MBA53212co2v3nvoub5 Converted UTC times for individual date slot', slotIndex, ':', { 
+                    utcStartDate, 
+                    utcStartTime, 
+                    utcEndDate, 
+                    utcEndTime
+                  });
+                  
+                  // Add each time slot as a separate occurrence
+                  formattedDates.push({
+                    date: utcStartDate,
+                    startTime: utcStartTime,
+                    endDate: utcEndDate,
+                    endTime: utcEndTime,
+                    is_overnight: needsNextDayDate
+                  });
+                });
+              });
+            }
+
+            debugLog('MBA53212co2v3nvoub5 Formatted dates for multiple individual days:', formattedDates);
+
             // Call the API for multiple individual days
             const response = await updateBookingDraftMultipleDays(
               bookingId,
               {
-                dates: bookingData.dates,
-                times: bookingData.times
+                dates: formattedDates,
+                times: {} // Empty times object since times are included in each date
               },
               timeSettings
             );

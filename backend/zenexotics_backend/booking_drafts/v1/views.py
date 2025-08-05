@@ -1016,9 +1016,11 @@ class UpdateBookingOccurrencesView(APIView):
                     occurrence_id = occurrence_data.get('occurrence_id')
                     
                     if not occurrence_id:
-                        # Generate new unique ID for new occurrence
-                        occurrence_id = f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"
-                        logger.info(f"MBA1644 - Generated new occurrence ID: {occurrence_id}")
+                        # Generate new unique ID for new occurrence using timestamp and random component
+                        timestamp = int(datetime.now().timestamp() * 1000)  # Use milliseconds for more precision
+                        unique_suffix = str(uuid.uuid4())[:8]  # Short random string
+                        occurrence_id = f"draft_{timestamp}_{unique_suffix}"
+                        logger.info(f"MBA1644 - Generated new unique occurrence ID: {occurrence_id}")
 
                     # Create a temporary service with the rates from the request
                     temp_service = Service(
@@ -1550,7 +1552,7 @@ class UpdateBookingDraftTimeAndDateView(APIView):
 
             # Create single occurrence for the entire stay
             occurrence = OrderedDict([
-                ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_0"),
+                ('occurrence_id', f"draft_{int(datetime.now().timestamp() * 1000)}_{str(uuid.uuid4())[:8]}"),
                 ('start_date', start_date.isoformat()),
                 ('end_date', end_date.isoformat()),
                 ('start_time', start_time.strftime('%H:%M')),
@@ -2170,33 +2172,41 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                         logger.info(f"MBA5321 - Exact match found for {start_date} {start_time}-{end_time}")
                         break
                 
-                # If no exact match, try to find by start date only (handles overnight changes)
+                # If no exact match, try to find by start date AND start time (handles end time changes only)
+                # This is more restrictive than the previous logic to prevent different time slots from matching
                 if not matching_occurrence:
                     for existing_occ in existing_occurrences:
                         existing_start_date = datetime.strptime(existing_occ['start_date'], '%Y-%m-%d').date()
+                        existing_start_time = datetime.strptime(existing_occ['start_time'], '%H:%M').time()
                         
-                        if existing_start_date == start_date_obj:
-                            # Start date match - preserve user's additional_rates choices
+                        if existing_start_date == start_date_obj and existing_start_time == start_time_obj:
+                            # Start date and time match - only end time/date changed, preserve user's choices
                             matching_occurrence = existing_occ.copy()
-                            logger.info(f"MBA5321 - Start date match found for {start_date} (preserving user choices)")
+                            logger.info(f"MBA5321 - Start date and time match found for {start_date} {start_time} (preserving user choices)")
                             break
                 
-                # If still no match, try positional matching ONLY if it's a reasonable match
-                # (same start date OR at least same day of week to avoid rate pollution)
+                # If still no match, try positional matching ONLY if it's an exact date AND time match
+                # This prevents different time slots on the same date from accidentally matching
                 if not matching_occurrence and occurrence_counter < len(existing_occurrences):
                     positional_candidate = existing_occurrences[occurrence_counter]
                     existing_start_date = datetime.strptime(positional_candidate['start_date'], '%Y-%m-%d').date()
+                    existing_start_time = datetime.strptime(positional_candidate['start_time'], '%H:%M').time()
+                    existing_end_time = datetime.strptime(positional_candidate['end_time'], '%H:%M').time()
                     
-                    # Only use positional match if it's the same start date or very close
-                    # (this prevents new dates from getting rates from unrelated dates)
-                    date_diff = abs((start_date_obj - existing_start_date).days)
-                    
-                    if date_diff <= 1:  # Allow up to 1 day difference for reasonable matching
+                    # Only use positional match if date AND time match exactly (this is very restrictive)
+                    if (existing_start_date == start_date_obj and 
+                        existing_start_time == start_time_obj and 
+                        existing_end_time == end_time_obj):
                         matching_occurrence = positional_candidate.copy()
-                        logger.info(f"MBA5321 - Positional match found at index {occurrence_counter} for {start_date} (preserving user choices, date diff: {date_diff} days)")
+                        logger.info(f"MBA5321 - Positional exact match found at index {occurrence_counter} for {start_date} {start_time}-{end_time}")
                     else:
-                        logger.info(f"MBA5321 - Skipping positional match at index {occurrence_counter} for {start_date} (date diff too large: {date_diff} days, would cause rate pollution)")
+                        logger.info(f"MBA5321 - Skipping positional match at index {occurrence_counter} for {start_date} {start_time}-{end_time} (not an exact date/time match, preventing ID collision)")
 
+                if matching_occurrence:
+                    logger.info(f"MBA5321 - Using existing occurrence ID: {matching_occurrence['occurrence_id']} for {start_date} {start_time}-{end_time}")
+                else:
+                    logger.info(f"MBA5321 - No matching occurrence found, will create new one for {start_date} {start_time}-{end_time}")
+                
                 if matching_occurrence:
                     # Detect if times actually changed before modifying the occurrence
                     original_start_time = matching_occurrence['start_time']
@@ -2325,7 +2335,7 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                         
                         # Create new occurrence with proper structure and filtered rates
                         new_occurrence = {
-                            'occurrence_id': f"draft_{int(datetime.now().timestamp())}_{occurrence_counter}",
+                            'occurrence_id': f"draft_{int(datetime.now().timestamp() * 1000)}_{str(uuid.uuid4())[:8]}",
                             'start_date': start_date,
                             'end_date': end_date,
                             'start_time': start_time,
@@ -2606,7 +2616,7 @@ class UpdateBookingDraftRecurringView(APIView):
 
                     # Create occurrence data
                     occurrence = OrderedDict([
-                        ('occurrence_id', f"draft_{int(datetime.now().timestamp())}_{len(processed_occurrences)}"),
+                        ('occurrence_id', f"draft_{int(datetime.now().timestamp() * 1000)}_{str(uuid.uuid4())[:8]}"),
                         ('start_date', date_obj.isoformat()),
                         ('end_date', date_obj.isoformat()),
                         ('start_time', start_time.strftime('%H:%M')),
@@ -3011,7 +3021,7 @@ class CreateDraftFromBookingView(APIView):
                 
                 # Extract data directly from the occurrence model in 24-hour UTC format
                 # Use draft occurrence ID instead of booking occurrence ID
-                draft_occurrence_id = f"draft_{draft_timestamp}_{occurrence_counter}"
+                draft_occurrence_id = f"draft_{int(datetime.now().timestamp() * 1000)}_{str(uuid.uuid4())[:8]}"
                 occurrence_data = OrderedDict([
                     ('occurrence_id', draft_occurrence_id),
                     ('start_date', occurrence.start_date.strftime('%Y-%m-%d')),

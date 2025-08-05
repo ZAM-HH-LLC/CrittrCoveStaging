@@ -273,8 +273,11 @@ const TimeSelectionCard = ({
     }
   };
 
-  const handleIndividualDayTimeSelect = (timesData, dateKey) => {
-    debugLog('MBAoi9uv43d: Individual day time selection for card:', { dateKey, timesData });
+  const handleIndividualDayTimeSelect = (timeSlotsData, dateKey) => {
+    debugLog('MBAoi9uv43d: Individual day time selection for card:', { dateKey, timeSlotsData });
+    debugLog('MBAoi9uv43d: Received time slots data structure:', timeSlotsData);
+    debugLog('MBAoi9uv43d: Is timeSlotsData an array?', Array.isArray(timeSlotsData));
+    debugLog('MBAoi9uv43d: Time slots count:', Array.isArray(timeSlotsData) ? timeSlotsData.length : 'Not an array');
     
     if (!dateKey) {
       debugLog('MBAoi9uv43d: No dateKey provided, returning');
@@ -284,25 +287,46 @@ const TimeSelectionCard = ({
     // Create a completely fresh object for the updated ranges with no shared references
     const updatedRanges = JSON.parse(JSON.stringify(individualTimeRanges));
     
-    // Now set the new time data for this date key
-    updatedRanges[dateKey] = JSON.parse(JSON.stringify(timesData));
+    // Now set the new time slots data for this date key
+    updatedRanges[dateKey] = JSON.parse(JSON.stringify(timeSlotsData));
     
     debugLog('MBAoi9uv43d: TimeSelectionCard updating only date:', dateKey);
     debugLog('MBAoi9uv43d: Current individualTimeRanges keys:', Object.keys(individualTimeRanges));
     debugLog('MBAoi9uv43d: New updatedRanges keys:', Object.keys(updatedRanges));
+    debugLog('MBAoi9uv43d: Updated time slots for date:', dateKey, updatedRanges[dateKey]);
     
     // Update local state with completely new object to break all references
     setIndividualTimeRanges(updatedRanges);
     
-    // Format time strings for API
+    // Format time slots for API - handle both single time slot (legacy) and multiple time slots
     const formattedRanges = {};
     Object.keys(updatedRanges).forEach(date => {
       const timeData = updatedRanges[date];
-      formattedRanges[date] = {
-        startTime: `${String(timeData.startTime.hours).padStart(2, '0')}:${String(timeData.startTime.minutes).padStart(2, '0')}`,
-        endTime: `${String(timeData.endTime.hours).padStart(2, '0')}:${String(timeData.endTime.minutes).padStart(2, '0')}`,
-        isOvernightForced: !!timeData.isOvernightForced
-      };
+      debugLog('MBAoi9uv43d: Formatting time data for date:', date, timeData);
+      debugLog('MBAoi9uv43d: Is timeData an array?', Array.isArray(timeData));
+      
+      // Check if timeData is an array of time slots or a single time object
+      if (Array.isArray(timeData)) {
+        // Multiple time slots - format each one
+        formattedRanges[date] = timeData.map((slot, index) => {
+          debugLog('MBAoi9uv43d: Formatting slot', index, 'for date', date, ':', slot);
+          return {
+            startTime: `${String(slot.startTime.hours).padStart(2, '0')}:${String(slot.startTime.minutes).padStart(2, '0')}`,
+            endTime: `${String(slot.endTime.hours).padStart(2, '0')}:${String(slot.endTime.minutes).padStart(2, '0')}`,
+            isOvernightForced: !!slot.isOvernightForced
+          };
+        });
+        debugLog('MBAoi9uv43d: Formatted multiple time slots for date', date, ':', formattedRanges[date]);
+      } else {
+        // Single time slot (legacy format)
+        debugLog('MBAoi9uv43d: Formatting single time slot for date', date, ':', timeData);
+        formattedRanges[date] = [{
+          startTime: `${String(timeData.startTime.hours).padStart(2, '0')}:${String(timeData.startTime.minutes).padStart(2, '0')}`,
+          endTime: `${String(timeData.endTime.hours).padStart(2, '0')}:${String(timeData.endTime.minutes).padStart(2, '0')}`,
+          isOvernightForced: !!timeData.isOvernightForced
+        }];
+        debugLog('MBAoi9uv43d: Formatted single time slot for date', date, ':', formattedRanges[date]);
+      }
     });
     
     // Create a completely new data object for the parent component
@@ -318,7 +342,10 @@ const TimeSelectionCard = ({
     // Add the specific date data
     updatedData[dateKey] = formattedRanges[dateKey];
     
-    debugLog('MBAoi9uv43d: TimeSelectionCard sending updated data to parent');
+    debugLog('MBAoi9uv43d: TimeSelectionCard sending updated data to parent:');
+    debugLog('MBAoi9uv43d: Updated data structure:', updatedData);
+    debugLog('MBAoi9uv43d: Date-specific data for', dateKey, ':', updatedData[dateKey]);
+    debugLog('MBAoi9uv43d: Individual time ranges:', updatedData.individualTimeRanges);
     onTimeSelect(updatedData);
   };
 
@@ -493,7 +520,7 @@ const TimeSelectionCard = ({
           <View style={styles.individualDaysContainer}>
             <Text style={styles.sectionHeader}>Individual Day Schedules</Text>
             <ScrollView>
-              {getDates().map((date, index) => {
+              {getDates().map((date) => {
                 const dateKey = date.toISOString().split('T')[0];
                 
                 // Get existing time data for this date or use default with deep copying
@@ -501,15 +528,25 @@ const TimeSelectionCard = ({
                 
                 // Check if we have a specific time range for this date in initialTimes
                 if (initialTimes && initialTimes[dateKey]) {
-                  const parsedStartTime = parseTimeValue(initialTimes[dateKey].startTime);
-                  const parsedEndTime = parseTimeValue(initialTimes[dateKey].endTime);
-                  
-                  timeData = {
-                    startTime: parsedStartTime || JSON.parse(JSON.stringify(times.startTime)),
-                    endTime: parsedEndTime || JSON.parse(JSON.stringify(times.endTime)),
-                    // CRITICAL FIX: prioritize current service over previous state
-                    isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
-                  };
+                  // Handle both new array format and legacy single object format
+                  if (Array.isArray(initialTimes[dateKey])) {
+                    // New format: array of time slots
+                    timeData = initialTimes[dateKey].map(slot => ({
+                      startTime: parseTimeValue(slot.startTime) || JSON.parse(JSON.stringify(times.startTime)),
+                      endTime: parseTimeValue(slot.endTime) || JSON.parse(JSON.stringify(times.endTime)),
+                      isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
+                    }));
+                  } else {
+                    // Legacy format: single time object
+                    const parsedStartTime = parseTimeValue(initialTimes[dateKey].startTime);
+                    const parsedEndTime = parseTimeValue(initialTimes[dateKey].endTime);
+                    
+                    timeData = {
+                      startTime: parsedStartTime || JSON.parse(JSON.stringify(times.startTime)),
+                      endTime: parsedEndTime || JSON.parse(JSON.stringify(times.endTime)),
+                      isOvernightForced: selectedService?.is_overnight || isOvernightForced || false
+                    };
+                  }
                   
                   debugLog(`MBAoi9uv43d: Found specific time data for date ${dateKey} in initialTimes`);
                 } 
