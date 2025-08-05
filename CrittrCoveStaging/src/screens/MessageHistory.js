@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useContext, useMemo, useLayoutEffect } from 'react';
-import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Image, TextInput, BackHandler } from 'react-native';
+import { View, StyleSheet, Platform, SafeAreaView, StatusBar, Text, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Image, TextInput, BackHandler, KeyboardAvoidingView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -83,7 +83,6 @@ const MessageHistory = ({ navigation, route }) => {
   
   // Add state for keyboard visibility
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const keyboardHeightRef = useRef(0);
   
   // All other state declarations
   const [hasMore, setHasMore] = useState(true);
@@ -124,9 +123,6 @@ const MessageHistory = ({ navigation, route }) => {
   const messageIdsRef = useRef(new Set());
 
   // Add viewport height detection for mobile browsers - using ref instead of state
-  const actualViewportHeightRef = useRef(null);
-  const inputContainerHeightRef = useRef(0);
-  const isAndroidChromeRef = useRef(false);
   
   // No viewport fix needed, we're using pure flexbox
 
@@ -152,51 +148,6 @@ const MessageHistory = ({ navigation, route }) => {
     routeParams: route.params
   });
 
-  // Add code to attach keyboard detection event for better handling in MessageHistory component root
-  useEffect(() => {
-    if (Platform.OS === 'web' && isAndroidChromeRef.current) {
-      // Setup a global keyboard visibility tracker
-      const detectKeyboard = () => {
-        // Use visualViewport API to detect keyboard
-        if (window.visualViewport) {
-          const keyboardHeight = window.innerHeight - window.visualViewport.height;
-          const keyboardVisible = keyboardHeight > 100;
-          
-          // Log keyboard visibility changes
-          debugLog('MBA9876: [KEYBOARD] Global keyboard visibility check', {
-            keyboardHeight,
-            keyboardVisible,
-            visualViewportHeight: window.visualViewport.height,
-            innerHeight: window.innerHeight
-          });
-          
-          // Apply CSS classes to document for keyboard visibility
-          if (keyboardVisible) {
-            document.documentElement.classList.add('keyboard-visible');
-            // Force bottom positioning for input container
-            setTimeout(() => {
-              window.scrollTo(0, document.body.scrollHeight);
-            }, 50);
-          } else {
-            document.documentElement.classList.remove('keyboard-visible');
-          }
-        }
-      };
-      
-      // Add visualViewport event listener
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', detectKeyboard);
-        
-        // Run initial detection
-        detectKeyboard();
-        
-        return () => {
-          window.visualViewport.removeEventListener('resize', detectKeyboard);
-          document.documentElement.classList.remove('keyboard-visible');
-        };
-      }
-    }
-  }, []);
 
   // Simple cleanup on sign out
   useEffect(() => {
@@ -239,309 +190,6 @@ const MessageHistory = ({ navigation, route }) => {
     }
   }, [userRole, isSignedIn]);
 
-  useEffect(() => {
-    debugLog('MBA9876: [VIEWPORT] useEffect running', {
-      timestamp: Date.now(),
-      screenWidth,
-      isWebMobile: Platform.OS === 'web' && screenWidth <= 900
-    });
-    
-    if (Platform.OS === 'web' && screenWidth <= 900) {
-      // Detect Android Chrome once at initialization
-      if (typeof navigator !== 'undefined') {
-        isAndroidChromeRef.current = /Chrome/i.test(navigator.userAgent) && 
-                                     /Android/i.test(navigator.userAgent);
-        
-        debugLog('MBA9876: [BROWSER] Browser detection', {
-          userAgent: navigator.userAgent,
-          isAndroidChrome: isAndroidChromeRef.current
-        });
-
-        // Add mobile-only CSS for Android Chrome
-        if (isAndroidChromeRef.current) {
-          // Create a style tag for our Android Chrome specific CSS
-          const styleTag = document.createElement('style');
-          styleTag.id = 'android-chrome-fixes';
-          styleTag.innerHTML = `
-            /* Android Chrome keyboard fixes */
-            body.keyboard-open {
-              height: 100% !important;
-              overflow: hidden !important;
-              position: fixed !important;
-              width: 100% !important;
-            }
-            
-            .message-input-container {
-              background-color: white;
-            }
-            
-            .message-input-container.keyboard-open {
-              position: fixed !important;
-              bottom: 0 !important;
-              left: 0 !important;
-              right: 0 !important;
-              z-index: 1000 !important;
-              margin-bottom: 0 !important;
-              padding-bottom: 0 !important;
-              transform: translateZ(0) !important;
-            }
-            
-            .message-container.keyboard-open {
-              padding-bottom: 60px !important;
-              height: calc(100vh - 60px) !important;
-              overflow-y: auto !important;
-            }
-            
-            textarea:focus {
-              /* Prevent browser from zooming on focus */
-              font-size: 16px !important;
-            }
-          `;
-          document.head.appendChild(styleTag);
-          
-          // Clean up the style tag when component unmounts
-          return () => {
-            const existingStyle = document.getElementById('android-chrome-fixes');
-            if (existingStyle) {
-              existingStyle.remove();
-            }
-          };
-        }
-      }
-    
-      const updateViewportHeight = () => {
-        // Get the actual viewport height (works better than 100vh on mobile)
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
-        const newHeight = window.innerHeight;
-        
-        debugLog('MBA9876: [VIEWPORT] updateViewportHeight called', {
-          timestamp: Date.now(),
-          newHeight,
-          previousHeight: actualViewportHeightRef.current,
-          vh,
-          currentActiveElement: document.activeElement?.tagName
-        });
-        
-        actualViewportHeightRef.current = newHeight;
-      };
-
-      // Mobile keyboard handling - completely revised approach
-      const handleResize = () => {
-        debugLog('MBA9876: [VIEWPORT] handleResize called', {
-          timestamp: Date.now(),
-          innerHeight: window.innerHeight,
-          activeElement: document.activeElement?.tagName,
-          visualViewport: window.visualViewport?.height,
-          documentHeight: document.documentElement.clientHeight,
-          screenHeight: window.screen.height
-        });
-        
-        updateViewportHeight();
-        
-        // Use visualViewport API if available (better for Android Chrome)
-        if (window.visualViewport) {
-          // For Android Chrome, calculate keyboard height differently
-          let keyboardHeight;
-          
-          if (isAndroidChromeRef.current) {
-            // For Android Chrome, use the difference between window.innerHeight and visualViewport.height
-            // This is more reliable than using screen.height on Android
-            keyboardHeight = window.innerHeight - window.visualViewport.height;
-            
-            // On some Android devices, we need to account for URL bar
-            if (document.documentElement.clientHeight > window.innerHeight) {
-              // Adjust for URL bar height
-              const urlBarHeight = document.documentElement.clientHeight - window.innerHeight;
-              keyboardHeight = Math.max(0, keyboardHeight - urlBarHeight);
-            }
-          } else {
-            // For other browsers, use the original calculation
-            keyboardHeight = window.screen.height - window.visualViewport.height;
-          }
-          
-          // Only consider keyboard open if height is significant
-          keyboardHeightRef.current = keyboardHeight > 100 ? keyboardHeight : 0;
-          
-          debugLog('MBA9876: [KEYBOARD] Detected keyboard height:', {
-            keyboardHeight: keyboardHeightRef.current,
-            screenHeight: window.screen.height,
-            visualViewportHeight: window.visualViewport.height,
-            innerHeight: window.innerHeight,
-            clientHeight: document.documentElement.clientHeight,
-            isKeyboardOpen: keyboardHeight > 100,
-            isAndroidChrome: isAndroidChromeRef.current
-          });
-          
-          // Apply direct style to input container if we have a keyboard
-          const inputContainer = document.querySelector('.message-input-container');
-          if (inputContainer) {
-            if (keyboardHeight > 100) {
-              // Keyboard is open - stick input to keyboard
-              inputContainer.style.position = 'fixed';
-              inputContainer.style.bottom = '0px';
-              inputContainer.style.left = '0px';
-              inputContainer.style.right = '0px';
-              inputContainer.style.zIndex = '1000';
-              
-              // Explicitly prevent any margin that might create space
-              inputContainer.style.marginBottom = '0px';
-              
-              // Force the browser to recalculate layout
-              inputContainer.style.transform = 'translateZ(0)';
-              
-              // Save the height for message container calculations
-              inputContainerHeightRef.current = inputContainer.offsetHeight;
-              
-              // Adjust the message container to make room for fixed input
-              const messageContainer = document.querySelector('.message-container');
-              if (messageContainer) {
-                messageContainer.style.paddingBottom = `${inputContainerHeightRef.current}px`;
-              }
-              
-              // For Android Chrome, we need additional handling
-              if (isAndroidChromeRef.current) {
-                // Prevent entire page from scrolling
-                document.body.style.overflow = 'hidden';
-                document.documentElement.style.overflow = 'hidden';
-                
-                // Add a small delay to ensure proper positioning after keyboard is fully visible
-                setTimeout(() => {
-                  // For Chrome on Android, we need to force the input into view
-                  if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
-                    // Scroll to bottom of page to ensure input is visible
-                    window.scrollTo(0, document.body.scrollHeight);
-                    
-                    // If input is still not visible enough, scroll it into view
-                    const inputRect = document.activeElement.getBoundingClientRect();
-                    const viewportHeight = window.visualViewport.height;
-                    
-                    if (inputRect.bottom > viewportHeight) {
-                      document.activeElement.scrollIntoView(false);
-                    }
-                    
-                    debugLog('MBA9876: [KEYBOARD] Android Chrome positioning adjustment', {
-                      inputBottom: inputRect.bottom,
-                      viewportHeight: viewportHeight,
-                      needsExtraScroll: inputRect.bottom > viewportHeight
-                    });
-                  }
-                }, 100);
-              }
-              
-              debugLog('MBA9876: [KEYBOARD] Fixed input to bottom with keyboard open', {
-                inputHeight: inputContainerHeightRef.current,
-                browser: navigator.userAgent
-              });
-            } else {
-              // Keyboard is closed - reset positioning
-              inputContainer.style.position = '';
-              inputContainer.style.bottom = '';
-              inputContainer.style.left = '';
-              inputContainer.style.right = '';
-              inputContainer.style.zIndex = '';
-              inputContainer.style.marginBottom = '';
-              inputContainer.style.transform = '';
-              
-              // Reset message container padding
-              const messageContainer = document.querySelector('.message-container');
-              if (messageContainer) {
-                messageContainer.style.paddingBottom = '';
-              }
-              
-              // Reset body overflow for Android Chrome
-              if (isAndroidChromeRef.current) {
-                document.body.style.overflow = '';
-                document.documentElement.style.overflow = '';
-              }
-              
-              debugLog('MBA9876: [KEYBOARD] Reset input positioning with keyboard closed');
-            }
-          }
-        }
-        
-        // Fix for mobile Chrome keyboard issues
-        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
-          debugLog('MBA9876: [VIEWPORT] Found active textarea, scheduling scroll', {
-            timestamp: Date.now()
-          });
-          
-          // Small delay to allow keyboard to settle
-          setTimeout(() => {
-            debugLog('MBA9876: [VIEWPORT] Executing scrollIntoView', {
-              timestamp: Date.now(),
-              stillActive: document.activeElement?.tagName === 'TEXTAREA'
-            });
-            
-            if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
-              // For Android Chrome, use a different scrolling approach
-              if (isAndroidChromeRef.current) {
-                window.scrollTo(0, document.body.scrollHeight);
-              } else {
-                document.activeElement.scrollIntoView({ 
-                  behavior: 'smooth', 
-                  block: 'center' 
-                });
-              }
-            }
-          }, 100);
-        }
-      };
-
-      updateViewportHeight();
-      
-      // Use visualViewport API for more accurate keyboard detection on Android
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', handleResize);
-        window.visualViewport.addEventListener('scroll', handleResize);
-      } else {
-        // Fallback to window resize events
-        window.addEventListener('resize', handleResize);
-      }
-      
-      window.addEventListener('orientationchange', updateViewportHeight);
-      
-      // Android Chrome gray space fix
-      const handleFocusOut = () => {
-        debugLog('MBA9876: [VIEWPORT] handleFocusOut called - fixing gray space', {
-          timestamp: Date.now()
-        });
-        
-        // Fix gray space on Android Chrome when keyboard closes
-        setTimeout(() => {
-          window.scrollTo(0, 0);
-          
-          // Reset any fixed positioning on input
-          const inputContainer = document.querySelector('.message-input-container');
-          if (inputContainer) {
-            inputContainer.style.position = '';
-            inputContainer.style.bottom = '';
-            
-            // Reset message container padding
-            const messageContainer = document.querySelector('.message-container');
-            if (messageContainer) {
-              messageContainer.style.paddingBottom = '';
-            }
-          }
-          
-          debugLog('MBA9876: [VIEWPORT] Gray space fix - scrolled to top');
-        }, 150);
-      };
-      
-      window.addEventListener('focusout', handleFocusOut);
-
-      return () => {
-        if (window.visualViewport) {
-          window.visualViewport.removeEventListener('resize', handleResize);
-          window.visualViewport.removeEventListener('scroll', handleResize);
-        } else {
-          window.removeEventListener('resize', handleResize);
-        }
-        window.removeEventListener('orientationchange', updateViewportHeight);
-        window.removeEventListener('focusout', handleFocusOut);
-      };
-    }
-  }, [screenWidth]);
 
   // Outside the renderMessage callback, add a function to group messages by booking ID
   const groupMessagesByBookingId = (messages) => {
@@ -3186,7 +2834,11 @@ const MessageHistory = ({ navigation, route }) => {
     }
 
     return (
-      <View style={styles.mainSection}>
+      <KeyboardAvoidingView 
+        style={styles.mainSection}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         {screenWidth > 900 && renderMessageHeader()}
         {/* Messages */}
         <View style={styles.messageSection} className="message-container">
@@ -3295,7 +2947,7 @@ const MessageHistory = ({ navigation, route }) => {
           screenWidth={screenWidth}
           selectedConversation={selectedConversation}
         />
-      </View>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -3866,77 +3518,6 @@ const MessageHistory = ({ navigation, route }) => {
   };
 
   // Add a special effect specifically for Android Chrome keyboard handling
-  useEffect(() => {
-    if (Platform.OS === 'web' && screenWidth <= 900 && isAndroidChromeRef.current) {
-      debugLog('MBA9876: [ANDROID] Setting up Android Chrome-specific keyboard handler');
-      
-      // Helper function to detect keyboard visibility more reliably on Android Chrome
-      const checkAndroidKeyboard = () => {
-        // If input is focused, keyboard is likely open
-        const isInputFocused = document.activeElement && 
-                              (document.activeElement.tagName === 'TEXTAREA' || 
-                               document.activeElement.tagName === 'INPUT');
-        
-        // Visual viewport height change is a good indicator
-        const viewportHeightReduced = window.visualViewport && 
-                                     window.innerHeight - window.visualViewport.height > 100;
-        
-        const keyboardIsLikelyOpen = isInputFocused && viewportHeightReduced;
-        
-        debugLog('MBA9876: [ANDROID] Android keyboard check', {
-          isInputFocused,
-          activeElement: document.activeElement?.tagName,
-          viewportHeightReduced,
-          innerHeight: window.innerHeight,
-          visualViewportHeight: window.visualViewport?.height,
-          keyboardIsLikelyOpen
-        });
-        
-        if (keyboardIsLikelyOpen) {
-          // Force input into view on Android Chrome
-          const inputContainer = document.querySelector('.message-input-container');
-          if (inputContainer) {
-            // Make sure input container is fixed to bottom
-            inputContainer.style.position = 'fixed';
-            inputContainer.style.bottom = '0px';
-            inputContainer.style.left = '0px';
-            inputContainer.style.right = '0px';
-            inputContainer.style.zIndex = '1000';
-            
-            // Explicitly ensure no margin
-            inputContainer.style.marginBottom = '0px';
-            
-            // Force visual viewport to bottom
-            setTimeout(() => {
-              window.scrollTo(0, document.body.scrollHeight);
-            }, 50);
-          }
-        }
-      };
-      
-      // Create event listeners specifically for Android Chrome
-      const handleAndroidFocus = () => {
-        debugLog('MBA9876: [ANDROID] Focus event on Android Chrome');
-        
-        // Add repeated checks for the keyboard
-        const checkInterval = setInterval(checkAndroidKeyboard, 100);
-        
-        // Stop checking after 1 second
-        setTimeout(() => {
-          clearInterval(checkInterval);
-        }, 1000);
-        
-        // Do an immediate check
-        checkAndroidKeyboard();
-      };
-      
-      document.addEventListener('focusin', handleAndroidFocus);
-      
-      return () => {
-        document.removeEventListener('focusin', handleAndroidFocus);
-      };
-    }
-  }, [screenWidth]);
 
   // Function to ensure the latest message is visible - update to be more thorough
   const ensureLatestMessageVisible = () => {
