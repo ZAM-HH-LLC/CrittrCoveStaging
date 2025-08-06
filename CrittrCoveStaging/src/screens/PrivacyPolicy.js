@@ -76,6 +76,7 @@ const PrivacyPolicy = () => {
       >
         <Text style={styles.title}>{privacyPolicyData.title}</Text>
         <Text style={styles.date}>Last Updated: {privacyPolicyData.lastUpdated}</Text>
+        <Text style={styles.version}>Version {privacyPolicyData.version}</Text>
         
         <Text style={styles.paragraph}>
           {privacyPolicyData.introduction}
@@ -108,8 +109,14 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 16,
-    marginBottom: 20,
+    marginBottom: 5,
     color: theme.colors.text,
+  },
+  version: {
+    fontSize: 14,
+    marginBottom: 20,
+    color: theme.colors.primary,
+    fontStyle: 'italic',
   },
   sectionTitle: {
     fontSize: 20,

@@ -97,6 +97,10 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text="Custom text when 'other' is selected for how_did_you_hear"
     )
     
+    # Terms of Service and Privacy Policy acceptance (combined)
+    terms_and_privacy_accepted_at = models.DateTimeField(null=True, blank=True, help_text="When user accepted both Terms of Service and Privacy Policy")
+    terms_and_privacy_version = models.CharField(max_length=20, blank=True, help_text="Version of Terms of Service and Privacy Policy accepted")
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(null=True, blank=True)

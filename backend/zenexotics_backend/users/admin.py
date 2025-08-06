@@ -5,12 +5,13 @@ from django.utils import timezone
 
 class CustomUserAdmin(UserAdmin):
     model = User
-    list_display = ('id', 'user_id', 'email', 'name', 'is_staff', 'is_active', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear')
-    list_filter = ('is_staff', 'is_active', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear')
+    list_display = ('id', 'user_id', 'email', 'name', 'is_staff', 'is_active', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear', 'terms_and_privacy_accepted_at')
+    list_filter = ('is_staff', 'is_active', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear', 'terms_and_privacy_accepted_at')
     fieldsets = (
         (None, {'fields': ('id', 'user_id', 'email', 'password')}),
         ('Personal info', {'fields': ('name', 'profile_picture', 'phone_number', 'birthday')}),
         ('Marketing', {'fields': ('how_did_you_hear', 'how_did_you_hear_other')}),
+        ('Terms & Privacy Acceptance', {'fields': ('terms_and_privacy_accepted_at', 'terms_and_privacy_version')}),
         ('Status', {'fields': ('is_active', 'is_staff', 'is_superuser', 'email_is_verified', 'identity_verified')}),
         ('Subscription', {'fields': ('subscription_plan', 'is_waitlister', 'signed_up_on_beta')}),
         ('Important dates', {'fields': ('last_login', 'created_at')}),

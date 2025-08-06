@@ -43,9 +43,10 @@ const TermsOfService = () => {
         contentContainerStyle={styles.contentContainer}
       >
         <Text style={styles.title}>Terms of Service for CrittrCove</Text>
-        <Text style={styles.date}>Effective Date: 7/18/2025</Text>
+        <Text style={styles.date}>Effective Date: {defaultTermsData.lastUpdated}</Text>
+        <Text style={styles.version}>Version {defaultTermsData.version}</Text>
         
-        {defaultTermsData.map((section, index) => (
+        {defaultTermsData.terms.map((section, index) => (
           renderSection(section)
         ))}
       </ScrollView>
@@ -69,8 +70,14 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 16,
-    marginBottom: 20,
+    marginBottom: 5,
     color: theme.colors.text,
+  },
+  version: {
+    fontSize: 14,
+    marginBottom: 20,
+    color: theme.colors.primary,
+    fontStyle: 'italic',
   },
   sectionTitle: {
     fontSize: 20,

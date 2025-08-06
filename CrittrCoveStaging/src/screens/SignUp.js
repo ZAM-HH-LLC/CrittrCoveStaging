@@ -9,6 +9,8 @@ import { AuthContext, debugLog } from '../context/AuthContext'; // Import AuthCo
 import { validateEmail, validateName, validatePassword, validatePasswordMatch, sanitizeInput } from '../validation/validation';
 import { verifyInvitation } from '../api/API';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import TermsOfServiceModal from '../components/modals/TermsOfServiceModal';
+import PrivacyPolicyModal from '../components/modals/PrivacyPolicyModal';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -41,6 +43,12 @@ export default function SignUp() {
   const [showHowDidYouHearDropdown, setShowHowDidYouHearDropdown] = useState(false);
   const [howDidYouHearOther, setHowDidYouHearOther] = useState('');
   const [howDidYouHearError, setHowDidYouHearError] = useState('');
+  
+  // Terms of Service and Privacy Policy state
+  const [termsAndPrivacyAccepted, setTermsAndPrivacyAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [termsAndPrivacyError, setTermsAndPrivacyError] = useState('');
   
   // Fallback locations in case API fails
   const fallbackLocations = [
@@ -230,6 +238,14 @@ export default function SignUp() {
     setConfirmPasswordError(passwordMatchValidation.message);
     if (!passwordMatchValidation.isValid) isValid = false;
     
+    // Validate Terms of Service and Privacy Policy acceptance
+    if (!termsAndPrivacyAccepted) {
+      setTermsAndPrivacyError('You must accept the Terms of Service and Privacy Policy to continue');
+      isValid = false;
+    } else {
+      setTermsAndPrivacyError('');
+    }
+    
     return isValid;
   };
 
@@ -299,7 +315,9 @@ export default function SignUp() {
         ...userData,
         timezone: userTimezone,
         use_military_time: useMilitaryTime,
-        invitation_token: inviteToken // Add invitation token here for backend to handle
+        invitation_token: inviteToken, // Add invitation token here for backend to handle
+        terms_and_privacy_accepted_at: new Date().toISOString(),
+        terms_and_privacy_version: '1.1'
       };
       
       debugLog('MBA12345 Registration data:', registrationData);
@@ -751,6 +769,36 @@ export default function SignUp() {
                 {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
               </View>
               
+              {/* Combined Terms of Service and Privacy Policy Checkbox */}
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity 
+                  style={styles.checkboxWrapper}
+                  onPress={() => setTermsAndPrivacyAccepted(!termsAndPrivacyAccepted)}
+                >
+                  <View style={[styles.checkbox, termsAndPrivacyAccepted && styles.checkboxChecked]}>
+                    {termsAndPrivacyAccepted && (
+                      <MaterialCommunityIcons name="check" size={16} color="white" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxText}>
+                    I agree to the{' '}
+                    <Text 
+                      style={styles.linkText}
+                      onPress={() => setShowTermsModal(true)}
+                    >
+                      Terms of Service
+                    </Text>
+                    {' '}and{' '}
+                    <Text 
+                      style={styles.linkText}
+                      onPress={() => setShowPrivacyModal(true)}
+                    >
+                      Privacy Policy
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+                {termsAndPrivacyError ? <Text style={styles.errorText}>{termsAndPrivacyError}</Text> : null}
+              </View>
               
               <CustomButton title="Sign Up" onPress={handleSignUp} style={styles.signupButton} />
             </>
@@ -783,6 +831,18 @@ export default function SignUp() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      {/* Terms of Service Modal */}
+      <TermsOfServiceModal 
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+      />
+
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyModal 
+        visible={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1003,5 +1063,35 @@ const styles = StyleSheet.create({
     marginTop: 24,
     width: '100%',
     backgroundColor: '#6B7280',
+  },
+  checkboxContainer: {
+    marginVertical: 10,
+  },
+  checkboxWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 5,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+    borderRadius: 4,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.primary,
+  },
+  checkboxText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    flex: 1,
+  },
+  linkText: {
+    color: theme.colors.primary,
+    textDecorationLine: 'underline',
   },
 });

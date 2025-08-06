@@ -28,7 +28,10 @@ export const BOOKING_STATES = {
   ]
 };
 
-export const defaultTermsData = [
+export const defaultTermsData = {
+  version: "1.1",
+  lastUpdated: "2025-08-06",
+  terms: [
     {
       header: "Welcome to CrittrCove",
       body: "Welcome to CrittrCove! These Terms of Service ('Terms') create a binding legal agreement between you and CrittrCove LLC, a Colorado-based company ('we,' 'us,' or 'our'). By using our platform, mobile apps, website, or any other CrittrCove services (collectively, the 'Platform'), you're agreeing to these Terms. If you don't agree, please don't use our services. We may update these Terms from time to time, and continued use means you accept any changes. You can find our current Terms at https://www.crittrcove.com/terms-of-service/."
@@ -306,14 +309,30 @@ export const defaultTermsData = [
       body: "We may update these Terms from time to time. We'll notify you of significant changes, and continued use of our platform constitutes acceptance of updated Terms."
     },
     {
+      header: "Account Deletion and Data Management",
+      body: "You have the right to request deletion of your CrittrCove account and associated data at any time. To request account deletion, please email support@crittrcove.com with your request. We will verify your identity and process your deletion request within 60 days of verification. Before deletion, you may request an export of your personal data. Please note that certain data may be retained for legal compliance and business purposes:",
+      subsections: [
+        {
+          subtitle: "Data Retention After Deletion",
+          body: "Financial records (invoices, payments) may be retained for up to 7 years for tax and legal compliance. Booking records may be retained for 3-5 years for business purposes and dispute resolution. Communication records may be retained for up to 2 years for legal protection. Some data may be anonymized rather than deleted to maintain platform analytics and safety."
+        },
+        {
+          subtitle: "Important Notes",
+          body: "Account deletion is irreversible once processing is complete. You acknowledge that complete data removal may not be technically feasible for all systems and backups. Anonymized data that cannot identify you may remain in our systems indefinitely."
+        }
+      ]
+    },
+    {
       header: "Contact Us",
       body: "Questions about these Terms? Contact us at support@crittrcove.com or write to CrittrCove LLC, 2510 Summit Dr, Colorado Springs, CO, 80909."
     }
-];
+  ]
+};
 
 export const privacyPolicyData = {
+  version: "1.1",
   title: "CrittrCove Privacy Policy",
-  lastUpdated: "7/18/2025",
+  lastUpdated: "8/6/2025",
   introduction: "Welcome to CrittrCove! Your privacy matters to us. This Privacy Policy explains how CrittrCove LLC (\"CrittrCove,\" \"we,\" \"our,\" or \"us\") collects, uses, and protects your personal information when you use our services, including our website, mobile apps, and any platform features related to connecting pet owners with animal care providers (the \"Services\").",
   sections: [
     {
@@ -401,8 +420,37 @@ export const privacyPolicyData = {
     },
     {
       title: "Data Storage & Retention",
-      content: "Data is stored in the U.S. or other regions where our systems are hosted. We retain your information only as long as necessary to provide our Services or comply with legal requirements.",
-      additionalInfo: "If you delete your account, your data will be removed from active systems within 30 days, though backups or logs may take longer to fully purge."
+      content: "Data is stored in the U.S. or other regions where our systems are hosted. We retain different types of information for different periods based on legal requirements and business needs:",
+      listItems: [
+        "Personal profile information: Retained while your account is active",
+        "Financial records: Up to 7 years for tax and legal compliance",
+        "Booking and service records: 3-5 years for business purposes and dispute resolution",
+        "Communication records: Up to 2 years for legal protection",
+        "Analytics and usage data: May be anonymized and retained indefinitely"
+      ],
+      additionalInfo: "If you delete your account, your data will be processed according to our deletion procedures outlined below."
+    },
+    {
+      title: "Data Deletion and Your Rights",
+      content: "You have the right to request deletion of your CrittrCove account and associated personal data. To request account deletion:",
+      listItems: [
+        "Email support@crittrcove.com with your deletion request",
+        "We will verify your identity for security purposes",
+        "Deletion will be processed within 60 days of verification",
+        "You may request a data export before deletion"
+      ],
+      subsections: [
+        {
+          subtitle: "What Gets Deleted vs. Retained",
+          content: "While we delete personal identifiers and profile information, certain data may be retained or anonymized:",
+          items: [
+            "Retained: Financial records for legal compliance, booking records for business purposes, communication records for legal protection",
+            "Anonymized: Usage patterns and platform analytics that cannot identify you",
+            "Deleted: Personal profile information, contact details, private messages content"
+          ]
+        }
+      ],
+      additionalInfo: "Account deletion is irreversible once processing is complete. Some technical limitations may prevent complete removal from all backup systems immediately."
     },
     {
       title: "Children's Privacy",

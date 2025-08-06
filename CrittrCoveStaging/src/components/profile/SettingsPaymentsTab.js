@@ -7,6 +7,8 @@ import { debugLog } from '../../context/AuthContext';
 import { useToast } from '../../components/ToastProvider';
 import { USER_TIMEZONE_OPTIONS, getTimezoneDisplayName, searchTimezones, getGroupedTimezones } from '../../data/Timezones';
 import { sanitizeInput } from '../../validation/validation';
+import TermsOfServiceModal from '../modals/TermsOfServiceModal';
+import PrivacyPolicyModal from '../modals/PrivacyPolicyModal';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -69,6 +71,8 @@ const SettingsPaymentsTab = ({
   const [timezones, setTimezones] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const showToast = useToast();
 
   useEffect(() => {
@@ -595,7 +599,7 @@ const SettingsPaymentsTab = ({
           </View>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('PrivacyPolicy')}
+            onPress={() => setShowPrivacyModal(true)}
           >
             <Text style={styles.actionButtonText}>View</Text>
           </TouchableOpacity>
@@ -611,7 +615,7 @@ const SettingsPaymentsTab = ({
           </View>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('TermsOfService')}
+            onPress={() => setShowTermsModal(true)}
           >
             <Text style={styles.actionButtonText}>View</Text>
           </TouchableOpacity>
@@ -732,6 +736,18 @@ const SettingsPaymentsTab = ({
     <View style={styles.container}>
       {isMobile ? renderMobileLayout() : renderDesktopLayout()}
       {renderTimezoneModal()}
+      
+      {/* Terms of Service Modal */}
+      <TermsOfServiceModal 
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+      />
+
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyModal 
+        visible={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
     </View>
   );
 };

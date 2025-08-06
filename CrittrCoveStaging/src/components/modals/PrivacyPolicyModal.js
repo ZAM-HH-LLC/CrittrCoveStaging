@@ -12,37 +12,72 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { AuthContext } from '../../context/AuthContext';
-import { defaultTermsData } from '../../data/mockData';
+import { privacyPolicyData } from '../../data/mockData';
 
-const TermsOfServiceModal = ({ visible, onClose, termsData }) => {
+const PrivacyPolicyModal = ({ visible, onClose, privacyData }) => {
   const { screenWidth } = useContext(AuthContext);
   const isDesktop = screenWidth > 768;
 
-  const terms = termsData || defaultTermsData.terms;
+  const privacy = privacyData || privacyPolicyData;
 
-  const renderSection = (section) => {
+  const renderSubsection = (subsection) => {
     return (
-      <View key={section.header} style={styles.section}>
-        <Text style={styles.sectionHeader}>{section.header}</Text>
-        
-        {section.body && (
-          <Text style={styles.sectionBody}>{section.body}</Text>
+      <View key={subsection.subtitle} style={styles.subsection}>
+        <Text style={styles.subsectionTitle}>{subsection.subtitle}</Text>
+        {subsection.content && (
+          <Text style={styles.subsectionContent}>{subsection.content}</Text>
         )}
-        
-        {section.subsections && (
-          section.subsections.map((subsection, index) => (
-            <View key={index} style={styles.subsection}>
-              <Text style={styles.subsectionTitle}>{subsection.subtitle}</Text>
-              <Text style={styles.subsectionBody}>{subsection.body}</Text>
-            </View>
+        {subsection.items && (
+          subsection.items.map((item, index) => (
+            <Text key={index} style={styles.listItem}>• {item}</Text>
           ))
         )}
       </View>
     );
   };
 
-  const renderTermsContent = () => {
-    return terms.map((section, index) => renderSection(section));
+  const renderSection = (section) => {
+    return (
+      <View key={section.title} style={styles.section}>
+        <Text style={styles.sectionHeader}>{section.title}</Text>
+        
+        {section.content && (
+          <Text style={styles.sectionBody}>{section.content}</Text>
+        )}
+        
+        {section.listItems && (
+          section.listItems.map((item, index) => (
+            <Text key={index} style={styles.listItem}>• {item}</Text>
+          ))
+        )}
+        
+        {section.subsections && (
+          section.subsections.map((subsection, index) => renderSubsection(subsection))
+        )}
+        
+        {section.additionalInfo && (
+          <Text style={styles.additionalInfo}>{section.additionalInfo}</Text>
+        )}
+        
+        {section.contactInfo && (
+          <View style={styles.contactInfo}>
+            <Text style={styles.contactText}>{section.contactInfo.company}</Text>
+            <Text style={styles.contactText}>{section.contactInfo.attention}</Text>
+            <Text style={styles.contactText}>{section.contactInfo.address}</Text>
+            <Text style={styles.contactText}>{section.contactInfo.email}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderPrivacyContent = () => {
+    return (
+      <>
+        <Text style={styles.introduction}>{privacy.introduction}</Text>
+        {privacy.sections.map((section, index) => renderSection(section))}
+      </>
+    );
   };
 
   return (
@@ -60,9 +95,9 @@ const TermsOfServiceModal = ({ visible, onClose, termsData }) => {
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Terms of Service</Text>
-              <Text style={styles.lastUpdated}>Last Updated: {defaultTermsData.lastUpdated}</Text>
-              <Text style={styles.version}>Version {defaultTermsData.version}</Text>
+              <Text style={styles.title}>{privacy.title}</Text>
+              <Text style={styles.lastUpdated}>Last Updated: {privacy.lastUpdated}</Text>
+              <Text style={styles.version}>Version {privacy.version}</Text>
             </View>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
@@ -71,7 +106,7 @@ const TermsOfServiceModal = ({ visible, onClose, termsData }) => {
           
           {/* Content */}
           <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-            {renderTermsContent()}
+            {renderPrivacyContent()}
           </ScrollView>
           
           {/* Footer */}
@@ -116,6 +151,12 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
   },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.header.fontFamily,
+  },
   lastUpdated: {
     fontSize: 14,
     color: theme.colors.textSecondary,
@@ -128,12 +169,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.regular.fontFamily,
     marginTop: 2,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    fontFamily: theme.fonts.header.fontFamily,
-  },
   closeButton: {
     padding: 8,
   },
@@ -143,6 +178,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 32,
+  },
+  introduction: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    lineHeight: 24,
+    marginBottom: 24,
   },
   section: {
     marginBottom: 24,
@@ -159,6 +201,15 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
     lineHeight: 24,
+    marginBottom: 8,
+  },
+  listItem: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    lineHeight: 24,
+    marginBottom: 4,
+    marginLeft: 8,
   },
   subsection: {
     marginTop: 12,
@@ -171,11 +222,32 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.header.fontFamily,
     marginBottom: 4,
   },
-  subsectionBody: {
+  subsectionContent: {
     fontSize: 16,
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
     lineHeight: 24,
+    marginBottom: 8,
+  },
+  additionalInfo: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.regular.fontFamily,
+    lineHeight: 20,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  contactInfo: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: theme.colors.surfaceSecondary,
+    borderRadius: 8,
+  },
+  contactText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.regular.fontFamily,
+    lineHeight: 20,
   },
   footerContainer: {
     flexDirection: 'row',
@@ -203,4 +275,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TermsOfServiceModal; 
+export default PrivacyPolicyModal;

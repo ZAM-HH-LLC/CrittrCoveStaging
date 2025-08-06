@@ -47,10 +47,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         max_length=255,
         help_text="Custom text when 'other' is selected"
     )
+    terms_and_privacy_accepted_at = serializers.DateTimeField(required=True, help_text="When user accepted Terms of Service and Privacy Policy")
+    terms_and_privacy_version = serializers.CharField(required=True, max_length=20, help_text="Version of Terms of Service and Privacy Policy accepted")
 
     class Meta:
         model = User
-        fields = ('email', 'password', 'password2', 'name', 'phone_number', 'timezone', 'use_military_time', 'invitation_token', 'how_did_you_hear', 'how_did_you_hear_other')
+        fields = ('email', 'password', 'password2', 'name', 'phone_number', 'timezone', 'use_military_time', 'invitation_token', 'how_did_you_hear', 'how_did_you_hear_other', 'terms_and_privacy_accepted_at', 'terms_and_privacy_version')
         extra_kwargs = {
             'name': {'required': True},
             'phone_number': {'required': True}
@@ -71,6 +73,14 @@ class RegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "how_did_you_hear_other": "Please specify how you heard about us when selecting 'Other'."
                 })
+        
+        # Validate Terms of Service and Privacy Policy acceptance
+        terms_and_privacy_accepted_at = attrs.get('terms_and_privacy_accepted_at')
+        
+        if not terms_and_privacy_accepted_at:
+            raise serializers.ValidationError({
+                "terms_and_privacy_accepted_at": "Terms of Service and Privacy Policy must be accepted to create an account."
+            })
         
         # Handle invitation token validation, if provided
         invitation_token = attrs.get('invitation_token')
