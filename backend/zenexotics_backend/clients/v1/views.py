@@ -101,9 +101,15 @@ def get_client_dashboard(request):
             ).order_by('start_date', 'start_time').first()
             
             if next_occurrence:
+                # Get professional's profile picture URL
+                professional_profile_picture = None
+                if booking.professional.user.profile_picture:
+                    professional_profile_picture = booking.professional.user.profile_picture.url
+                
                 booking_data = {
                     'booking_id': booking.booking_id,
                     'professional_name': booking.professional.user.name,
+                    'professional_profile_picture': professional_profile_picture,
                     'start_date': next_occurrence.start_date,
                     'start_time': next_occurrence.start_time,
                     'service_type': booking.service_id.service_name if booking.service_id else None,

@@ -319,32 +319,6 @@ const Dashboard = ({ navigation }) => {
     }, 100);
   };
 
-  const renderHeader = () => {
-    if (isMobile) return null;
-    
-    return (
-      <View style={styles.headerContainer}>
-        <View style={styles.headerRight}>
-          {/* <TouchableOpacity style={styles.notificationButton}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationCount}>3</Text>
-            </View>
-          </TouchableOpacity> */}
-          <TouchableOpacity 
-            style={styles.profileButton}
-            onPress={() => navigateToFrom(navigation, 'MyProfile', 'Dashboard')}
-          >
-            <Avatar.Image 
-              size={40} 
-              source={require('../../assets/default-profile.png')} 
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
   const renderWelcomeSection = () => (
     <View style={styles.welcomeSection}>
       <View style={styles.welcomeContent}>
@@ -647,7 +621,9 @@ const Dashboard = ({ navigation }) => {
             time: is_prototype ? booking.time : booking.start_time,
             client_name: is_prototype ? booking.owner : booking.client_name,
             professional_name: is_prototype ? booking.professional : booking.professional_name,
-            status: is_prototype ? booking.status : booking.status
+            status: is_prototype ? booking.status : booking.status,
+            client_profile_picture: booking.client_profile_picture,
+            professional_profile_picture: booking.professional_profile_picture
           });
           
           const bookingId = is_prototype ? booking.id : booking.booking_id;
@@ -669,6 +645,8 @@ const Dashboard = ({ navigation }) => {
                 id: bookingId,
                 client_name: isProfessional ? name : null,
                 professional_name: !isProfessional ? name : null,
+                client_profile_picture: isProfessional ? booking.client_profile_picture : null,
+                professional_profile_picture: !isProfessional ? booking.professional_profile_picture : null,
                 serviceName: is_prototype ? booking.service : booking.service_type,
                 date: is_prototype ? booking.date : booking.start_date,
                 time: is_prototype ? booking.time : booking.start_time,

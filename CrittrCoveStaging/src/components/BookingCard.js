@@ -6,6 +6,7 @@ import { theme } from '../styles/theme';
 import { AuthContext, debugLog } from '../context/AuthContext';
 import { convertDateTimeFromUTC, formatDate } from '../utils/time_utils';
 import { supportsHover } from '../utils/deviceUtils';
+import { getMediaUrl } from '../config/config';
 
 const getStatusInfo = (status) => {
   // Add debugging for status values
@@ -126,6 +127,47 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
     originalTime: time
   });
 
+  // Get profile picture URL based on type
+  const getProfilePictureUrl = () => {
+    if (type === 'professional') {
+      return booking.client_profile_picture;
+    } else {
+      return booking.professional_profile_picture;
+    }
+  };
+
+  const profilePictureUrl = getProfilePictureUrl();
+
+  // Render profile image or fallback icon
+  const renderProfileImage = () => {
+    if (profilePictureUrl) {
+      return (
+        <Image 
+          source={{ uri: getMediaUrl(profilePictureUrl) }}
+          style={[
+            styles.profileImage,
+            isMobile && styles.mobileProfileImage
+          ]}
+        />
+      );
+    }
+    
+    // Return fallback icon inside a circular view with the same dimensions
+    return (
+      <View style={[
+        styles.profileImage, 
+        styles.fallbackIconContainer,
+        isMobile && styles.mobileProfileImage
+      ]}>
+        <MaterialCommunityIcons 
+          name="account" 
+          size={isMobile ? 24 : 44} 
+          color={theme.colors.textSecondary} 
+        />
+      </View>
+    );
+  };
+
   const getMetaText = () => {
     const timeText = convertedTime || 'No time selected';
     const serviceText = serviceName || 'No service selected';
@@ -176,7 +218,8 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
     booking,
     type,
     name,
-    status
+    status,
+    profilePictureUrl
   });
 
   return (
@@ -191,13 +234,7 @@ const BookingCard = ({ booking, type, onViewDetails }) => {
     >
       <View style={[styles.cardContent, isMobile && styles.mobileCardContent]}>
         <View style={[styles.topContent, isMobile && styles.mobileTopContent]}>
-          <Image 
-            source={require('../../assets/default-profile.png')} 
-            style={[
-              styles.profileImage,
-              isMobile && styles.mobileProfileImage
-            ]}
-          />
+          {renderProfileImage()}
           <View style={[styles.contentContainer, isMobile && styles.mobileContentContainer]}>
             <View style={[styles.headerContainer, isMobile && styles.mobileHeaderContainer]}>
               <View style={styles.nameAndPets}>
@@ -304,6 +341,13 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+  },
+  fallbackIconContainer: {
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   contentContainer: {
     flex: 1,
