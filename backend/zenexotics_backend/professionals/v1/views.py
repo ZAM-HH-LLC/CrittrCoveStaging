@@ -276,7 +276,8 @@ def search_professionals(request):
             service__searchable=True,
             service__is_archived=False,
             user__is_deleted=False,  # Exclude deleted users
-            user__is_active=True  # Exclude inactive users
+            user__is_active=True,  # Exclude inactive users
+            user__is_profile_visible=True  # Exclude users with profile visibility off
         ).distinct()
         
         # Apply badge filters

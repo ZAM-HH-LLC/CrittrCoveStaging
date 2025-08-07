@@ -339,9 +339,10 @@ def update_user_profile(user, data):
         
         # Handle settings toggle fields from SettingsPaymentsTab
         if 'profile_visibility' in data:
+            logger.debug(f"helpers.py: Updating profile visibility for user {user.id} from {user.is_profile_visible} to {data['profile_visibility']}")
             user.is_profile_visible = data['profile_visibility']
             response_data['profile_visibility'] = user.is_active and user.is_profile_visible
-            logger.debug(f"helpers.py: Updated profile visibility for user {user.id} to {user.is_profile_visible}")
+            logger.debug(f"helpers.py: Updated profile visibility for user {user.id} to {user.is_profile_visible}. Final visibility: {response_data['profile_visibility']} (is_active: {user.is_active}, is_profile_visible: {user.is_profile_visible})")
         
         # Handle user settings
         try:
@@ -461,7 +462,9 @@ def update_user_profile(user, data):
             response_data['profile_photo'] = user.profile_picture.url if user.profile_picture else None
         
         # Save user model changes
+        logger.debug(f"helpers.py: Saving user model changes for user {user.id}. is_profile_visible will be saved as: {user.is_profile_visible}")
         user.save()
+        logger.debug(f"helpers.py: User model saved successfully for user {user.id}")
         
         # Update Client model if it exists
         try:
