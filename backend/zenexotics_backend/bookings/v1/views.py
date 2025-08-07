@@ -1920,13 +1920,24 @@ class ConnectionsView(APIView):
                 logger.info(f"MBA9452: Current date in user timezone: {current_date}")
                 
                 # Get all clients for this professional (both invited and with bookings)
+                # Exclude deleted users
                 clients = Client.objects.filter(
                     Q(booking__professional=professional) |  # Clients who have bookings with this professional
                     Q(invited_by=professional)  # Clients who were invited by this professional
+                ).filter(
+                    user__is_deleted=False,  # Exclude deleted users
+                    user__is_active=True  # Exclude inactive users
                 ).distinct().select_related('user')
+                
+                logger.info(f"MBA9452: Found {clients.count()} active clients for professional {professional.professional_id}")
                 
                 connections = []
                 for client in clients:
+                    # Skip if client user is deleted (double-check)
+                    if client.user.is_deleted or not client.user.is_active:
+                        logger.info(f"MBA9452: Skipping deleted/inactive client user: {client.user.id}")
+                        continue
+                        
                     # Find all conversations between these users
                     conversations = Conversation.objects.filter(
                         (Q(participant1=request.user) & Q(participant2=client.user)) |

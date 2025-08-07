@@ -37,8 +37,12 @@ class ClientListView(generics.ListAPIView):
         try:
             professional_status = ProfessionalStatus.objects.get(user=user)
             if professional_status.is_approved:
-                logger.info(f"User {user.email} is an approved professional - returning all clients")
-                return Client.objects.all()
+                logger.info(f"User {user.email} is an approved professional - returning all active clients")
+                # Exclude deleted and inactive users
+                return Client.objects.filter(
+                    user__is_deleted=False,
+                    user__is_active=True
+                )
             else:
                 logger.warning(f"User {user.email} is not an approved professional - returning empty list")
                 return Client.objects.none()

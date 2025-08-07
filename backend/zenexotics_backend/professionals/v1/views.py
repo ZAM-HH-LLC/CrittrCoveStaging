@@ -267,13 +267,16 @@ def search_professionals(request):
         original_service_query = service_query  # Store original for fallback messaging
         
         # Start with all professionals who have approved services - optimized with select_related
+        # Exclude deleted and inactive users
         professionals_query = Professional.objects.select_related('user').prefetch_related(
             'service_set'
         ).filter(
             service__moderation_status='APPROVED',
             service__is_active=True,
             service__searchable=True,
-            service__is_archived=False
+            service__is_archived=False,
+            user__is_deleted=False,  # Exclude deleted users
+            user__is_active=True  # Exclude inactive users
         ).distinct()
         
         # Apply badge filters
