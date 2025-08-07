@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrittrCove - Confirm Account Deletion</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4caf50;
+            margin-bottom: 10px;
+        }
+        .title {
+            font-size: 20px;
+            color: #dc3545;
+            margin: 0;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+        }
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .confirm-button {
+            display: inline-block;
+            background-color: #dc3545;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .confirm-button:hover {
+            background-color: #c82333;
+        }
+        .footer {
+            border-top: 1px solid #e9ecef;
+            padding-top: 20px;
+            margin-top: 30px;
+            font-size: 14px;
+            color: #6c757d;
+            text-align: center;
+        }
+        .expiry-info {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🐾 CrittrCove</div>
+            <h1 class="title">Account Deletion Request</h1>
+        </div>
+        
+        <div class="content">
+            <p>Hi {{ user.name }},</p>
+            
+            <p>You have requested to delete your CrittrCove account. We're sorry to see you go!</p>
+            
+            <div class="warning-box">
+                <strong>⚠️ Important:</strong> Account deletion is permanent and irreversible. Once confirmed, your account and associated data will be processed for deletion within 60 days.
+            </div>
+            
+            {% if future_bookings %}
+            <div class="warning-box">
+                <strong>📅 Upcoming Bookings:</strong> Deleting your account will cancel {{ future_bookings|length }} upcoming booking(s):
+                <ul style="margin-top: 10px;">
+                    {% for booking in future_bookings|slice:":3" %}
+                    <li>{{ booking.service }} with {{ booking.other_party }} (next: {{ booking.next_occurrence_date|date:"M d, Y" }} at {{ booking.next_occurrence_time|time:"g:i A" }})</li>
+                    {% endfor %}
+                    {% if future_bookings|length > 3 %}
+                    <li>... and {{ future_bookings|length|add:"-3" }} more booking(s)</li>
+                    {% endif %}
+                </ul>
+                <p style="margin-top: 10px;">The other parties will be automatically notified of these cancellations.</p>
+                <p style="margin-top: 10px;"><strong>WE RECOMMEND YOU REACH OUT TO THE OTHER PARTY TO CANCEL TO ENSURE YOUR REPUTATION STAYS IN TACT.</strong></p>
+            </div>
+            {% endif %}
+            
+            <p>Before you proceed, please note:</p>
+            <ul>
+                <li>Your profile and personal information will be removed</li>
+                <li>{% if future_bookings %}All future bookings will be cancelled ({{ future_bookings|length }} booking{{ future_bookings|length|pluralize }}){% else %}Any future bookings will be cancelled{% endif %}</li>
+                <li>Your name in existing conversations will show as "Deleted User"</li>
+                <li>Financial records may be retained for 7 years for legal compliance</li>
+                <li>Booking records may be retained for 3-5 years for business purposes</li>
+                <li>Communication records may be retained for 2 years for legal protection</li>
+                <li>Some data may be anonymized rather than completely deleted</li>
+            </ul>
+            
+            <p>If you're sure you want to delete your account, click the button below to confirm:</p>
+            
+            <div class="button-container">
+                <a href="{{ confirmation_url }}" class="confirm-button">Confirm Account Deletion</a>
+            </div>
+            
+            <div class="expiry-info">
+                <strong>⏰ Time Sensitive:</strong> This confirmation link will expire on {{ expires_at|date:"F d, Y \a\\t g:i A T" }}. After this time, you'll need to submit a new deletion request.
+            </div>
+            
+            <p>If you didn't request this deletion or have changed your mind, simply ignore this email. Your account will remain active.</p>
+            
+            <p>If you have any questions or concerns, please contact our support team at <a href="mailto:support@crittrcove.com">support@crittrcove.com</a>.</p>
+        </div>
+        
+        <div class="footer">
+            <p>This email was sent to {{ user.email }} because you requested account deletion on CrittrCove.</p>
+            <p>CrittrCove LLC, 2510 Summit Dr, Colorado Springs, CO, 80909</p>
+        </div>
+    </div>
+</body>
+</html>

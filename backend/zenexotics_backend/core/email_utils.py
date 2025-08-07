@@ -824,3 +824,149 @@ CrittrCove, Inc. • 123 Pet Street • San Francisco, CA 94103
     except Exception as e:
         logger.error(f"Error sending booking reminder email: {str(e)}")
         logger.exception("Full booking reminder email error details:")
+
+
+def send_booking_cancellation_email(recipient_email, email_context):
+    """
+    Send booking cancellation notification due to account deletion.
+    
+    Args:
+        recipient_email (str): Email of the person to notify
+        email_context (dict): Context containing booking information
+    """
+    try:
+        from core.time_utils import get_user_time_settings, convert_from_utc
+        from datetime import datetime, timezone as dt_timezone
+        
+        subject = f"Booking Cancelled - {email_context['service_name']}"
+        
+        # Format the occurrence time in the recipient's timezone
+        other_party_user = email_context['other_party_user']
+        recipient_role = email_context['recipient_role']
+        
+        # Get recipient's timezone settings (use Django primary key, not custom user_id)
+        user_settings = get_user_time_settings(other_party_user.id)
+        recipient_timezone = user_settings['timezone']
+        use_military_time = user_settings['use_military_time']
+        
+        # Combine date and time into a UTC datetime
+        occurrence_date = email_context['next_occurrence_date']
+        occurrence_time = email_context['next_occurrence_time']
+        utc_dt = datetime.combine(occurrence_date, occurrence_time, dt_timezone.utc)
+        
+        # Convert to recipient's timezone
+        local_dt = convert_from_utc(utc_dt, recipient_timezone)
+        
+        # Format according to user's preferences
+        time_format = '%H:%M' if use_military_time else '%I:%M %p'
+        formatted_time = local_dt.strftime(time_format).lstrip('0')
+        formatted_date = local_dt.strftime('%B %d, %Y')
+        formatted_datetime = f"{formatted_date} at {formatted_time}"
+        
+        # Role-specific content
+        if recipient_role == 'professional':
+            role_specific_content = """
+                <p>You can update your availability and find other opportunities on your CrittrCove professional dashboard.</p>
+                
+                <p style="margin-top: 30px;">
+                    <a href="{}/professional-dashboard" 
+                       style="background-color: #008080; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                        View Your Dashboard
+                    </a>
+                </p>""".format(settings.FRONTEND_BASE_URL)
+                
+            role_specific_plain = f"""
+You can update your availability and find other opportunities on your CrittrCove professional dashboard at {settings.FRONTEND_BASE_URL}/professional-dashboard.
+"""
+        else:  # client
+            role_specific_content = """
+                <p>You can find alternative pet care professionals on CrittrCove by visiting our platform.</p>
+                
+                <p style="margin-top: 30px;">
+                    <a href="{}/find-professionals" 
+                       style="background-color: #008080; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                        Find New Professionals
+                    </a>
+                </p>""".format(settings.FRONTEND_BASE_URL)
+                
+            role_specific_plain = f"""
+You can find alternative pet care professionals on CrittrCove by visiting our platform at {settings.FRONTEND_BASE_URL}/find-professionals.
+"""
+        
+        # Build HTML content
+        content_html = f"""
+        <tr>
+            <td style="padding: 30px;">
+                <h2 style="color: #333333; margin-bottom: 20px;">Booking Cancellation Notice</h2>
+                
+                <p>Hi {email_context['other_party_name']},</p>
+                
+                <p>We're writing to inform you that your booking has been cancelled because {email_context['cancelled_by_name']} has deleted their CrittrCove account.</p>
+                
+                <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                    <h3 style="margin-top: 0; color: #856404;">Cancelled Booking Details:</h3>
+                    <ul style="margin: 10px 0;">
+                        <li><strong>Booking ID:</strong> #{email_context['booking_id']}</li>
+                        <li><strong>Service:</strong> {email_context['service_name']}</li>
+                        <li><strong>Next scheduled occurrence:</strong> {formatted_datetime}</li>
+                        <li><strong>Total occurrences cancelled:</strong> {email_context['total_occurrences']}</li>
+                        <li><strong>Reason:</strong> {email_context['reason']}</li>
+                    </ul>
+                </div>
+                
+                <p>We apologize for any inconvenience this may cause.</p>
+                
+                {role_specific_content}
+                
+                <p>If you have any questions or concerns, please don't hesitate to contact our support team at <a href="mailto:support@crittrcove.com">support@crittrcove.com</a>.</p>
+                
+                <p>Best regards,<br>The CrittrCove Team</p>
+            </td>
+        </tr>
+        """
+        
+        # Build plain text content
+        plain_content = f"""
+Hi {email_context['other_party_name']},
+
+We're writing to inform you that your booking has been cancelled because {email_context['cancelled_by_name']} has deleted their CrittrCove account.
+
+CANCELLED BOOKING DETAILS:
+- Booking ID: #{email_context['booking_id']}
+- Service: {email_context['service_name']}
+- Next scheduled occurrence: {formatted_datetime}
+- Total occurrences cancelled: {email_context['total_occurrences']}
+- Reason: {email_context['reason']}
+
+We apologize for any inconvenience this may cause.
+
+{role_specific_plain}
+
+If you have any questions or concerns, please don't hesitate to contact our support team at support@crittrcove.com.
+
+Best regards,
+The CrittrCove Team
+        """
+        
+        # Build full HTML email
+        html_content = build_email_html(content_html, email_context['other_party_name'])
+        
+        # Send email
+        success = send_email_with_retry(
+            subject=subject,
+            html_content=html_content,
+            plain_content=plain_content,
+            recipient_email=recipient_email,
+            headers=DEFAULT_EMAIL_HEADERS
+        )
+        
+        if success:
+            logger.info(f"Booking cancellation email sent to {recipient_email} for booking {email_context['booking_id']}")
+        else:
+            logger.error(f"Failed to send booking cancellation email to {recipient_email} for booking {email_context['booking_id']}")
+            
+        return success
+        
+    except Exception as e:
+        logger.error(f"Error sending booking cancellation email to {recipient_email}: {str(e)}")
+        return False

@@ -198,7 +198,7 @@ ROOT_URLCONF = "zenexotics_backend.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [os.path.join(BASE_DIR, 'templates')],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -300,6 +300,14 @@ FRONTEND_URL_MAP = {
 }
 
 FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', FRONTEND_URL_MAP.get(ENVIRONMENT))
+
+# Backend URL for email confirmations and external links
+if ENVIRONMENT == 'development':
+    BACKEND_BASE_URL = os.environ.get('BACKEND_BASE_URL', 'http://localhost:8000')
+if ENVIRONMENT == 'staging' :
+    BACKEND_BASE_URL = os.environ.get('BACKEND_BASE_URL', 'https://staging-ec2.crittrcove.com')
+if ENVIRONMENT == 'production':
+    BACKEND_BASE_URL = os.environ.get('BACKEND_BASE_URL', 'https://api.crittrcove.com')
 
 # CORS settings by environment
 CORS_ALLOWED_ORIGINS = [FRONTEND_BASE_URL]

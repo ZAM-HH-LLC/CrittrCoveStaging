@@ -101,6 +101,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     terms_and_privacy_accepted_at = models.DateTimeField(null=True, blank=True, help_text="When user accepted both Terms of Service and Privacy Policy")
     terms_and_privacy_version = models.CharField(max_length=20, blank=True, help_text="Version of Terms of Service and Privacy Policy accepted")
     
+    # Account deletion tracking
+    is_deletion_requested = models.BooleanField(default=False, help_text="True if user has requested account deletion")
+    deletion_requested_at = models.DateTimeField(null=True, blank=True, help_text="When user requested account deletion")
+    deletion_confirmation_token = models.CharField(max_length=100, blank=True, help_text="Token for confirming account deletion via email")
+    deletion_token_expires_at = models.DateTimeField(null=True, blank=True, help_text="When the deletion confirmation token expires")
+    is_deleted = models.BooleanField(default=False, help_text="True if account has been soft deleted")
+    deleted_at = models.DateTimeField(null=True, blank=True, help_text="When account was actually deleted")
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(null=True, blank=True)

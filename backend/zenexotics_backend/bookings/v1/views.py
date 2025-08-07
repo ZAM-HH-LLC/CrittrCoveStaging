@@ -1095,6 +1095,14 @@ class UpdateBookingView(APIView):
                     participant2=booking.client.user
                 )
 
+            # Check if either user is deleted - prevent messaging to deleted users
+            from users.account_deletion import validate_user_not_deleted
+            
+            recipient = booking.client.user if request.user == booking.professional.user else booking.professional.user
+            deleted_user_response = validate_user_not_deleted(recipient)
+            if deleted_user_response:
+                return deleted_user_response
+
             message = UserMessage.objects.create(
                 conversation=conversation,
                 sender=request.user,

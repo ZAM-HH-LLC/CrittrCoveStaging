@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { theme } from '../../../styles/theme';
 import { debugLog } from '../../../context/AuthContext';
+import { useToast } from '../../ToastProvider';
 
 const MobileMessageInput = ({
   onSendMessage,
@@ -25,6 +26,7 @@ const MobileMessageInput = ({
   const [sending, setSending] = useState(false);
   
   const textInputRef = useRef(null);
+  const showToast = useToast();
 
   const handleSend = async () => {
     if ((!messageText.trim() && selectedImages.length === 0) || sending) {
@@ -47,7 +49,41 @@ const MobileMessageInput = ({
       textInputRef.current?.blur();
     } catch (error) {
       debugLog('MobileMessageInput: Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message');
+      
+      // Handle specific error cases with toast messages
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        
+        // Check for deleted user error
+        if (errorData.error === 'Cannot send messages to a deleted user account.') {
+          showToast({
+            message: errorData.detail || 'This user has deleted their account and is no longer receiving messages.',
+            type: 'error',
+            duration: 4000
+          });
+        } else if (errorData.error) {
+          // Show other API errors
+          showToast({
+            message: errorData.error,
+            type: 'error',
+            duration: 3000
+          });
+        } else if (errorData.detail) {
+          // Show error details
+          showToast({
+            message: errorData.detail,
+            type: 'error',
+            duration: 3000
+          });
+        }
+      } else {
+        // Show generic error
+        showToast({
+          message: 'Failed to send message. Please check your connection and try again.',
+          type: 'error',
+          duration: 3000
+        });
+      }
     } finally {
       setSending(false);
     }

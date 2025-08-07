@@ -38,6 +38,18 @@ class UserMessage(models.Model):
         validators=[validate_message_image],
         help_text="Image attachment for the message. Maximum size: 5MB. Allowed formats: JPEG, PNG, GIF, WebP"
     )
+    
+    # Fields for handling deleted users while preserving conversation history
+    sender_name_backup = models.CharField(max_length=255, blank=True, help_text='Backup of sender name for deleted users')
+    is_sender_deleted = models.BooleanField(default=False, help_text='True if the sender has been deleted')
+    
+    def get_sender_name(self):
+        """
+        Get the sender name, using backup if the sender is deleted.
+        """
+        if self.is_sender_deleted:
+            return self.sender_name_backup or "Deleted User"
+        return self.sender.name if self.sender else "Unknown User"
 
     class Meta:
         ordering = ['-timestamp']

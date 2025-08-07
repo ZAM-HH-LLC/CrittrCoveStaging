@@ -34,6 +34,7 @@ import ClientPetsModal from '../components/ClientPetsModal';
 import { formatMessageTime, shouldShowTimestamp } from '../components/Messages/messageTimeUtils';
 import MessageTimestamp from '../components/Messages/MessageTimestamp';
 import ReviewRequestCard from '../components/ReviewRequestCard';
+import { useToast } from '../components/ToastProvider';
 
 const MessageHistory = ({ navigation, route }) => {
   // IMPORTANT: React hooks rules require that hooks are called in the same order
@@ -101,6 +102,7 @@ const MessageHistory = ({ navigation, route }) => {
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
   const { resetNotifications, updateRoute, markConversationAsRead, getConversationUnreadCount } = useContext(MessageNotificationContext);
   const [showClientPetsModal, setShowClientPetsModal] = useState(false);
+  const showToast = useToast();
 
   // Add a ref to track if we're handling route params
   const isHandlingRouteParamsRef = useRef(false);
@@ -1735,6 +1737,41 @@ const MessageHistory = ({ navigation, route }) => {
         timestamp: Date.now()
       });
       
+      // Handle specific error cases with toast messages
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        
+        // Check for deleted user error
+        if (errorData.error === 'Cannot send messages to a deleted user account.') {
+          showToast({
+            message: errorData.detail || 'This user has deleted their account and is no longer receiving messages.',
+            type: 'error',
+            duration: 4000
+          });
+        } else if (errorData.error) {
+          // Show other API errors
+          showToast({
+            message: errorData.error,
+            type: 'error',
+            duration: 3000
+          });
+        } else if (errorData.detail) {
+          // Show error details
+          showToast({
+            message: errorData.detail,
+            type: 'error',
+            duration: 3000
+          });
+        }
+      } else {
+        // Show generic error for network issues or other errors
+        showToast({
+          message: 'Failed to send message. Please check your connection and try again.',
+          type: 'error',
+          duration: 3000
+        });
+      }
+      
       console.error('Error sending message:', error);
       throw error;
     }
@@ -2701,11 +2738,41 @@ const MessageHistory = ({ navigation, route }) => {
     } catch (error) {
       debugLog('MBA2349f87g9qbh2nfv9cg: Error in handleBookingRequest:', error);
       console.error('Error creating booking:', error);
-      Alert.alert(
-        'Error',
-        'Unable to create booking. Please try again.',
-        [{ text: 'OK' }]
-      );
+      
+      // Handle specific error cases with toast messages
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        
+        // Check for deleted user error
+        if (errorData.error === 'Cannot send messages to a deleted user account.') {
+          showToast({
+            message: errorData.detail || 'This user has deleted their account and is no longer receiving messages.',
+            type: 'error',
+            duration: 4000
+          });
+        } else if (errorData.error) {
+          // Show other API errors
+          showToast({
+            message: errorData.error,
+            type: 'error',
+            duration: 3000
+          });
+        } else if (errorData.detail) {
+          // Show error details
+          showToast({
+            message: errorData.detail,
+            type: 'error',
+            duration: 3000
+          });
+        }
+      } else {
+        // Show generic error
+        showToast({
+          message: 'Unable to create booking. Please try again.',
+          type: 'error',
+          duration: 3000
+        });
+      }
     }
   };
 

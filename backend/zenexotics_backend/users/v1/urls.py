@@ -7,6 +7,10 @@ from .views_invitation import (
     InvitationListCreateView, InvitationDetailView,
     verify_invitation, accept_invitation, resend_invitation_email
 )
+from ..account_deletion import (
+    request_account_deletion, confirm_account_deletion, 
+    cancel_account_deletion, get_deletion_status, export_user_data
+)
 
 # Create a router for the TutorialStatusViewSet
 tutorial_router = DefaultRouter()
@@ -34,6 +38,13 @@ urlpatterns = [
     path('invitations/<uuid:token>/verify/', verify_invitation, name='verify-invitation'),
     path('invitations/<uuid:token>/accept/', accept_invitation, name='accept-invitation'),
     path('invitations/<uuid:token>/resend/', resend_invitation_email, name='resend-invitation'),
+    
+    # Account Deletion URLs
+    path('request-deletion/', request_account_deletion, name='request-account-deletion'),
+    path('confirm-deletion/', confirm_account_deletion, name='confirm-account-deletion'),
+    path('cancel-deletion/', cancel_account_deletion, name='cancel-account-deletion'),
+    path('deletion-status/', get_deletion_status, name='deletion-status'),
+    path('export-data/', export_user_data, name='export-user-data'),
 ]
 
 # Add the tutorial router URLs

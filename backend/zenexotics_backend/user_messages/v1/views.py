@@ -245,6 +245,14 @@ def send_normal_message(request):
                 {'error': 'You are not a participant in this conversation'}, 
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        # Check if either user is deleted - prevent messaging to deleted users
+        from users.account_deletion import validate_user_not_deleted
+        
+        recipient = conversation.participant1 if current_user == conversation.participant2 else conversation.participant2
+        deleted_user_response = validate_user_not_deleted(recipient)
+        if deleted_user_response:
+            return deleted_user_response
 
         # Check if we have image IDs to process
         if image_message_ids:
@@ -547,6 +555,22 @@ def send_request_booking(request):
             logger.error(f"Conversation not found with ID: {conversation_id}")
             return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
         
+        # Verify user is a participant and check for deleted users
+        current_user = request.user
+        if current_user not in [conversation.participant1, conversation.participant2]:
+            return Response(
+                {'error': 'You are not a participant in this conversation'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if either user is deleted - prevent messaging to deleted users
+        from users.account_deletion import validate_user_not_deleted
+        
+        recipient = conversation.participant1 if current_user == conversation.participant2 else conversation.participant2
+        deleted_user_response = validate_user_not_deleted(recipient)
+        if deleted_user_response:
+            return deleted_user_response
+        
         # Initialize cost data
         cost_data = {'total_client_cost': 0, 'total_sitter_payout': 0}
         booking_id = request.data.get('booking_id')
@@ -710,6 +734,14 @@ def upload_message_image(request):
                 status=status.HTTP_403_FORBIDDEN
             )
         
+        # Check if either user is deleted - prevent messaging to deleted users
+        from users.account_deletion import validate_user_not_deleted
+        
+        recipient = conversation.participant1 if current_user == conversation.participant2 else conversation.participant2
+        deleted_user_response = validate_user_not_deleted(recipient)
+        if deleted_user_response:
+            return deleted_user_response
+        
         # Initialize variables
         image_file = None
         image_filename = None
@@ -824,6 +856,14 @@ def upload_and_send_message(request):
                 {'error': 'You are not a participant in this conversation'}, 
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        # Check if either user is deleted - prevent messaging to deleted users
+        from users.account_deletion import validate_user_not_deleted
+        
+        recipient = conversation.participant1 if current_user == conversation.participant2 else conversation.participant2
+        deleted_user_response = validate_user_not_deleted(recipient)
+        if deleted_user_response:
+            return deleted_user_response
         
         # Get caption/message content if provided
         content = request.data.get('content', '')

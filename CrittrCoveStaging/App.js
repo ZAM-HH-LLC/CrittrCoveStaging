@@ -98,6 +98,7 @@ import ReptileSitterColoradoSprings from './src/screens/seo/ReptileSitterColorad
 import PetBoardingColoradoSprings from './src/screens/seo/PetBoardingColoradoSprings';
 import DogSittingColoradoSprings from './src/screens/seo/DogSittingColoradoSprings';
 import SiteMap from './src/screens/SiteMap';
+import ConfirmAccountDeletion from './src/screens/ConfirmAccountDeletion';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -127,6 +128,7 @@ const screens = [
   { name: 'ProfessionalProfile', component: ProfessionalProfile },
   { name: 'MyContracts', component: MyContracts },
   { name: 'ChangePassword', component: ChangePassword },
+  { name: 'ConfirmAccountDeletion', component: ConfirmAccountDeletion },
   { name: 'MyBookings', component: MyBookings },
   { name: 'ServiceManager', component: ServiceManagerScreen },
   { name: 'Blog', component: BlogScreen },
@@ -181,6 +183,7 @@ const createLinking = (authContext) => ({
       '/ProfessionalProfile', '/professional-profile',
       '/MyContracts', '/my-contracts',
       '/ChangePassword', '/change-password',
+      '/ConfirmAccountDeletion', '/confirm-account-deletion',
       '/MyBookings', '/my-bookings',
       '/ServiceManager', '/service-manager',
       '/TestToast', '/test-toast',
@@ -271,6 +274,7 @@ const createLinking = (authContext) => ({
       },
       MyContracts: 'my-contracts',
       ChangePassword: 'change-password',
+      ConfirmAccountDeletion: 'confirm-account-deletion',
       MyBookings: 'my-bookings',
       ServiceManager: 'service-manager',
       Blog: 'blog',
@@ -456,6 +460,7 @@ function AppContent() {
               '/ProfessionalProfile', '/professional-profile',
               '/MyContracts', '/my-contracts',
               '/ChangePassword', '/change-password',
+              '/ConfirmAccountDeletion', '/confirm-account-deletion',
               '/MyBookings', '/my-bookings',
               '/ServiceManager', '/service-manager',
               '/TestToast', '/test-toast',
@@ -582,6 +587,7 @@ function AppContent() {
         '/ProfessionalProfile', '/professional-profile',
         '/MyContracts', '/my-contracts',
         '/ChangePassword', '/change-password',
+        '/ConfirmAccountDeletion', '/confirm-account-deletion',
         '/MyBookings', '/my-bookings',
         '/ServiceManager', '/service-manager',
         '/TestToast', '/test-toast',

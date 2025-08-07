@@ -9,6 +9,8 @@ import { USER_TIMEZONE_OPTIONS, getTimezoneDisplayName, searchTimezones, getGrou
 import { sanitizeInput } from '../../validation/validation';
 import TermsOfServiceModal from '../modals/TermsOfServiceModal';
 import PrivacyPolicyModal from '../modals/PrivacyPolicyModal';
+import { API_BASE_URL } from '../../config/config';
+import axios from 'axios';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -73,6 +75,10 @@ const SettingsPaymentsTab = ({
   const [loading, setLoading] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletionStatus, setDeletionStatus] = useState(null);
+  const [deletionReason, setDeletionReason] = useState('');
+  const [modalError, setModalError] = useState('');
   const showToast = useToast();
 
   useEffect(() => {
@@ -96,6 +102,18 @@ const SettingsPaymentsTab = ({
     } else {
       fetchTimeSettings();
     }
+    
+    // Fetch deletion status
+    const fetchDeletionStatus = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/users/v1/deletion-status/`);
+        setDeletionStatus(response.data);
+      } catch (error) {
+        debugLog('MBA12345 Error fetching deletion status:', error);
+      }
+    };
+    
+    fetchDeletionStatus();
   }, [propTimezone]);
 
   useEffect(() => {
@@ -620,6 +638,63 @@ const SettingsPaymentsTab = ({
             <Text style={styles.actionButtonText}>View</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="download" size={24} color={theme.colors.primary} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Export My Data</Text>
+              <Text style={styles.settingDescription}>Download all your account data in JSON format</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleExportData}
+            disabled={loading}
+          >
+            <Text style={styles.actionButtonText}>
+              {loading ? 'Exporting...' : 'Export'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Account Deletion Section */}
+        <View style={styles.settingItem}>
+          <View style={styles.settingContent}>
+            <MaterialCommunityIcons name="account-remove" size={24} color={theme.colors.error} />
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Delete Account</Text>
+              <Text style={styles.settingDescription}>
+                {deletionStatus?.is_deletion_requested 
+                  ? 'Account deletion requested. Check your email to confirm.'
+                  : 'Permanently delete your account and all associated data'
+                }
+              </Text>
+              {deletionStatus?.is_deletion_requested && (
+                <Text style={styles.expiryText}>
+                  Request expires: {new Date(deletionStatus.deletion_token_expires_at).toLocaleDateString()}
+                </Text>
+              )}
+            </View>
+          </View>
+          {deletionStatus?.is_deletion_requested ? (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.cancelButton]}
+              onPress={handleCancelAccountDeletion}
+              disabled={loading}
+            >
+              <Text style={styles.cancelButtonText}>Cancel Request</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => setShowDeleteModal(true)}
+              disabled={loading}
+            >
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </>
     );
   };
@@ -732,6 +807,142 @@ const SettingsPaymentsTab = ({
       });
   };
 
+  const handleRequestAccountDeletion = async () => {
+    // Clear previous error
+    setModalError('');
+    
+    // Validate deletion reason
+    if (!deletionReason.trim()) {
+      setModalError('Please provide a reason for deleting your account.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post(`${API_BASE_URL}/api/users/v1/request-deletion/`, {
+        reason: deletionReason.trim()
+      });
+      
+      setDeletionStatus({
+        ...deletionStatus,
+        is_deletion_requested: true,
+        deletion_requested_at: new Date().toISOString(),
+        deletion_token_expires_at: response.data.expires_at
+      });
+      
+      setShowDeleteModal(false);
+      setDeletionReason(''); // Reset the reason field
+      setModalError(''); // Clear any errors
+      showToast({
+        message: 'Account deletion request submitted. Please check your email to confirm.',
+        type: 'success',
+        duration: 5000
+      });
+      
+    } catch (error) {
+      debugLog('MBA12345 Error requesting account deletion:', error);
+      
+      if (error.response?.data?.active_bookings) {
+        // Handle active bookings error with detailed information
+        const activeBookings = error.response.data.active_bookings;
+        const bookingsList = activeBookings.map(booking => 
+          `${booking.service} with ${booking.other_party} (${booking.role})`
+        ).join(', ');
+        
+        setModalError(`Cannot delete account. You have active bookings: ${bookingsList}. Please wait for them to complete.`);
+      } else if (error.response?.data?.incomplete_bookings) {
+        // Handle incomplete bookings error with detailed information
+        const incompleteBookings = error.response.data.incomplete_bookings;
+        const bookingsList = incompleteBookings.map(booking => 
+          `Booking ID: ${booking.booking_id} (${booking.service} with ${booking.other_party})`
+        ).join(', ');
+        
+        setModalError(`Cannot delete account. You have incomplete past bookings that need to be marked as complete: ${bookingsList}. Please mark all past bookings as completed before deleting your account.`);
+      } else {
+        setModalError(error.response?.data?.error || 'Failed to request account deletion. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelAccountDeletion = async () => {
+    try {
+      setLoading(true);
+      await axios.post(`${API_BASE_URL}/api/users/v1/cancel-deletion/`);
+      
+      setDeletionStatus({
+        ...deletionStatus,
+        is_deletion_requested: false,
+        deletion_requested_at: null,
+        deletion_token_expires_at: null
+      });
+      
+      showToast({
+        message: 'Account deletion request cancelled successfully.',
+        type: 'success',
+        duration: 3000
+      });
+      
+    } catch (error) {
+      debugLog('MBA12345 Error cancelling account deletion:', error);
+      showToast({
+        message: 'Failed to cancel account deletion. Please contact support.',
+        type: 'error',
+        duration: 4000
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE_URL}/api/users/v1/export-data/`, {
+        responseType: 'blob',
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract filename from response headers or create default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `crittrcove_data_export_${new Date().toISOString().split('T')[0]}.json`;
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      showToast({
+        message: 'Data export downloaded successfully.',
+        type: 'success',
+        duration: 3000
+      });
+      
+    } catch (error) {
+      debugLog('MBA12345 Error exporting data:', error);
+      showToast({
+        message: 'Failed to export data. Please try again.',
+        type: 'error',
+        duration: 4000
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {isMobile ? renderMobileLayout() : renderDesktopLayout()}
@@ -748,6 +959,99 @@ const SettingsPaymentsTab = ({
         visible={showPrivacyModal}
         onClose={() => setShowPrivacyModal(false)}
       />
+
+      {/* Account Deletion Confirmation Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showDeleteModal}
+        onRequestClose={() => {
+          setShowDeleteModal(false);
+          setDeletionReason(''); // Reset the reason when modal closes
+          setModalError(''); // Clear any errors
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <MaterialCommunityIcons name="alert-circle" size={48} color={theme.colors.error} />
+              <Text style={styles.deleteModalTitle}>Delete Account</Text>
+              <Text style={styles.deleteModalWarning}>This action cannot be undone</Text>
+            </View>
+            
+            <ScrollView style={styles.deleteModalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.deleteModalDescription}>
+                Are you sure you want to delete your account? This will:
+              </Text>
+              
+              <View style={styles.deleteInfoList}>
+                <Text style={styles.deleteInfoItem}>• Remove your profile and personal information</Text>
+                <Text style={styles.deleteInfoItem}>• Cancel all future bookings (other parties will be notified)</Text>
+                <Text style={styles.deleteInfoItem}>• Anonymize your name in existing conversations</Text>
+                <Text style={styles.deleteInfoItem}>• Process deletion within 60 days</Text>
+              </View>
+              
+              <View style={styles.retentionWarning}>
+                <Text style={styles.retentionWarningText}>
+                  Some data may be retained for legal compliance (financial records, booking history) as outlined in our Terms of Service.
+                </Text>
+              </View>
+              
+              {/* Deletion Reason Input */}
+              <View style={styles.reasonContainer}>
+                <Text style={styles.reasonLabel}>Reason for deletion (required):</Text>
+                <TextInput
+                  style={styles.reasonInput}
+                  placeholder="Please tell us why you're deleting your account..."
+                  placeholderTextColor={theme.colors.secondary}
+                  value={deletionReason}
+                  onChangeText={(text) => {
+                    const sanitized = sanitizeInput(text, 'general', { maxLength: 500 });
+                    setDeletionReason(sanitized);
+                  }}
+                  multiline={true}
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+                <Text style={styles.reasonCounter}>
+                  {deletionReason.length}/500 characters
+                </Text>
+              </View>
+            </ScrollView>
+            
+            {/* Error display area */}
+            {modalError && (
+              <View style={styles.modalErrorContainer}>
+                <MaterialCommunityIcons name="alert-circle" size={20} color={theme.colors.error} />
+                <Text style={styles.modalErrorText}>{modalError}</Text>
+              </View>
+            )}
+            
+            <View style={styles.deleteModalFooter}>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelModalButton]}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setDeletionReason(''); // Reset the reason when cancelling
+                  setModalError(''); // Clear any errors
+                }}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.button, styles.confirmDeleteButton]}
+                onPress={handleRequestAccountDeletion}
+                disabled={loading}
+              >
+                <Text style={styles.confirmDeleteButtonText}>
+                  {loading ? 'Processing...' : 'Delete My Account'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1110,6 +1414,168 @@ const styles = StyleSheet.create({
   noPaymentMethodsText: {
     color: theme.colors.secondary,
     fontSize: 16,
+  },
+  deleteButton: {
+    backgroundColor: theme.colors.error,
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontWeight: '500',
+  },
+  cancelButton: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  cancelButtonText: {
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  expiryText: {
+    fontSize: 12,
+    color: theme.colors.error,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  deleteModalContent: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 15,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    overflow: 'hidden',
+    flexDirection: 'column',
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: '#fff5f5',
+  },
+  deleteModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.colors.error,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  deleteModalWarning: {
+    fontSize: 14,
+    color: theme.colors.error,
+    marginTop: 4,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  deleteModalBody: {
+    padding: 24,
+    flex: 1,
+  },
+  deleteModalDescription: {
+    fontSize: 16,
+    color: theme.colors.text,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  deleteInfoList: {
+    marginBottom: 20,
+  },
+  deleteInfoItem: {
+    fontSize: 14,
+    color: theme.colors.text,
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  retentionWarning: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  retentionWarningText: {
+    fontSize: 12,
+    color: '#856404',
+    lineHeight: 18,
+  },
+  deleteModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    gap: 12,
+  },
+  button: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  cancelModalButton: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  cancelModalButtonText: {
+    color: theme.colors.text,
+    fontWeight: '500',
+    fontSize: 16,
+  },
+  confirmDeleteButton: {
+    flex: 1,
+    backgroundColor: theme.colors.error,
+  },
+  confirmDeleteButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  reasonContainer: {
+    marginTop: 20,
+  },
+  reasonLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  reasonInput: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: theme.colors.text,
+    minHeight: 80,
+    maxHeight: 120,
+  },
+  reasonCounter: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  modalErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffebee',
+    padding: 12,
+    marginHorizontal: 24,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffcdd2',
+    gap: 8,
+  },
+  modalErrorText: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.error,
+    lineHeight: 18,
   },
 });
 

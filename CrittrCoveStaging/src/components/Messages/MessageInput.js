@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadAndSendImageMessage } from '../../api/API';
 import { debugLog } from '../../context/AuthContext';
 import { validateMessage, sanitizeInput } from '../../validation/validation';
+import { useToast } from '../ToastProvider';
 
 const MessageInput = React.forwardRef(({ 
   onSendMessage, 
@@ -21,6 +22,7 @@ const MessageInput = React.forwardRef(({
   const [isUploading, setIsUploading] = useState(false);
   const textInputRef = useRef(null);
   const defaultHeight = 40; // Define constant for default height
+  const showToast = useToast();
 
   // Function to dismiss keyboard - can be called from parent
   const dismissKeyboard = useCallback(() => {
@@ -281,23 +283,47 @@ const MessageInput = React.forwardRef(({
         } catch (error) {
           debugLog('MBA5511: Failed to send image message', error);
           
-          // More descriptive error message based on the error
-          let errorMessage = 'Failed to upload images. Please try again.';
-          
-          if (error.message && error.message.includes('Network Error')) {
-            errorMessage = 'Network error occurred. Please check your connection and try again.';
-          }
-          
-          if (error.response) {
-            // Server responded with an error
-            if (error.response.status === 413) {
-              errorMessage = 'The image is too large to upload. Please select a smaller image or use fewer images.';
-            } else if (error.response.data && error.response.data.error) {
-              errorMessage = error.response.data.error;
+          // Handle specific error cases with toast messages
+          if (error.response && error.response.data) {
+            const errorData = error.response.data;
+            
+            // Check for deleted user error
+            if (errorData.error === 'Cannot send messages to a deleted user account.') {
+              showToast({
+                message: errorData.detail || 'This user has deleted their account and is no longer receiving messages.',
+                type: 'error',
+                duration: 4000
+              });
+            } else if (errorData.error) {
+              // Show other API errors
+              showToast({
+                message: errorData.error,
+                type: 'error',
+                duration: 3000
+              });
+            } else if (errorData.detail) {
+              // Show error details
+              showToast({
+                message: errorData.detail,
+                type: 'error',
+                duration: 3000
+              });
             }
+          } else if (error.message && error.message.includes('Network Error')) {
+            showToast({
+              message: 'Network error occurred. Please check your connection and try again.',
+              type: 'error',
+              duration: 3000
+            });
+          } else {
+            // Default error message
+            showToast({
+              message: 'Failed to upload images. Please try again.',
+              type: 'error',
+              duration: 3000
+            });
           }
           
-          Alert.alert('Error', errorMessage);
           setIsUploading(false);
           return;
         }
