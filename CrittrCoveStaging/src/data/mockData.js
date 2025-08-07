@@ -310,7 +310,7 @@ export const defaultTermsData = {
     },
     {
       header: "Account Deletion and Data Management",
-      body: "You have the right to request deletion of your CrittrCove account and associated data at any time. To request account deletion, please email support@crittrcove.com with your request. We will verify your identity and process your deletion request within 60 days of verification. Before deletion, you may request an export of your personal data. Please note that certain data may be retained for legal compliance and business purposes:",
+      body: "You have the right to request deletion of your CrittrCove account and associated data at any time. To request account deletion, please hit the delete account button in your profile settings. Please email support@crittrcove.com with your request to remove any other additional information. We will verify your identity and process your deletion request within 60 days of verification. Please note that certain data may be retained for legal compliance and business purposes:",
       subsections: [
         {
           subtitle: "Data Retention After Deletion",
