@@ -340,7 +340,7 @@ export const privacyPolicyData = {
       content: "This Privacy Policy applies to:",
       listItems: [
         "Users who visit our website or app",
-        "Pet owners and pet care providers using our Services",
+        "Pet owners and pet care providers or businesses using our Services",
         "Any data collected during interactions with our Services, support tools, or beta features"
       ],
       additionalInfo: "This policy does not apply to third-party platforms we link to or integrate with. Those sites have their own policies."
@@ -372,7 +372,7 @@ export const privacyPolicyData = {
             "Referral sources",
             "Background checks (when implemented in the future for professionals)"
           ],
-          additionalInfo: "We do not currently collect sensitive data like social security numbers, government IDs, or health info."
+          additionalInfo: "We do not currently collect sensitive data like social security numbers, government IDs, or health info during beta (except for health info entered in about your pets). After beta, we will be collecting credit card numbers, but using stripe, so only the last 4 digits will be recorded."
         }
       ]
     },
@@ -383,7 +383,7 @@ export const privacyPolicyData = {
         "Let you create and manage your profile",
         "Match you with other users (clients or professionals)",
         "Improve the app and monitor performance",
-        "Send optional updates, news, or promotional content (you can opt out)",
+        "Send optional updates, news, or promotional content (you can opt out via settings)",
         "Prevent fraud or abuse of the platform"
       ],
       additionalInfo: "We may analyze trends and usage patterns to enhance functionality but do not sell your personal information."
@@ -392,7 +392,7 @@ export const privacyPolicyData = {
       title: "Sharing of Information",
       content: "We may share limited information:",
       listItems: [
-        "Between users for service coordination (e.g., pet name, general location, messages)",
+        "Between users for service coordination (examples, but not limited to: pet name, general location, messages)",
         "With service providers that help us run the platform (e.g., email providers, hosting companies)",
         "When legally required, such as to respond to law enforcement or court orders"
       ],
@@ -403,11 +403,12 @@ export const privacyPolicyData = {
       content: "You can:",
       listItems: [
         "Edit or delete your profile information at any time",
-        "Request deletion of your account by contacting support",
-        "Decline location tracking in your device settings",
-        "Opt out of non-essential emails by clicking \"unsubscribe\" in messages"
+        "Request deletion of your account by pressing the delete button in profile settings.",
+        "Request deletion of specific private messages by contacting support.",
+        "Decline location tracking in your device settings or by contacting support.",
+        "Opt out of non-essential emails by clicking \"unsubscribe\" in messages for the marketing communications."
       ],
-      additionalInfo: "During beta, some opt-out or privacy tools may not yet be live. We're working to expand these features before full launch."
+      additionalInfo: "During beta, some opt-out or privacy tools may not yet be live. We're working to expand these features before full launch. If you are using this app during beta you agree that is ok and you will not have any right to sue for things like that or things we are lacking."
     },
     {
       title: "Security of Your Data",
