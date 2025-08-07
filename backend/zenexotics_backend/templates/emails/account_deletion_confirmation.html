@@ -104,7 +104,7 @@
                 <strong>📅 Upcoming Bookings:</strong> Deleting your account will cancel {{ future_bookings|length }} upcoming booking(s):
                 <ul style="margin-top: 10px;">
                     {% for booking in future_bookings|slice:":3" %}
-                    <li>{{ booking.service }} with {{ booking.other_party }} (next: {{ booking.next_occurrence_date|date:"M d, Y" }} at {{ booking.next_occurrence_time|time:"g:i A" }})</li>
+                    <li>{{ booking.service }} with {{ booking.other_party }} (next: {{ booking.formatted_date }} at {{ booking.formatted_time }})</li>
                     {% endfor %}
                     {% if future_bookings|length > 3 %}
                     <li>... and {{ future_bookings|length|add:"-3" }} more booking(s)</li>

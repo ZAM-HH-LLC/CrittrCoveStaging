@@ -639,7 +639,7 @@ const SettingsPaymentsTab = ({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.settingItem}>
+        {/* <View style={styles.settingItem}>
           <View style={styles.settingContent}>
             <MaterialCommunityIcons name="download" size={24} color={theme.colors.primary} />
             <View style={styles.settingTextContainer}>
@@ -656,7 +656,7 @@ const SettingsPaymentsTab = ({
               {loading ? 'Exporting...' : 'Export'}
             </Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Account Deletion Section */}
         <View style={styles.settingItem}>
@@ -846,7 +846,7 @@ const SettingsPaymentsTab = ({
         // Handle active bookings error with detailed information
         const activeBookings = error.response.data.active_bookings;
         const bookingsList = activeBookings.map(booking => 
-          `${booking.service} with ${booking.other_party} (${booking.role})`
+          `${booking.service} with ${booking.other_party} (${booking.role === 'client' ? 'professional' : 'client'})`
         ).join(', ');
         
         setModalError(`Cannot delete account. You have active bookings: ${bookingsList}. Please wait for them to complete.`);

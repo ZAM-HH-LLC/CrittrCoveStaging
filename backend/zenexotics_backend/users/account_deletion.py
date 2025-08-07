@@ -280,9 +280,16 @@ def get_future_bookings(user):
     Get all future bookings that will be cancelled when the user deletes their account.
     """
     from bookings.models import Booking
+    from core.time_utils import get_user_time_settings, convert_from_utc
+    from datetime import datetime, timezone as dt_timezone
     
     future_bookings = []
     future_statuses = ['Confirmed', 'Pending Professional Changes', 'Pending Client Approval', 'Confirmed Pending Professional Changes']
+    
+    # Get user's timezone settings
+    user_settings = get_user_time_settings(user.id)
+    user_timezone = user_settings['timezone']
+    use_military_time = user_settings['use_military_time']
     
     # Check as client
     if hasattr(user, 'client_profile'):
@@ -308,6 +315,20 @@ def get_future_bookings(user):
             
             if future_occurrences.exists():
                 first_occurrence = future_occurrences.first()
+                
+                # Convert UTC date/time to user's timezone
+                occurrence_date = first_occurrence.start_date
+                occurrence_time = first_occurrence.start_time
+                utc_dt = datetime.combine(occurrence_date, occurrence_time, dt_timezone.utc)
+                local_dt = convert_from_utc(utc_dt, user_timezone)
+                
+                # Format according to user's preferences
+                time_format = '%H:%M' if use_military_time else '%I:%M %p'
+                formatted_time = local_dt.strftime(time_format).lstrip('0')
+                formatted_date = local_dt.strftime('%B %d, %Y')
+                
+                logger.info(f"Converting booking occurrence to user timezone - user_id: {user.id}, timezone: {user_timezone}, formatted: {formatted_date} at {formatted_time}")
+                
                 future_bookings.append({
                     'booking_id': booking.booking_id,
                     'role': 'client',
@@ -316,8 +337,10 @@ def get_future_bookings(user):
                     'other_party_user': booking.professional.user,  # Include full user object
                     'recipient_role': 'professional',  # Who will receive the cancellation email
                     'service': booking.service_id.service_name if booking.service_id else 'Unknown',
-                    'next_occurrence_date': first_occurrence.start_date,  # Raw date object
-                    'next_occurrence_time': first_occurrence.start_time,  # Raw time object
+                    'next_occurrence_date': first_occurrence.start_date,  # Raw date object (for backward compatibility)
+                    'next_occurrence_time': first_occurrence.start_time,  # Raw time object (for backward compatibility)
+                    'formatted_date': formatted_date,  # User's timezone formatted date
+                    'formatted_time': formatted_time,  # User's timezone formatted time
                     'total_occurrences': future_occurrences.count()
                 })
     
@@ -345,6 +368,18 @@ def get_future_bookings(user):
             
             if future_occurrences.exists():
                 first_occurrence = future_occurrences.first()
+                
+                # Convert UTC date/time to user's timezone
+                occurrence_date = first_occurrence.start_date
+                occurrence_time = first_occurrence.start_time
+                utc_dt = datetime.combine(occurrence_date, occurrence_time, dt_timezone.utc)
+                local_dt = convert_from_utc(utc_dt, user_timezone)
+                
+                # Format according to user's preferences
+                time_format = '%H:%M' if use_military_time else '%I:%M %p'
+                formatted_time = local_dt.strftime(time_format).lstrip('0')
+                formatted_date = local_dt.strftime('%B %d, %Y')
+                
                 future_bookings.append({
                     'booking_id': booking.booking_id,
                     'role': 'professional',
@@ -353,8 +388,10 @@ def get_future_bookings(user):
                     'other_party_user': booking.client.user,  # Include full user object
                     'recipient_role': 'client',  # Who will receive the cancellation email
                     'service': booking.service_id.service_name if booking.service_id else 'Unknown',
-                    'next_occurrence_date': first_occurrence.start_date,  # Raw date object
-                    'next_occurrence_time': first_occurrence.start_time,  # Raw time object
+                    'next_occurrence_date': first_occurrence.start_date,  # Raw date object (for backward compatibility)
+                    'next_occurrence_time': first_occurrence.start_time,  # Raw time object (for backward compatibility)
+                    'formatted_date': formatted_date,  # User's timezone formatted date
+                    'formatted_time': formatted_time,  # User's timezone formatted time
                     'total_occurrences': future_occurrences.count()
                 })
     
@@ -856,28 +893,8 @@ def send_deletion_confirmation_email(user, token, future_bookings=None, request=
     IMPORTANT: Deleting your account will cancel {len(future_bookings)} upcoming booking(s):
     """
         for booking in future_bookings[:3]:  # Show first 3 bookings
-            # Format the occurrence time in the user's timezone
-            from core.time_utils import get_user_time_settings, convert_from_utc
-            from datetime import datetime, timezone as dt_timezone
-            
-            # Get user's timezone settings
-            user_settings = get_user_time_settings(user.id)
-            user_timezone = user_settings['timezone']
-            use_military_time = user_settings['use_military_time']
-            
-            # Combine date and time into a UTC datetime
-            occurrence_date = booking['next_occurrence_date']
-            occurrence_time = booking['next_occurrence_time']
-            utc_dt = datetime.combine(occurrence_date, occurrence_time, dt_timezone.utc)
-            
-            # Convert to user's timezone
-            local_dt = convert_from_utc(utc_dt, user_timezone)
-            
-            # Format according to user's preferences
-            time_format = '%H:%M' if use_military_time else '%I:%M %p'
-            formatted_time = local_dt.strftime(time_format).lstrip('0')
-            formatted_date = local_dt.strftime('%B %d, %Y')
-            formatted_occurrence = f"{formatted_date} at {formatted_time}"
+            # Use pre-formatted date and time from user's timezone
+            formatted_occurrence = f"{booking['formatted_date']} at {booking['formatted_time']}"
             
             future_bookings_text += f"""
     - {booking['service']} with {booking['other_party']} (next occurrence: {formatted_occurrence})"""
