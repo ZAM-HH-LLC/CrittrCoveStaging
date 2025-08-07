@@ -465,7 +465,7 @@ const VerificationModal = ({ visible, onClose, title, type, onProceed }) => {
           steps: [
             'Contact our support team via the contact button below',
             'We\'ll send you a secure link to our background check partner',
-            'Complete the background check process (typically 2-3 business days)',
+            'Pay the $49.99 fee (we do not take a cut of this fee) and complete the background check process (typically 2-3 business days).',
             'Once verified, your profile will display a "Background Verified" badge'
           ],
           benefits: [
@@ -480,10 +480,10 @@ const VerificationModal = ({ visible, onClose, title, type, onProceed }) => {
           icon: 'shield-account',
           description: 'Get insured to provide additional protection for you and the pets you care for.',
           steps: [
-            'Contact our support team via the contact button below',
-            'We\'ll connect you with our insurance partner or have you provide proof of insurance',
-            'Complete the insurance application process or we will alert you when we have verified your private insurance',
-            'Once approved, your profile will display an "Insured" badge'
+            'Contact our support team via the contact button below.',
+            'We\'ll have you provide proof of insurance over email (send to support@crittrcove.com to skip first step).',
+            'We will alert you when we have verified your private insurance.',
+            'Once approved, your profile will display an "Insured" badge.'
           ],
           benefits: [
             'Protection against accidents and liability',

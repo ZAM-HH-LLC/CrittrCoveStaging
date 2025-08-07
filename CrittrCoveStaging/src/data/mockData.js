@@ -434,23 +434,23 @@ export const privacyPolicyData = {
       title: "Data Deletion and Your Rights",
       content: "You have the right to request deletion of your CrittrCove account and associated personal data. To request account deletion:",
       listItems: [
-        "Email support@crittrcove.com with your deletion request",
-        "We will verify your identity for security purposes",
+        "Select delete account button in settings of your profile.",
+        "Email support@crittrcove.com with your deletion request.",
+        "We will verify your identity for security purposes via email.",
         "Deletion will be processed within 60 days of verification",
-        "You may request a data export before deletion"
       ],
       subsections: [
         {
           subtitle: "What Gets Deleted vs. Retained",
           content: "While we delete personal identifiers and profile information, certain data may be retained or anonymized:",
           items: [
-            "Retained: Financial records for legal compliance, booking records for business purposes, communication records for legal protection",
-            "Anonymized: Usage patterns and platform analytics that cannot identify you",
-            "Deleted: Personal profile information, contact details, private messages content"
+            "Retained: Financial records for legal compliance, booking records in messages for business purposes, communication records for legal protection",
+            "Anonymized: Usage patterns and platform analytics that cannot identify you. user name and email are anonymized.",
+            "Deleted: Personal profile information, contact details"
           ]
         }
       ],
-      additionalInfo: "Account deletion is irreversible once processing is complete. Some technical limitations may prevent complete removal from all backup systems immediately."
+      additionalInfo: "Account deletion is irreversible once processing is complete. Some technical limitations may prevent complete removal of some things from all backup systems immediately."
     },
     {
       title: "Children's Privacy",
