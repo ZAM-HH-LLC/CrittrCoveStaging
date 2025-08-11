@@ -7,6 +7,8 @@
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Find trusted dog walkers in Colorado Springs. Professional pet care services for your furry friends. Book reliable local dog walking today." />
     <meta name="keywords" content="dog walker colorado springs, dog walking services, pet care, dog sitters, professional dog walkers" />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://crittrcove.com/dog-walker-colorado-springs" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
@@ -58,27 +60,51 @@
     </script>
     
     <!-- Preload the main app -->
-    <link rel="preload" href="/static/js/main.8bf77393.js" as="script">
+    <link rel="preload" href="/static/js/main.320f62e0.js" as="script">
     <link rel="preload" href="/static/css/main.60d5a690.css" as="style">
 </head>
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root">
-        <!-- Loading indicator for React app -->
-        <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: Arial, sans-serif; background: white;">
-            <div style="text-align: center;">
-                <div style="font-size: 24px; font-weight: bold; color: #4CAF50; margin-bottom: 20px;">CrittrCove</div>
-                <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #4CAF50; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-                <div style="margin-top: 20px; color: #666;">Loading...</div>
-            </div>
-        </div>
-        <style>
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        </style>
-    </div>
+    <main>
+      <header>
+        <h1>Dog Walkers in Colorado Springs</h1>
+        <p>Book dependable local dog walkers for quick potty breaks or longer adventures around your neighborhood.</p>
+      </header>
+
+      <section>
+        <h2>Why choose CrittrCove</h2>
+        <ul>
+          <li>Real‑time updates and GPS‑logged walks</li><li>Flexible scheduling from weekdays to weekends</li><li>Experienced walkers for puppies and seniors</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Areas we serve</h2>
+        <p>Common routes include Monument Valley Park, Bear Creek, and trails around Rockrimmon and Briargate.</p>
+      </section>
+
+      <section>
+        <h2>FAQs</h2>
+        
+      <h3>How long are walks?</h3>
+      <p>Choose 20, 30, or 60‑minute options. Custom lengths are often available on request.</p>
+    
+      <h3>Do walkers come in all weather?</h3>
+      <p>Yes, within reason. Walkers adjust pace and duration for heat, snow, and safety.</p>
+    
+      <h3>Is key handling secure?</h3>
+      <p>Sitters follow clear key and access procedures. Many use lockboxes for convenience.</p>
+    
+      </section>
+
+      <nav aria-label="Related services">
+        <a href="/dog-sitting-colorado-springs">Dog sitting</a> • <a href="/dog-boarding-colorado-springs">Dog boarding</a> • <a href="/cat-sitting-colorado-springs">Cat sitting</a>
+      </nav>
+
+      <p><a class="cta" href="/signup" rel="nofollow">Find a sitter</a></p>
+    </main>
+  </div>
     
     <!-- Load the React app -->
     <script>
@@ -93,23 +119,13 @@
               l.pathname.slice(0, -1) + decoded + l.hash
             );
           }
-        }(window.location))
-        
-        // Ensure React app takes over after loading
-        window.addEventListener('load', function() {
-          // Remove the pre-rendered content and let React hydrate
-          setTimeout(function() {
-            const root = document.getElementById('root');
-            if (root) {
-              root.innerHTML = '';
-            }
-          }, 100);
-        });
+        }(window.location));
+        // Note: We intentionally do not clear #root so the static content remains
     </script>
     
-    <!-- Load React app scripts -->
-    <script defer="defer" src="/static/js/174.a88fdf84.js"></script>
-    <script defer="defer" src="/static/js/main.8bf77393.js"></script>
+    <!-- Load React app scripts (progressive enhancement) -->
+    <script defer="defer" src="/static/js/251.84d69273.js"></script>
+    <script defer="defer" src="/static/js/main.320f62e0.js"></script>
     <link href="/static/css/main.60d5a690.css" rel="stylesheet">
 </body>
 </html>
