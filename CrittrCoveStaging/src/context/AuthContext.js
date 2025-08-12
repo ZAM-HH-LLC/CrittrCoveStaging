@@ -650,7 +650,6 @@ export const AuthProvider = ({ children }) => {
           '/AvailabilitySettings',
           '/Settings',
           '/ProfessionalSettings',
-          '/ProfessionalProfile',
           '/MyContracts',
           '/ChangePassword',
           '/change-password',
@@ -688,7 +687,6 @@ export const AuthProvider = ({ children }) => {
           'AvailabilitySettings',
           'Settings',
           'ProfessionalSettings',
-          'ProfessionalProfile',
           'MyContracts',
           'ChangePassword',
           'MyBookings',
@@ -705,20 +703,36 @@ export const AuthProvider = ({ children }) => {
         }
       }
       
+      console.log('MBA293hjv08he: Auth check result:', {
+        isOnProtectedRoute,
+        currentRouteName: Platform.OS === 'web' ? 'N/A' : currentRouteInfo?.name,
+        currentPath: Platform.OS === 'web' ? currentPath : 'N/A',
+        isSignedIn,
+        platformOS: Platform.OS,
+        fullCurrentRouteInfo: currentRouteInfo,
+        fullCurrentPath: currentPath
+      });
+
       if (isOnProtectedRoute) {
-        debugLog(`MBA1111 AUTH REDIRECT: User not signed in on protected route, redirecting to SignIn`);
+        console.log('MBA293hjv08he: REDIRECTING TO SIGNIN - User not signed in on protected route:', {
+          platformOS: Platform.OS,
+          currentRouteName: Platform.OS === 'web' ? 'N/A' : currentRouteInfo?.name,
+          currentPath: Platform.OS === 'web' ? currentPath : 'N/A',
+          isOnProtectedRoute: isOnProtectedRoute
+        });
         
         // Use platform navigation for redirect
         try {
           // First try using existing navigate function
           navigate('SignIn');
-          debugLog('MBA1111 AUTH REDIRECT: Navigation to SignIn successful');
+          console.log('MBA293hjv08he: Navigation to SignIn successful');
         } catch (error) {
-          debugLog('MBA1111 AUTH REDIRECT: Navigation failed, using platform navigation fallback:', error);
+          console.log('MBA293hjv08he: Navigation failed, using platform navigation fallback:', error);
           // Fallback to platform navigation redirect
           platformNavigation.redirectToSignIn(null);
         }
       } else {
+        console.log('MBA293hjv08he: Auth guard - current route is NOT protected, no redirect needed');
         debugLog(`MBA1111 AUTH REDIRECT: Current route is not protected, no redirect needed`);
       }
       } catch (error) {

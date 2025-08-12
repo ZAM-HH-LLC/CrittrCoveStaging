@@ -180,7 +180,6 @@ const createLinking = (authContext) => ({
       '/AvailabilitySettings', '/availability-settings',
       '/Settings', '/settings',
       '/ProfessionalSettings', '/professional-settings',
-      '/ProfessionalProfile', '/professional-profile',
       '/MyContracts', '/my-contracts',
       '/ChangePassword', '/change-password',
       '/ConfirmAccountDeletion', '/confirm-account-deletion',
@@ -267,9 +266,10 @@ const createLinking = (authContext) => ({
       HelpFAQ: 'help-faq',
       ContactUs: 'contact-us',
       ProfessionalProfile: {
-        path: 'professional-profile',
+        path: 'professionals/:professionalSlug/:professionalId',
         parse: {
-          professional: (professional) => undefined
+          professionalId: (professionalId) => professionalId || null,
+          professionalSlug: (professionalSlug) => professionalSlug || null
         }
       },
       MyContracts: 'my-contracts',
@@ -457,7 +457,6 @@ function AppContent() {
               '/AvailabilitySettings', '/availability-settings',
               '/Settings', '/settings',
               '/ProfessionalSettings', '/professional-settings',
-              '/ProfessionalProfile', '/professional-profile',
               '/MyContracts', '/my-contracts',
               '/ChangePassword', '/change-password',
               '/ConfirmAccountDeletion', '/confirm-account-deletion',
@@ -584,7 +583,6 @@ function AppContent() {
         '/AvailabilitySettings', '/availability-settings',
         '/Settings', '/settings',
         '/ProfessionalSettings', '/professional-settings',
-        '/ProfessionalProfile', '/professional-profile',
         '/MyContracts', '/my-contracts',
         '/ChangePassword', '/change-password',
         '/ConfirmAccountDeletion', '/confirm-account-deletion',
@@ -708,7 +706,6 @@ function AppContent() {
         'AvailabilitySettings',
         'Settings',
         'ProfessionalSettings',
-        'ProfessionalProfile',
         'MyContracts',
         'ChangePassword',
         'MyBookings',

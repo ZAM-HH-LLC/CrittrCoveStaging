@@ -3,13 +3,13 @@ import { View, StyleSheet, Platform, Dimensions, TouchableOpacity, Text, useWind
 import SearchRefiner from '../components/SearchRefiner';
 import ProfessionalList from '../components/ProfessionalList';
 import MapView from '../components/MapView';
-import ProfessionalServicesModal from '../components/ProfessionalServicesModal';
 import { theme } from '../styles/theme';
 // import { mockProfessionals } from '../data/mockData'; // TODO: Remove mock data after implementing real search
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AuthContext, debugLog } from '../context/AuthContext';
+import { AuthContext, debugLog, getStorage, setStorage } from '../context/AuthContext';
 import BackHeader from '../components/BackHeader';
 import { searchProfessionals } from '../api/API';
+import { createProfessionalSlug } from '../utils/urlUtils';
 
 const SearchProfessionalsListing = ({ navigation, route }) => {
   const { width: windowWidth } = useWindowDimensions();
@@ -35,8 +35,6 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
   const [activeFilters, setActiveFilters] = useState({
     categories: [],
   });
-  const [servicesModalVisible, setServicesModalVisible] = useState(false);
-  const [selectedProfessional, setSelectedProfessional] = useState(null);
 
   // Helper function to extract city from location string
   const extractCity = (location) => {
@@ -134,7 +132,43 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
   }, [screenWidth]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
+    const unsubscribe = navigation.addListener('focus', async () => {
+      debugLog('MBAa3M$91vkP: Search screen focused, checking for stored state');
+      try {
+        const storedStateStr = await getStorage('search_professionals_state');
+        if (storedStateStr) {
+          const storedState = JSON.parse(storedStateStr);
+          // Check if the stored state is recent (within 10 minutes)
+          const maxAge = 10 * 60 * 1000; // 10 minutes
+          if (Date.now() - storedState.timestamp < maxAge) {
+            debugLog('MBAa3M$91vkP: Restoring previous search state', {
+              professionalsCount: storedState.professionals?.length,
+              activeView: storedState.activeView
+            });
+            
+            // Restore the previous state
+            setProfessionals(storedState.professionals || []);
+            setSearchResults(storedState.searchResults);
+            setCurrentSearchParams(storedState.currentSearchParams);
+            setActiveFilters(storedState.activeFilters || { categories: [] });
+            
+            // Restore the correct view - if it was 'list', keep it as 'list'
+            if (storedState.activeView === 'list') {
+              setActiveView('list');
+            } else if (isSingleView) {
+              setActiveView('filters');
+            }
+            
+            return;
+          } else {
+            debugLog('MBAa3M$91vkP: Stored state too old, ignoring');
+          }
+        }
+      } catch (e) {
+        debugLog('MBAa3M$91vkP: Error restoring search state', { message: e?.message });
+      }
+      
+      // Fallback to default behavior if no valid stored state
       if (isSingleView) {
         setActiveView('filters');
       }
@@ -152,6 +186,14 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     setIsLoading(true);
     try {
       debugLog('MBA9999', 'Loading initial professionals for Colorado Springs');
+      
+      // Clear any stored state since we're doing a fresh load
+      try {
+        await setStorage('search_professionals_state', '');
+        debugLog('MBAa3M$91vkP: Cleared stored search state on initial load');
+      } catch (e) {
+        debugLog('MBAa3M$91vkP: Error clearing stored search state on initial load', { message: e?.message });
+      }
       
       // Load first 20 professionals in Colorado Springs area with no filters
       const searchParams = {
@@ -187,10 +229,18 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     }
   };
 
-  const handleSearchResults = (results, searchParams = null) => {
+  const handleSearchResults = async (results, searchParams = null) => {
     debugLog('MBA9999', 'Received search results:', results);
     setSearchResults(results);
     setProfessionals(results.professionals || []);
+    
+    // Clear stored state since we have new search results
+    try {
+      await setStorage('search_professionals_state', '');
+      debugLog('MBAa3M$91vkP: Cleared stored search state due to new search');
+    } catch (e) {
+      debugLog('MBAa3M$91vkP: Error clearing stored search state', { message: e?.message });
+    }
     
     // Handle fallback message
     if (results.fallback_message) {
@@ -223,20 +273,85 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     // Implement pagination logic
   };
 
-  const handleProfessionalSelect = (professional) => {
-    // Instead of navigating to profile, show services modal
-    setSelectedProfessional(professional);
-    setServicesModalVisible(true);
+  const handleProfessionalSelect = async (professional) => {
+    debugLog('MBAa3M$91vkP: Selecting professional from listing', { id: professional?.professional_id, name: professional?.name });
+    try {
+      // Persist selection for reload resilience
+      await setStorage('last_professional_profile_id', String(professional.professional_id));
+      const snapshot = {
+        professional_id: professional.professional_id,
+        name: professional.name,
+        location: professional.location,
+        profile_picture_url: professional.profile_picture_url || professional.profile_picture || null,
+        badges: professional.badges || null,
+        average_rating: professional.average_rating || 0,
+        review_count: professional.review_count || 0
+      };
+      await setStorage('last_professional_profile_snapshot', JSON.stringify(snapshot));
+      
+      // Store current search state to restore when returning
+      const searchState = {
+        professionals: professionals,
+        searchResults: searchResults,
+        currentSearchParams: currentSearchParams,
+        activeFilters: activeFilters,
+        activeView: activeView,
+        timestamp: Date.now()
+      };
+      await setStorage('search_professionals_state', JSON.stringify(searchState));
+      debugLog('MBAa3M$91vkP: Stored search state before navigation', { 
+        professionalsCount: professionals.length,
+        activeView: activeView 
+      });
+    } catch (e) {
+      debugLog('MBAa3M$91vkP: Error storing selection from listing', { message: e?.message });
+    }
+
+    // Navigate to ProfessionalProfile screen with friendly URL
+    const professionalSlug = createProfessionalSlug(professional.name);
+    navigation.navigate('ProfessionalProfile', {
+      professionalId: professional.professional_id.toString(),
+      professionalSlug: professionalSlug,
+    });
   };
 
-  const handleShowServicesModal = (professional) => {
-    setSelectedProfessional(professional);
-    setServicesModalVisible(true);
-  };
+  const handleShowServicesModal = async (professional) => {
+    try {
+      await setStorage('last_professional_profile_id', String(professional.professional_id));
+      const snapshot = {
+        professional_id: professional.professional_id,
+        name: professional.name,
+        location: professional.location,
+        profile_picture_url: professional.profile_picture_url || professional.profile_picture || null,
+        badges: professional.badges || null,
+        average_rating: professional.average_rating || 0,
+        review_count: professional.review_count || 0
+      };
+      await setStorage('last_professional_profile_snapshot', JSON.stringify(snapshot));
+      
+      // Store current search state to restore when returning
+      const searchState = {
+        professionals: professionals,
+        searchResults: searchResults,
+        currentSearchParams: currentSearchParams,
+        activeFilters: activeFilters,
+        activeView: activeView,
+        timestamp: Date.now()
+      };
+      await setStorage('search_professionals_state', JSON.stringify(searchState));
+      debugLog('MBAa3M$91vkP: Stored search state before navigation from services modal', { 
+        professionalsCount: professionals.length,
+        activeView: activeView 
+      });
+    } catch (e) {
+      debugLog('MBAa3M$91vkP: Error storing selection from services modal', { message: e?.message });
+    }
 
-  const handleCloseServicesModal = () => {
-    setServicesModalVisible(false);
-    setSelectedProfessional(null);
+    const professionalSlug = createProfessionalSlug(professional.name);
+    navigation.navigate('ProfessionalProfile', {
+      professionalId: professional.professional_id.toString(),
+      professionalSlug: professionalSlug,
+    });
   };
 
   const toggleMapSize = () => {
@@ -543,13 +658,6 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
         </View>
       </SafeAreaView>
       
-      {/* Professional Services Modal */}
-      <ProfessionalServicesModal
-        visible={servicesModalVisible}
-        onClose={handleCloseServicesModal}
-        professional={selectedProfessional}
-        primaryService={selectedProfessional?.primary_service}
-      />
     </View>
   );
 };

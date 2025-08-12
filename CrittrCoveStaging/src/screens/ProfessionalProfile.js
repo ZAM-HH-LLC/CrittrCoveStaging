@@ -1,1484 +1,1402 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Platform, useWindowDimensions, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, useWindowDimensions, Modal, ActivityIndicator, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
-import BackHeader from '../components/BackHeader';
-import CrossPlatformView from '../components/CrossPlatformView';
-import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
-import { AuthContext } from '../context/AuthContext';
-import { Calendar } from 'react-native-calendars';
-import { mockPets } from '../data/mockData';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SCREEN_WIDTH } from '../context/AuthContext';
-import ServiceCard from '../components/ServiceCard';
-import { mockServicesForCards } from '../data/mockData';
-import { mockConversations, mockMessages } from '../data/mockData';
-import platformNavigation from '../utils/platformNavigation';
-// Conditionally import WebMap component
-const WebMap = Platform.OS === 'web' ? require('react-leaflet').MapContainer : null;
-
-// Mock API function to fetch profile data
-const fetchProfileData = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        // profilePhoto: 'https://example.com/profile-photo.jpg',
-        bio: "Hi! I'm an experienced pet professional who loves all animals. I have 5 years of experience caring for dogs, cats, and exotic pets.",
-        petPhotos: [
-          // 'https://example.com/pet-photo-1.jpg',
-          // 'https://example.com/pet-photo-2.jpg',
-        ],
-        services: ['Dog Boarding', 'Dog Walking', 'Drop-In Visits', 'House Sitting'],
-        rates: {
-          boarding: '35',
-          daycare: '25',
-          houseSitting: '40',
-          dropInVisits: '20',
-          dogWalking: '15'
-        },
-        name: 'John Doe',
-        location: 'New York, NY'
-      });
-    }, 1000);
-  });
-};
-
-const mockReviews = [
-  {
-    id: 1,
-    name: 'Noah M.',
-    service: 'Fish Tank Cleaning',
-    date: 'Dec 02, 2024',
-    rating: 5,
-    text: 'Dina was fantastic with our dog! Sent lots of photos and clearly made sure she was comfortable. Will definitely use again!',
-    photo: 'https://via.placeholder.com/50'
-  },
-  {
-    id: 2,
-    name: 'Kaily J.',
-    service: 'Ferrier',
-    date: 'Nov 26, 2024',
-    rating: 4,
-    text: 'Dina always takes such good care of Elijah. He was having tummy problems today and she kept me updated all day on how he was doing.',
-    photo: 'https://via.placeholder.com/50'
-  },
-  {
-    id: 3,
-    name: 'Nadia U.',
-    service: 'Reptile Boarding & Habitat Maintenance',
-    date: 'Nov 19, 2024',
-    rating: 5,
-    text: 'She took such great care of our puppy! Sent pictures and videos the whole time, her backyard was super nice and clean ❤️ my puppy was definitely in great hands! Bonus her dogs were so sweet with our puppy.',
-    photo: 'https://via.placeholder.com/50'
-  },
-  {
-    id: 4,
-    name: 'Vanessa G.',
-    service: 'Bird Feeding',
-    date: 'Nov 19, 2024',
-    rating: 5,
-    text: 'Dina was great! She communicated through the whole stay and sent plenty of videos and photos. 10/10',
-    photo: 'https://via.placeholder.com/50'
-  }
-];
-
-const useResponsiveLayout = () => {
-  const { width } = useWindowDimensions();
-  const [isWideScreen, setIsWideScreen] = useState(true);
-
-  useEffect(() => {
-    setIsWideScreen(Platform.OS === 'web' && width >= 900);
-  }, [width]);
-
-  return isWideScreen;
-};
-
-// Move this outside the component and add platform safety
-if (Platform.OS === 'web' && typeof document !== 'undefined') {
-  try {
-    const style = document.createElement('style');
-    style.textContent = `
-      .services-scroll::-webkit-scrollbar {
-        -webkit-appearance: none;
-      }
-
-      .services-scroll::-webkit-scrollbar:vertical {
-        width: 11px;
-      }
-
-      .services-scroll::-webkit-scrollbar:horizontal {
-        height: 11px;
-      }
-
-      .services-scroll::-webkit-scrollbar-thumb {
-        border-radius: 8px;
-        border: 2px solid white;
-        background-color: rgba(0, 0, 0, .5);
-      }
-    `;
-    if (document.head) {
-      document.head.appendChild(style);
-    }
-  } catch (error) {
-    console.warn('MBA5511: Could not inject CSS styles:', error);
-  }
-}
-
-// Platform-aware storage helpers
-const platformStorage = {
-  setItem: async (key, value) => {
-    try {
-      if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem(key, value);
-      } else {
-        await AsyncStorage.setItem(key, value);
-      }
-    } catch (error) {
-      console.warn('MBA5511: Storage setItem failed:', error);
-    }
-  },
-  
-  getItem: async (key) => {
-    try {
-      if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
-        return sessionStorage.getItem(key);
-      } else {
-        return await AsyncStorage.getItem(key);
-      }
-    } catch (error) {
-      console.warn('MBA5511: Storage getItem failed:', error);
-      return null;
-    }
-  },
-  
-  removeItem: async (key) => {
-    try {
-      if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
-        sessionStorage.removeItem(key);
-      } else {
-        await AsyncStorage.removeItem(key);
-      }
-    } catch (error) {
-      console.warn('MBA5511: Storage removeItem failed:', error);
-    }
-  }
-};
+import { AuthContext, getStorage, setStorage, debugLog } from '../context/AuthContext';
+import { getProfessionalServicesDetailed, createConversation, getUserReviews, searchProfessionals } from '../api/API';
+import { getMediaUrl } from '../config/config';
+import { generateProfessionalUrl, shareProfessionalProfile } from '../utils/urlUtils';
+import ReviewsModal from '../components/ReviewsModal';
+import { BACKEND_TO_FRONTEND_TIME_UNIT } from '../data/mockData';
 
 const ProfessionalProfile = ({ route, navigation }) => {
-  const { width: windowWidth } = useWindowDimensions();
-  const { screenWidth, isCollapsed, is_DEBUG } = useContext(AuthContext);
-  const [professionalData, setProfessionalData] = useState(null);
-  const [canGoBack, setCanGoBack] = useState(false);
-  const [bioModalVisible, setBioModalVisible] = useState(false);
-  const [reviewsModalVisible, setReviewsModalVisible] = useState(false);
-  const [specialistModalVisible, setSpecialistModalVisible] = useState(false);
-  const [favoriteServices, setFavoriteServices] = useState([]);
-  const [servicesModalVisible, setServicesModalVisible] = useState(false);
-  const [isMobile, setIsMobile] = useState(screenWidth <= 900);
-  const isWideScreen = useResponsiveLayout();
-
-  // Calculate marginLeft to account for sidebar on desktop
-  const marginLeft = screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0;
-
-  // Debug component lifecycle
-  useEffect(() => {
-    if (is_DEBUG) {
-      console.log('MBA9999: ProfessionalProfile component mounted');
-    }
-    return () => {
-      if (is_DEBUG) {
-        console.log('MBA9999: ProfessionalProfile component unmounting');
-      }
-    };
-  }, []);
-
-  // Debug professional data changes
-  useEffect(() => {
-    if (is_DEBUG) {
-      console.log('MBA9999: Professional data changed:', professionalData ? professionalData.name : 'null');
-    }
-  }, [professionalData]);
-
-  useEffect(() => {
-    const updateLayout = () => {
-      setIsMobile(screenWidth <= 900);
-    };
-    updateLayout();
-  }, [screenWidth]);
-
-  useEffect(() => {
-    // Check if we can go back and if SearchProfessionalsListing exists in history
-    const state = navigation.getState();
-    const hasHistory = state.routes.some(route => route.name === 'SearchProfessionalsListing');
-    setCanGoBack(navigation.canGoBack() && hasHistory);
-  }, [navigation]);
-
-  const handleBack = async () => {
-    if (is_DEBUG) {
-      console.log('MBA9999: handleBack called, Platform:', Platform.OS);
-    }
-    
-    // Remove stored professional data
-    await platformStorage.removeItem('currentProfessional');
-    
-    if (is_DEBUG) {
-      console.log('MBA9999: Navigating back to SearchProfessionalsListing');
-    }
-    
-    // Use navigation.navigate for consistent behavior across platforms
-    navigation.navigate('SearchProfessionalsListing');
-  };
-
-  // Handle browser back button - REMOVED due to causing navigation issues
-  // The browser's native back button will work with React Navigation
-  // useEffect(() => {
-  //   if (Platform.OS === 'web') {
-  //     // Popstate handling removed - was causing automatic navigation
-  //   }
-  // }, []);
+  const { isSignedIn } = useContext(AuthContext);
+  const [professional, setProfessional] = useState(null);
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [reviews, setReviews] = useState([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('services');
+  const [selectedServiceForRates, setSelectedServiceForRates] = useState(null);
+  const [showServiceRatesModal, setShowServiceRatesModal] = useState(false);
+  const [loadingProfessional, setLoadingProfessional] = useState(false);
+  const [showAnimalTypesModal, setShowAnimalTypesModal] = useState(false);
+  const [selectedAnimalTypes, setSelectedAnimalTypes] = useState(null);
+  const [isSharing, setIsSharing] = useState(false);
+  
+  const { width: screenWidth } = Dimensions.get('window');
 
   useEffect(() => {
     const loadProfessionalData = async () => {
-      if (is_DEBUG) {
-        console.log('MBA9999: loadProfessionalData called', {
-          hasRouteParams: !!route?.params?.professional,
-          platform: Platform.OS
-        });
+      // Prefer professional from params if it is an object (on web reload, params may contain a string "[object Object]")
+      if (route?.params?.professional && typeof route.params.professional === 'object') {
+        const profObj = route.params.professional;
+        setProfessional(profObj);
+        try {
+          await setStorage('last_professional_profile_id', String(profObj.professional_id));
+          const snapshot = {
+            professional_id: profObj.professional_id,
+            name: profObj.name,
+            location: profObj.location,
+            profile_picture_url: profObj.profile_picture_url || profObj.profile_picture || null,
+            badges: profObj.badges || null,
+            average_rating: profObj.average_rating || 0,
+            review_count: profObj.review_count || 0
+          };
+          await setStorage('last_professional_profile_snapshot', JSON.stringify(snapshot));
+          debugLog('MBAa3M$91vkP: Stored professional snapshot from params', snapshot);
+        } catch (e) {
+          debugLog('MBAa3M$91vkP: Error storing professional snapshot from params', { message: e?.message });
+        }
+        return;
       }
+
+      // If not in params, try to get from URL parameter or storage
+      let professionalId = route?.params?.professionalId;
+      const professionalSlug = route?.params?.professionalSlug;
       
-      if (route?.params?.professional) {
-        if (is_DEBUG) {
-          console.log('MBA9999: Setting professional data from route params:', route.params.professional.name);
+      debugLog('MBAa3M$91vkP: Route params received', { 
+        professionalId, 
+        professionalSlug,
+        hasDirectProfessional: !!route?.params?.professional 
+      });
+      
+      if (!professionalId) {
+        try {
+          professionalId = await getStorage('last_professional_profile_id');
+          debugLog('MBAa3M$91vkP: Loaded professionalId from storage', { professionalId });
+        } catch (e) {
+          debugLog('MBAa3M$91vkP: Error loading professionalId from storage', { message: e?.message });
         }
-        setProfessionalData(route.params.professional);
-        // Store in platform-appropriate storage for persistence
-        await platformStorage.setItem('currentProfessional', JSON.stringify(route.params.professional));
-      } else {
-        // Try to get professional data from storage
-        const storedProfessional = await platformStorage.getItem('currentProfessional');
-        if (is_DEBUG) {
-          console.log('MBA9999: Checking storage for professional data:', !!storedProfessional);
+      }
+
+      // If we have a snapshot in storage, use it for immediate UI hydration
+      try {
+        const snapStr = await getStorage('last_professional_profile_snapshot');
+        if (!route?.params?.professional && snapStr) {
+          const snapshot = JSON.parse(snapStr);
+          if (snapshot && snapshot.professional_id) {
+            setProfessional(snapshot);
+            debugLog('MBAa3M$91vkP: Hydrated professional from stored snapshot');
+          }
         }
-        
-        if (storedProfessional) {
-          try {
-            const parsedProfessional = JSON.parse(storedProfessional);
-            if (is_DEBUG) {
-              console.log('MBA9999: Setting professional data from storage:', parsedProfessional.name);
+      } catch (e) {
+        debugLog('MBAa3M$91vkP: Error hydrating professional snapshot', { message: e?.message });
+      }
+
+      if (professionalId) {
+        setLoadingProfessional(true);
+        try {
+          // Use a broad search and filter by ID (no new endpoint)
+          const searchParams = {
+            animal_types: [],
+            location: 'Colorado Springs, Colorado',
+            service_query: '',
+            overnight_service: false,
+            price_min: 0,
+            price_max: 999999,
+            radius_miles: 500,
+            page: 1,
+            page_size: 100
+          };
+          const results = await searchProfessionals(searchParams);
+          const foundProfessional = results?.professionals?.find(p => p.professional_id?.toString() === professionalId?.toString());
+          if (foundProfessional) {
+            setProfessional(foundProfessional);
+            // Persist for future reloads
+            try {
+              await setStorage('last_professional_profile_id', String(foundProfessional.professional_id));
+              const snapshot = {
+                professional_id: foundProfessional.professional_id,
+                name: foundProfessional.name,
+                location: foundProfessional.location,
+                profile_picture_url: foundProfessional.profile_picture_url || foundProfessional.profile_picture || null,
+                badges: foundProfessional.badges || null,
+                average_rating: foundProfessional.average_rating || 0,
+                review_count: foundProfessional.review_count || 0
+              };
+              await setStorage('last_professional_profile_snapshot', JSON.stringify(snapshot));
+              debugLog('MBAa3M$91vkP: Updated professional snapshot from search', snapshot);
+            } catch (e) {
+              debugLog('MBAa3M$91vkP: Error storing professional snapshot from search', { message: e?.message });
             }
-            setProfessionalData(parsedProfessional);
-          } catch (error) {
-            console.error('MBA9999: Error parsing stored professional data:', error);
-            // Only redirect if we can't parse the data
-            navigation.replace('SearchProfessionalsListing');
+          } else {
+            setErrorMessage('Professional not found');
+            setShowErrorModal(true);
           }
-        } else {
-          if (is_DEBUG) {
-            console.log('MBA9999: No professional data found, redirecting to search');
-          }
-          // If no data, redirect back to search
-          navigation.replace('SearchProfessionalsListing');
+        } catch (error) {
+          debugLog('MBAa3M$91vkP: Error loading professional via search', { message: error?.message });
+          setErrorMessage('Failed to load professional');
+          setShowErrorModal(true);
+        } finally {
+          setLoadingProfessional(false);
         }
+      } else {
+        setErrorMessage('No professional information provided');
+        setShowErrorModal(true);
       }
     };
 
     loadProfessionalData();
-  }, [route?.params?.professional, navigation, is_DEBUG]);
+  }, [route?.params?.professional, route?.params?.professionalId, route?.params?.professionalSlug]);
 
-  const getContentWidth = () => {
-    if (Platform.OS === 'web') {
-      // Account for sidebar width on desktop
-      const availableWidth = screenWidth > 900 
-        ? windowWidth - (isCollapsed ? 70 : 250) 
-        : windowWidth;
-      return Math.min(1000, availableWidth - 32); // 32px for padding
+  useEffect(() => {
+    if (professional?.professional_id) {
+      fetchServices();
+      fetchReviews();
     }
-    return windowWidth - 32; // 16px padding on each side
+  }, [professional?.professional_id]);
+
+  const fetchServices = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const servicesData = await getProfessionalServicesDetailed(professional.professional_id);
+      setServices(servicesData);
+    } catch (err) {
+      setError('Failed to load services');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleFavorite = (serviceId) => {
-    setFavoriteServices(prev => 
-      prev.includes(serviceId) 
-        ? prev.filter(id => id !== serviceId)
-        : [...prev, serviceId]
+  const fetchReviews = async () => {
+    if (!professional?.professional_id) return;
+    
+    setLoadingReviews(true);
+    try {
+      const professionalId = professional.professional_id.toString();
+      const reviewsData = await getUserReviews(null, professionalId, false);
+      
+      if (reviewsData && typeof reviewsData === 'object') {
+        setReviews(reviewsData.reviews || []);
+        setAverageRating(reviewsData.average_rating || 0);
+        setReviewCount(reviewsData.review_count || 0);
+      } else {
+        setReviews([]);
+        setAverageRating(0);
+        setReviewCount(0);
+      }
+    } catch (err) {
+      setReviews([]);
+      setAverageRating(0);
+      setReviewCount(0);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const handleBack = () => {
+    debugLog('MBAa3M$91vkP: Back button pressed');
+    if (navigation.canGoBack && navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      debugLog('MBAa3M$91vkP: No back stack, navigating to SearchProfessionalsListing');
+      navigation.navigate('SearchProfessionalsListing');
+    }
+  };
+
+  const formatAnimalTypes = (animalTypes, isClickable = false, onPress = null) => {
+    if (!animalTypes || typeof animalTypes !== 'object') return 'Various animals';
+    const types = Object.keys(animalTypes);
+    if (types.length === 0) return 'Various animals';
+    if (types.length === 1) return types[0];
+    if (types.length === 2) return `${types[0]} & ${types[1]}`;
+    
+    if (isClickable && onPress && types.length > 2) {
+      return (
+        <TouchableOpacity onPress={onPress}>
+          <Text style={styles.clickableAnimalTypes}>
+            {types[0]}, {types[1]} & <Text style={styles.moreAnimalsLink}>{types.length - 2} more</Text>
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+    
+    return `${types[0]}, ${types[1]} & ${types.length - 2} more`;
+  };
+
+  const showAnimalTypes = (animalTypes) => {
+    setSelectedAnimalTypes(animalTypes);
+    setShowAnimalTypesModal(true);
+  };
+
+  const closeAnimalTypesModal = () => {
+    setShowAnimalTypesModal(false);
+    setSelectedAnimalTypes(null);
+  };
+
+  const handleShareProfile = async () => {
+    if (!professional) return;
+    
+    setIsSharing(true);
+    try {
+      // Get current URL to determine base URL
+      const currentUrl = typeof window !== 'undefined' ? window.location.origin : 'https://crittrcover.com';
+      const success = await shareProfessionalProfile(professional, currentUrl);
+      
+      if (!success) {
+        setErrorMessage('Unable to share profile. Please try again.');
+        setShowErrorModal(true);
+      }
+    } catch (error) {
+      debugLog('MBAa3M$91vkP: Error sharing profile', { message: error?.message });
+      setErrorMessage('Unable to share profile. Please try again.');
+      setShowErrorModal(true);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const renderStars = (rating) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <MaterialCommunityIcons
+          key={i}
+          name={i <= rating ? "star" : "star-outline"}
+          size={16}
+          color={theme.colors.warning}
+          style={styles.starIcon}
+        />
+      );
+    }
+    return <View style={styles.starsContainer}>{stars}</View>;
+  };
+
+  const handleCreateConversation = async () => {
+    if (!professional?.professional_id) {
+      setErrorMessage('Professional information not available');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!isSignedIn) {
+      navigation.navigate('SignIn');
+      return;
+    }
+
+    setIsCreatingConversation(true);
+    try {
+      const response = await createConversation(professional.professional_id);
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const navigationParams = { 
+        conversationId: response.conversation_id,
+        otherUserName: professional.name,
+        otherUserProfilePic: professional.profile_picture || null,
+        isProfessional: false,
+        fullConversationData: JSON.stringify(response),
+        _timestamp: Date.now()
+      };
+      
+      navigation.navigate('MessageHistory', navigationParams);
+      
+    } catch (err) {
+      if (err.response?.status === 400 && 
+          err.response?.data?.error === 'Cannot create conversation with yourself') {
+        setErrorMessage('You cannot contact yourself.');
+        setShowErrorModal(true);
+      } else {
+        setErrorMessage('Failed to create conversation. Please try again.');
+        setShowErrorModal(true);
+      }
+    } finally {
+      setIsCreatingConversation(false);
+    }
+  };
+
+  const handleOpenReviewsModal = () => {
+    setShowReviewsModal(true);
+  };
+
+  const handleCloseReviewsModal = () => {
+    setShowReviewsModal(false);
+  };
+
+  const showServiceRates = (service) => {
+    setSelectedServiceForRates(service);
+    setShowServiceRatesModal(true);
+  };
+
+  const closeServiceRatesModal = () => {
+    setShowServiceRatesModal(false);
+    setSelectedServiceForRates(null);
+  };
+
+  const renderServiceCard = (service) => {
+    const displayUnit = BACKEND_TO_FRONTEND_TIME_UNIT[service.unit_of_time] || service.unit_of_time;
+    const animalTypes = service.animal_types;
+    const hasMultipleTypes = animalTypes && Object.keys(animalTypes).length > 2;
+    
+    return (
+      <TouchableOpacity 
+        key={service.service_id} 
+        style={styles.serviceCard}
+        onPress={() => showServiceRates(service)}
+      >
+        <View style={styles.serviceCardHeader}>
+          <Text style={styles.serviceName}>{service.service_name}</Text>
+          <Text style={styles.servicePrice}>from ${service.base_rate}/{displayUnit}</Text>
+        </View>
+        <Text style={styles.serviceDescription} numberOfLines={2}>
+          {service.description}
+        </Text>
+        
+        <View style={styles.serviceFooter}>
+          <View style={styles.animalTypesContainer}>
+            {hasMultipleTypes ? 
+              formatAnimalTypes(animalTypes, true, () => showAnimalTypes(animalTypes)) :
+              <Text style={styles.animalTypes}>{formatAnimalTypes(animalTypes)}</Text>
+            }
+          </View>
+          <View style={styles.serviceFooterRight}>
+            {service.is_overnight && (
+              <View style={styles.overnightBadge}>
+                <Text style={styles.overnightText}>Overnight</Text>
+              </View>
+            )}
+            <Text style={styles.viewRatesText}>View Rates</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
-  const renderServices = () => (
-    <View style={styles.servicesSection}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Services</Text>
-        <TouchableOpacity 
-          style={styles.seeAllButton}
-          onPress={() => setServicesModalVisible(true)}
-        >
-          <Text style={styles.seeAllButtonText}>See All</Text>
-        </TouchableOpacity>
+  const renderReviewCard = (review) => (
+    <View key={review.review_id} style={styles.reviewCard}>
+      <View style={styles.reviewHeader}>
+        <View style={styles.reviewerInfo}>
+          <View style={styles.reviewerAvatar}>
+            {review.reviewer_profile_picture ? (
+              <Image 
+                source={{ uri: getMediaUrl(review.reviewer_profile_picture) }}
+                style={styles.reviewerImage}
+              />
+            ) : (
+              <MaterialCommunityIcons name="account" size={20} color={theme.colors.text} />
+            )}
+          </View>
+          <View style={styles.reviewerDetails}>
+            <Text style={styles.reviewerName}>{review.client_name || 'Anonymous'}</Text>
+            {renderStars(review.rating)}
+          </View>
+        </View>
+        <Text style={styles.reviewDate}>
+          {new Date(review.created_at).toLocaleDateString()}
+        </Text>
       </View>
-      <View style={styles.servicesWrapper}>
-        <ScrollView 
-          horizontal
-          showsHorizontalScrollIndicator={true}
-          style={[
-            styles.servicesScroll,
-            Platform.OS === 'web' && { 
-              className: 'services-scroll',
-              overflowX: 'scroll'
-            }
-          ]}
-          contentContainerStyle={styles.servicesScrollContent}
-          persistentScrollbar={true}
-        >
-          {mockServicesForCards.slice(0, 5).map(service => (
-            <ServiceCard 
-              key={service.id}
-              service={service}
-              onHeartPress={toggleFavorite}
-              isFavorite={favoriteServices.includes(service.id)}
-              professionalName={professionalData.name}
-              professionalId={professionalData.id}
-              navigation={navigation}
-            />
-          ))}
-        </ScrollView>
-      </View>
+      <Text style={styles.reviewText} numberOfLines={3}>
+        {review.review_text || 'No comments provided.'}
+      </Text>
+      <Text style={styles.reviewService}>{review.service_name || 'Service'}</Text>
     </View>
   );
 
-  if (!professionalData) {
+  if (!professional || loadingProfessional) {
     return (
-      <CrossPlatformView fullWidthHeader={true}>
-        <BackHeader 
-          title="Professional Profile" 
-          onBackPress={handleBack}
-        />
+      <View style={styles.fullContainer}>
         <View style={styles.centered}>
-          <Text>Loading...</Text>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading professional...</Text>
         </View>
-      </CrossPlatformView>
+      </View>
     );
   }
 
-  const renderProfilePhoto = () => {
-    if (professionalData.profilePicture) {
-      return <Image source={{ uri: professionalData.profilePicture }} style={styles.profilePhoto} />;
-    }
-    return (
-      <View style={[styles.profilePhoto, styles.profilePhotoPlaceholder]}>
-        <MaterialCommunityIcons name="account" size={80} color={theme.colors.primary} />
-      </View>
-    );
-  };
-
-  const renderSpecialistExperience = () => (
-    <View style={styles.specialistSection}>
-      <Text style={styles.sectionTitle}>Specialist Experience</Text>
-      <TruncatedText text={professionalData?.bio || ''} />
-    </View>
-  );
-
-  const renderRatingStars = () => (
-    <View style={styles.ratingContainer}>
-      <MaterialCommunityIcons name="star" size={24} color={theme.colors.primary} />
-      <Text style={styles.rating}>{professionalData.reviews}</Text>
-      <Text style={[styles.reviewCount, { marginLeft: 12 }]}>({professionalData.reviewCount || 50} reviews)</Text>
-    </View>
-  );
-
-  // Add new component for truncated text with Read More
-  const TruncatedText = ({ text, maxLines = 3 }) => (
-    <View>
-      <Text 
-        numberOfLines={maxLines} 
-        style={styles.specialistText}
-      >
-        {text}
-      </Text>
-      <TouchableOpacity 
-        style={styles.readMoreButton}
-        onPress={() => setSpecialistModalVisible(true)}
-      >
-        <Text style={styles.readMoreText}>Read more</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderMap = () => {
-    if (Platform.OS === 'web' && WebMap) {
-      const { MapContainer, TileLayer, Marker } = require('react-leaflet');
-      return (
-        <View style={styles.mapContainer}>
-          <MapContainer
-            center={[38.8339, -104.8214]} // Default coordinates
-            zoom={13}
-            style={{ height: 400, width: '100%' }}
+  return (
+    <View style={styles.fullContainer}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Profile Header Section with Back Button */}
+        <View style={styles.profileHeader}>
+          {/* Back Button positioned in top left */}
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          
+          {/* Share Button positioned in top right */}
+          <TouchableOpacity 
+            style={[styles.shareButton, isSharing && styles.shareButtonDisabled]} 
+            onPress={handleShareProfile}
+            disabled={isSharing}
           >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-            <Marker position={[38.8339, -104.8214]} />
-          </MapContainer>
-        </View>
-      );
-    }
-    // For mobile, return null or a placeholder
-    return null;
-  };
-
-  const renderPets = () => {
-    if (!mockPets || mockPets.length === 0) return null;
-    
-    return (
-      <View style={styles.petsSection}>
-        <Text style={styles.sectionTitle}>Pets</Text>
-        {mockPets.map((pet, index) => (
-          <View key={pet.id} style={styles.petItem}>
-            <View style={styles.petPhoto}>
-              <MaterialCommunityIcons 
-                name={pet.animal_type.toLowerCase() === 'dog' ? 'dog' : 
-                      pet.animal_type.toLowerCase() === 'cat' ? 'cat' : 'snake'} 
-                size={30} 
-                color={theme.colors.primary} 
+            {isSharing ? (
+              <ActivityIndicator size="small" color={theme.colors.text} />
+            ) : (
+              <MaterialCommunityIcons name="export" size={24} color={theme.colors.text} />
+            )}
+          </TouchableOpacity>
+          <View style={styles.profileImageContainer}>
+            {professional?.profile_picture_url ? (
+              <Image 
+                source={{ uri: getMediaUrl(professional.profile_picture_url) }} 
+                style={styles.profileImage} 
               />
-            </View>
-            <View style={styles.petInfo}>
-              <Text style={styles.petName}>{pet.name}</Text>
-              <Text style={styles.petBreed}>{pet.breed}</Text>
-              <Text style={styles.petDetails}>
-                {`${pet.weight} lbs, ${pet.age.years} years${pet.age.months ? ` ${pet.age.months} months` : ''}`}
-              </Text>
-            </View>
+            ) : (
+              <View style={styles.profileImagePlaceholder}>
+                <MaterialCommunityIcons name="account" size={60} color={theme.colors.text} />
+              </View>
+            )}
+            {professional?.badges?.is_elite_pro && (
+              <View style={styles.eliteBadge}>
+                <MaterialCommunityIcons name="medal" size={20} color="#4CAF50" />
+              </View>
+            )}
           </View>
-        ))}
-      </View>
-    );
-  };
-
-  const styles2 = StyleSheet.create({
-    modalContent: {
-      backgroundColor: theme.colors.background,
-      padding: 24,
-      borderRadius: 12,
-      width: Platform.OS === 'web' ? 
-        (screenWidth <= 650 ? '90%' : '60%') : 
-        '90%',
-      maxWidth: 800,
-      maxHeight: '90%',
-    },
-  });
-
-  // Create services array from professionalData
-  const services = [
-    { name: 'Boarding', price: "25" },
-    { name: 'Doggy Day Care', price: "30" },
-    { name: 'House Sitting', price: "40" },
-    { name: 'Drop-In Visits', price: "35" },
-    { name: 'Dog Walking', price: "45" }
-  ];
-
-  const HomeFeature = ({ text }) => (
-    <View style={styles.featureBubble}>
-      <Text style={styles.featureText}>{text}</Text>
-    </View>
-  );
-
-  const renderReviews = () => (
-    <View style={styles.reviewsSection}>
-      <Text style={styles.sectionTitle}>Reviews</Text>
-      <View style={styles.reviewsGrid}>
-        {mockReviews.slice(0, 4).map(renderReview)}
-      </View>
-      <TouchableOpacity 
-        style={styles.readMoreButton}
-        onPress={() => setReviewsModalVisible(true)}
-      >
-        <Text style={styles.readMoreText}>Read more reviews</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderReview = (review) => (
-    <View key={review.id} style={styles.reviewItem}>
-      <View style={styles.reviewHeader}>
-        <Image source={{ uri: review.photo }} style={styles.reviewerPhoto} />
-        <View style={styles.reviewerInfo}>
-          <Text style={styles.reviewerName}>{review.name}</Text>
-          <View style={styles.reviewMeta}>
-            <View style={styles.starContainer}>
-              {[...Array(5)].map((_, index) => (
-                <MaterialCommunityIcons
-                  key={index}
-                  name={index < review.rating ? "star" : "star-outline"}
-                  size={16}
-                  color={theme.colors.primary}
-                />
-              ))}
+          
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{professional?.name}</Text>
+            <View style={styles.locationContainer}>
+              <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.secondary} />
+              <Text style={styles.location}>{professional?.location}</Text>
             </View>
-            <View style={styles.serviceInfo}>
-              <MaterialCommunityIcons name="home" size={16} color={theme.colors.secondary} />
-              <Text style={styles.serviceText}>{review.service} • {review.date}</Text>
+            
+            {reviewCount > 0 ? (
+              <TouchableOpacity style={styles.ratingContainer} onPress={handleOpenReviewsModal}>
+                <MaterialCommunityIcons name="star" size={16} color={theme.colors.warning} />
+                <Text style={styles.rating}>{averageRating.toFixed(1)}</Text>
+                <Text style={styles.reviewCountText}>({reviewCount} reviews)</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.noReviewsText}>No reviews yet</Text>
+            )}
+          </View>
+
+          {/* Badges Row */}
+          {(professional?.badges?.is_background_checked || professional?.badges?.is_insured) && (
+            <View style={styles.badgesContainer}>
+              {professional?.badges?.is_background_checked && (
+                <View style={styles.badge}>
+                  <MaterialCommunityIcons name="shield-check" size={16} color="#9C27B0" />
+                  <Text style={styles.badgeText}>Background Checked</Text>
+                </View>
+              )}
+              {professional?.badges?.is_insured && (
+                <View style={styles.badge}>
+                  <MaterialCommunityIcons name="security" size={16} color="#0784C6" />
+                  <Text style={styles.badgeText}>Insured</Text>
+                </View>
+              )}
             </View>
-          </View>
+          )}
         </View>
-      </View>
-      <Text style={styles.reviewText}>{review.text}</Text>
-    </View>
-  );
 
-  const renderHomeSection = () => (
-    <View style={styles.homeSection}>
-      <Text style={styles.sectionTitle}>Home</Text>
-      <View style={styles.homeFeaturesGrid}>
-        <HomeFeature text="No children present" />
-        <HomeFeature text="Has security system" />
-        <HomeFeature text="Non-smoking household" />
-        <HomeFeature text="Has 2 dogs" />
-        <HomeFeature text="Dogs allowed on bed" />
-        <HomeFeature text="Dogs allowed on furniture" />
-        <HomeFeature text="Potty breaks every 0-2 hours" />
-      </View>
-    </View>
-
-  );
-
-  const renderAboutSection = () => (
-    <View style={styles.aboutSection}>
-      <Text style={styles.sectionTitle}>About {professionalData.name}</Text>
-      <View style={styles.aboutSubsections}>
-        <View style={styles.communicationSection}>
-          <Text style={styles.subsectionTitle}>Communication</Text>
-          <Text>22 repeat pet parents</Text>
-          <Text>100% response rate</Text>
-          <Text>Usually responds in a few minutes</Text>
-          <Text>90% bookings with photo updates</Text>
-        </View>
-        <View style={styles.skillsSection}>
-          <Text style={styles.subsectionTitle}>Skills</Text>
-          <Text>3 years of experience</Text>
-        </View>
-      </View> 
-    </View>
-  );
-
-  const renderAvailability = () => (
-    <View style={dynamicStyles.dynamicServicesBox}>
-      <View style={styles.calendarSection}>
-        <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Availability</Text>
-        <Calendar
-          style={styles.calendar}
-          theme={{
-            calendarBackground: theme.colors.surface,
-            selectedDayBackgroundColor: theme.colors.primary,
-            selectedDayTextColor: '#ffffff',
-            todayTextColor: theme.colors.primary,
-          }}
-        />
-      </View>
-    </View>
-  );
-
-  const renderGallery = () => {
-    return (
-      <View style={styles.gallerySection}>
-        <Text style={styles.sectionTitle}>53 Photos</Text>
-        <View style={styles.photoGrid}>
-          {[1, 2, 3, 4].map((_, index) => (
-            <Image 
-              key={index}
-              source={{ uri: 'https://via.placeholder.com/150' }}
-              style={styles.galleryPhoto}
-                      />
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  const additionalStyles = StyleSheet.create({
-    servicesSection: {
-      marginBottom: 24,
-    },
-    sectionHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    seeAllButton: {
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 8,
-      alignSelf: 'flex-start',
-      minWidth: 'auto',
-      width: 'auto',
-    },
-    seeAllButtonText: {
-      color: theme.colors.primary,
-      fontSize: 16,
-      fontWeight: '600',
-      textAlign: 'center',
-    },
-    servicesScroll: {
-      marginHorizontal: -24, // To counteract parent padding
-      paddingHorizontal: 24,
-    },
-    modalServicesGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 16,
-      justifyContent: 'center',
-      padding: 16,
-    },
-  });
-
-  const handleContactPress = () => {
-    // Check if conversation already exists
-    const existingConversation = mockConversations.find(
-      conv => conv.professionalId === professionalData.id
-    );
-
-    if (existingConversation) {
-      // Use replace instead of navigate to avoid navigation stack issues
-      navigation.replace('MessageHistory', {
-        selectedConversation: existingConversation.id
-      });
-    } else {
-      // Create new conversation
-      const newConversation = {
-        id: `conv_${Date.now()}`,
-        name: professionalData.name,
-        professionalId: professionalData.id,
-        lastMessage: '',
-        timestamp: new Date().toISOString(),
-        unread: false,
-        bookingStatus: null
-      };
-
-      // Add new conversation to mockConversations
-      mockConversations.unshift(newConversation);
-
-      // Initialize empty messages array for this conversation
-      mockMessages[newConversation.id] = [];
-
-      // Use replace instead of navigate
-      navigation.replace('MessageHistory', {
-        selectedConversation: newConversation.id
-      });
-    }
-  };
-
-  // Create dynamic styles that account for sidebar
-  const createStyles = (screenWidth, isCollapsed) => StyleSheet.create({
-    mainContainer: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-      height: Platform.OS === 'web' ? '100vh' : '100%',
-      overflow: 'hidden',
-      position: Platform.OS === 'web' ? 'fixed' : 'relative',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      marginLeft: screenWidth > 900 ? (isCollapsed ? 70 : 250) : 0,
-      transition: Platform.OS === 'web' ? 'margin-left 0.3s ease' : undefined,
-    },
-    dynamicProfileSection: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      alignItems: 'center',
-      width: '100%',
-      display: windowWidth >= 600 ? 'flex' : 'block',
-    },
-    dynamicProfileSectionMobile: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      alignItems: 'center',
-      width: '100%',
-      maxWidth: 500,
-      alignSelf: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-    },
-    dynamicServicesBox: {
-      backgroundColor: theme.colors.surface,
-      padding: 24,
-      paddingTop: 0,
-      borderRadius: 12,
-      marginTop: 24,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 3,
-      width: '100%',
-      maxWidth: Platform.OS === 'web' ? 600 : undefined,
-      alignSelf: 'center',
-    },
-  });
-
-  const dynamicStyles = createStyles(screenWidth, isCollapsed);
-
-  // Add this new function to render profile section based on screen size
-  const renderProfileSection = () => {
-    if (windowWidth >= 600) {
-      // Web version - original layout
-      return (
-        <View style={[styles.leftColumn, !isWideScreen && styles.leftColumnMobile]}>
-          <View style={[styles.profileSection, !isWideScreen && styles.profileSectionMobile]}>
-            {renderProfilePhoto()}
-            <Text style={styles.name}>{professionalData.name}</Text>
-            <Text style={styles.location}>{professionalData.location}</Text>
-            {renderRatingStars()}
-            <TouchableOpacity style={styles.contactButton} onPress={handleContactPress}>
-              <Text style={styles.contactButtonText}>Contact {professionalData.name}</Text>
-            </TouchableOpacity>
-          </View>
-          {isWideScreen && renderAvailability()}
-          {isWideScreen && renderMap()}
-          {isWideScreen && mockPets && mockPets.length > 0 && renderPets()}
-        </View>
-      );
-    } else {
-      // Mobile version - fixed layout
-      return (
-        <View style={[dynamicStyles.dynamicProfileSection, dynamicStyles.dynamicProfileSectionMobile]}>
-          {renderProfilePhoto()}
-          <Text style={styles.name}>{professionalData.name}</Text>
-          <Text style={styles.location}>{professionalData.location}</Text>
-          {renderRatingStars()}
-          <TouchableOpacity style={styles.contactButton} onPress={handleContactPress}>
-            <Text style={styles.contactButtonText}>Contact {professionalData.name}</Text>
+        {/* Contact Button */}
+        <View style={styles.contactSection}>
+          <TouchableOpacity 
+            style={[styles.contactButton, isCreatingConversation && styles.contactButtonDisabled]} 
+            onPress={handleCreateConversation}
+            disabled={isCreatingConversation}
+          >
+            {isCreatingConversation ? (
+              <View style={styles.contactButtonContent}>
+                <ActivityIndicator size="small" color={theme.colors.whiteText} />
+                <Text style={[styles.contactButtonText, { marginLeft: 8 }]}>Creating conversation...</Text>
+              </View>
+            ) : (
+              <>
+                <MaterialCommunityIcons name="message" size={20} color={theme.colors.whiteText} />
+                <Text style={styles.contactButtonText}>Contact {professional?.name}</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
-      );
-    }
-  };
 
-  return (
-    <View style={dynamicStyles.mainContainer}>
-      <CrossPlatformView fullWidthHeader={true} contentWidth="1200px">
-        <BackHeader 
-          title="Professional Profile" 
-          onBackPress={handleBack}
-        />
-        <ScrollView contentContainerStyle={styles.scrollViewContent}>
-          <View style={[styles.content, { width: getContentWidth() }]}>
-            <View style={[styles.twoColumnLayout, !isWideScreen && styles.singleColumnLayout]}>
-              {renderProfileSection()}
-              <View style={styles.rightColumn}>
-                {/* TODO: Add back after MVP launch */}
-                {/* {renderGallery()} */}
-                {renderServices()}
-                {!isWideScreen && renderAvailability()}
-                {renderSpecialistExperience()}
-                {renderReviews()}
-                {renderHomeSection()}
-                {!isWideScreen && renderMap()}
-              </View>
-            </View>
-          </View>
-        </ScrollView>
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'services' && styles.activeTab]}
+            onPress={() => setActiveTab('services')}
+          >
+            <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>
+              Services ({services.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
+            onPress={() => setActiveTab('reviews')}
+          >
+            <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>
+              Reviews ({reviewCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Bio Modal */}
-        <Modal
-          visible={bioModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setBioModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles2.modalContent}>
-              <Text style={styles.bioText}>{professionalData.bio}</Text>
-              <TouchableOpacity 
-                style={styles.closeButton}
-                onPress={() => setBioModalVisible(false)}
-              >
-                <Text style={styles.closeButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Reviews Modal */}
-        <Modal
-          visible={reviewsModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setReviewsModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles2.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>All Reviews</Text>
-                <TouchableOpacity 
-                  style={styles.modalCloseIcon}
-                  onPress={() => setReviewsModalVisible(false)}
-                >
-                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView 
-                style={styles.modalScroll}
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                {mockReviews.map((review) => (
-                  <View key={review.id} style={styles.modalReviewItem}>
-                    {renderReview(review)}
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Specialist Experience Modal */}
-        <Modal
-          visible={specialistModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setSpecialistModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles2.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Specialist Experience</Text>
-                <TouchableOpacity 
-                  style={styles.modalCloseIcon}
-                  onPress={() => setSpecialistModalVisible(false)}
-                >
-                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView 
-                style={styles.modalScroll}
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                <Text style={styles.bioText}>{professionalData?.bio}</Text>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Services Modal */}
-        <Modal
-          visible={servicesModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setServicesModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles2.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>All Services</Text>
-                <TouchableOpacity 
-                  style={styles.modalCloseIcon}
-                  onPress={() => setServicesModalVisible(false)}
-                >
-                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView 
-                style={styles.modalScroll}
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                <View style={styles.modalServicesGrid}>
-                  {mockServicesForCards.map(service => (
-                    <ServiceCard 
-                      key={service.id}
-                      service={service}
-                      onHeartPress={toggleFavorite}
-                      isFavorite={favoriteServices.includes(service.id)}
-                      professionalName={professionalData.name}
-                      professionalId={professionalData.id}
-                      navigation={navigation}
-                    />
-                  ))}
+        {/* Tab Content */}
+        <View style={styles.tabContent}>
+          {activeTab === 'services' && (
+            <View style={styles.servicesGrid}>
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                  <Text style={styles.loadingText}>Loading services...</Text>
                 </View>
-              </ScrollView>
+              ) : error ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{error}</Text>
+                  <TouchableOpacity style={styles.retryButton} onPress={fetchServices}>
+                    <Text style={styles.retryText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : services.length > 0 ? (
+                services.map(renderServiceCard)
+              ) : (
+                <View style={styles.emptyState}>
+                  <MaterialCommunityIcons name="briefcase-outline" size={60} color={theme.colors.secondary} />
+                  <Text style={styles.emptyStateText}>No services available</Text>
+                </View>
+              )}
             </View>
+          )}
+
+          {activeTab === 'reviews' && (
+            <View style={styles.reviewsGrid}>
+              {loadingReviews ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                  <Text style={styles.loadingText}>Loading reviews...</Text>
+                </View>
+              ) : reviews.length > 0 ? (
+                reviews.slice(0, 6).map(renderReviewCard)
+              ) : (
+                <View style={styles.emptyState}>
+                  <MaterialCommunityIcons name="star-outline" size={60} color={theme.colors.secondary} />
+                  <Text style={styles.emptyStateText}>No reviews yet</Text>
+                </View>
+              )}
+              
+              {reviews.length > 6 && (
+                <TouchableOpacity style={styles.viewAllButton} onPress={handleOpenReviewsModal}>
+                  <Text style={styles.viewAllText}>View All Reviews</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Error Modal */}
+      <Modal
+        visible={showErrorModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowErrorModal(false);
+        }}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowErrorModal(false);
+          }}
+        >
+          <View style={styles.errorModalContent}>
+            <Text style={styles.errorModalTitle}>Error</Text>
+            <Text style={styles.errorModalText}>{errorMessage}</Text>
+            <TouchableOpacity 
+              style={styles.errorModalButton}
+              onPress={() => {
+                setShowErrorModal(false);
+              }}
+            >
+              <Text style={styles.errorModalButtonText}>OK</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
-      </CrossPlatformView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Reviews Modal */}
+      <ReviewsModal
+        visible={showReviewsModal}
+        onClose={handleCloseReviewsModal}
+        reviews={reviews}
+        averageRating={averageRating}
+        reviewCount={reviewCount}
+        userName={professional?.name}
+        forProfessional={true}
+      />
+
+      {/* Service Rates Modal */}
+      <Modal
+        visible={showServiceRatesModal}
+        transparent
+        animationType="slide"
+        onRequestClose={closeServiceRatesModal}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeServiceRatesModal}
+        >
+          <View style={styles.serviceRatesModalContent}>
+            <TouchableOpacity 
+              style={styles.modalCloseButton}
+              onPress={closeServiceRatesModal}
+            >
+              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+            
+            {selectedServiceForRates && (
+              <>
+                <Text style={styles.serviceModalTitle}>{selectedServiceForRates.service_name}</Text>
+                <Text style={styles.serviceModalDescription}>{selectedServiceForRates.description}</Text>
+                
+                <View style={styles.ratesSection}>
+                  <Text style={styles.ratesSectionTitle}>Pricing Details</Text>
+                  
+                  {/* Base Rate */}
+                  <View style={styles.rateRow}>
+                    <Text style={styles.rateLabel}>Base Rate</Text>
+                    <Text style={styles.rateValue}>${selectedServiceForRates.base_rate}/{BACKEND_TO_FRONTEND_TIME_UNIT[selectedServiceForRates.unit_of_time] || selectedServiceForRates.unit_of_time}</Text>
+                  </View>
+                  
+                  {/* Additional Animal Rate */}
+                  {parseFloat(selectedServiceForRates.additional_animal_rate) > 0 && (
+                    <View style={[
+                      styles.rateRow,
+                      selectedServiceForRates.additional_rates && selectedServiceForRates.additional_rates.length > 0 && 
+                      selectedServiceForRates.holiday_rate && selectedServiceForRates.holiday_rate !== "0.00%" && selectedServiceForRates.holiday_rate !== "$0.00"
+                        ? {} : styles.lastRateRow
+                    ]}>
+                      <View style={styles.additionalRateInfo}>
+                        <Text style={styles.rateLabel}>Additional Animal</Text>
+                        <Text style={styles.rateDescription}>Applies after {selectedServiceForRates.applies_after} animal{selectedServiceForRates.applies_after !== 1 ? 's' : ''}</Text>
+                      </View>
+                      <Text style={styles.rateValue}>+${selectedServiceForRates.additional_animal_rate}/{BACKEND_TO_FRONTEND_TIME_UNIT[selectedServiceForRates.unit_of_time] || selectedServiceForRates.unit_of_time}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Holiday Rate */}
+                  {selectedServiceForRates.holiday_rate && selectedServiceForRates.holiday_rate !== "0.00%" && selectedServiceForRates.holiday_rate !== "$0.00" && (
+                    <View style={[
+                      styles.rateRow,
+                      selectedServiceForRates.additional_rates && selectedServiceForRates.additional_rates.length > 0
+                        ? {} : styles.lastRateRow
+                    ]}>
+                      <Text style={styles.rateLabel}>Holiday Rate</Text>
+                      <Text style={styles.rateValue}>
+                        {selectedServiceForRates.holiday_rate_is_percent ? 
+                          `+${selectedServiceForRates.holiday_rate}` : 
+                          `+${selectedServiceForRates.holiday_rate}`}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Additional Rates */}
+                  {selectedServiceForRates.additional_rates && selectedServiceForRates.additional_rates.length > 0 && (
+                    <>
+                      <Text style={styles.additionalRatesTitle}>Additional Rates</Text>
+                      {selectedServiceForRates.additional_rates.map((rate, index) => (
+                        <View key={index} style={[
+                          styles.rateRow,
+                          index === selectedServiceForRates.additional_rates.length - 1 ? styles.lastRateRow : {}
+                        ]}>
+                          <View style={styles.additionalRateInfo}>
+                            <Text style={styles.rateLabel}>{rate.title}</Text>
+                            <Text style={styles.rateDescription}>{rate.description}</Text>
+                          </View>
+                          <Text style={styles.rateValue}>+${rate.rate}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </View>
+                
+                <View style={styles.serviceModalFooter}>
+                  <View style={styles.animalTypesContainer}>
+                    {selectedServiceForRates.animal_types && Object.keys(selectedServiceForRates.animal_types).length > 2 ? 
+                      formatAnimalTypes(selectedServiceForRates.animal_types, true, () => showAnimalTypes(selectedServiceForRates.animal_types)) :
+                      <Text style={styles.animalTypesModal}>{formatAnimalTypes(selectedServiceForRates.animal_types)}</Text>
+                    }
+                  </View>
+                  {selectedServiceForRates.is_overnight && (
+                    <View style={styles.overnightBadge}>
+                      <Text style={styles.overnightText}>Overnight</Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Animal Types Modal */}
+      <Modal
+        visible={showAnimalTypesModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAnimalTypesModal}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeAnimalTypesModal}
+        >
+          <View style={styles.animalTypesModalContent}>
+            <TouchableOpacity 
+              style={styles.modalCloseButton}
+              onPress={closeAnimalTypesModal}
+            >
+              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+            
+            {selectedAnimalTypes && (
+              <>
+                <Text style={styles.animalTypesModalTitle}>Supported Animals</Text>
+                <ScrollView style={styles.animalTypesScrollContainer} showsVerticalScrollIndicator={true}>
+                  <View style={styles.animalTypesList}>
+                    {Object.entries(selectedAnimalTypes).map(([animal, category], index) => (
+                      <View key={index} style={styles.animalTypeItem}>
+                        <Text style={styles.animalTypeName}>{animal}</Text>
+                        <Text style={styles.animalTypeCategory}>{category}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  scrollViewContent: {
-    flexGrow: 1,
-    paddingBottom: Platform.OS === 'web' ? 16 : 80,
-    height: Platform.OS === 'web' ? 'calc(100vh - 124px)' : '100%',
-    overflow: 'auto',
-  },
-  content: {
-    alignSelf: 'center',
-    padding: 24,
-  },
-  topSection: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    gap: 24,
-    marginBottom: 24,
-  },
-  gallerySection: {
-    maxHeight: 400,
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    maxHeight: 320,
-    overflow: 'auto',
-  },
-  bottomSection: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    gap: 24,
-  },
-  servicesSection: {
-    flex: Platform.OS === 'web' ? 1 : undefined,
+  fullContainer: {
+    flex: 1,
     backgroundColor: theme.colors.background,
-    padding: 24,
-    borderRadius: 12,
+    width: '100%',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: theme.colors.surface,
+    zIndex: 10,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  aboutSection: {
-    maxHeight: 300,
-    overflow: 'auto',
-    marginBottom: 24,
-    padding: 16,
+  shareButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
     backgroundColor: theme.colors.surface,
-    borderRadius: 12,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  profileHeader: {
-    alignItems: Platform.OS === 'web' ? 'flex-start' : 'center',
+  shareButtonDisabled: {
+    opacity: 0.7,
   },
-  profileInfo: {
-    alignItems: Platform.OS === 'web' ? 'flex-start' : 'center',
-  },
-  hostingSection: {
-    marginTop: 24,
-  },
-  hostTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    fontFamily: theme.fonts.header.fontFamily,
-  },
-  weightRanges: {
-    gap: 8,
-  },
-  weightRange: {
-    fontSize: 16,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  galleryPhoto: {
-    width: Platform.OS === 'web' ? 100 : 50,
-    height: Platform.OS === 'web' ? 100 : 50,
-    borderRadius: 8,
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    width: '100%',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  profilePhoto: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 16,
-    alignSelf: 'center',
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: theme.colors.text,
   },
-  profilePhotoPlaceholder: {
+  
+  // Profile Header
+  profileHeader: {
     backgroundColor: theme.colors.surface,
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  profileImageContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: theme.colors.primary,
+  },
+  profileImagePlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    borderWidth: 3,
+    borderColor: theme.colors.primary,
   },
-  name: {
+  eliteBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: theme.colors.background,
+    borderRadius: 15,
+    padding: 4,
+    borderWidth: 2,
+    borderColor: theme.colors.surface,
+  },
+  profileInfo: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileName: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: theme.colors.text,
+    marginBottom: 8,
     textAlign: 'center',
-    fontFamily: theme.fonts.header.fontFamily,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   location: {
     fontSize: 16,
     color: theme.colors.secondary,
-    marginBottom: 8,
-    textAlign: 'center',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  section: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: theme.colors.primary,
-    fontFamily: theme.fonts.header.fontFamily,
-  },
-  bioInput: {
-    backgroundColor: theme.colors.surface,
-  },
-  service: {
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  rateItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  rateLabel: {
-    flex: 1,
-    fontSize: 16,
-  },
-  rateInput: {
-    flex: 1,
-    backgroundColor: theme.colors.surface,
-  },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  petPhoto: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: theme.colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  addPhotoButton: {
-    width: 100,
-    height: 100,
-    margin: 5,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButton: {
-    margin: 20,
+    marginLeft: 4,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: theme.colors.background,
+    borderRadius: 20,
   },
   rating: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 5,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginLeft: 4,
   },
-  reviewCount: {
+  reviewCountText: {
     fontSize: 14,
     color: theme.colors.secondary,
     marginLeft: 4,
   },
-  contactButton: {
-    backgroundColor: theme.colors.primary,
-    padding: 12,
-    borderRadius: 8,
-    alignSelf: 'center',
-  },
-  contactButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.surface,
-    textAlign: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  statText: {
-    fontSize: 16,
-    marginLeft: 5,
-  },
-  bioText: {
-    fontSize: 18,
-    lineHeight: 28,
-    color: theme.colors.text,
-    overflow: 'hidden',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  serviceItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  serviceText: {
-    fontSize: 8,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  servicePrice: {
+  noReviewsText: {
     fontSize: 14,
     color: theme.colors.secondary,
-    fontFamily: theme.fonts.regular.fontFamily,
+    fontStyle: 'italic',
   },
-  skillsGrid: {
+  badgesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
   },
-  skillBadge: {
-    backgroundColor: theme.colors.surface,
-    padding: 10,
-    borderRadius: 5,
-    margin: 5,
-  },
-  skillText: {
-    fontSize: 16,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  photoGallery: {
+  badge: {
     flexDirection: 'row',
-  },
-  calculatorText: {
-    fontSize: 16,
-    color: theme.colors.secondary,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  additionalRatesButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: theme.colors.surface,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.outline,
-  },
-  additionalRatesText: {
-    color: theme.colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  calendarSection: {
-    marginTop: 24,
-  },
-  readMoreButton: {
-    marginTop: 8,
-  },
-  readMoreText: {
-    color: theme.colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  reviewsSection: {
-    marginVertical: 32,
-    width: '100%',
     backgroundColor: theme.colors.background,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
-  reviewItem: {
-    marginBottom: 16,
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
+    color: theme.colors.text,
+  },
+  
+  // Contact Section
+  contactSection: {
+    padding: 20,
     backgroundColor: theme.colors.surface,
+  },
+  contactButton: {
+    backgroundColor: theme.colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
-    maxWidth: Platform.OS === 'web' ? 600 : undefined,
-  },
-  servicesSection: {
-    backgroundColor: theme.colors.surface,
-    padding: 24,
-    borderRadius: 12,
+    maxWidth: 300,
+    alignSelf: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    marginBottom: 24,
   },
-  mapContainer: {
-    height: 400,
-    width: '100%',
-    marginVertical: 24,
+  contactButtonDisabled: {
+    backgroundColor: theme.colors.secondary,
+    opacity: 0.7,
   },
-  map: {
-    flex: 1,
-  },
-  petsSection: {
-    marginBottom: 24,
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderRadius: 12,
-  },
-  petItem: {
+  contactButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
   },
-  petInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  petName: {
+  contactButtonText: {
+    color: theme.colors.whiteText,
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 2,
-    fontFamily: theme.fonts.header.fontFamily,
+    marginLeft: 8,
   },
-  petBreed: {
-    fontSize: 14,
-    color: theme.colors.secondary,
-    marginBottom: 2,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  petDetails: {
-    fontSize: 14,
-    color: theme.colors.secondary,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  aboutSubsections: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    gap: 24,
-  },
-  communicationSection: {
-    flex: 1,
-  },
-  skillsSection: {
-    flex: 1,
-  },
-  homeDetails: {
+  
+  // Tabs
+  tabsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 20,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: theme.colors.primary,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.secondary,
+  },
+  activeTabText: {
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  
+  // Tab Content
+  tabContent: {
+    flex: 1,
+    padding: 20,
+  },
+  
+  // Services Grid
+  servicesGrid: {
     gap: 16,
   },
-  noReviews: {
-    fontSize: 16,
-    color: theme.colors.secondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 16,
-  },
-  twoColumnLayout: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  singleColumnLayout: {
-    flexDirection: 'column',
-  },
-  leftColumn: {
-    flex: Platform.OS === 'web' ? 1 : undefined,
-    maxWidth: Platform.OS === 'web' ? 400 : undefined,
-  },
-  rightColumn: {
-    flex: Platform.OS === 'web' ? 2 : undefined,
-  },
-  calendar: {
-    height: 300,
-    marginTop: 16,
-  },
-  serviceText: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular.fontFamily,
-    fontWeight: '100',
-  },
-  homeFeaturesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 16,
-  },
-  featureBubble: {
+  serviceCard: {
     backgroundColor: theme.colors.surface,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.outline,
-  },
-  featureText: {
-    fontSize: 14,
-    color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  reviewItem: {
-    marginBottom: 24,
-    backgroundColor: theme.colors.surface,
-    padding: 16,
     borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  reviewHeader: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  reviewerPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  reviewerInfo: {
-    flex: 1,
-  },
-  reviewerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-    fontFamily: theme.fonts.header.fontFamily,
-  },
-  serviceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  reviewText: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 16,
-    fontFamily: theme.fonts.header.fontFamily,
-  },
-  modalScroll: {
-    maxHeight: Platform.OS === 'web' ? '70vh' : '80%',
-  },
-  closeButton: {
-    marginTop: 16,
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 8,
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: theme.fonts.regular.fontFamily,
-  },
-  modalHeader: {
+  serviceCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
-  modalCloseIcon: {
-    padding: 8,
-  },
-  modalScrollContent: {
-    paddingBottom: 24,
-  },
-  modalContainer: {
+  serviceName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
     flex: 1,
+  },
+  servicePrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  serviceDescription: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  serviceFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  serviceFooterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  animalTypesContainer: {
+    flex: 1,
+  },
+  animalTypes: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    fontStyle: 'italic',
+  },
+  clickableAnimalTypes: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    fontStyle: 'italic',
+  },
+  moreAnimalsLink: {
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  overnightBadge: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  overnightText: {
+    color: theme.colors.whiteText,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  viewRatesText: {
+    fontSize: 12,
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  
+  // Reviews Grid
+  reviewsGrid: {
+    gap: 16,
+  },
+  reviewCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reviewerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  reviewerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: Platform.OS === 'web' ? 40 : 20,
+    marginRight: 12,
   },
-  reviewsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginTop: 16,
+  reviewerImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
-  reviewItem: {
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderRadius: 12,
+  reviewerDetails: {
     flex: 1,
-    minWidth: Platform.OS === 'web' ? 300 : '100%',
-    // maxWidth: Platform.OS === 'web' ? 'calc(50% - 8px)' : undefined,
-    marginBottom: 0, // Remove default margin since we're using gap
   },
-  specialistSection: {
-    marginTop: 24,
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderRadius: 12,
-  },
-  specialistText: {
-    fontSize: 16,
-    lineHeight: 24,
+  reviewerName: {
+    fontSize: 14,
+    fontWeight: '600',
     color: theme.colors.text,
-    fontFamily: theme.fonts.regular.fontFamily,
+    marginBottom: 4,
   },
-  modalReviewItem: {
-    marginBottom: 16,
-    width: '100%',
+  reviewDate: {
+    fontSize: 12,
+    color: theme.colors.secondary,
   },
-  leftColumnMobile: {
-    maxWidth: '100%',
+  reviewText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  reviewService: {
+    fontSize: 12,
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  
+  // Stars
+  starsContainer: {
+    flexDirection: 'row',
+  },
+  starIcon: {
+    marginRight: 2,
+  },
+  
+  // Empty States
+  emptyState: {
     alignItems: 'center',
+    paddingVertical: 40,
   },
-  seeAllButton: {
+  emptyStateText: {
+    fontSize: 16,
+    color: theme.colors.secondary,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  
+  // Loading/Error States
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  errorText: {
+    fontSize: 16,
+    color: theme.colors.error,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: theme.colors.whiteText,
+    fontWeight: '500',
+  },
+  
+  // View All Button
+  viewAllButton: {
+    backgroundColor: theme.colors.background,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
     borderWidth: 1,
     borderColor: theme.colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    minWidth: 'auto',
-    width: 'auto',
   },
-  seeAllButtonText: {
+  viewAllText: {
     color: theme.colors.primary,
     fontSize: 16,
     fontWeight: '600',
-    textAlign: 'center',
-    fontFamily: theme.fonts.regular.fontFamily,
   },
-  modalServicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
+  
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    padding: 16,
-  },
-  reviewMeta: {
-    gap: 4,
-  },
-  starContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    padding: 20,
+  },
+  errorModalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 20,
+    minWidth: 280,
+    alignItems: 'center',
+  },
+  errorModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  errorModalText: {
+    fontSize: 16,
+    color: theme.colors.secondary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  errorModalButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  errorModalButtonText: {
+    color: theme.colors.whiteText,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Service Rates Modal
+  serviceRatesModalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    position: 'relative',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: theme.colors.background,
+    zIndex: 1,
+  },
+  serviceModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  serviceModalDescription: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  ratesSection: {
+    marginBottom: 20,
+  },
+  ratesSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  rateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  lastRateRow: {
+    borderBottomWidth: 0,
+  },
+  rateLabel: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  rateValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  additionalRatesTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  additionalRateInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  rateDescription: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    marginTop: 2,
+  },
+  serviceModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  animalTypesModal: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    fontStyle: 'italic',
+  },
+  
+  // Animal Types Modal
+  animalTypesModalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 24,
+    width: '80%',
+    maxWidth: 300,
+    maxHeight: '60%',
+    position: 'relative',
+  },
+  animalTypesModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 16,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  animalTypesScrollContainer: {
+    flex: 1,
+    maxHeight: 300, // Limit height to ensure scrolling works
+  },
+  animalTypesList: {
+    gap: 12,
+    paddingBottom: 10, // Add some bottom padding for better scroll experience
+  },
+  animalTypeItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.background,
+    borderRadius: 8,
+  },
+  animalTypeName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+    flex: 1,
+  },
+  animalTypeCategory: {
+    fontSize: 12,
+    color: theme.colors.secondary,
+    fontStyle: 'italic',
   },
 });
 
