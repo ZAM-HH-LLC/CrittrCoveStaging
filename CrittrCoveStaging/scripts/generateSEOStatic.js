@@ -60,19 +60,19 @@ const seoPages = [
   {
     path: '/dog-walker-colorado-springs',
     title: 'Dog Walker Colorado Springs | Professional Pet Care | CrittrCove',
-    description: 'Find trusted dog walkers in Colorado Springs. Professional pet care services for your furry friends. Book reliable local dog walking today.',
+    description: 'Connect with dog walkers in Colorado Springs who offer dog walking and exercise services. Book and pay securely for reliable pet care.',
     keywords: 'dog walker colorado springs, dog walking services, pet care, dog professionals, professional dog walkers'
   },
   {
     path: '/cat-sitting-colorado-springs',
     title: 'Cat Sitting Colorado Springs | In-Home Pet Care | CrittrCove',
-    description: 'Professional cat sitting services in Colorado Springs. In-home pet care for your feline friends. Book trusted local cat professionals today.',
+    description: 'Connect with cat sitters in Colorado Springs who offer in-home cat sitting and care services. Book and pay securely for your feline friends.',
     keywords: 'cat sitting colorado springs, cat professional, in-home pet care, cat care services, professional cat professionals'
   },
   {
     path: '/exotic-pet-care-colorado-springs',
     title: 'Exotic Pet Care Colorado Springs | Specialized Pet Services | CrittrCove',
-    description: 'Specialized exotic pet care in Colorado Springs. Professional care for birds, reptiles, ferrets, and other exotic pets. Book trusted local exotic pet professionals.',
+    description: 'Connect with exotic pet sitters in Colorado Springs who offer specialized care for reptiles, birds, ferrets, and other exotic pets. Book and pay securely.',
     keywords: 'exotic pet care colorado springs, bird professional, reptile care, ferret professional, specialized pet care'
   },
   {
@@ -385,9 +385,10 @@ const generateHTMLTemplate = (page, buildFiles) => {
 <head>
     <meta charset="utf-8" />
     <link rel="icon" href="/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="${page.description}" />

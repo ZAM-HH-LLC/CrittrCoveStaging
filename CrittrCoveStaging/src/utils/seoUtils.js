@@ -149,7 +149,7 @@ export const seoConfigs = {
   },
   dogWalker: {
     title: "Dog Walker Colorado Springs | Professional Pet Walking | CrittrCove", 
-    description: "Professional dog walking services in Colorado Springs. Reliable pet walkers for daily exercise and care. Book trusted dog walkers in your neighborhood today.",
+    description: "Professional dog walking services in Colorado Springs. Reliable pet walkers for daily exercise and care. Book dog walkers in your neighborhood today.",
     keywords: "dog walker colorado springs, pet walking, dog exercise, professional dog walkers, pet care services"
   },
   catSitting: {

@@ -8,11 +8,11 @@ const DogWalkerColoradoSprings = () => {
   const introContent = (
     <View style={styles.introContent}>
       <Text style={styles.introText}>
-        Professional dog walking services in Colorado Springs. Connect with trusted local dog walkers who provide 
+        Professional dog walking services in Colorado Springs. Connect with local 5-star dog walkers who provide 
         reliable exercise and companionship for your furry friend while you're at work or away.
       </Text>
       <Text style={styles.introText}>
-        Our vetted dog walkers in Colorado Springs offer flexible scheduling, GPS tracking, and detailed walk reports 
+        Our dog walkers in Colorado Springs offer flexible scheduling, GPS tracking, and detailed walk reports 
         to keep you connected with your pet's daily exercise routine.
       </Text>
     </View>
