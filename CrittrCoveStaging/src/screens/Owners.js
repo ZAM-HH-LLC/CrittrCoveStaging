@@ -4,7 +4,7 @@ import { Chip, Card, Title, Paragraph, Button, Portal, Modal, useTheme } from 'r
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import SearchBar from '../components/SearchBar';
-import { mockOwners } from '../data/mockData';
+// import { mockOwners } from '../data/mockData';
 
 const Owners = ({ navigation }) => {
   const { colors } = useTheme();
@@ -21,7 +21,7 @@ const Owners = ({ navigation }) => {
   const fetchOwners = async () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      setOwners(mockOwners);
+      // setOwners(mockOwners);
     } catch (error) {
       console.error('Error fetching owners:', error);
     }
