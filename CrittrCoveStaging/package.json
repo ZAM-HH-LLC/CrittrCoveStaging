@@ -9,7 +9,7 @@
     "web:prod": "NODE_ENV=production npx expo start --web",
     "build": "NODE_ENV=staging npx expo export:web && npm run postbuild",
     "postbuild": "node scripts/generateSEOStatic.js && npm run copy-favicons",
-    "copy-favicons": "cp public/android-chrome-192x192.png web-build/ && cp public/android-chrome-512x512.png web-build/ && cp public/apple-touch-icon.png web-build/ && cp public/site.webmanifest web-build/ && cp public/android-chrome-192x192.png web/ && cp public/android-chrome-512x512.png web/ && cp public/apple-touch-icon.png web/ && cp public/site.webmanifest web/",
+    "copy-favicons": "cp public/favicon.ico web-build/ && cp public/android-chrome-192x192.png web-build/ && cp public/android-chrome-512x512.png web-build/ && cp public/apple-touch-icon.png web-build/ && cp public/site.webmanifest web-build/ && cp public/favicon.ico web/ && cp public/android-chrome-192x192.png web/ && cp public/android-chrome-512x512.png web/ && cp public/apple-touch-icon.png web/ && cp public/site.webmanifest web/",
     "clean-worktree": "git worktree remove -f gh-pages || true && rm -rf gh-pages",
     "deploy": "npm run clean-worktree && git worktree add gh-pages gh-pages && rm -rf gh-pages/* && cp -r web-build/* gh-pages/ && cp ../CNAME gh-pages/ && cd gh-pages && git add . && git commit -m \"Deploy to gh-pages\" && git pull origin gh-pages --rebase || true && git push origin gh-pages && cd .. && git worktree remove -f gh-pages || true",
     "deploy:full": "npm run build && npm run deploy",
