@@ -92,6 +92,9 @@ urlpatterns = [
         path('interaction-logs/', include('interaction_logs.urls')),
         path('error-logs/', include('error_logs.urls')),
         path('engagement-logs/', include('engagement_logs.urls')),
+        
+        # Analytics
+        path('blog-analytics/', include('blog_analytics.urls')),
     ])),
 ]
 

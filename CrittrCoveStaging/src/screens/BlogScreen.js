@@ -15,6 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import BackHeader from '../components/BackHeader';
 import { theme } from '../styles/theme';
 import { navigateToFrom } from '../components/Navigation';
+import ColoradoSpringsCTA from '../components/ColoradoSpringsCTA';
 
 const BlogScreen = ({ navigation }) => {
   const theme = useTheme();
@@ -132,6 +133,9 @@ const BlogScreen = ({ navigation }) => {
         )}
       </View>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Call-to-Action for Colorado Springs users */}
+        <ColoradoSpringsCTA navigation={navigation} variant="compact" />
+        
         {filteredPosts.length > 0 ? (
           filteredPosts.map(renderBlogPost)
         ) : (

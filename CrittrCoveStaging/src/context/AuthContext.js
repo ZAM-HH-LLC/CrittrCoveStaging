@@ -1743,12 +1743,6 @@ export const AuthProvider = ({ children }) => {
           const timeUntilExpiry = authService.current.getTimeUntilExpiry(token);
           const shouldRefresh = authService.current.shouldRefreshToken(token);
           
-          debugLog('MBAo34invid3w Token monitor check:', {
-            timeUntilExpirySeconds: Math.round(timeUntilExpiry / 1000),
-            shouldRefresh,
-            isRefreshing: authService.current.isRefreshing,
-            platform: Platform.OS
-          });
           
           if (timeUntilExpiry < 0) {
             debugLog('MBAo34invid3w TOKEN EXPIRED DETECTED in monitor');

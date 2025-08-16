@@ -1954,3 +1954,29 @@ export const getUserReviews = async (conversationId = null, professionalId = nul
   }
 };
 
+/**
+ * Track anonymous blog visitors for marketing analytics
+ * @param {Object} visitorData - Visitor location and page data
+ * @returns {Promise<Object>} - Response from the API
+ */
+export const trackBlogVisitor = async (visitorData) => {
+  try {
+    debugLog('MBA9999', 'Tracking blog visitor:', {
+      page: visitorData.page,
+      hasLocation: !!(visitorData.latitude && visitorData.longitude)
+    });
+
+    const response = await axios.post(
+      `${API_BASE_URL}/api/blog-analytics/v1/track/`,
+      visitorData
+    );
+    
+    debugLog('MBA9999', 'Blog visitor tracked successfully');
+    return response.data;
+  } catch (error) {
+    debugLog('MBA9999', 'Error tracking blog visitor (non-critical):', error.response?.data || error.message);
+    // Don't throw the error since this is non-critical tracking
+    return { status: 'error', message: 'Tracking failed' };
+  }
+};
+

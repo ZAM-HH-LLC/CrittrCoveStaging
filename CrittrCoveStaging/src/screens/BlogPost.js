@@ -16,6 +16,7 @@ import { theme } from '../styles/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BLOG_POSTS } from '../data/mockData';
 import { handleBack, navigateToFrom } from '../components/Navigation';
+import ColoradoSpringsCTA from '../components/ColoradoSpringsCTA';
 
 const BlogPost = ({ route, navigation }) => {
   const [post, setPost] = useState(null);
@@ -244,6 +245,9 @@ const BlogPost = ({ route, navigation }) => {
         <View style={styles.contentContainer}>
           {renderFormattedContent(post.content)}
         </View>
+
+        {/* Call-to-Action for Colorado Springs users */}
+        <ColoradoSpringsCTA navigation={navigation} variant="default" />
 
         {/* Engagement metrics removed - they were fake
         <View style={[styles.stats, { borderTopColor: theme.colors.border }]}>

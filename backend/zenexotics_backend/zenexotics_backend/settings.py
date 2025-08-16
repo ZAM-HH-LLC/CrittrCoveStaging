@@ -177,6 +177,7 @@ INSTALLED_APPS = [
     'error_logs',
     'engagement_logs',
     'locations',  # New app for managing city-by-city rollout
+    'blog_analytics',  # New app for blog visitor tracking
 ]
 
 MIDDLEWARE = [

@@ -45,7 +45,21 @@ export const handleBack = async (navigation) => {
         to: previousRoute 
       });
       
-      // Use platform-aware navigation
+      // Check if we're in a problematic state (page reload on web)
+      // If React Navigation can't go back, use navigateToFrom instead
+      const canGoBack = navigation && typeof navigation.canGoBack === 'function' 
+                       ? navigation.canGoBack() 
+                       : false;
+      
+      const isWebReloadScenario = Platform.OS === 'web' && !canGoBack;
+      
+      if (isWebReloadScenario) {
+        debugLog('MBA6789: handleBack - detected web reload scenario, using navigateToFrom');
+        navigateToFrom(navigation, previousRoute, currentRoute);
+        return true;
+      }
+      
+      // Use platform-aware navigation (original behavior)
       const success = platformNavigation.goBack(navigation);
       if (success) {
         await setStorage('currentRoute', previousRoute);
@@ -53,13 +67,28 @@ export const handleBack = async (navigation) => {
       
       return success;
     } else {
-      // If no previous route, go to Dashboard as fallback
-      if (currentRoute !== 'Dashboard') {
-        debugLog('MBA6789: handleBack - no previous route, going to Dashboard', { 
-          from: currentRoute 
+      // If no previous route, try platform navigation first
+      debugLog('MBA6789: handleBack - no previous route, trying platform goBack first');
+      
+      try {
+        const success = platformNavigation.goBack(navigation);
+        if (success) {
+          return true;
+        }
+      } catch (goBackError) {
+        debugLog('MBA6789: platformNavigation.goBack failed in fallback, using specific route', goBackError);
+      }
+      
+      // If platform goBack fails, navigate to appropriate fallback route
+      // Check auth context to determine if user is signed in
+      const fallbackRoute = Platform.OS === 'web' ? 'Home' : 'Dashboard';
+      if (currentRoute !== fallbackRoute) {
+        debugLog('MBA6789: handleBack - no previous route and goBack failed, going to fallback', { 
+          from: currentRoute,
+          fallback: fallbackRoute
         });
-        platformNavigation.navigateTo(navigation, 'Dashboard');
-        await setStorage('currentRoute', 'Dashboard');
+        platformNavigation.navigateTo(navigation, fallbackRoute);
+        await setStorage('currentRoute', fallbackRoute);
         return true;
       }
     }
