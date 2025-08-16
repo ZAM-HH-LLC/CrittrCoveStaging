@@ -1,13 +1,11 @@
 {
   "files": {
     "main.css": "/static/css/main.60d5a690.css",
-    "main.js": "/static/js/main.28850654.js",
-    "static/js/251.d7dc3fc9.js": "/static/js/251.d7dc3fc9.js",
+    "main.js": "/static/js/main.6a1111e3.js",
+    "static/js/766.259cdeae.js": "/static/js/766.259cdeae.js",
     "static/media/hero-image.jpg": "/static/media/hero-image.424f8a0cb7b1986d78c3.jpg",
     "og-image.jpg": "/og-image.jpg",
     "static/media/default-profile.png": "/static/media/default-profile.0695878757dbc86fae81.png",
-    "static/media/user10.png": "/static/media/user10.55bbb564f3b12d6a736e.png",
-    "static/media/user8.png": "/static/media/user8.fb62e9c497f7a3d39de8.png",
     "static/media/MaterialCommunityIcons.ttf": "/static/media/MaterialCommunityIcons.5d42b4e60858731e7b65.ttf",
     "static/media/ZEGN_USER.jpeg": "/static/media/ZEGN_USER.ab7ee48e98c0856bd407.jpeg",
     "static/media/Ionicons.ttf": "/static/media/Ionicons.9b6b1954a5eb6efeaf11.ttf",
@@ -19,13 +17,9 @@
     "static/media/FontAwesome5_Solid.ttf": "/static/media/FontAwesome5_Solid.07c3313b24f7b1ca85ee.ttf",
     "static/media/user2.png": "/static/media/user2.2356c55dbde8d97f60f2.png",
     "static/media/user3.png": "/static/media/user3.ceef543650ca617d5e9e.png",
-    "static/media/user9.png": "/static/media/user9.fdb12560d3f0a8511959.png",
     "static/media/FontAwesome.ttf": "/static/media/FontAwesome.1e59d2330b4c6deb84b3.ttf",
     "static/media/user4.png": "/static/media/user4.58378ed25cf9bc79aeb4.png",
-    "static/media/user5.png": "/static/media/user5.6e041c0f826063afc158.png",
-    "static/media/user6.png": "/static/media/user6.943d36e020756a238d35.png",
     "static/media/FontAwesome5_Brands.ttf": "/static/media/FontAwesome5_Brands.9e138496e8f1719c6ebf.ttf",
-    "static/media/user7.png": "/static/media/user7.1431674f298a9f88bd16.png",
     "static/media/default-pet-image.png": "/static/media/default-pet-image.3b5628b61ce454d19bca.png",
     "static/media/FontAwesome6_Regular.ttf": "/static/media/FontAwesome6_Regular.17a6e1aebccdbaa39e78.ttf",
     "static/media/FontAwesome5_Regular.ttf": "/static/media/FontAwesome5_Regular.1017bce89c72f95bcf8e.ttf",
@@ -45,12 +39,12 @@
     "serve.json": "/serve.json",
     "robots.txt": "/robots.txt",
     "main.60d5a690.css.map": "/static/css/main.60d5a690.css.map",
-    "main.28850654.js.map": "/static/js/main.28850654.js.map",
-    "251.d7dc3fc9.js.map": "/static/js/251.d7dc3fc9.js.map"
+    "main.6a1111e3.js.map": "/static/js/main.6a1111e3.js.map",
+    "766.259cdeae.js.map": "/static/js/766.259cdeae.js.map"
   },
   "entrypoints": [
-    "static/js/251.d7dc3fc9.js",
+    "static/js/766.259cdeae.js",
     "static/css/main.60d5a690.css",
-    "static/js/main.28850654.js"
+    "static/js/main.6a1111e3.js"
   ]
 }
