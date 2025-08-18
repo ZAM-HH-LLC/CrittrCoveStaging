@@ -55,7 +55,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ('email', 'password', 'password2', 'name', 'phone_number', 'timezone', 'use_military_time', 'invitation_token', 'how_did_you_hear', 'how_did_you_hear_other', 'terms_and_privacy_accepted_at', 'terms_and_privacy_version')
         extra_kwargs = {
             'name': {'required': True},
-            'phone_number': {'required': True}
+            'phone_number': {'required': False}
         }
 
     def validate(self, attrs):
@@ -63,6 +63,18 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"password": "Password fields didn't match."}
             )
+        
+        # Validate phone number if provided
+        phone_number = attrs.get('phone_number')
+        if phone_number:
+            import re
+            digits_only = re.sub(r'\D', '', phone_number)
+            if len(digits_only) != 10:
+                raise serializers.ValidationError({
+                    "phone_number": "Phone number must be exactly 10 digits"
+                })
+            # Store only digits
+            attrs['phone_number'] = digits_only
         
         # Validate how_did_you_hear_other when "other" is selected
         how_did_you_hear = attrs.get('how_did_you_hear')

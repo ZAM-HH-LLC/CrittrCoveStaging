@@ -5,8 +5,8 @@ from django.utils import timezone
 
 class CustomUserAdmin(UserAdmin):
     model = User
-    list_display = ('id', 'user_id', 'email', 'name', 'is_staff', 'is_active', 'is_profile_visible', 'is_deleted', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear', 'terms_and_privacy_accepted_at')
-    list_filter = ('is_staff', 'is_active', 'is_profile_visible', 'is_deleted', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear', 'terms_and_privacy_accepted_at')
+    list_display = ('id', 'user_id', 'email', 'name', 'formatted_phone_number', 'is_staff', 'is_active', 'is_profile_visible', 'is_deleted', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear', 'terms_and_privacy_accepted_at')
+    list_filter = ('is_staff', 'is_active', 'is_profile_visible', 'is_deleted', 'email_is_verified', 'subscription_plan', 'is_waitlister', 'signed_up_on_beta', 'how_did_you_hear', 'terms_and_privacy_accepted_at', 'phone_number')
     fieldsets = (
         (None, {'fields': ('id', 'user_id', 'email', 'password')}),
         ('Personal info', {'fields': ('name', 'profile_picture', 'phone_number', 'birthday')}),
@@ -23,9 +23,20 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('email', 'name', 'password1', 'password2', 'is_staff', 'is_active', 'is_profile_visible', 'is_deleted')}
         ),
     )
-    search_fields = ('id', 'email', 'name', 'user_id')
+    search_fields = ('id', 'email', 'name', 'user_id', 'phone_number')
     ordering = ('email',)
     readonly_fields = ('id', 'created_at', 'user_id')
+
+    def formatted_phone_number(self, obj):
+        if obj.phone_number:
+            # Format as (XXX) XXX-XXXX
+            import re
+            phone = re.sub(r'\D', '', obj.phone_number)
+            if len(phone) == 10:
+                return f"({phone[:3]}) {phone[3:6]}-{phone[6:]}"
+            return obj.phone_number
+        return "-"
+    formatted_phone_number.short_description = 'Phone Number'
 
 @admin.register(UserSettings)
 class UserSettingsAdmin(admin.ModelAdmin):

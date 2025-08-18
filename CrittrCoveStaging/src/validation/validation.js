@@ -739,16 +739,22 @@ export const validatePhoneNumber = (phoneNumber) => {
     };
   }
 
-  // Sanitize the phone number
-  const sanitizedPhone = sanitizeInput(phoneNumber, 'phone');
+  // Sanitize the phone number - remove all non-digit characters
+  const sanitizedPhone = phoneNumber.replace(/\D/g, '');
 
-  // Basic phone number format validation (allows various formats)
-  const phoneRegex = /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/;
-  
-  if (!phoneRegex.test(sanitizedPhone)) {
+  // Validate that it's exactly 10 digits (US phone number format)
+  if (sanitizedPhone.length !== 10) {
     return {
       isValid: false,
-      message: 'Please enter a valid phone number'
+      message: 'Phone number must be exactly 10 digits'
+    };
+  }
+
+  // Validate that it contains only digits
+  if (!/^\d{10}$/.test(sanitizedPhone)) {
+    return {
+      isValid: false,
+      message: 'Phone number must contain only digits'
     };
   }
 

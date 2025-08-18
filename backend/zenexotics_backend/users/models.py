@@ -17,6 +17,13 @@ def validate_image_file(value):
     if value.content_type not in settings.ALLOWED_IMAGE_TYPES:
         raise ValidationError('File type not supported. Please upload a valid image file.')
 
+def validate_phone_number(value):
+    if value:
+        import re
+        digits_only = re.sub(r'\D', '', value)
+        if len(digits_only) != 10:
+            raise ValidationError('Phone number must be exactly 10 digits')
+
 def user_profile_photo_path(instance, filename):
     # Get the file extension
     ext = filename.split('.')[-1]
@@ -55,7 +62,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         help_text="Profile picture for the user. Maximum size: 5MB. Allowed formats: JPEG, PNG, GIF, WebP"
     )
-    phone_number = models.CharField(max_length=20, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True, validators=[validate_phone_number])
     birthday = models.DateTimeField(null=True, blank=True)
     
     # Status fields
@@ -125,6 +132,17 @@ class User(AbstractBaseUser, PermissionsMixin):
         if not self.user_id:
             self.user_id = 'user_' + ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(9))
         super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.phone_number:
+            # Remove all non-digit characters
+            import re
+            digits_only = re.sub(r'\D', '', self.phone_number)
+            if len(digits_only) != 10:
+                raise ValidationError('Phone number must be exactly 10 digits')
+            # Store only digits
+            self.phone_number = digits_only
 
     def get_first_name(self):
         return self.name.split()[0]

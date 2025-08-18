@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { View, TextInput, Text, StyleSheet, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import axios from 'axios';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -6,7 +6,7 @@ import { theme } from '../styles/theme';
 import CustomButton from '../components/CustomButton';
 import { API_BASE_URL } from '../config/config';
 import { AuthContext, debugLog } from '../context/AuthContext'; // Import AuthContext
-import { validateEmail, validateName, validatePassword, validatePasswordMatch, sanitizeInput } from '../validation/validation';
+import { validateEmail, validateName, validatePassword, validatePasswordMatch, validatePhoneNumber, sanitizeInput } from '../validation/validation';
 import { verifyInvitation } from '../api/API';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TermsOfServiceModal from '../components/modals/TermsOfServiceModal';
@@ -22,6 +22,7 @@ export default function SignUp() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -70,8 +71,20 @@ export default function SignUp() {
   const [firstNameError, setFirstNameError] = useState('');
   const [lastNameError, setLastNameError] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [phoneNumberError, setPhoneNumberError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+
+  // Form refs for better autofill handling
+  const emailRef = useRef(null);
+  const phoneRef = useRef(null);
+  const passwordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
+  
+  // Autofill protection state
+  const [isAutofilling, setIsAutofilling] = useState(false);
+  const autofillTimeoutRef = useRef(null);
+  const lastPhoneNumberRef = useRef('');
 
   // Check for invitation token when component mounts
   useEffect(() => {
@@ -165,6 +178,31 @@ export default function SignUp() {
     checkInvitation();
   }, [route.params, route.name]);
 
+  // Handle autofill interference prevention
+  useEffect(() => {
+    // Log when phone number changes unexpectedly (potential autofill interference)
+    if (phoneNumber && phoneNumber.length > 0) {
+      debugLog('MBA7777: Phone number state updated:', phoneNumber);
+      lastPhoneNumberRef.current = phoneNumber;
+    }
+  }, [phoneNumber]);
+
+  // Protect phone number from autofill interference
+  useEffect(() => {
+    if (isAutofilling && phoneNumber && phoneNumber.length > 0) {
+      debugLog('MBA7777: Autofill protection active, preserving phone number:', phoneNumber);
+    }
+  }, [isAutofilling, phoneNumber]);
+
+  // Cleanup autofill timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autofillTimeoutRef.current) {
+        clearTimeout(autofillTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Fetch supported locations from backend
   useEffect(() => {
     const fetchLocations = async () => {
@@ -228,6 +266,11 @@ export default function SignUp() {
     setEmailError(emailValidation.message);
     if (!emailValidation.isValid) isValid = false;
     
+    // Validate phone number with sanitization
+    const phoneNumberValidation = validatePhoneNumber(phoneNumber);
+    setPhoneNumberError(phoneNumberValidation.message);
+    if (!phoneNumberValidation.isValid) isValid = false;
+    
     // Validate password with sanitization
     const passwordValidation = validatePassword(password);
     setPasswordError(passwordValidation.message);
@@ -263,6 +306,7 @@ export default function SignUp() {
       const sanitizedFirstName = sanitizeInput(firstName, 'name');
       const sanitizedLastName = sanitizeInput(lastName, 'name');
       const sanitizedEmail = sanitizeInput(email, 'email');
+      const sanitizedPhoneNumber = phoneNumber.replace(/\D/g, ''); // Only digits for phone number
       const sanitizedPassword = sanitizeInput(password, 'password');
       const sanitizedLocation = sanitizeInput(location, 'general');
       const sanitizedHowDidYouHearOther = sanitizeInput(howDidYouHearOther, 'general');
@@ -274,6 +318,8 @@ export default function SignUp() {
         sanitizedLastName,
         originalEmail: email,
         sanitizedEmail,
+        originalPhoneNumber: phoneNumber,
+        sanitizedPhoneNumber,
         originalLocation: location,
         sanitizedLocation,
         originalHowDidYouHearOther: howDidYouHearOther,
@@ -303,7 +349,7 @@ export default function SignUp() {
         email: sanitizedEmail.trim().toLowerCase(),
         password: sanitizedPassword,
         password2: confirmPassword, // Note: We don't sanitize confirm password as it needs to match exactly
-        phone_number: '', // Add empty phone number for now
+        phone_number: sanitizedPhoneNumber.trim(), // Add sanitized phone number
         location: inviteVerified ? 'Colorado Springs' : sanitizedLocation, // Use default location for invited users
         how_did_you_hear: howDidYouHear,
         how_did_you_hear_other: howDidYouHear === 'other' ? sanitizedHowDidYouHearOther.trim() : '',
@@ -447,6 +493,25 @@ export default function SignUp() {
   const handleEmailChange = (text) => {
     debugLog('MBA7777: Email input change:', text);
     
+    // Check if this might be an autofill event (sudden large change)
+    const isAutofillEvent = text.length > 0 && (Math.abs(text.length - email.length) > 3 || !email.includes(text) && !text.includes(email));
+    
+    if (isAutofillEvent) {
+      debugLog('MBA7777: Autofill event detected for email');
+      setIsAutofilling(true);
+      
+      // Clear any existing timeout
+      if (autofillTimeoutRef.current) {
+        clearTimeout(autofillTimeoutRef.current);
+      }
+      
+      // Set timeout to clear autofill mode after a short delay
+      autofillTimeoutRef.current = setTimeout(() => {
+        setIsAutofilling(false);
+        debugLog('MBA7777: Autofill mode cleared');
+      }, 1000);
+    }
+    
     // Apply real-time sanitization for emails
     const sanitizedText = sanitizeInput(text, 'email');
     
@@ -467,8 +532,61 @@ export default function SignUp() {
     setEmailError('');
   };
 
+  const handlePhoneNumberChange = useCallback((text) => {
+    debugLog('MBA7777: Phone number input change:', text);
+    
+    // If we're in autofill mode, ignore changes to prevent interference
+    if (isAutofilling) {
+      debugLog('MBA7777: Autofill mode active, ignoring phone number change');
+      return;
+    }
+    
+    // Handle autofill interference - if text is empty or null, don't clear the field
+    if (!text || text === '') {
+      debugLog('MBA7777: Empty text detected, preserving current phone number');
+      return;
+    }
+    
+    // Only allow digits for phone numbers
+    const digitsOnly = text.replace(/\D/g, '');
+    
+    // Limit to 10 digits
+    const sanitizedText = digitsOnly.substring(0, 10);
+    
+    // Only update if the sanitized text is different from current value and not empty
+    if (sanitizedText !== phoneNumber && sanitizedText !== '') {
+      debugLog('MBA7777: Updating phone number from', phoneNumber, 'to', sanitizedText);
+      setPhoneNumber(sanitizedText);
+      setPhoneNumberError('');
+      lastPhoneNumberRef.current = sanitizedText;
+    } else if (sanitizedText === '' && lastPhoneNumberRef.current !== '') {
+      // If autofill is trying to clear the field, preserve the last known value
+      debugLog('MBA7777: Autofill trying to clear phone number, preserving:', lastPhoneNumberRef.current);
+      setPhoneNumber(lastPhoneNumberRef.current);
+    }
+  }, [isAutofilling, phoneNumber]);
+
   const handlePasswordChange = (text) => {
     debugLog('MBA7777: Password input change:', text);
+    
+    // Check if this might be an autofill event (sudden large change)
+    const isAutofillEvent = text.length > 0 && (Math.abs(text.length - password.length) > 3 || !password.includes(text) && !text.includes(password));
+    
+    if (isAutofillEvent) {
+      debugLog('MBA7777: Autofill event detected for password');
+      setIsAutofilling(true);
+      
+      // Clear any existing timeout
+      if (autofillTimeoutRef.current) {
+        clearTimeout(autofillTimeoutRef.current);
+      }
+      
+      // Set timeout to clear autofill mode after a short delay
+      autofillTimeoutRef.current = setTimeout(() => {
+        setIsAutofilling(false);
+        debugLog('MBA7777: Autofill mode cleared');
+      }, 1000);
+    }
     
     // For passwords, we're more lenient with sanitization during typing
     // Full validation happens on form submission
@@ -578,7 +696,14 @@ export default function SignUp() {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.formContainer}>
           <Text style={styles.title}>Sign Up</Text>
-          <Text style={styles.subtitle}>Sign up to continue</Text>
+          <View style={styles.subtitleContainer}>
+            <View style={styles.signInLinkContainer}>
+              <Text style={styles.signInText}>Already have an account? </Text>
+              <TouchableOpacity onPress={navigateToSignIn}>
+                <Text style={styles.signInLink}>Sign in</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
           
           {verifyingInvite && (
             <View style={styles.inviteContainer}>
@@ -734,37 +859,83 @@ export default function SignUp() {
                 {lastNameError ? <Text style={styles.errorText}>{lastNameError}</Text> : null}
               </View>
               
+              
               <View style={styles.inputContainer}>
                 <TextInput
+                  ref={phoneRef}
+                  key="phone-input"
+                  name="phone"
+                  style={[styles.input, phoneNumberError ? styles.errorInput : null]}
+                  placeholder="Phone Number (10 digits)"
+                  value={phoneNumber}
+                  onChangeText={handlePhoneNumberChange}
+                  keyboardType="numeric"
+                  maxLength={10}
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  textContentType="none"
+                  blurOnSubmit={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                />
+                {phoneNumberError ? <Text style={styles.errorText}>{phoneNumberError}</Text> : null}
+              </View>
+
+              <View style={styles.inputContainer}>
+                <TextInput
+                  ref={emailRef}
+                  key="email-input"
+                  name="email"
                   style={[styles.input, emailError ? styles.errorInput : null]}
                   placeholder="Email"
                   value={email}
                   onChangeText={handleEmailChange}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
                   editable={true}
+                  blurOnSubmit={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => phoneRef.current?.focus()}
                 />
                 {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
               </View>
               
               <View style={styles.inputContainer}>
                 <TextInput
+                  ref={passwordRef}
+                  key="password-input"
+                  name="password"
                   style={[styles.input, passwordError ? styles.errorInput : null]}
                   placeholder="Password"
                   value={password}
                   onChangeText={handlePasswordChange}
                   secureTextEntry
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  blurOnSubmit={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => confirmPasswordRef.current?.focus()}
                 />
                 {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
               </View>
               
               <View style={styles.inputContainer}>
                 <TextInput
+                  ref={confirmPasswordRef}
+                  key="confirm-password-input"
+                  name="confirmPassword"
                   style={[styles.input, confirmPasswordError ? styles.errorInput : null]}
                   placeholder="Confirm Password"
                   value={confirmPassword}
                   onChangeText={handleConfirmPasswordChange}
                   secureTextEntry
+                  autoComplete="current-password"
+                  textContentType="password"
+                  blurOnSubmit={false}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSignUp}
                 />
                 {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
               </View>
@@ -800,7 +971,20 @@ export default function SignUp() {
                 {termsAndPrivacyError ? <Text style={styles.errorText}>{termsAndPrivacyError}</Text> : null}
               </View>
               
-              <CustomButton title="Sign Up" onPress={handleSignUp} style={styles.signupButton} />
+              <TouchableOpacity 
+                style={[styles.signupButton, loading && styles.signupButtonDisabled]} 
+                onPress={handleSignUp}
+                disabled={loading}
+              >
+                {loading ? (
+                  <View style={styles.buttonContent}>
+                    <ActivityIndicator size="small" color="white" style={styles.buttonLoader} />
+                    <Text style={styles.buttonText}>Signing Up...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.buttonText}>Sign Up</Text>
+                )}
+              </TouchableOpacity>
             </>
           ) : (
             /* Show waitlist button if unsupported location is selected */
@@ -819,16 +1003,7 @@ export default function SignUp() {
             </View>
           )}
           
-          {loading && <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />}
           {successMessage ? <Text style={styles.message}>{successMessage}</Text> : null}
-        </View>
-        
-        {/* Sign In Link */}
-        <View style={styles.signInContainer}>
-          <Text style={styles.signInText}>Already have an account? </Text>
-          <TouchableOpacity onPress={navigateToSignIn}>
-            <Text style={styles.signInLink}>Sign in</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
       
@@ -883,8 +1058,18 @@ const styles = StyleSheet.create({
   subtitle: {
     color: theme.colors.text,
     fontSize: 16,
-    marginBottom: 24,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  subtitleContainer: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  signInLinkContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
   },
   inputContainer: {
     width: '100%',
@@ -934,11 +1119,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   signupButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    alignItems: 'center',
     marginTop: 24,
     width: '100%',
   },
-  loader: {
-    marginTop: 20,
+  signupButtonDisabled: {
+    backgroundColor: theme.colors.border,
+    opacity: 0.7,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonLoader: {
+    marginRight: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   signInContainer: {
     flexDirection: 'row',
