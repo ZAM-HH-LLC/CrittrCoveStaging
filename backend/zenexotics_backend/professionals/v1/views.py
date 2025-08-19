@@ -22,6 +22,7 @@ import random
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Case, When, Value, IntegerField, Avg
 from reviews.models import ClientReview
+from logs.models import SearchLog, GetMatchedLog
 
 # Configure logging to print to console
 logger = logging.getLogger(__name__)
@@ -257,6 +258,8 @@ def search_professionals(request):
         # Badge filters
         filter_background_checked = data.get('filter_background_checked', False)
         filter_insured = data.get('filter_insured', False)
+        # Logging control
+        skip_logging = data.get('skip_logging', False)
         filter_elite_pro = data.get('filter_elite_pro', False)
         
         logger.debug(f"Search parameters: {data}")
@@ -827,6 +830,38 @@ def search_professionals(request):
             'search_location': used_location
         }
         
+        # Store search log in database for analytics and business intelligence
+        search_params_for_log = {
+            'animal_types': animal_types,
+            'location': location,
+            'service_query': service_query,
+            'overnight_service': overnight_service,
+            'price_min': price_min,
+            'price_max': price_max,
+            'radius_miles': radius_miles,
+            'filter_background_checked': filter_background_checked,
+            'filter_insured': filter_insured,
+            'filter_elite_pro': filter_elite_pro
+        }
+        
+        results_data_for_log = {
+            'results_found': len(final_results),
+            'has_fallback': bool(fallback_message),
+            'search_successful': len(final_results) > 0,
+            'original_query_successful': len(final_results) > 0 and not fallback_message
+        }
+        
+        # Only create search log if skip_logging is False
+        if not skip_logging:
+            try:
+                # Create search log entry (handles deduplication automatically)
+                search_log = SearchLog.create_from_search_params(request, search_params_for_log, results_data_for_log)
+                logger.debug(f"Search log created with ID: {search_log.search_id}")
+            except Exception as e:
+                logger.error(f"Failed to create search log: {str(e)}")
+        else:
+            logger.debug("Skipping search log creation due to skip_logging=True")
+        
         return Response(response_data)
 
     except Exception as e:
@@ -901,5 +936,51 @@ def get_professional_services(request, professional_id):
         logger.error(f"Error in get_professional_services: {str(e)}")
         return Response(
             {'error': 'An error occurred while fetching professional services'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def submit_get_matched_request(request):
+    """
+    Handle "get matched" requests when users can't find professionals for their search criteria.
+    This helps us understand demand for services that aren't currently available.
+    """
+    try:
+        data = request.data
+        email = data.get('email', '').strip()
+        search_query = data.get('search_query', '').strip()
+        
+        if not email:
+            return Response(
+                {'error': 'Email is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Basic email validation
+        import re
+        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_pattern, email):
+            return Response(
+                {'error': 'Invalid email format'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Store get matched request in database (handles deduplication automatically)
+            get_matched_log = GetMatchedLog.create_from_request(request, email, search_query)
+            logger.debug(f"Get matched log created with ID: {get_matched_log.id}")
+        except Exception as e:
+            logger.error(f"Failed to create get matched log: {str(e)}")
+        
+        return Response({
+            'success': True,
+            'message': 'Thank you for your interest! We will reach out when we have matching professionals in your area.'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in submit_get_matched_request: {str(e)}")
+        return Response(
+            {'error': 'An error occurred while processing your request'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

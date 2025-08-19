@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { getMediaUrl } from '../config/config';
 import { BACKEND_TO_FRONTEND_TIME_UNIT } from '../data/mockData';
 import { debugLog } from '../context/AuthContext';
+import GetMatchedModal from './GetMatchedModal';
 
 const ProfessionalCard = ({ professional, index, onPress }) => {
   // Debug log for unit_of_time mapping
@@ -135,7 +136,8 @@ const ProfessionalCard = ({ professional, index, onPress }) => {
   );
 };
 
-const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isMobile, filters, onFilterPress, searchParams = null, fallbackMessage = null }) => {
+const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isMobile, filters, onFilterPress, searchParams = null, fallbackMessage = null, onGetMatched }) => {
+  const [showGetMatchedModal, setShowGetMatchedModal] = useState(false);
   
   // Function to generate appropriate empty state message
   const getEmptyStateMessage = () => {
@@ -205,6 +207,30 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
       emptyStateTitle: emptyState.title,
       emptyStateMessage: emptyState.message
     });
+
+    // Always show Get Matched button when no professionals are found
+    // This helps capture demand for services/locations we don't have yet
+    const shouldShowGetMatched = true;
+
+    const getSearchQueryForMatching = () => {
+      if (!searchParams) return 'pet care services in your area';
+      
+      let parts = [];
+      if (searchParams.service_query) {
+        parts.push(searchParams.service_query);
+      }
+      if (searchParams.animal_types && searchParams.animal_types.length > 0) {
+        parts.push(`for ${searchParams.animal_types.join(', ')}`);
+      }
+      if (searchParams.overnight_service) {
+        parts.push('with overnight service');
+      }
+      if (searchParams.location) {
+        parts.push(`in ${searchParams.location}`);
+      }
+      
+      return parts.join(' ') || 'pet care services in your area';
+    };
     
     return (
       <View style={styles.emptyStateContainer}>
@@ -215,12 +241,31 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
         />
         <Text style={styles.emptyStateTitle}>{emptyState.title}</Text>
         <Text style={styles.emptyStateMessage}>{emptyState.message}</Text>
-        <TouchableOpacity 
-          style={styles.adjustSearchButton}
-          onPress={() => onFilterPress && onFilterPress()}
-        >
-          <Text style={styles.adjustSearchButtonText}>Adjust Search</Text>
-        </TouchableOpacity>
+        
+        <View style={styles.emptyStateButtons}>
+          <TouchableOpacity 
+            style={styles.adjustSearchButton}
+            onPress={() => onFilterPress && onFilterPress()}
+          >
+            <Text style={styles.adjustSearchButtonText}>Adjust Search</Text>
+          </TouchableOpacity>
+
+          {shouldShowGetMatched && (
+            <TouchableOpacity 
+              style={styles.getMatchedButton}
+              onPress={() => setShowGetMatchedModal(true)}
+            >
+              <Text style={styles.getMatchedButtonText}>Get Matched</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <GetMatchedModal
+          visible={showGetMatchedModal}
+          onClose={() => setShowGetMatchedModal(false)}
+          searchQuery={getSearchQueryForMatching()}
+          onSubmit={onGetMatched}
+        />
       </View>
     );
   };
@@ -282,7 +327,15 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
           />
           <View style={styles.fallbackTextContainer}>
             <Text style={styles.fallbackMessageText}>{fallbackMessage}</Text>
-            <Text style={styles.fallbackSubtext}>Showing available professionals in Colorado Springs instead below. Please select different professionals to see all their services:</Text>
+            <Text style={styles.fallbackSubtext}>Showing available professionals in Colorado Springs instead below. Please select different professionals to see all their services or get matched with the below button:</Text>
+            
+            {/* Get Matched Button for fallback searches - always show when fallback message appears */}
+            <TouchableOpacity 
+              style={styles.fallbackGetMatchedButton}
+              onPress={() => setShowGetMatchedModal(true)}
+            >
+              <Text style={styles.fallbackGetMatchedButtonText}>Get Matched</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -299,6 +352,14 @@ const ProfessionalList = ({ professionals, onLoadMore, onProfessionalSelect, isM
         onEndReached={onLoadMore}
         onEndReachedThreshold={0.5}
         contentContainerStyle={styles.listContent}
+      />
+
+      {/* Get Matched Modal for fallback searches */}
+      <GetMatchedModal
+        visible={showGetMatchedModal}
+        onClose={() => setShowGetMatchedModal(false)}
+        searchQuery={fallbackMessage ? `${searchParams?.service_query || 'service'} for ${searchParams?.animal_types?.join(', ') || 'pets'} in ${searchParams?.location || 'your area'}` : ''}
+        onSubmit={onGetMatched}
       />
     </View>
   );
@@ -514,6 +575,12 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.large,
     lineHeight: 22,
   },
+  emptyStateButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.medium,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
   adjustSearchButton: {
     paddingHorizontal: theme.spacing.large,
     paddingVertical: theme.spacing.medium,
@@ -524,6 +591,19 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.medium,
     fontWeight: '600',
     color: theme.colors.whiteText,
+  },
+  getMatchedButton: {
+    paddingHorizontal: theme.spacing.large,
+    paddingVertical: theme.spacing.medium,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+  },
+  getMatchedButtonText: {
+    fontSize: theme.fontSizes.medium,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
   fallbackIconContainer: {
     backgroundColor: theme.colors.background,
@@ -606,6 +686,19 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontFamily: theme.fonts.regular.fontFamily,
     marginTop: theme.spacing.small,
+  },
+  fallbackGetMatchedButton: {
+    marginTop: theme.spacing.medium,
+    paddingHorizontal: theme.spacing.medium,
+    paddingVertical: theme.spacing.small,
+    borderRadius: 6,
+    backgroundColor: theme.colors.primary,
+    alignSelf: 'flex-start',
+  },
+  fallbackGetMatchedButtonText: {
+    fontSize: theme.fontSizes.small,
+    fontWeight: '600',
+    color: theme.colors.whiteText,
   },
 });
 

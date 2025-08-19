@@ -765,7 +765,7 @@ const SearchRefiner = ({ onFiltersChange, onShowProfessionals, isMobile, onSearc
       };
 
       // Call the search API
-      const results = await searchProfessionals(searchParams);
+      const results = await searchProfessionals(searchParams, 'SearchRefiner_handleSearch');
       
       debugLog('MBA9999', 'Search completed successfully:', results);
 

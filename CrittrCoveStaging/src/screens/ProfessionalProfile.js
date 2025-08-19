@@ -10,7 +10,7 @@ import ReviewsModal from '../components/ReviewsModal';
 import { BACKEND_TO_FRONTEND_TIME_UNIT } from '../data/mockData';
 
 const ProfessionalProfile = ({ route, navigation }) => {
-  const { isSignedIn } = useContext(AuthContext);
+  const { isSignedIn, screenWidth: contextScreenWidth, isCollapsed } = useContext(AuthContext);
   const [professional, setProfessional] = useState(null);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -106,7 +106,7 @@ const ProfessionalProfile = ({ route, navigation }) => {
             page: 1,
             page_size: 100
           };
-          const results = await searchProfessionals(searchParams);
+          const results = await searchProfessionals(searchParams, 'ProfessionalProfile_loadProfessional');
           const foundProfessional = results?.professionals?.find(p => p.professional_id?.toString() === professionalId?.toString());
           if (foundProfessional) {
             setProfessional(foundProfessional);
@@ -401,6 +401,8 @@ const ProfessionalProfile = ({ route, navigation }) => {
     </View>
   );
 
+  const styles = createStyles(contextScreenWidth, isCollapsed, isSignedIn);
+
   if (!professional || loadingProfessional) {
     return (
       <View style={styles.fullContainer}>
@@ -637,7 +639,11 @@ const ProfessionalProfile = ({ route, navigation }) => {
           activeOpacity={1}
           onPress={closeServiceRatesModal}
         >
-          <View style={styles.serviceRatesModalContent}>
+          <TouchableOpacity 
+            style={styles.serviceRatesModalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <TouchableOpacity 
               style={styles.modalCloseButton}
               onPress={closeServiceRatesModal}
@@ -646,7 +652,12 @@ const ProfessionalProfile = ({ route, navigation }) => {
             </TouchableOpacity>
             
             {selectedServiceForRates && (
-              <>
+              <ScrollView 
+                style={styles.serviceRatesScrollContainer}
+                contentContainerStyle={styles.serviceRatesScrollContent}
+                showsVerticalScrollIndicator={true}
+                bounces={false}
+              >
                 <Text style={styles.serviceModalTitle}>{selectedServiceForRates.service_name}</Text>
                 <Text style={styles.serviceModalDescription}>{selectedServiceForRates.description}</Text>
                 
@@ -724,9 +735,9 @@ const ProfessionalProfile = ({ route, navigation }) => {
                     </View>
                   )}
                 </View>
-              </>
+              </ScrollView>
             )}
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -772,12 +783,16 @@ const ProfessionalProfile = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  fullContainer: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    width: '100%',
-  },
+  const createStyles = (contextScreenWidth, isCollapsed, isSignedIn) => StyleSheet.create({
+    fullContainer: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      // Adjust width to account for sidebar on desktop when signed in
+      width: (contextScreenWidth > 900 && isSignedIn) ? 
+        (isCollapsed ? 'calc(100% - 70px)' : 'calc(100% - 250px)') : '100%',
+      // Only apply sidebar margin when signed in and on desktop
+      marginLeft: (contextScreenWidth > 900 && isSignedIn) ? (isCollapsed ? 70 : 250) : 0,
+    },
   backButton: {
     position: 'absolute',
     top: 20,
@@ -1266,6 +1281,14 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     maxHeight: '80%',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  serviceRatesScrollContainer: {
+    flex: 1,
+    marginTop: 40, // Account for close button
+  },
+  serviceRatesScrollContent: {
+    paddingBottom: 20,
   },
   modalCloseButton: {
     position: 'absolute',

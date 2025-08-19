@@ -8,7 +8,7 @@ import { theme } from '../styles/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AuthContext, debugLog, getStorage, setStorage } from '../context/AuthContext';
 import BackHeader from '../components/BackHeader';
-import { searchProfessionals } from '../api/API';
+import { searchProfessionals, submitGetMatchedRequest } from '../api/API';
 import { createProfessionalSlug } from '../utils/urlUtils';
 
 const SearchProfessionalsListing = ({ navigation, route }) => {
@@ -141,22 +141,35 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
           // Check if the stored state is recent (within 10 minutes)
           const maxAge = 10 * 60 * 1000; // 10 minutes
           if (Date.now() - storedState.timestamp < maxAge) {
-            debugLog('MBAa3M$91vkP: Restoring previous search state', {
+            debugLog('MBAa3M$91vkP: Found recent search state', {
               professionalsCount: storedState.professionals?.length,
-              activeView: storedState.activeView
+              activeView: storedState.activeView,
+              isDesktop: screenWidth > 768
             });
             
-            // Restore the previous state
+            // Restore the previous state for navigation between screens
+            debugLog('MBAa3M$91vkP: Restoring search state for navigation focus', { screenWidth });
             setProfessionals(storedState.professionals || []);
             setSearchResults(storedState.searchResults);
             setCurrentSearchParams(storedState.currentSearchParams);
             setActiveFilters(storedState.activeFilters || { categories: [] });
+            setFallbackMessage(storedState.fallbackMessage || null);
             
-            // Restore the correct view - if it was 'list', keep it as 'list'
-            if (storedState.activeView === 'list') {
-              setActiveView('list');
-            } else if (isSingleView) {
-              setActiveView('filters');
+            // Handle view state restoration - simple logic: if we have professionals, show them
+            const hasProfessionals = storedState.professionals && storedState.professionals.length > 0;
+            
+            if (screenWidth <= 768) {
+              // Mobile: handle view switching
+              if (hasProfessionals) {
+                setActiveView('list');
+                setShowingSearch(false); // Show professional list, not search refiner
+              } else {
+                setActiveView('filters');
+                setShowingSearch(true); // Show search refiner if no professionals
+              }
+            } else {
+              // Desktop: if we have professionals, show them; otherwise show search refiner
+              setShowingSearch(!hasProfessionals);
             }
             
             return;
@@ -172,15 +185,98 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       if (isSingleView) {
         setActiveView('filters');
       }
+      // For desktop, the initial professional loading will be handled by the other useEffect
     });
 
     return unsubscribe;
-  }, [navigation, isSingleView]);
+  }, [navigation, isSingleView, screenWidth]);
 
-  // Load initial professionals when component mounts
+  // Check for stored state on component mount (handles page reloads)
   useEffect(() => {
-    loadInitialProfessionals();
-  }, []);
+    const restoreStateOnMount = async () => {
+      debugLog('MBAa3M$91vkP: Component mounted, checking for stored state (page reload)');
+      try {
+        const storedStateStr = await getStorage('search_professionals_state');
+        if (storedStateStr) {
+          const storedState = JSON.parse(storedStateStr);
+          const maxAge = 10 * 60 * 1000; // 10 minutes
+          if (Date.now() - storedState.timestamp < maxAge) {
+            debugLog('MBAa3M$91vkP: Found recent search state on mount', {
+              professionalsCount: storedState.professionals?.length,
+              activeView: storedState.activeView,
+              showingSearch: storedState.showingSearch,
+              isDesktop: screenWidth > 768
+            });
+            
+            // Restore the previous state for all screen sizes (mobile and desktop)
+            setProfessionals(storedState.professionals || []);
+            setSearchResults(storedState.searchResults);
+            setCurrentSearchParams(storedState.currentSearchParams);
+            setActiveFilters(storedState.activeFilters || { categories: [] });
+            setFallbackMessage(storedState.fallbackMessage || null);
+            
+            // Handle view state restoration - simple logic: if we have professionals, show them
+            const hasProfessionals = storedState.professionals && storedState.professionals.length > 0;
+            
+            if (screenWidth <= 768) {
+              // Mobile: handle view switching
+              if (hasProfessionals) {
+                setActiveView('list');
+                setShowingSearch(false); // Show professional list, not search refiner
+              } else {
+                setActiveView('filters');
+                setShowingSearch(true); // Show search refiner if no professionals
+              }
+            } else {
+              // Desktop: if we have professionals, show them; otherwise show search refiner
+              setShowingSearch(!hasProfessionals);
+            }
+            
+            debugLog('MBAa3M$91vkP: State restored on mount', {
+              hasProfessionals: hasProfessionals,
+              showingSearch: !hasProfessionals,
+              activeView: hasProfessionals ? 'list' : 'filters'
+            });
+          }
+        }
+      } catch (e) {
+        debugLog('MBAa3M$91vkP: Error restoring state on mount', { message: e?.message });
+      }
+    };
+
+    restoreStateOnMount();
+  }, []); // Run only once on mount
+
+  // Load initial professionals when component mounts (for all screen sizes)
+  useEffect(() => {
+    const loadInitialIfNeeded = async () => {
+      // Debug the screen width to understand what's happening
+      debugLog('MBA9999', 'Screen width check:', { screenWidth, windowWidth });
+      
+      // Check if we have recent stored state before loading initial professionals
+      try {
+        const storedStateStr = await getStorage('search_professionals_state');
+        if (storedStateStr) {
+          const storedState = JSON.parse(storedStateStr);
+          const maxAge = 10 * 60 * 1000; // 10 minutes
+          if (Date.now() - storedState.timestamp < maxAge) {
+            debugLog('MBA9999', 'Skipping initial load - have recent stored state');
+            return; // Don't load initial professionals if we have recent stored state
+          }
+        }
+      } catch (e) {
+        debugLog('MBA9999', 'Error checking for stored state, proceeding with initial load');
+      }
+      
+      // Use windowWidth from useWindowDimensions for more reliable detection
+      const currentWidth = windowWidth || screenWidth;
+      
+      debugLog('MBA9999', 'Loading initial professionals for all screen sizes', { currentWidth });
+      loadInitialProfessionals();
+    };
+
+    loadInitialIfNeeded();
+  }, [screenWidth, windowWidth]);
 
   const loadInitialProfessionals = async () => {
     setIsLoading(true);
@@ -208,7 +304,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
         page_size: 20
       };
       
-      const results = await searchProfessionals(searchParams);
+      const results = await searchProfessionals(searchParams, 'loadInitialProfessionals', true);
       
       debugLog('MBA9999', 'Initial professionals loaded:', results);
       setSearchResults(results);
@@ -234,14 +330,6 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     setSearchResults(results);
     setProfessionals(results.professionals || []);
     
-    // Clear stored state since we have new search results
-    try {
-      await setStorage('search_professionals_state', '');
-      debugLog('MBAa3M$91vkP: Cleared stored search state due to new search');
-    } catch (e) {
-      debugLog('MBAa3M$91vkP: Error clearing stored search state', { message: e?.message });
-    }
-    
     // Handle fallback message
     if (results.fallback_message) {
       setFallbackMessage(results.fallback_message);
@@ -261,6 +349,29 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
       
       debugLog('MBA9999', 'Updated active filters:', filterCategories);
       debugLog('MBA9999', 'Search complete: Found ' + (results.professionals?.length || 0) + ' professionals with active filters: ' + filterCategories.join(', '));
+      
+      // Store search state for reload persistence
+      try {
+        const searchState = {
+          professionals: results.professionals || [],
+          searchResults: results,
+          currentSearchParams: searchParams,
+          activeFilters: { categories: filterCategories },
+          activeView: activeView,
+          fallbackMessage: results.fallback_message || null,
+          showingSearch: showingSearch,
+          timestamp: Date.now()
+        };
+        await setStorage('search_professionals_state', JSON.stringify(searchState));
+        debugLog('MBAa3M$91vkP: Stored search state after search results', {
+          professionalsCount: results.professionals?.length || 0,
+          fallbackMessage: results.fallback_message,
+          activeView: activeView,
+          showingSearch: showingSearch
+        });
+      } catch (e) {
+        debugLog('MBAa3M$91vkP: Error storing search state after search results', { message: e?.message });
+      }
     }
   };
 
@@ -271,6 +382,17 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
 
   const handleLoadMore = () => {
     // Implement pagination logic
+  };
+
+  const handleGetMatched = async (email, searchQuery) => {
+    try {
+      debugLog('MBA8001', 'Handling get matched request', { email, searchQuery });
+      await submitGetMatchedRequest(email, searchQuery);
+      debugLog('MBA8001', 'Get matched request successful');
+    } catch (error) {
+      debugLog('MBA8001', 'Get matched request failed', error);
+      throw error;
+    }
   };
 
   const handleProfessionalSelect = async (professional) => {
@@ -296,6 +418,8 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
         currentSearchParams: currentSearchParams,
         activeFilters: activeFilters,
         activeView: activeView,
+        fallbackMessage: fallbackMessage,
+        showingSearch: showingSearch,
         timestamp: Date.now()
       };
       await setStorage('search_professionals_state', JSON.stringify(searchState));
@@ -312,6 +436,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     navigation.navigate('ProfessionalProfile', {
       professionalId: professional.professional_id.toString(),
       professionalSlug: professionalSlug,
+      professional: professional, // Pass the complete professional object to avoid unnecessary API call
     });
   };
 
@@ -336,6 +461,8 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
         currentSearchParams: currentSearchParams,
         activeFilters: activeFilters,
         activeView: activeView,
+        fallbackMessage: fallbackMessage,
+        showingSearch: showingSearch,
         timestamp: Date.now()
       };
       await setStorage('search_professionals_state', JSON.stringify(searchState));
@@ -351,6 +478,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
     navigation.navigate('ProfessionalProfile', {
       professionalId: professional.professional_id.toString(),
       professionalSlug: professionalSlug,
+      professional: professional, // Pass the complete professional object to avoid unnecessary API call
     });
   };
 
@@ -568,6 +696,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
                   setShowingSearch(true);
                 }
               }}
+              onGetMatched={handleGetMatched}
             />
             )}
           </View>
@@ -626,6 +755,7 @@ const SearchProfessionalsListing = ({ navigation, route }) => {
                   setActiveView('filters');
                 }
               }}
+              onGetMatched={handleGetMatched}
             />
           </>
         )}
