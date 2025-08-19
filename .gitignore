@@ -115,3 +115,4 @@ env/
 # New additions
 *.zip
 application.zip
+payment_changes/

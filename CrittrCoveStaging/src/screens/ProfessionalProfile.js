@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, useWindowDimensions, Modal, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, useWindowDimensions, Modal, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AuthContext, getStorage, setStorage, debugLog } from '../context/AuthContext';
@@ -31,7 +31,8 @@ const ProfessionalProfile = ({ route, navigation }) => {
   const [selectedAnimalTypes, setSelectedAnimalTypes] = useState(null);
   const [isSharing, setIsSharing] = useState(false);
   
-  const { width: screenWidth } = Dimensions.get('window');
+  // Use screenWidth from AuthContext (renamed to contextScreenWidth)
+  const screenWidth = contextScreenWidth;
 
   useEffect(() => {
     const loadProfessionalData = async () => {
@@ -724,10 +725,11 @@ const ProfessionalProfile = ({ route, navigation }) => {
                 
                 <View style={styles.serviceModalFooter}>
                   <View style={styles.animalTypesContainer}>
-                    {selectedServiceForRates.animal_types && Object.keys(selectedServiceForRates.animal_types).length > 2 ? 
-                      formatAnimalTypes(selectedServiceForRates.animal_types, true, () => showAnimalTypes(selectedServiceForRates.animal_types)) :
+                    {selectedServiceForRates.animal_types && Object.keys(selectedServiceForRates.animal_types).length > 2 ? (
+                      formatAnimalTypes(selectedServiceForRates.animal_types, true, () => showAnimalTypes(selectedServiceForRates.animal_types))
+                    ) : (
                       <Text style={styles.animalTypesModal}>{formatAnimalTypes(selectedServiceForRates.animal_types)}</Text>
-                    }
+                    )}
                   </View>
                   {selectedServiceForRates.is_overnight && (
                     <View style={styles.overnightBadge}>

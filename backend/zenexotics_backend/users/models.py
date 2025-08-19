@@ -82,6 +82,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     # Payment related
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_connect_account_id = models.CharField(max_length=100, blank=True, null=True)
     
     # Marketing and referral tracking
     how_did_you_hear = models.CharField(

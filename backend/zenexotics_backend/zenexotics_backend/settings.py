@@ -310,6 +310,13 @@ if ENVIRONMENT == 'staging' :
 if ENVIRONMENT == 'production':
     BACKEND_BASE_URL = os.environ.get('BACKEND_BASE_URL', 'https://api.crittrcove.com')
 
+# Stripe Configuration
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+STRIPE_CONNECT_CLIENT_ID = os.environ.get('STRIPE_CONNECT_CLIENT_ID')
+FRONTEND_URL = FRONTEND_BASE_URL  # Use for Stripe Connect redirects
+
 # CORS settings by environment
 CORS_ALLOWED_ORIGINS = [FRONTEND_BASE_URL]
 if IS_DEVELOPMENT:

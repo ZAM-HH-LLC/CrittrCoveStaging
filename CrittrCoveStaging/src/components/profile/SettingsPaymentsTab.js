@@ -11,6 +11,7 @@ import TermsOfServiceModal from '../modals/TermsOfServiceModal';
 import PrivacyPolicyModal from '../modals/PrivacyPolicyModal';
 import { API_BASE_URL } from '../../config/config';
 import axios from 'axios';
+import PaymentMethodsManager from '../PaymentMethodsManager';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -52,10 +53,6 @@ const SettingsPaymentsTab = ({
   timezone: propTimezone,
   use_military_time,
   onUpdateSetting,
-  paymentMethods,
-  onAddPaymentMethod,
-  onRemovePaymentMethod,
-  onSetDefaultPayment,
   isMobile,
   currentPlan = { 
     id: 'waitlist',
@@ -116,9 +113,6 @@ const SettingsPaymentsTab = ({
     fetchDeletionStatus();
   }, [propTimezone]);
 
-  useEffect(() => {
-    debugLog('MBA54321 SettingsPaymentsTab received paymentMethods:', paymentMethods);
-  }, [paymentMethods]);
 
   const handleTimezoneChange = async (newTimezone) => {
     try {
@@ -356,24 +350,6 @@ const SettingsPaymentsTab = ({
     </View>
   );
 
-  const renderPaymentMethodsSection = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{userRole === 'professional' ? 'Payout Methods' : 'Payment Methods' }</Text>
-        <TouchableOpacity style={styles.addButton} onPress={onAddPaymentMethod}>
-          <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
-          <Text style={styles.addButtonText}>Add New</Text>
-        </TouchableOpacity>
-      </View>
-      {paymentMethods && paymentMethods.length > 0 ? (
-        paymentMethods.map(renderPaymentMethod)
-      ) : (
-        <View style={styles.noPaymentMethodsContainer}>
-          <Text style={styles.noPaymentMethodsText}>No payment methods added yet</Text>
-        </View>
-      )}
-    </View>
-  );
 
   const renderDesktopLayout = () => (
     <View style={styles.desktopContainer}>
@@ -434,31 +410,47 @@ const SettingsPaymentsTab = ({
         </View>
       </View>
 
-      {/* TODO: Add back in after MVP 
       <View style={styles.rightColumn}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Current Plan</Text>
-          {renderCurrentPlanInfo()}
+          <PaymentMethodsManager 
+            userRole={userRole} 
+            onRefresh={() => {
+              // Refresh any parent state if needed
+              console.log('Payment methods refreshed');
+            }}
+          />
         </View>
-
-        {renderPaymentMethodsSection()}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Billing History</Text>
-          {/* Add billing history items here
-          <TouchableOpacity style={styles.viewAllButton}>
-            <Text style={styles.viewAllText}>View All Transactions</Text>
-          </TouchableOpacity>
+          <View style={styles.emptyBillingContainer}>
+            <Text style={styles.emptyBillingText}>No billing history yet</Text>
+            <Text style={styles.emptyBillingSubtext}>Your transaction history will appear here once you start using payment methods</Text>
+          </View>
         </View>
-      </View> */}
+      </View>
     </View>
   );
 
   const renderMobileLayout = () => (
     <ScrollView style={styles.mobileContainer} contentContainerStyle={{ paddingBottom: 100 }}>
-      {/* TODO: Add back after MVP 
-      {renderPlansSection()}
-      {renderPaymentMethodsSection()} */}
+      <View style={styles.section}>
+        <PaymentMethodsManager 
+          userRole={userRole} 
+          onRefresh={() => {
+            // Refresh any parent state if needed
+            console.log('Payment methods refreshed');
+          }}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Billing History</Text>
+        <View style={styles.emptyBillingContainer}>
+          <Text style={styles.emptyBillingText}>No billing history yet</Text>
+          <Text style={styles.emptyBillingSubtext}>Your transaction history will appear here once you start using payment methods</Text>
+        </View>
+      </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notification Settings</Text>
@@ -735,41 +727,6 @@ const SettingsPaymentsTab = ({
     </View>
   );
 
-  const renderPaymentMethod = (method) => (
-    <View key={method.id} style={styles.paymentItem}>
-      <View style={styles.paymentContent}>
-        <MaterialCommunityIcons 
-          name={method.type === 'card' ? 'credit-card' : 'bank'} 
-          size={24} 
-          color={theme.colors.primary} 
-        />
-        <View style={styles.paymentTextContainer}>
-          <View style={styles.paymentTitleRow}>
-            <Text style={styles.paymentTitle}>
-              {method.type === 'card' ? `•••• ${method.last4}` : method.bankName}
-            </Text>
-            {!method.isDefault && (
-              <TouchableOpacity 
-                style={styles.setDefaultButton}
-                onPress={() => onSetDefaultPayment(method.id)}
-              >
-                <Text style={styles.setDefaultText}>Set Default</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.paymentDescription} numberOfLines={1}>
-            {method.type === 'card' ? `Expires ${method.expiry}` : `Account ending in ${method.last4}`}
-          </Text>
-        </View>
-      </View>
-      <TouchableOpacity 
-        style={styles.deleteButton} 
-        onPress={() => onRemovePaymentMethod(method.id)}
-      >
-        <MaterialCommunityIcons name="delete" size={20} color={theme.colors.error} />
-      </TouchableOpacity>
-    </View>
-  );
 
   // Handle setting updates with toast notifications
   const handleUpdateSetting = (id, value) => {
@@ -1576,6 +1533,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.error,
     lineHeight: 18,
+  },
+  emptyBillingContainer: {
+    alignItems: 'center',
+    padding: 32,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+  },
+  emptyBillingText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  emptyBillingSubtext: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+    marginTop: 4,
+    textAlign: 'center',
   },
 });
 

@@ -5,7 +5,6 @@ import { API_BASE_URL } from '../config/config';
 import { Dimensions, Platform } from 'react-native';
 import { navigate } from '../../App';
 import { navigateToFrom } from '../components/Navigation';
-import { initStripe } from '../utils/StripeService';
 import { getUserName, getTimeSettings } from '../api/API';
 import platformNavigation from '../utils/platformNavigation';
 
