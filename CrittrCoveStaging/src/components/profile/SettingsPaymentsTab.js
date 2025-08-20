@@ -82,6 +82,12 @@ const SettingsPaymentsTab = ({
   // Stripe modal state
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [stripeClientSecret, setStripeClientSecret] = useState(null);
+  const [refreshPaymentMethods, setRefreshPaymentMethods] = useState(null);
+  
+  // Debug: Log when refresh function changes
+  useEffect(() => {
+    debugLog('MBA12345', 'refreshPaymentMethods state changed:', refreshPaymentMethods ? 'function available' : 'null');
+  }, [refreshPaymentMethods]);
 
   useEffect(() => {
     // Fetch user's time settings when component mounts
@@ -424,6 +430,10 @@ const SettingsPaymentsTab = ({
               console.log('Payment methods refreshed');
             }}
             onShowModal={handleShowStripeModal}
+            onPaymentMethodsUpdate={(refreshFn) => {
+              debugLog('MBA12345', 'PaymentMethodsManager onPaymentMethodsUpdate called with:', refreshFn ? 'function' : 'null');
+              setRefreshPaymentMethods(() => refreshFn);
+            }}
           />
         </View>
 
@@ -448,6 +458,10 @@ const SettingsPaymentsTab = ({
             console.log('Payment methods refreshed');
           }}
           onShowModal={handleShowStripeModal}
+          onPaymentMethodsUpdate={(refreshFn) => {
+            debugLog('MBA12345', 'Mobile PaymentMethodsManager onPaymentMethodsUpdate called with:', refreshFn ? 'function' : 'null');
+            setRefreshPaymentMethods(() => refreshFn);
+          }}
         />
       </View>
 
@@ -871,6 +885,16 @@ const SettingsPaymentsTab = ({
   };
   
   const handleStripeSuccess = () => {
+    debugLog('MBA12345', 'SettingsPaymentsTab: handleStripeSuccess called');
+    
+    // Refresh payment methods list once
+    if (refreshPaymentMethods) {
+      debugLog('MBA12345', 'SettingsPaymentsTab: Calling refreshPaymentMethods once');
+      refreshPaymentMethods();
+    } else {
+      debugLog('MBA12345', 'SettingsPaymentsTab: refreshPaymentMethods is null');
+    }
+    
     handleStripeModalClose();
     showToast({
       message: 'Payment method saved successfully',

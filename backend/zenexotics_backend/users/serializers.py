@@ -585,8 +585,8 @@ class UserProfileSerializer(serializers.Serializer):
                     'id': method.payment_method_id,
                     'type': 'card' if method.type in ['CREDIT_CARD', 'DEBIT_CARD'] else 'bank',
                     'last4': method.last4,
-                    'expiry': method.expiration_date.strftime('%m/%y') if method.expiration_date else None,
-                    'isDefault': method.is_primary,
+                    'expiry': f"{method.exp_month:02d}/{method.exp_year % 100:02d}" if method.exp_month and method.exp_year else None,
+                    'isDefault': method.is_primary_payment,
                     'bankName': method.bank_name if method.type == 'BANK_ACCOUNT' else None
                 }
                 for method in payment_methods

@@ -134,7 +134,7 @@ def get_client_dashboard(request):
         onboarding_progress = {
             'profile_complete': profile_complete,
             'has_pets': has_pets,
-            'has_payment_method': PaymentMethod.objects.filter(user=client.user, is_primary=True).exists(),
+            'has_payment_method': PaymentMethod.objects.filter(user=client.user, is_primary_payment=True).exists(),
             'subscription_plan': getattr(client.user, 'current_subscription_plan', 0),  # Default to 0 if not set
             'marked_noreply_as_not_spam': marked_noreply_as_not_spam
         }

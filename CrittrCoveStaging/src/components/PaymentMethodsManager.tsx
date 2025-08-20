@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
-import { debugLog } from '../context/AuthContext';
+import { debugLog, AuthContext } from '../context/AuthContext';
 import { useToast } from './ToastProvider';
 
 // Stripe imports - conditional for web platform
@@ -50,14 +50,18 @@ const initializeStripe = async () => {
 };
 
 interface PaymentMethod {
-  id: string;
-  type: 'card' | 'bank';
+  payment_method_id: string;
+  type: 'CREDIT_CARD' | 'DEBIT_CARD' | 'BANK_ACCOUNT';
   last4: string;
   brand?: string;
-  expiry?: string;
-  bankName?: string;
-  isDefault: boolean;
-  isVerified: boolean;
+  exp_month?: number;
+  exp_year?: number;
+  bank_name?: string;
+  is_primary_payment: boolean;
+  is_primary_payout: boolean;
+  is_verified: boolean;
+  display_name: string;
+  created_at: string;
 }
 
 interface ConnectStatus {
@@ -77,6 +81,7 @@ interface PaymentMethodsManagerProps {
   userRole: 'client' | 'professional';
   onRefresh?: () => void;
   onShowModal?: (clientSecret: string) => void;
+  onPaymentMethodsUpdate?: (refreshFn: () => void) => void;
 }
 
 // Card setup component for web - exported for use in parent
@@ -88,6 +93,7 @@ export const CardSetupForm: React.FC<{
   const stripe = useStripe?.();
   const elements = useElements?.();
   const [isProcessing, setIsProcessing] = useState(false);
+  const { isApprovedProfessional } = useContext(AuthContext);
 
   const handleSubmit = async () => {
     if (!stripe || !elements) {
@@ -98,7 +104,7 @@ export const CardSetupForm: React.FC<{
     setIsProcessing(true);
 
     try {
-      const { error } = await stripe.confirmSetup({
+      const { error, setupIntent } = await stripe.confirmSetup({
         elements,
         confirmParams: {},
         redirect: 'if_required'
@@ -106,13 +112,39 @@ export const CardSetupForm: React.FC<{
 
       if (error) {
         onError(error.message || 'Setup failed');
-      } else {
+      } else if (setupIntent && setupIntent.status === 'succeeded') {
+        // Save payment method to backend first
+        debugLog('MBA2knlv843', 'Saving payment method to backend...');
+        await savePaymentMethodToBackend(setupIntent.payment_method, isApprovedProfessional);
+        debugLog('MBA2knlv843', 'Payment method saved to backend successfully');
+        
+        // Only call onSuccess - this will handle the refresh via the parent
+        debugLog('MBA2knlv843', 'Calling onSuccess callback only');
         onSuccess();
+      } else {
+        onError('Payment method setup was not completed');
       }
     } catch (error) {
+      console.error('Error in card setup:', error);
       onError('An unexpected error occurred');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const savePaymentMethodToBackend = async (paymentMethodId: string, isApprovedProfessional: boolean) => {
+    try {
+      debugLog('MBA2knlv843', 'Saving payment method to backend:', { paymentMethodId, isApprovedProfessional });
+      const response = await axios.post(`${API_BASE_URL}/api/payment-methods/v1/`, {
+        stripe_payment_method_id: paymentMethodId,
+        is_approved_professional: isApprovedProfessional
+      });
+      
+      debugLog('MBA2knlv843', 'Payment method saved to backend successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      debugLog('MBA2knlv843', 'Error saving payment method to backend:', error);
+      throw new Error(error.response?.data?.error || 'Failed to save payment method');
     }
   };
 
@@ -138,13 +170,18 @@ export const CardSetupForm: React.FC<{
 
 const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   userRole,
-  onShowModal
+  onShowModal,
+  onPaymentMethodsUpdate
 }) => {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [isStripeReady, setIsStripeReady] = useState(false);
   // Removed local modal state - now using parent modal
   const [loading, setLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [paymentMethodToDelete, setPaymentMethodToDelete] = useState<PaymentMethod | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDropdownForMethod, setShowDropdownForMethod] = useState<string | null>(null);
   const showToast = useToast();
 
   useEffect(() => {
@@ -156,21 +193,51 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
     };
     
     initStripe();
+    // Only fetch payment methods once on mount - don't depend on userRole changes
     fetchPaymentMethods();
     
     if (userRole === 'professional') {
       fetchConnectStatus();
     }
-  }, [userRole]);
+  }, []); // Remove userRole dependency to prevent duplicate calls
+
+  // Add refresh function that can be called after successful payment method addition
+  const refreshPaymentMethods = () => {
+    debugLog('MBA2knlv843', 'refreshPaymentMethods called - fetching payment methods');
+    fetchPaymentMethods();
+  };
+  
+  // Expose refresh function to parent - only call once
+  useEffect(() => {
+    if (onPaymentMethodsUpdate) {
+      onPaymentMethodsUpdate(refreshPaymentMethods);
+    }
+  }, []); // Remove dependency to prevent multiple calls
+  
 
   const fetchPaymentMethods = async () => {
     try {
-      // This would call your existing payment methods API
-      // const response = await API.get('/payment-methods/');
-      // setPaymentMethods(response.data);
-      setPaymentMethods([]); // Placeholder
+      debugLog('MBA2knlv843', 'Fetching payment methods...');
+      const response = await axios.get(`${API_BASE_URL}/api/payment-methods/v1/?method_type=both`);
+      debugLog('MBA2knlv843', 'Raw payment methods response:', response.data);
+      
+      // Combine payment and payout methods into single list for display
+      const allMethods = [
+        ...(response.data.payment_methods || []),
+        ...(response.data.payout_methods || [])
+      ];
+      
+      // Remove duplicates (bank accounts might appear in both lists)
+      const uniqueMethods = allMethods.filter((method, index, self) => 
+        index === self.findIndex(m => m.payment_method_id === method.payment_method_id)
+      );
+      
+      debugLog('MBA2knlv843', 'Setting payment methods state:', uniqueMethods);
+      setPaymentMethods(uniqueMethods);
+      debugLog('MBA2knlv843', 'Payment methods state updated successfully');
     } catch (error) {
       debugLog('MBA2knlv843', 'Error fetching payment methods:', error);
+      // Don't show error to user for failed fetch, just log it
     }
   };
 
@@ -289,6 +356,47 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
     }
   };
 
+  const handleDeletePaymentMethod = async () => {
+    if (!paymentMethodToDelete) return;
+    
+    try {
+      setDeleteLoading(true);
+      await axios.delete(`${API_BASE_URL}/api/payment-methods/v1/${paymentMethodToDelete.payment_method_id}/`);
+      
+      // Refresh the list
+      await fetchPaymentMethods();
+      
+      // Close modal
+      setShowDeleteModal(false);
+      setPaymentMethodToDelete(null);
+      
+      showToast({
+        message: 'Payment method deleted successfully',
+        type: 'success',
+        duration: 3000
+      });
+    } catch (error) {
+      debugLog('MBA2knlv843', 'Error deleting payment method:', error);
+      showToast({
+        message: error.response?.data?.error || 'Failed to delete payment method',
+        type: 'error',
+        duration: 4000
+      });
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleMenuPress = (method: PaymentMethod) => {
+    setShowDropdownForMethod(method.payment_method_id);
+  };
+
+  const handleDeleteClick = (method: PaymentMethod) => {
+    setShowDropdownForMethod(null); // Close dropdown
+    setPaymentMethodToDelete(method);
+    setShowDeleteModal(true);
+  };
+
   const renderPaymentMethods = () => {
     if (paymentMethods.length === 0) {
       return (
@@ -308,31 +416,63 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
       );
     }
 
-    return paymentMethods.map((method) => (
-      <View key={method.id} style={styles.paymentMethodItem}>
-        <View style={styles.paymentMethodContent}>
-          <MaterialCommunityIcons 
-            name={method.type === 'card' ? 'credit-card' : 'bank'} 
-            size={24} 
-            color={theme.colors.primary} 
-          />
-          <View style={styles.paymentMethodInfo}>
-            <Text style={styles.paymentMethodTitle}>
-              {method.type === 'card' ? `•••• ${method.last4}` : method.bankName}
-            </Text>
-            <Text style={styles.paymentMethodSubtitle}>
-              {method.type === 'card' ? `${method.brand} • Expires ${method.expiry}` : `Account ending in ${method.last4}`}
-            </Text>
-            {method.isDefault && (
-              <Text style={styles.defaultBadge}>Default</Text>
+    return paymentMethods.map((method) => {
+      const isCard = method.type === 'CREDIT_CARD' || method.type === 'DEBIT_CARD';
+      const iconName = isCard ? 'credit-card' : 'bank';
+      
+      return (
+        <View key={method.payment_method_id} style={styles.paymentMethodItem}>
+          <View style={styles.paymentMethodContent}>
+            <MaterialCommunityIcons 
+              name={iconName} 
+              size={24} 
+              color={theme.colors.primary} 
+            />
+            <View style={styles.paymentMethodInfo}>
+              <Text style={styles.paymentMethodTitle}>
+                {method.display_name}
+              </Text>
+              <Text style={styles.paymentMethodSubtitle}>
+                {isCard && method.exp_month && method.exp_year 
+                  ? `${method.brand} • Expires ${method.exp_month}/${method.exp_year}`
+                  : isCard 
+                    ? method.brand
+                    : `Account ending in ${method.last4}`
+                }
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                {method.is_primary_payment && (
+                  <Text style={styles.defaultBadge}>Primary Payment</Text>
+                )}
+                {method.is_primary_payout && (
+                  <Text style={styles.defaultBadge}>Primary Payout</Text>
+                )}
+              </View>
+            </View>
+          </View>
+          <View style={styles.menuContainer}>
+            <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={() => handleMenuPress(method)}
+            >
+              <MaterialCommunityIcons name="dots-vertical" size={20} color={theme.colors.text} />
+            </TouchableOpacity>
+            
+            {showDropdownForMethod === method.payment_method_id && (
+              <View style={styles.dropdown}>
+                <TouchableOpacity 
+                  style={styles.dropdownItem}
+                  onPress={() => handleDeleteClick(method)}
+                >
+                  <MaterialCommunityIcons name="delete" size={16} color={theme.colors.error} />
+                  <Text style={styles.dropdownItemText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
-        <TouchableOpacity style={styles.menuButton}>
-          <MaterialCommunityIcons name="dots-vertical" size={20} color={theme.colors.text} />
-        </TouchableOpacity>
-      </View>
-    ));
+      );
+    });
   };
 
   const renderPayoutStatus = () => {
@@ -386,7 +526,11 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <TouchableOpacity 
+      style={styles.container}
+      activeOpacity={1}
+      onPress={() => setShowDropdownForMethod(null)} // Close dropdown when clicking outside
+    >
       {userRole === 'professional' ? (
         <View>
           <View style={styles.sectionHeader}>
@@ -421,8 +565,52 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
         </View>
       )}
 
-      {/* Modal now handled by parent component */}
-    </View>
+      {/* Delete confirmation modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showDeleteModal}
+        onRequestClose={() => {
+          setShowDeleteModal(false);
+          setPaymentMethodToDelete(null);
+        }}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <MaterialCommunityIcons name="alert-circle" size={32} color={theme.colors.error} />
+              <Text style={styles.deleteModalTitle}>Delete Payment Method</Text>
+            </View>
+            
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete {paymentMethodToDelete?.display_name}? This action cannot be undone.
+            </Text>
+            
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setPaymentMethodToDelete(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteButton]}
+                onPress={handleDeletePaymentMethod}
+                disabled={deleteLoading}
+              >
+                <Text style={styles.deleteButtonText}>
+                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </TouchableOpacity>
   );
 };
 
@@ -592,6 +780,96 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteModalContent: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  deleteButton: {
+    backgroundColor: theme.colors.error,
+  },
+  cancelButtonText: {
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  menuContainer: {
+    position: 'relative',
+  },
+  dropdown: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    backgroundColor: theme.colors.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1000,
+    minWidth: 120,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: theme.colors.error,
+    fontWeight: '500',
   },
 });
 

@@ -67,7 +67,10 @@ const StripeContent: React.FC<{
       <Elements stripe={stripePromise} options={{ clientSecret }}>
         <CardSetupForm
           clientSecret={clientSecret}
-          onSuccess={onSuccess}
+          onSuccess={() => {
+            console.log('StripeModalSafe: CardSetupForm onSuccess called');
+            onSuccess();
+          }}
           onError={onError}
         />
       </Elements>

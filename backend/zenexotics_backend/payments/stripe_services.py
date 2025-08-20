@@ -116,10 +116,7 @@ def persist_card_payment_method_from_setup_intent(setup_intent):
         expiration_date = datetime(exp_year, exp_month, 1).date()
         
         # Check if this is the user's first payment method
-        is_first_method = not PaymentMethod.objects.filter(
-            user=user, 
-            type_of_payment='Pay_for'
-        ).exists()
+        is_first_method = not PaymentMethod.objects.filter(user=user).exists()
         
         # Upsert payment method
         payment_method_obj, created = PaymentMethod.objects.update_or_create(
@@ -127,12 +124,13 @@ def persist_card_payment_method_from_setup_intent(setup_intent):
             stripe_payment_method_id=payment_method_id,
             defaults={
                 'type': card_type,
-                'type_of_payment': 'Pay_for',
                 'last4': payment_method.card.last4,
                 'brand': payment_method.card.brand.title(),
-                'expiration_date': expiration_date,
+                'exp_month': payment_method.card.exp_month,
+                'exp_year': payment_method.card.exp_year,
                 'is_verified': True,
-                'is_primary': is_first_method,
+                'is_primary_payment': is_first_method,
+                'is_primary_payout': False,
             }
         )
         
@@ -155,10 +153,7 @@ def persist_bank_from_account_external(external_account, account):
         user = User.objects.get(stripe_connect_account_id=account.id)
         
         # Check if this is the user's first bank account
-        is_first_method = not PaymentMethod.objects.filter(
-            user=user, 
-            type_of_payment='Receive_payment'
-        ).exists()
+        is_first_method = not PaymentMethod.objects.filter(user=user, type='BANK_ACCOUNT').exists()
         
         # Upsert payment method
         payment_method_obj, created = PaymentMethod.objects.update_or_create(
@@ -166,11 +161,11 @@ def persist_bank_from_account_external(external_account, account):
             stripe_payment_method_id=external_account.id,
             defaults={
                 'type': 'BANK_ACCOUNT',
-                'type_of_payment': 'Receive_payment',
                 'bank_account_last4': external_account.last4,
                 'bank_name': external_account.bank_name or 'Bank Account',
                 'is_verified': account.payouts_enabled,
-                'is_primary': is_first_method,
+                'is_primary_payment': is_first_method,
+                'is_primary_payout': is_first_method,
             }
         )
         
