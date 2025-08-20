@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import axios from 'axios';
@@ -91,11 +91,20 @@ export const CardSetupForm: React.FC<{
   clientSecret: string;
   onSuccess: () => void;
   onError: (error: string) => void;
-}> = ({ onSuccess, onError }) => {
+}> = ({ clientSecret, onSuccess, onError }) => {
   const stripe = useStripe?.();
   const elements = useElements?.();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasLinkSavedMethods, setHasLinkSavedMethods] = useState(false);
+  const [showAlternativeInstructions, setShowAlternativeInstructions] = useState(false);
+  const [userHasInteracted, setUserHasInteracted] = useState(false);
   const { isApprovedProfessional } = useContext(AuthContext);
+
+  console.log('MBA2i3j4fi4 CardSetupForm component rendered', {
+    clientSecret: clientSecret ? 'SET' : 'NOT SET',
+    stripe: stripe ? 'LOADED' : 'NOT LOADED',
+    elements: elements ? 'LOADED' : 'NOT LOADED'
+  });
 
   const handleSubmit = async () => {
     if (!stripe || !elements) {
@@ -151,12 +160,98 @@ export const CardSetupForm: React.FC<{
   };
 
   if (!PaymentElement) {
+    console.log('MBA2i3j4fi4 PaymentElement not available, showing loading');
     return <Text>Loading payment form...</Text>;
   }
 
+  const paymentElementOptions = {
+    // Force showing only new payment method entry - disable all saved methods
+    layout: {
+      type: 'tabs',
+      defaultCollapsed: false,
+      radios: false,
+      spacedAccordionItems: false
+    },
+    // Disable Link and saved payment methods completely
+    linkMode: 'never',
+    disableLink: true,
+    // Force fresh entry
+    paymentMethodCreation: 'manual',
+    // Configure to show card tab first
+    paymentMethodOrder: ['card', 'us_bank_account'],
+    // Appearance settings to hide saved methods
+    appearance: {
+      disableLink: true,
+      variables: {
+        colorPrimary: '#0570DE'
+      }
+    }
+  };
+
+  console.log('MBA2i3j4fi4 Rendering PaymentElement with options:', paymentElementOptions);
+  console.log('MBA2i3j4fi4 Client secret available:', clientSecret ? 'YES' : 'NO');
+
   return (
-    <View style={styles.cardSetupContainer}>
-      <PaymentElement />
+    <View style={styles.cardSetupWrapper}>
+      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.cardSetupContainer}>
+        {/* Helpful instructions for users */}
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>
+            {hasLinkSavedMethods && !userHasInteracted ? "Want to Add a Different Payment Method?" : "Add a New Payment Method"}
+          </Text>
+          <Text style={styles.instructionsText}>
+            {hasLinkSavedMethods && !userHasInteracted
+              ? "💡 We found a saved payment method. To add a card or different bank account, click \"Change\" below, then select \"[+] new payment method\""
+              : "💡 Choose to add a credit card or connect your bank account securely"
+            }
+          </Text>
+          {showAlternativeInstructions && (
+            <View style={styles.alternativeContainer}>
+              <Text style={styles.alternativeText}>
+                ℹ️ Having trouble? The "Change" button below will reveal more options including "Add new payment method"
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.paymentElementWrapper}>
+          <PaymentElement 
+            options={paymentElementOptions}
+            onReady={() => {
+              console.log('MBA2i3j4fi4 PaymentElement is ready');
+            }}
+            onChange={(event) => {
+              console.log('MBA2i3j4fi4 PaymentElement changed:', event);
+              
+              // Detect if we're showing saved payment methods vs fresh entry
+              if (event.complete && event.value?.type) {
+                console.log('MBA2i3j4fi4 Payment method type detected:', event.value.type);
+                // If it completed immediately without user input, likely showing saved method
+                if (!hasLinkSavedMethods && event.complete && !event.empty && !userHasInteracted) {
+                  setHasLinkSavedMethods(true);
+                  setShowAlternativeInstructions(true);
+                  console.log('MBA2i3j4fi4 Detected Link saved methods - showing alternative instructions');
+                }
+              }
+              
+              // If user starts interacting with empty form, they likely clicked Change
+              if (event.empty && hasLinkSavedMethods && !userHasInteracted) {
+                setUserHasInteracted(true);
+                setShowAlternativeInstructions(false);
+                console.log('MBA2i3j4fi4 User has interacted - hiding instructions');
+              }
+            }}
+            onFocus={(event) => {
+              console.log('MBA2i3j4fi4 PaymentElement focused:', event);
+            }}
+            onBlur={(event) => {
+              console.log('MBA2i3j4fi4 PaymentElement blurred:', event);
+            }}
+          />
+        </View>
+      </ScrollView>
+      
+      {/* Fixed button at bottom */}
       <TouchableOpacity
         style={[styles.submitButton, isProcessing && styles.submitButtonDisabled]}
         onPress={handleSubmit}
@@ -267,7 +362,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   };
 
   const handleAddCard = async () => {
-    console.log('PaymentMethodsManager: Add Card/Bank button clicked!', {
+    console.log('MBA2i3j4fi4 PaymentMethodsManager: Add Card/Bank button clicked!', {
       platform: Platform.OS,
       isStripeReady,
       loading,
@@ -319,15 +414,16 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
 
     try {
       setLoading(true);
-      debugLog('MBA2knlv843', 'Creating setup intent...');
+      console.log('MBA2i3j4fi4 Creating setup intent...');
       const response = await axios.post(`${API_BASE_URL}/api/payments/v1/create-setup-intent/`);
-      debugLog('MBA2knlv843', 'Setup intent created successfully');
+      console.log('MBA2i3j4fi4 Setup intent created successfully:', response.data);
       
       if (onShowModal) {
+        console.log('MBA2i3j4fi4 Calling onShowModal with client secret');
         onShowModal(response.data.client_secret);
       } else {
         // No fallback - require parent to handle modal
-        debugLog('MBA2knlv843', 'No modal handler provided by parent');
+        console.log('MBA2i3j4fi4 No modal handler provided by parent');
         showToast({
           message: 'Modal handler not configured',
           type: 'error',
@@ -335,7 +431,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
         });
       }
     } catch (error) {
-      debugLog('MBA2knlv843', 'Error creating setup intent:', error);
+      console.log('MBA2i3j4fi4 Error creating setup intent:', error);
       const errorMessage = error.response?.data?.error || 'Failed to start card setup';
       showToast({
         message: errorMessage,
@@ -651,7 +747,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
               disabled={loading}
             >
               <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
-              <Text style={styles.addButtonText}>Add Card/Bank</Text>
+              <Text style={styles.addButtonText}>Add Payment Method</Text>
             </TouchableOpacity>
           </View>
           {renderPaymentMethods()}
@@ -818,8 +914,8 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: theme.colors.background,
     borderRadius: 16,
-    padding: 32,
-    width: '90%',
+    padding: 16,
+    width: '95%',
     maxWidth: 520,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -851,20 +947,70 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  cardSetupWrapper: {
+    flex: 1,
+    maxHeight: 600, // Limit height so modal doesn't grow too tall
+  },
+  scrollContainer: {
+    flex: 1,
+  },
   cardSetupContainer: {
     gap: 24,
+    paddingBottom: 20, // Add bottom padding for scroll
+  },
+  instructionsContainer: {
+    backgroundColor: '#F8F9FA',
+    padding: 16,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.primary,
+    marginBottom: 8,
+  },
+  instructionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  instructionsText: {
+    fontSize: 14,
+    color: theme.colors.secondary,
+    lineHeight: 20,
+  },
+  alternativeContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
+  },
+  alternativeText: {
+    fontSize: 13,
+    color: '#1976D2',
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  paymentElementWrapper: {
+    paddingHorizontal: 8, // Add horizontal padding to prevent border cutoff
+    marginHorizontal: -4, // Slight negative margin to maintain overall alignment
   },
   submitButton: {
     backgroundColor: theme.colors.primary,
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 16,
+    marginHorizontal: 0, // Remove horizontal margin to span full width
     shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    // Add top border for visual separation
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 20,
   },
   submitButtonDisabled: {
     opacity: 0.6,
@@ -1017,8 +1163,8 @@ export const modalStyles = StyleSheet.create({
   modalContent: {
     backgroundColor: theme.colors.background,
     borderRadius: 16,
-    padding: 32,
-    width: '90%',
+    padding: 16, // Increased padding to prevent border cutoff on card/bank tabs
+    width: '95%',
     maxWidth: 520,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },

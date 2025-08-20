@@ -56,7 +56,7 @@ const StripeContent: React.FC<{
       onPress={(e) => e.stopPropagation()}
     >
       <View style={modalStyles.modalHeader}>
-        <Text style={modalStyles.modalTitle}>Add Payment Method</Text>
+        <Text style={modalStyles.modalTitle}>Add Card or Bank Account</Text>
         <TouchableOpacity 
           onPress={onClose}
           style={modalStyles.closeButton}
@@ -64,14 +64,34 @@ const StripeContent: React.FC<{
           <MaterialCommunityIcons name="close" size={24} color={theme.colors.secondary} />
         </TouchableOpacity>
       </View>
-      <Elements stripe={stripePromise} options={{ clientSecret }}>
+      <Elements 
+        stripe={stripePromise} 
+        options={{ 
+          clientSecret,
+          // Disable Link completely at Elements level
+          linkMode: 'never',
+          // Force manual payment method creation
+          paymentMethodCreation: 'manual',
+          // Appearance settings
+          appearance: {
+            theme: 'stripe',
+            disableLink: true
+          }
+        }}
+        onReady={() => {
+          console.log('MBA2i3j4fi4 Elements component is ready');
+        }}
+      >
         <CardSetupForm
           clientSecret={clientSecret}
           onSuccess={() => {
-            console.log('StripeModalSafe: CardSetupForm onSuccess called');
+            console.log('MBA2i3j4fi4 StripeModalSafe: CardSetupForm onSuccess called');
             onSuccess();
           }}
-          onError={onError}
+          onError={(error) => {
+            console.log('MBA2i3j4fi4 StripeModalSafe: CardSetupForm onError called:', error);
+            onError(error);
+          }}
         />
       </Elements>
     </TouchableOpacity>
@@ -95,26 +115,39 @@ const StripeModalSafe: React.FC<StripeModalProps> = ({
   }, [visible, clientSecret]);
 
   const initializeStripe = async () => {
+    console.log('MBA2i3j4fi4 initializeStripe called', {
+      stripePromise: stripePromise ? 'EXISTS' : 'NULL',
+      visible,
+      clientSecret: clientSecret ? 'SET' : 'NOT SET'
+    });
+
     if (stripePromise) {
+      console.log('MBA2i3j4fi4 Stripe already initialized, skipping');
       setIsLoading(false);
       return; // Already initialized
     }
 
     try {
       setIsLoading(true);
+      console.log('MBA2i3j4fi4 Loading Stripe library...');
       
       const stripe = require('@stripe/stripe-js');
       const publishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      
+      console.log('MBA2i3j4fi4 Publishable key available:', publishableKey ? 'YES' : 'NO');
       
       if (!publishableKey) {
         throw new Error('Stripe publishable key not found');
       }
 
+      console.log('MBA2i3j4fi4 Creating Stripe instance...');
       const promise = stripe.loadStripe(publishableKey);
       setStripePromise(promise);
+      
+      console.log('MBA2i3j4fi4 Stripe initialization complete');
       setIsLoading(false);
     } catch (error) {
-      console.error('Error initializing Stripe:', error);
+      console.error('MBA2i3j4fi4 Error initializing Stripe:', error);
       onError('Failed to initialize payment system');
       setIsLoading(false);
     }
