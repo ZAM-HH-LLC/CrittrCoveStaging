@@ -12,6 +12,7 @@ import PrivacyPolicyModal from '../modals/PrivacyPolicyModal';
 import { API_BASE_URL } from '../../config/config';
 import axios from 'axios';
 import PaymentMethodsManager from '../PaymentMethodsManager';
+import StripeModalSafe from '../StripeModalSafe';
 
 const SubscriptionPlan = ({ plan, isPopular, isCurrent, onSwitch }) => (
   <View style={[
@@ -77,6 +78,10 @@ const SettingsPaymentsTab = ({
   const [deletionReason, setDeletionReason] = useState('');
   const [modalError, setModalError] = useState('');
   const showToast = useToast();
+  
+  // Stripe modal state
+  const [showStripeModal, setShowStripeModal] = useState(false);
+  const [stripeClientSecret, setStripeClientSecret] = useState(null);
 
   useEffect(() => {
     // Fetch user's time settings when component mounts
@@ -418,6 +423,7 @@ const SettingsPaymentsTab = ({
               // Refresh any parent state if needed
               console.log('Payment methods refreshed');
             }}
+            onShowModal={handleShowStripeModal}
           />
         </View>
 
@@ -441,6 +447,7 @@ const SettingsPaymentsTab = ({
             // Refresh any parent state if needed
             console.log('Payment methods refreshed');
           }}
+          onShowModal={handleShowStripeModal}
         />
       </View>
 
@@ -853,6 +860,33 @@ const SettingsPaymentsTab = ({
     }
   };
 
+  const handleShowStripeModal = (clientSecret) => {
+    setStripeClientSecret(clientSecret);
+    setShowStripeModal(true);
+  };
+  
+  const handleStripeModalClose = () => {
+    setShowStripeModal(false);
+    setStripeClientSecret(null);
+  };
+  
+  const handleStripeSuccess = () => {
+    handleStripeModalClose();
+    showToast({
+      message: 'Payment method saved successfully',
+      type: 'success',
+      duration: 3000
+    });
+  };
+  
+  const handleStripeError = (error) => {
+    showToast({
+      message: error,
+      type: 'error',
+      duration: 4000
+    });
+  };
+
   const handleExportData = async () => {
     try {
       setLoading(true);
@@ -1009,6 +1043,15 @@ const SettingsPaymentsTab = ({
           </View>
         </View>
       </Modal>
+      
+      {/* Stripe Payment Setup Modal - Full Screen Overlay */}
+      <StripeModalSafe
+        visible={showStripeModal}
+        clientSecret={stripeClientSecret}
+        onClose={handleStripeModalClose}
+        onSuccess={handleStripeSuccess}
+        onError={handleStripeError}
+      />
     </View>
   );
 };

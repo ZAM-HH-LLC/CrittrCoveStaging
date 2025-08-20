@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
-import { debugLog, AuthContext } from '../context/AuthContext';
+import { debugLog } from '../context/AuthContext';
 import { useToast } from './ToastProvider';
 
 // Stripe imports - conditional for web platform
-let stripePromise: any = null;
-let Elements: any = null;
 let PaymentElement: any = null;
 let useStripe: any = null;
 let useElements: any = null;
@@ -24,7 +22,6 @@ const initializeStripe = async () => {
   if (Platform.OS === 'web') {
     try {
       // Use require for better compatibility with Expo web
-      const stripe = require('@stripe/stripe-js');
       const stripeReact = require('@stripe/react-stripe-js');
       
       // Get publishable key from environment
@@ -35,8 +32,7 @@ const initializeStripe = async () => {
       }
       
       console.log('PaymentMethodsManager: Loading Stripe with publishable key:', publishableKey.substring(0, 12) + '...');
-      stripePromise = stripe.loadStripe(publishableKey);
-      Elements = stripeReact.Elements;
+      // Stripe promise and Elements are now handled by parent
       PaymentElement = stripeReact.PaymentElement;
       useStripe = stripeReact.useStripe;
       useElements = stripeReact.useElements;
@@ -88,7 +84,7 @@ export const CardSetupForm: React.FC<{
   clientSecret: string;
   onSuccess: () => void;
   onError: (error: string) => void;
-}> = ({ clientSecret, onSuccess, onError }) => {
+}> = ({ onSuccess, onError }) => {
   const stripe = useStripe?.();
   const elements = useElements?.();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -142,16 +138,13 @@ export const CardSetupForm: React.FC<{
 
 const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   userRole,
-  onRefresh,
   onShowModal
 }) => {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [isStripeReady, setIsStripeReady] = useState(false);
-  const [showCardSetup, setShowCardSetup] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // Removed local modal state - now using parent modal
   const [loading, setLoading] = useState(false);
-  const { user } = useContext(AuthContext);
   const showToast = useToast();
 
   useEffect(() => {
@@ -251,9 +244,13 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
       if (onShowModal) {
         onShowModal(response.data.client_secret);
       } else {
-        // Fallback to local modal
-        setClientSecret(response.data.client_secret);
-        setShowCardSetup(true);
+        // No fallback - require parent to handle modal
+        debugLog('MBA2knlv843', 'No modal handler provided by parent');
+        showToast({
+          message: 'Modal handler not configured',
+          type: 'error',
+          duration: 3000
+        });
       }
     } catch (error) {
       debugLog('MBA2knlv843', 'Error creating setup intent:', error);
@@ -268,25 +265,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
     }
   };
 
-  const handleCardSetupSuccess = () => {
-    setShowCardSetup(false);
-    setClientSecret(null);
-    fetchPaymentMethods();
-    showToast({
-      message: 'Payment method saved successfully',
-      type: 'success',
-      duration: 3000
-    });
-    onRefresh?.();
-  };
-
-  const handleCardSetupError = (error: string) => {
-    showToast({
-      message: error,
-      type: 'error',
-      duration: 4000
-    });
-  };
+  // Removed local modal handlers - now handled by parent
 
   const handleSetupPayouts = async () => {
     try {
@@ -359,7 +338,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   const renderPayoutStatus = () => {
     if (!connectStatus) return null;
 
-    const { has_account, payouts_enabled, external_accounts, is_verified } = connectStatus;
+    const { has_account, payouts_enabled, external_accounts } = connectStatus;
 
     if (!has_account || external_accounts.length === 0) {
       return (
@@ -442,37 +421,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
         </View>
       )}
 
-      {/* Card Setup Modal - Web Only */}
-      {showCardSetup && clientSecret && Elements && stripePromise && Platform.OS === 'web' && (
-        <Elements stripe={stripePromise} options={{ clientSecret }}>
-          <TouchableOpacity 
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowCardSetup(false)}
-          >
-            <TouchableOpacity 
-              style={styles.modalContent}
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add Payment Method</Text>
-                <TouchableOpacity 
-                  onPress={() => setShowCardSetup(false)}
-                  style={styles.closeButton}
-                >
-                  <MaterialCommunityIcons name="close" size={24} color={theme.colors.secondary} />
-                </TouchableOpacity>
-              </View>
-              <CardSetupForm
-                clientSecret={clientSecret}
-                onSuccess={handleCardSetupSuccess}
-                onError={handleCardSetupError}
-              />
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Elements>
-      )}
+      {/* Modal now handled by parent component */}
     </View>
   );
 };
