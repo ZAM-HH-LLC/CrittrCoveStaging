@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -82,6 +82,8 @@ interface PaymentMethodsManagerProps {
   onRefresh?: () => void;
   onShowModal?: (clientSecret: string) => void;
   onPaymentMethodsUpdate?: (refreshFn: () => void) => void;
+  onDropdownStateChange?: (isOpen: boolean, isSwitching?: boolean) => void;
+  closeDropdown?: boolean;
 }
 
 // Card setup component for web - exported for use in parent
@@ -171,7 +173,9 @@ export const CardSetupForm: React.FC<{
 const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   userRole,
   onShowModal,
-  onPaymentMethodsUpdate
+  onPaymentMethodsUpdate,
+  onDropdownStateChange,
+  closeDropdown
 }) => {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
@@ -183,6 +187,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showDropdownForMethod, setShowDropdownForMethod] = useState<string | null>(null);
   const showToast = useToast();
+  const switchingDropdownRef = useRef(false);
 
   useEffect(() => {
     const initStripe = async () => {
@@ -213,6 +218,16 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
       onPaymentMethodsUpdate(refreshPaymentMethods);
     }
   }, []); // Remove dependency to prevent multiple calls
+  
+  // Close dropdown when parent requests it
+  useEffect(() => {
+    debugLog('MBA2knlv843', 'closeDropdown effect triggered:', { closeDropdown, showDropdownForMethod });
+    if (closeDropdown && showDropdownForMethod) {
+      debugLog('MBA2knlv843', 'Closing dropdown from parent request');
+      setShowDropdownForMethod(null);
+      onDropdownStateChange?.(false);
+    }
+  }, [closeDropdown, showDropdownForMethod, onDropdownStateChange]);
   
 
   const fetchPaymentMethods = async () => {
@@ -388,13 +403,71 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   };
 
   const handleMenuPress = (method: PaymentMethod) => {
+    debugLog('MBA2knlv843', 'Menu pressed for method:', method.payment_method_id, 'currently open:', showDropdownForMethod);
+    
+    // Set flag to indicate we're switching dropdowns
+    switchingDropdownRef.current = true;
+    
+    // If the same dropdown is already open, close it
+    if (showDropdownForMethod === method.payment_method_id) {
+      debugLog('MBA2knlv843', 'Same dropdown clicked, closing it');
+      setShowDropdownForMethod(null);
+      onDropdownStateChange?.(false);
+      switchingDropdownRef.current = false;
+      return;
+    }
+    
+    // If a different dropdown is open, close it first then open the new one
+    if (showDropdownForMethod) {
+      debugLog('MBA2knlv843', 'Different dropdown open, switching to new one');
+    } else {
+      debugLog('MBA2knlv843', 'No dropdown open, opening new one');
+    }
+    
     setShowDropdownForMethod(method.payment_method_id);
+    onDropdownStateChange?.(true, switchingDropdownRef.current);
+    
+    // Clear switching flag after a brief delay and notify parent
+    setTimeout(() => {
+      switchingDropdownRef.current = false;
+      debugLog('MBA2knlv843', 'Clearing switching flag and notifying parent');
+      onDropdownStateChange?.(true, false); // Update parent that we're no longer switching
+    }, 100);
   };
 
   const handleDeleteClick = (method: PaymentMethod) => {
     setShowDropdownForMethod(null); // Close dropdown
+    onDropdownStateChange?.(false);
     setPaymentMethodToDelete(method);
     setShowDeleteModal(true);
+  };
+
+  const handleMakePrimaryClick = async (method: PaymentMethod) => {
+    setShowDropdownForMethod(null); // Close dropdown
+    onDropdownStateChange?.(false);
+    
+    try {
+      // Call backend to set as primary
+      await axios.patch(`${API_BASE_URL}/api/payment-methods/v1/${method.payment_method_id}/`, {
+        is_primary_payment: true
+      });
+      
+      // Refresh the list
+      await fetchPaymentMethods();
+      
+      showToast({
+        message: 'Primary payment method updated successfully',
+        type: 'success',
+        duration: 3000
+      });
+    } catch (error) {
+      debugLog('MBA2knlv843', 'Error setting primary payment method:', error);
+      showToast({
+        message: error.response?.data?.error || 'Failed to update primary payment method',
+        type: 'error',
+        duration: 4000
+      });
+    }
   };
 
   const renderPaymentMethods = () => {
@@ -416,12 +489,19 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
       );
     }
 
-    return paymentMethods.map((method) => {
+    return paymentMethods.map((method, index) => {
       const isCard = method.type === 'CREDIT_CARD' || method.type === 'DEBIT_CARD';
       const iconName = isCard ? 'credit-card' : 'bank';
       
       return (
-        <View key={method.payment_method_id} style={styles.paymentMethodItem}>
+        <View 
+          key={method.payment_method_id} 
+          style={[
+            styles.paymentMethodItem,
+            // Ensure dropdown items have lower z-index than their parent
+            { zIndex: showDropdownForMethod === method.payment_method_id ? 1000 + (paymentMethods.length - index) : 1 }
+          ]}
+        >
           <View style={styles.paymentMethodContent}>
             <MaterialCommunityIcons 
               name={iconName} 
@@ -450,18 +530,35 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
               </View>
             </View>
           </View>
-          <View style={styles.menuContainer}>
+          <View style={[styles.menuContainer, { zIndex: 1000 + (paymentMethods.length - index) }]}>
             <TouchableOpacity 
               style={styles.menuButton}
               onPress={() => handleMenuPress(method)}
+              data-menu-button="true"
             >
               <MaterialCommunityIcons name="dots-vertical" size={20} color={theme.colors.text} />
             </TouchableOpacity>
             
             {showDropdownForMethod === method.payment_method_id && (
-              <View style={styles.dropdown}>
+              <View
+                style={[
+                  styles.dropdown,
+                  // If this is the last item, position dropdown above the button
+                  index === paymentMethods.length - 1 && styles.dropdownLast
+                ]}
+                data-dropdown="true"
+              >
+                {!method.is_primary_payment && (
+                  <TouchableOpacity 
+                    style={styles.dropdownItem}
+                    onPress={() => handleMakePrimaryClick(method)}
+                  >
+                    <MaterialCommunityIcons name="star" size={16} color={theme.colors.primary} />
+                    <Text style={[styles.dropdownItemText, { color: theme.colors.primary }]}>Make Primary</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity 
-                  style={styles.dropdownItem}
+                  style={[styles.dropdownItem, { borderBottomWidth: 0 }]} // Remove border from last item
                   onPress={() => handleDeleteClick(method)}
                 >
                   <MaterialCommunityIcons name="delete" size={16} color={theme.colors.error} />
@@ -526,11 +623,7 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   };
 
   return (
-    <TouchableOpacity 
-      style={styles.container}
-      activeOpacity={1}
-      onPress={() => setShowDropdownForMethod(null)} // Close dropdown when clicking outside
-    >
+    <View style={styles.container}>
       {userRole === 'professional' ? (
         <View>
           <View style={styles.sectionHeader}>
@@ -610,7 +703,8 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
           </View>
         </View>
       </Modal>
-    </TouchableOpacity>
+      
+    </View>
   );
 };
 
@@ -669,6 +763,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderRadius: 8,
     marginBottom: 8,
+    position: 'relative', // Ensure proper stacking context
   },
   paymentMethodContent: {
     flexDirection: 'row',
@@ -852,19 +947,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 1000,
-    minWidth: 120,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 20, // Higher elevation for Android
+    minWidth: 140,
+    overflow: 'hidden',
+    zIndex: 9999, // Very high z-index for iOS
+  },
+  dropdownLast: {
+    top: 'auto', // Override top positioning
+    bottom: 28, // Position above the button instead
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     gap: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: theme.colors.border,
   },
   dropdownItemText: {
     fontSize: 14,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Modal, FlatList, TextInput } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
@@ -83,11 +83,74 @@ const SettingsPaymentsTab = ({
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [stripeClientSecret, setStripeClientSecret] = useState(null);
   const [refreshPaymentMethods, setRefreshPaymentMethods] = useState(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [closeDropdown, setCloseDropdown] = useState(false);
+  const isSwitchingDropdownRef = useRef(false);
   
   // Debug: Log when refresh function changes
   useEffect(() => {
     debugLog('MBA12345', 'refreshPaymentMethods state changed:', refreshPaymentMethods ? 'function available' : 'null');
   }, [refreshPaymentMethods]);
+  
+  const handleCloseDropdown = () => {
+    debugLog('MBA12345', 'handleCloseDropdown called, isDropdownOpen:', isDropdownOpen, 'isSwitchingDropdown:', isSwitchingDropdownRef.current);
+    if (isDropdownOpen) {
+      debugLog('MBA12345', 'Triggering dropdown close');
+      setCloseDropdown(true);
+      isSwitchingDropdownRef.current = false; // Reset switching state when closing
+      // Reset closeDropdown after a brief delay to allow effect to run
+      setTimeout(() => setCloseDropdown(false), 50);
+    }
+  };
+  
+  // Debug: Log when dropdown state changes
+  useEffect(() => {
+    debugLog('MBA12345', 'isDropdownOpen state changed:', isDropdownOpen);
+  }, [isDropdownOpen]);
+  
+  
+  // Add document click listener when dropdown is open
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      // Small delay to allow other handlers (like menu button clicks) to process first
+      setTimeout(() => {
+        // Check if click was on dropdown content
+        const clickedElement = event.target;
+        const isDropdownClick = clickedElement.closest('[data-dropdown="true"]');
+        const isMenuButtonClick = clickedElement.closest('[data-menu-button="true"]');
+        
+        debugLog('MBA12345', 'Document click detected (delayed):', {
+          isDropdownClick: !!isDropdownClick,
+          isMenuButtonClick: !!isMenuButtonClick,
+          target: clickedElement.tagName,
+          currentDropdownState: isDropdownOpen,
+          isSwitchingDropdown: isSwitchingDropdownRef.current
+        });
+        
+        // Only close if we're still in the same state, it wasn't a dropdown-related click, and we're not switching
+        if (!isDropdownClick && !isMenuButtonClick && isDropdownOpen && !isSwitchingDropdownRef.current) {
+          debugLog('MBA12345', 'Click outside dropdown, closing...');
+          handleCloseDropdown();
+        } else if (isSwitchingDropdownRef.current) {
+          debugLog('MBA12345', 'Ignoring click during dropdown switch');
+        } else if (!isDropdownOpen) {
+          debugLog('MBA12345', 'No dropdown open, ignoring click');
+        } else {
+          debugLog('MBA12345', 'Click on dropdown-related element, ignoring');
+        }
+      }, 0);
+    };
+    
+    if (isDropdownOpen) {
+      debugLog('MBA12345', 'Adding document click listener');
+      document.addEventListener('click', handleDocumentClick, true);
+    }
+    
+    return () => {
+      debugLog('MBA12345', 'Removing document click listener');
+      document.removeEventListener('click', handleDocumentClick, true);
+    };
+  }, [isDropdownOpen]);
 
   useEffect(() => {
     // Fetch user's time settings when component mounts
@@ -434,6 +497,12 @@ const SettingsPaymentsTab = ({
               debugLog('MBA12345', 'PaymentMethodsManager onPaymentMethodsUpdate called with:', refreshFn ? 'function' : 'null');
               setRefreshPaymentMethods(() => refreshFn);
             }}
+            onDropdownStateChange={(isOpen, isSwitching = false) => {
+              debugLog('MBA12345', 'Dropdown state changed:', { isOpen, isSwitching });
+              setIsDropdownOpen(isOpen);
+              isSwitchingDropdownRef.current = isSwitching;
+            }}
+            closeDropdown={closeDropdown}
           />
         </View>
 
@@ -462,6 +531,12 @@ const SettingsPaymentsTab = ({
             debugLog('MBA12345', 'Mobile PaymentMethodsManager onPaymentMethodsUpdate called with:', refreshFn ? 'function' : 'null');
             setRefreshPaymentMethods(() => refreshFn);
           }}
+          onDropdownStateChange={(isOpen, isSwitching = false) => {
+            debugLog('MBA12345', 'Mobile dropdown state changed:', { isOpen, isSwitching });
+            setIsDropdownOpen(isOpen);
+            isSwitchingDropdownRef.current = isSwitching;
+          }}
+          closeDropdown={closeDropdown}
         />
       </View>
 
@@ -1076,6 +1151,7 @@ const SettingsPaymentsTab = ({
         onSuccess={handleStripeSuccess}
         onError={handleStripeError}
       />
+      
     </View>
   );
 };
@@ -1618,6 +1694,15 @@ const styles = StyleSheet.create({
     color: theme.colors.secondary,
     marginTop: 4,
     textAlign: 'center',
+  },
+  fullScreenOverlay: {
+    position: 'fixed', // Use fixed positioning to ensure it covers entire screen
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100, // Low z-index, well below dropdown
+    backgroundColor: 'transparent',
   },
 });
 

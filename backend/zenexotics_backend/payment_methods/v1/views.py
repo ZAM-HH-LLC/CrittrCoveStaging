@@ -200,6 +200,44 @@ class PaymentMethodDetailView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
+    def patch(self, request, payment_method_id):
+        """Update a payment method (e.g., set as primary)"""
+        try:
+            # Get the payment method
+            payment_method = get_object_or_404(
+                PaymentMethod,
+                payment_method_id=payment_method_id,
+                user=request.user
+            )
+            
+            # Check if request wants to set as primary payment
+            if request.data.get('is_primary_payment') is True:
+                PaymentMethod.set_primary_payment_method(request.user, payment_method)
+                logger.info(f"Set payment method {payment_method_id} as primary payment for user {request.user.id}")
+            
+            # Check if request wants to set as primary payout  
+            if request.data.get('is_primary_payout') is True:
+                if payment_method.type == 'BANK_ACCOUNT':
+                    PaymentMethod.set_primary_payout_method(request.user, payment_method)
+                    logger.info(f"Set payment method {payment_method_id} as primary payout for user {request.user.id}")
+                else:
+                    return Response(
+                        {'error': 'Only bank accounts can be set as primary payout method'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Return updated payment method
+            payment_method.refresh_from_db()
+            response_data = PaymentMethodSerializer(payment_method).data
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error updating payment method: {str(e)}")
+            return Response(
+                {'error': 'An error occurred while updating the payment method'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def delete(self, request, payment_method_id):
         """Delete a payment method"""
         try:
