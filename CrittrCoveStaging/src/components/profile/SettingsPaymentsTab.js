@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Modal, FlatList, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Modal, FlatList, TextInput, Platform, Linking, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../styles/theme';
 import { getTimeSettings, updateTimeSettings } from '../../api/API';
@@ -53,6 +53,7 @@ const SettingsPaymentsTab = ({
   profile_visibility,
   timezone: propTimezone,
   use_military_time,
+  email,
   onUpdateSetting,
   isMobile,
   currentPlan = { 
@@ -214,6 +215,64 @@ const SettingsPaymentsTab = ({
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSetupPayouts = async () => {
+    try {
+      setLoading(true);
+      console.log('MBA2i3j4fi4 Professional payout setup clicked - starting Connect onboarding');
+      console.log('MBA2i3j4fi4 Calling Connect onboarding API endpoint...');
+      
+      const response = await axios.post(`${API_BASE_URL}/api/payments/v1/setup-payouts/`, {
+        refresh_url: `${window.location.origin}/payments/onboarding/refresh`,
+        return_url: `${window.location.origin}/payments/onboarding/return`
+      });
+      
+      console.log('MBA2i3j4fi4 Connect onboarding response received:', {
+        url: response.data.onboarding_url ? 'URL_SET' : 'URL_MISSING',
+        account_id: response.data.account_id || 'NO_ACCOUNT_ID'
+      });
+      
+      if (response.data.onboarding_url) {
+        console.log('MBA2i3j4fi4 Opening Stripe Connect onboarding in new window...');
+        
+        // Open Stripe onboarding in new window/tab
+        if (Platform.OS === 'web') {
+          window.open(response.data.onboarding_url, '_blank');
+          console.log('MBA2i3j4fi4 Stripe Connect onboarding opened successfully');
+        } else {
+          // For mobile, use Linking
+          Linking.openURL(response.data.onboarding_url);
+          console.log('MBA2i3j4fi4 Stripe Connect onboarding opened via Linking');
+        }
+        
+        showToast({
+          message: 'Opening Stripe payout setup...',
+          type: 'success',
+          duration: 3000
+        });
+        
+        // Keep loading state for a bit longer to show user feedback
+        setTimeout(() => setLoading(false), 1000);
+      } else {
+        console.error('MBA2i3j4fi4 No onboarding URL in response');
+        throw new Error('No onboarding URL provided');
+      }
+    } catch (error) {
+      console.error('MBA2i3j4fi4 Error in payout setup:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      
+      showToast({
+        message: error.response?.data?.error || 'Failed to start payout setup',
+        type: 'error',
+        duration: 4000
+      });
+      setLoading(false); // Only reset loading on error
     }
   };
 
@@ -486,24 +545,38 @@ const SettingsPaymentsTab = ({
 
       <View style={styles.rightColumn}>
         <View style={styles.section}>
-          <PaymentMethodsManager 
-            userRole={userRole} 
-            onRefresh={() => {
-              // Refresh any parent state if needed
-              console.log('Payment methods refreshed');
-            }}
-            onShowModal={handleShowStripeModal}
-            onPaymentMethodsUpdate={(refreshFn) => {
-              debugLog('MBA12345', 'PaymentMethodsManager onPaymentMethodsUpdate called with:', refreshFn ? 'function' : 'null');
-              setRefreshPaymentMethods(() => refreshFn);
-            }}
-            onDropdownStateChange={(isOpen, isSwitching = false) => {
-              debugLog('MBA12345', 'Dropdown state changed:', { isOpen, isSwitching });
-              setIsDropdownOpen(isOpen);
-              isSwitchingDropdownRef.current = isSwitching;
-            }}
-            closeDropdown={closeDropdown}
-          />
+          {console.log('MBA2i3onv4i3 SettingsPaymentsTab desktop: userRole check:', {
+            userRole,
+            isPetOwnerOrClient: userRole === 'petOwner' || userRole === 'client',
+            platform: Platform.OS,
+            timestamp: new Date().toISOString()
+          })}
+          {userRole === 'petOwner' || userRole === 'client' || userRole === 'professional' ? (
+            <PaymentMethodsManager 
+              userRole={userRole === 'petOwner' ? 'client' : userRole}
+              userEmail={email}
+              onRefresh={() => {
+                // Refresh any parent state if needed
+                console.log('MBA2i3j4fi4 Payment methods refreshed');
+              }}
+              onShowModal={handleShowStripeModal}
+              onPaymentMethodsUpdate={(refreshFn) => {
+                debugLog('MBA12345', 'PaymentMethodsManager onPaymentMethodsUpdate called with:', refreshFn ? 'function' : 'null');
+                setRefreshPaymentMethods(() => refreshFn);
+              }}
+              onDropdownStateChange={(isOpen, isSwitching = false) => {
+                debugLog('MBA12345', 'Dropdown state changed:', { isOpen, isSwitching });
+                setIsDropdownOpen(isOpen);
+                isSwitchingDropdownRef.current = isSwitching;
+              }}
+              closeDropdown={closeDropdown}
+            />
+          ) : (
+            <View>
+              {console.log('MBA2i3onv4i3 SettingsPaymentsTab desktop: No matching userRole, should not happen')}
+              <Text>Unsupported user role: {userRole}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -520,8 +593,15 @@ const SettingsPaymentsTab = ({
   const renderMobileLayout = () => (
     <ScrollView style={styles.mobileContainer} contentContainerStyle={{ paddingBottom: 100 }}>
       <View style={styles.section}>
+        {console.log('MBA2i3onv4i3 SettingsPaymentsTab mobile: PaymentMethodsManager props:', {
+          userRole,
+          mappedRole: userRole === 'petOwner' ? 'client' : userRole,
+          platform: Platform.OS,
+          timestamp: new Date().toISOString()
+        })}
         <PaymentMethodsManager 
-          userRole={userRole} 
+          userRole={userRole === 'petOwner' ? 'client' : userRole}
+          userEmail={email}
           onRefresh={() => {
             // Refresh any parent state if needed
             console.log('Payment methods refreshed');
@@ -1147,6 +1227,7 @@ const SettingsPaymentsTab = ({
       <StripeModalSafe
         visible={showStripeModal}
         clientSecret={stripeClientSecret}
+        userEmail={email}
         onClose={handleStripeModalClose}
         onSuccess={handleStripeSuccess}
         onError={handleStripeError}
@@ -1703,6 +1784,38 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 100, // Low z-index, well below dropdown
     backgroundColor: 'transparent',
+  },
+  payoutSetupContainer: {
+    padding: 20,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  payoutDescription: {
+    color: theme.colors.secondary,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 14,
+  },
+  payoutButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  payoutButtonIcon: {
+    marginRight: 8,
+  },
+  payoutButtonText: {
+    color: theme.colors.background,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  payoutButtonDisabled: {
+    opacity: 0.6,
   },
 });
 

@@ -27,29 +27,38 @@ logger = logging.getLogger(__name__)
 @permission_classes([IsAuthenticated])
 def create_setup_intent(request):
     """
-    Create a SetupIntent for saving a payment method for future use.
+    Create a SetupIntent for saving a card payment method (client role only).
     """
     try:
         user = request.user
+        user_role = request.data.get('user_role', 'client')
         
         # Get or create Stripe customer
         customer = get_or_create_stripe_customer(user)
         
-        # Create SetupIntent
+        # Only clients should use SetupIntent for card storage
+        if user_role != 'client':
+            logger.warning(f"MBA2i3j4fi4 SetupIntent requested by non-client role: {user_role} for user {user.user_id}")
+            return Response({
+                'error': 'SetupIntent is only for client card storage. Pros should use Connect onboarding for payouts.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create SetupIntent restricted to cards only
         setup_intent = stripe.SetupIntent.create(
             customer=customer.id,
             usage='off_session',
             payment_method_types=['card'],
-            metadata={'user_id': user.user_id}
+            metadata={'user_id': user.user_id, 'app_role': 'client'}
         )
         
+        logger.info(f"MBA2i3j4fi4 Created card-only SetupIntent for client user {user.user_id}")
         return Response({
             'client_secret': setup_intent.client_secret,
             'setup_intent_id': setup_intent.id
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        logger.error(f"Error creating setup intent for user {request.user.user_id}: {e}")
+        logger.error(f"MBA2i3j4fi4 Error creating setup intent for user {request.user.user_id}: {e}")
         return Response({
             'error': 'Failed to create setup intent'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -59,30 +68,46 @@ def create_setup_intent(request):
 def onboard_professional(request):
     """
     Create or get Connect Express account and generate onboarding link.
+    Legacy endpoint - calls same logic as new function.
     """
     try:
         user = request.user
+        logger.warning(f"MBA2i3j4fi4 Legacy onboard_professional endpoint called by user {user.user_id}")
+        logger.info(f"MBA2i3j4fi4 Starting Connect onboarding for professional user {user.user_id} ({user.email})")
         
         # Get or create Connect Express account
+        logger.info(f"MBA2i3j4fi4 Creating/retrieving Stripe Connect Express account...")
         account = get_or_create_connect_express_account(user)
+        logger.info(f"MBA2i3j4fi4 Connect account ready: {account.id}")
         
         # Create account link for onboarding
-        refresh_url = request.data.get('refresh_url')
-        return_url = request.data.get('return_url')
+        refresh_url = request.data.get('refresh_url', f"{settings.FRONTEND_URL}/profile?tab=payments&refresh=true")
+        return_url = request.data.get('return_url', f"{settings.FRONTEND_URL}/profile?tab=payments&success=true")
         
+        logger.info(f"MBA2i3j4fi4 Creating onboarding link with URLs - refresh: {refresh_url}, return: {return_url}")
         onboarding_url = create_account_link(
             account.id, 
             refresh_url=refresh_url, 
             return_url=return_url
         )
         
+        logger.info(f"MBA2i3j4fi4 Successfully created Connect onboarding link for user {user.user_id}")
         return Response({
             'onboarding_url': onboarding_url,
             'account_id': account.id
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        logger.error(f"Error creating Connect onboarding for user {request.user.user_id}: {e}")
+        logger.error(f"MBA2i3j4fi4 Error creating Connect onboarding for user {request.user.user_id}: {e}")
+        
+        # Provide more specific error message for Connect not enabled
+        error_message = str(e)
+        if 'signed up for Connect' in error_message:
+            logger.error(f"MBA2i3j4fi4 Stripe Connect not enabled on account - user needs to enable Connect in Dashboard")
+            return Response({
+                'error': 'Stripe Connect must be enabled in your Stripe Dashboard to set up payouts. Please contact support.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         return Response({
             'error': 'Failed to create onboarding link'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

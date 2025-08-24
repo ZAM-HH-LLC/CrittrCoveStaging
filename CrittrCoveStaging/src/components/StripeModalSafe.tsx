@@ -7,6 +7,7 @@ import { CardSetupForm, modalStyles } from './PaymentMethodsManager';
 interface StripeModalProps {
   visible: boolean;
   clientSecret: string | null;
+  userEmail?: string;
   onClose: () => void;
   onSuccess: () => void;
   onError: (error: string) => void;
@@ -16,10 +17,11 @@ interface StripeModalProps {
 const StripeContent: React.FC<{
   stripePromise: any;
   clientSecret: string;
+  userEmail?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
   onClose: () => void;
-}> = ({ stripePromise, clientSecret, onSuccess, onError, onClose }) => {
+}> = ({ stripePromise, clientSecret, userEmail, onSuccess, onError, onClose }) => {
   // Only import on web platform
   if (Platform.OS !== 'web') {
     return null;
@@ -67,16 +69,8 @@ const StripeContent: React.FC<{
       <Elements 
         stripe={stripePromise} 
         options={{ 
-          clientSecret,
-          // Disable Link completely at Elements level
-          linkMode: 'never',
-          // Force manual payment method creation
-          paymentMethodCreation: 'manual',
-          // Appearance settings
-          appearance: {
-            theme: 'stripe',
-            disableLink: true
-          }
+          clientSecret, 
+          appearance: { theme: 'stripe' } 
         }}
         onReady={() => {
           console.log('MBA2i3j4fi4 Elements component is ready');
@@ -84,6 +78,7 @@ const StripeContent: React.FC<{
       >
         <CardSetupForm
           clientSecret={clientSecret}
+          userEmail={userEmail}
           onSuccess={() => {
             console.log('MBA2i3j4fi4 StripeModalSafe: CardSetupForm onSuccess called');
             onSuccess();
@@ -101,6 +96,7 @@ const StripeContent: React.FC<{
 const StripeModalSafe: React.FC<StripeModalProps> = ({
   visible,
   clientSecret,
+  userEmail,
   onClose,
   onSuccess,
   onError
@@ -177,6 +173,7 @@ const StripeModalSafe: React.FC<StripeModalProps> = ({
           <StripeContent
             stripePromise={stripePromise}
             clientSecret={clientSecret}
+            userEmail={userEmail}
             onSuccess={onSuccess}
             onError={onError}
             onClose={onClose}

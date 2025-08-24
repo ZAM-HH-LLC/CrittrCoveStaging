@@ -99,6 +99,8 @@ import PetBoardingColoradoSprings from './src/screens/seo/PetBoardingColoradoSpr
 import DogSittingColoradoSprings from './src/screens/seo/DogSittingColoradoSprings';
 import SiteMap from './src/screens/SiteMap';
 import ConfirmAccountDeletion from './src/screens/ConfirmAccountDeletion';
+import StripeOnboardingReturn from './src/screens/StripeOnboardingReturn';
+import StripeOnboardingRefresh from './src/screens/StripeOnboardingRefresh';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -149,6 +151,8 @@ const screens = [
   { name: 'PetBoardingColoradoSprings', component: PetBoardingColoradoSprings },
   { name: 'DogSittingColoradoSprings', component: DogSittingColoradoSprings },
   { name: 'SiteMap', component: SiteMap },
+  { name: 'StripeOnboardingReturn', component: StripeOnboardingReturn },
+  { name: 'StripeOnboardingRefresh', component: StripeOnboardingRefresh },
 ];
 
 const createLinking = (authContext) => ({
@@ -295,6 +299,8 @@ const createLinking = (authContext) => ({
       PetBoardingColoradoSprings: 'pet-boarding-colorado-springs',
       DogSittingColoradoSprings: 'dog-sitting-colorado-springs',
       SiteMap: 'site-map',
+      StripeOnboardingReturn: 'payments/onboarding/return',
+      StripeOnboardingRefresh: 'payments/onboarding/refresh',
     }
   }
 });

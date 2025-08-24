@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, ScrollView } from 'react-native';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import axios from 'axios';
@@ -79,6 +79,7 @@ interface ConnectStatus {
 
 interface PaymentMethodsManagerProps {
   userRole: 'client' | 'professional';
+  userEmail?: string;
   onRefresh?: () => void;
   onShowModal?: (clientSecret: string) => void;
   onPaymentMethodsUpdate?: (refreshFn: () => void) => void;
@@ -89,18 +90,16 @@ interface PaymentMethodsManagerProps {
 // Card setup component for web - exported for use in parent
 export const CardSetupForm: React.FC<{
   clientSecret: string;
+  userEmail?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
-}> = ({ clientSecret, onSuccess, onError }) => {
+}> = ({ clientSecret, userEmail, onSuccess, onError }) => {
   const stripe = useStripe?.();
   const elements = useElements?.();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [hasLinkSavedMethods, setHasLinkSavedMethods] = useState(false);
-  const [showAlternativeInstructions, setShowAlternativeInstructions] = useState(false);
-  const [userHasInteracted, setUserHasInteracted] = useState(false);
   const { isApprovedProfessional } = useContext(AuthContext);
 
-  console.log('MBA2i3j4fi4 CardSetupForm component rendered', {
+  console.log('MBA2i3j4fi4 CardSetupForm component rendered (card-only)', {
     clientSecret: clientSecret ? 'SET' : 'NOT SET',
     stripe: stripe ? 'LOADED' : 'NOT LOADED',
     elements: elements ? 'LOADED' : 'NOT LOADED'
@@ -164,31 +163,13 @@ export const CardSetupForm: React.FC<{
     return <Text>Loading payment form...</Text>;
   }
 
+  // Card-only Payment Element options (no Link, no ACH)
   const paymentElementOptions = {
-    // Force showing only new payment method entry - disable all saved methods
-    layout: {
-      type: 'tabs',
-      defaultCollapsed: false,
-      radios: false,
-      spacedAccordionItems: false
-    },
-    // Disable Link and saved payment methods completely
-    linkMode: 'never',
-    disableLink: true,
-    // Force fresh entry
-    paymentMethodCreation: 'manual',
-    // Configure to show card tab first
-    paymentMethodOrder: ['card', 'us_bank_account'],
-    // Appearance settings to hide saved methods
-    appearance: {
-      disableLink: true,
-      variables: {
-        colorPrimary: '#0570DE'
-      }
-    }
+    layout: { type: 'tabs' },
+    paymentMethodOrder: ['card']
   };
 
-  console.log('MBA2i3j4fi4 Rendering PaymentElement with options:', paymentElementOptions);
+  console.log('MBA2i3j4fi4 Rendering card-only PaymentElement with options:', paymentElementOptions);
   console.log('MBA2i3j4fi4 Client secret available:', clientSecret ? 'YES' : 'NO');
 
   return (
@@ -197,55 +178,37 @@ export const CardSetupForm: React.FC<{
         {/* Helpful instructions for users */}
         <View style={styles.instructionsContainer}>
           <Text style={styles.instructionsTitle}>
-            {hasLinkSavedMethods && !userHasInteracted ? "Want to Add a Different Payment Method?" : "Add a New Payment Method"}
+            Add a New Card
           </Text>
           <Text style={styles.instructionsText}>
-            {hasLinkSavedMethods && !userHasInteracted
-              ? "💡 We found a saved payment method. To add a card or different bank account, click \"Change\" below, then select \"[+] new payment method\""
-              : "💡 Choose to add a credit card or connect your bank account securely"
-            }
+            💳 Enter your card details below to save for future payments
           </Text>
-          {showAlternativeInstructions && (
-            <View style={styles.alternativeContainer}>
-              <Text style={styles.alternativeText}>
-                ℹ️ Having trouble? The "Change" button below will reveal more options including "Add new payment method"
-              </Text>
-            </View>
-          )}
         </View>
         
         <View style={styles.paymentElementWrapper}>
           <PaymentElement 
             options={paymentElementOptions}
-            onReady={() => {
-              console.log('MBA2i3j4fi4 PaymentElement is ready');
+            onReady={(element: any) => {
+              console.log('MBA2i3j4fi4 Card-only PaymentElement ready');
+              try {
+                console.log('Available payment methods:', element?.availablePaymentMethods);
+                console.log('Payment method configuration:', element?.paymentMethodConfiguration);
+              } catch (e) {
+                console.log('Could not read availablePaymentMethods/config:', e);
+              }
             }}
             onChange={(event) => {
-              console.log('MBA2i3j4fi4 PaymentElement changed:', event);
+              console.log('MBA2i3j4fi4 Card PaymentElement changed:', event);
               
-              // Detect if we're showing saved payment methods vs fresh entry
-              if (event.complete && event.value?.type) {
-                console.log('MBA2i3j4fi4 Payment method type detected:', event.value.type);
-                // If it completed immediately without user input, likely showing saved method
-                if (!hasLinkSavedMethods && event.complete && !event.empty && !userHasInteracted) {
-                  setHasLinkSavedMethods(true);
-                  setShowAlternativeInstructions(true);
-                  console.log('MBA2i3j4fi4 Detected Link saved methods - showing alternative instructions');
-                }
-              }
-              
-              // If user starts interacting with empty form, they likely clicked Change
-              if (event.empty && hasLinkSavedMethods && !userHasInteracted) {
-                setUserHasInteracted(true);
-                setShowAlternativeInstructions(false);
-                console.log('MBA2i3j4fi4 User has interacted - hiding instructions');
+              if (event.complete && event.value?.type === 'card') {
+                console.log('MBA2i3j4fi4 Card information complete');
               }
             }}
             onFocus={(event) => {
-              console.log('MBA2i3j4fi4 PaymentElement focused:', event);
+              console.log('MBA2i3j4fi4 Card PaymentElement focused:', event);
             }}
             onBlur={(event) => {
-              console.log('MBA2i3j4fi4 PaymentElement blurred:', event);
+              console.log('MBA2i3j4fi4 Card PaymentElement blurred:', event);
             }}
           />
         </View>
@@ -258,7 +221,7 @@ export const CardSetupForm: React.FC<{
         disabled={isProcessing}
       >
         <Text style={styles.submitButtonText}>
-          {isProcessing ? 'Processing...' : 'Save Payment Method'}
+          {isProcessing ? 'Processing...' : 'Save Card'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -267,16 +230,26 @@ export const CardSetupForm: React.FC<{
 
 const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   userRole,
+  userEmail,
   onShowModal,
   onPaymentMethodsUpdate,
   onDropdownStateChange,
   closeDropdown
 }) => {
+  console.log('MBA2i3onv4i3 PaymentMethodsManager: Component render with props:', {
+    userRole,
+    userEmail: userEmail ? 'PROVIDED' : 'NOT_PROVIDED',
+    platform: Platform.OS,
+    timestamp: new Date().toISOString()
+  });
+
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [isStripeReady, setIsStripeReady] = useState(false);
   // Removed local modal state - now using parent modal
   const [loading, setLoading] = useState(false);
+  const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(userRole !== 'professional');
+  const [isLoadingConnectStatus, setIsLoadingConnectStatus] = useState(userRole === 'professional');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [paymentMethodToDelete, setPaymentMethodToDelete] = useState<PaymentMethod | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -284,22 +257,98 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   const showToast = useToast();
   const switchingDropdownRef = useRef(false);
 
+  // Define fetch functions with useCallback to prevent infinite loops
+  const fetchPaymentMethods = useCallback(async () => {
+    console.log('MBA2i3onv4i3 fetchPaymentMethods called:', {
+      platform: Platform.OS,
+      timestamp: new Date().toISOString()
+    });
+    try {
+      setIsLoadingPaymentMethods(true);
+      debugLog('MBA2knlv843', 'Fetching payment methods...');
+      const response = await axios.get(`${API_BASE_URL}/api/payment-methods/v1/?method_type=both`);
+      debugLog('MBA2knlv843', 'Raw payment methods response:', response.data);
+      
+      // Combine payment and payout methods into single list for display
+      const allMethods = [
+        ...(response.data.payment_methods || []),
+        ...(response.data.payout_methods || [])
+      ];
+      
+      // Remove duplicates (bank accounts might appear in both lists)
+      const uniqueMethods = allMethods.filter((method, index, self) => 
+        index === self.findIndex(m => m.payment_method_id === method.payment_method_id)
+      );
+      
+      debugLog('MBA2knlv843', 'Setting payment methods state:', uniqueMethods);
+      setPaymentMethods(uniqueMethods);
+      debugLog('MBA2knlv843', 'Payment methods state updated successfully');
+    } catch (error) {
+      debugLog('MBA2knlv843', 'Error fetching payment methods:', error);
+      // Don't show error to user for failed fetch, just log it
+    } finally {
+      setIsLoadingPaymentMethods(false);
+    }
+  }, []);
+
+  const fetchConnectStatus = useCallback(async () => {
+    console.log('MBA2i3onv4i3 fetchConnectStatus called:', {
+      platform: Platform.OS,
+      timestamp: new Date().toISOString()
+    });
+    try {
+      setIsLoadingConnectStatus(true);
+      console.log('MBA2i3onv4i3 Making connect-status API call...');
+      const response = await axios.get(`${API_BASE_URL}/api/payments/v1/connect-status/`);
+      console.log('MBA2i3onv4i3 Connect status API response received:', response.data);
+      setConnectStatus(response.data);
+      debugLog('MBA2knlv843', 'Connect status:', response.data);
+    } catch (error) {
+      console.log('MBA2i3onv4i3 Error in fetchConnectStatus:', error);
+      debugLog('MBA2knlv843', 'Error fetching connect status:', error);
+    } finally {
+      console.log('MBA2i3onv4i3 fetchConnectStatus completed');
+      setIsLoadingConnectStatus(false);
+    }
+  }, []);
+
   useEffect(() => {
+    console.log('MBA2i3onv4i3 Stripe init useEffect triggered');
     const initStripe = async () => {
-      console.log('PaymentMethodsManager: Starting Stripe initialization...');
+      console.log('MBA2i3onv4i3 PaymentMethodsManager: Starting Stripe initialization...');
       const ready = await initializeStripe();
-      console.log('PaymentMethodsManager: Stripe initialization result:', ready);
+      console.log('MBA2i3onv4i3 PaymentMethodsManager: Stripe initialization result:', ready);
       setIsStripeReady(ready);
     };
     
     initStripe();
-    // Only fetch payment methods once on mount - don't depend on userRole changes
+  }, []); // Stripe init only needs to run once
+
+  useEffect(() => {
+    // Fetch data when component mounts or userRole changes
+    console.log('MBA2i3onv4i3 userRole useEffect triggered:', {
+      userRole,
+      platform: Platform.OS,
+      isLoadingPaymentMethods,
+      isLoadingConnectStatus,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (!userRole) {
+      console.log('MBA2i3onv4i3 userRole is falsy, skipping fetch calls');
+      return;
+    }
+    
+    console.log('MBA2i3onv4i3 Calling fetchPaymentMethods...');
     fetchPaymentMethods();
     
     if (userRole === 'professional') {
+      console.log('MBA2i3onv4i3 User is professional - calling fetchConnectStatus...');
       fetchConnectStatus();
+    } else {
+      console.log('MBA2i3onv4i3 User is not professional, skipping fetchConnectStatus');
     }
-  }, []); // Remove userRole dependency to prevent duplicate calls
+  }, [userRole, fetchPaymentMethods, fetchConnectStatus]); // Add userRole dependency to handle race conditions
 
   // Add refresh function that can be called after successful payment method addition
   const refreshPaymentMethods = () => {
@@ -323,46 +372,9 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
       onDropdownStateChange?.(false);
     }
   }, [closeDropdown, showDropdownForMethod, onDropdownStateChange]);
-  
-
-  const fetchPaymentMethods = async () => {
-    try {
-      debugLog('MBA2knlv843', 'Fetching payment methods...');
-      const response = await axios.get(`${API_BASE_URL}/api/payment-methods/v1/?method_type=both`);
-      debugLog('MBA2knlv843', 'Raw payment methods response:', response.data);
-      
-      // Combine payment and payout methods into single list for display
-      const allMethods = [
-        ...(response.data.payment_methods || []),
-        ...(response.data.payout_methods || [])
-      ];
-      
-      // Remove duplicates (bank accounts might appear in both lists)
-      const uniqueMethods = allMethods.filter((method, index, self) => 
-        index === self.findIndex(m => m.payment_method_id === method.payment_method_id)
-      );
-      
-      debugLog('MBA2knlv843', 'Setting payment methods state:', uniqueMethods);
-      setPaymentMethods(uniqueMethods);
-      debugLog('MBA2knlv843', 'Payment methods state updated successfully');
-    } catch (error) {
-      debugLog('MBA2knlv843', 'Error fetching payment methods:', error);
-      // Don't show error to user for failed fetch, just log it
-    }
-  };
-
-  const fetchConnectStatus = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/payments/v1/connect-status/`);
-      setConnectStatus(response.data);
-      debugLog('MBA2knlv843', 'Connect status:', response.data);
-    } catch (error) {
-      debugLog('MBA2knlv843', 'Error fetching connect status:', error);
-    }
-  };
 
   const handleAddCard = async () => {
-    console.log('MBA2i3j4fi4 PaymentMethodsManager: Add Card/Bank button clicked!', {
+    console.log('MBA2i3j4fi4 PaymentMethodsManager: Add Card button clicked (client role)!', {
       platform: Platform.OS,
       isStripeReady,
       loading,
@@ -414,9 +426,14 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
 
     try {
       setLoading(true);
-      console.log('MBA2i3j4fi4 Creating setup intent...');
-      const response = await axios.post(`${API_BASE_URL}/api/payments/v1/create-setup-intent/`);
-      console.log('MBA2i3j4fi4 Setup intent created successfully:', response.data);
+      console.log('MBA2i3j4fi4 Creating card-only setup intent for client...');
+      const response = await axios.post(`${API_BASE_URL}/api/payments/v1/setup-intent/`, {
+        user_role: 'client'
+      });
+      console.log('MBA2i3j4fi4 Card-only setup intent created successfully:', response.data);
+      
+      // Verify it's card-only
+      console.log('MBA2i3j4fi4 Expected payment_method_types: ["card"]');
       
       if (onShowModal) {
         console.log('MBA2i3j4fi4 Calling onShowModal with client secret');
@@ -448,22 +465,22 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
   const handleSetupPayouts = async () => {
     try {
       setLoading(true);
-      const response = await axios.post(`${API_BASE_URL}/api/payments/v1/onboard-professional/`, {
+      const response = await axios.post(`${API_BASE_URL}/api/payments/v1/setup-payouts/`, {
         refresh_url: `${window.location.origin}/payments/onboarding/refresh`,
         return_url: `${window.location.origin}/payments/onboarding/return`
       });
       
-      // Redirect to Stripe onboarding
+      // Redirect to Stripe onboarding - don't reset loading since we're leaving the page
       window.location.href = response.data.onboarding_url;
     } catch (error) {
       debugLog('MBA2knlv843', 'Error starting onboarding:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to start payout setup';
       showToast({
-        message: 'Failed to start payout setup',
+        message: errorMessage,
         type: 'error',
-        duration: 3000
+        duration: 4000
       });
-    } finally {
-      setLoading(false);
+      setLoading(false); // Only reset loading on error
     }
   };
 
@@ -718,6 +735,25 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
     ));
   };
 
+  // Compute overall loading state
+  const isInitialLoading = userRole === 'professional' 
+    ? isLoadingConnectStatus 
+    : isLoadingPaymentMethods;
+
+  // Show loading state until all necessary data is fetched
+  if (isInitialLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>
+            {userRole === 'professional' ? 'Loading payout information...' : 'Loading payment methods...'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {userRole === 'professional' ? (
@@ -725,13 +761,17 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Payout Methods</Text>
             <TouchableOpacity 
-              style={styles.addButton} 
+              style={[styles.addButton, loading && styles.addButtonDisabled]} 
               onPress={handleSetupPayouts}
               disabled={loading}
             >
-              <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
+              {loading ? (
+                <ActivityIndicator size="small" color={theme.colors.background} />
+              ) : (
+                <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
+              )}
               <Text style={styles.addButtonText}>
-                {connectStatus?.has_account ? 'Manage' : 'Set Up Payouts'}
+                {loading ? (connectStatus?.has_account ? 'Managing...' : 'Setting up...') : (connectStatus?.has_account ? 'Manage' : 'Set Up Payouts')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -742,12 +782,18 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Payment Methods</Text>
             <TouchableOpacity 
-              style={styles.addButton} 
+              style={[styles.addButton, loading && styles.addButtonDisabled]} 
               onPress={handleAddCard}
               disabled={loading}
             >
-              <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
-              <Text style={styles.addButtonText}>Add Payment Method</Text>
+              {loading ? (
+                <ActivityIndicator size="small" color={theme.colors.background} />
+              ) : (
+                <MaterialCommunityIcons name="plus" size={20} color={theme.colors.background} />
+              )}
+              <Text style={styles.addButtonText}>
+                {loading ? 'Adding...' : 'Add Card'}
+              </Text>
             </TouchableOpacity>
           </View>
           {renderPaymentMethods()}
@@ -831,6 +877,9 @@ const styles = StyleSheet.create({
     color: theme.colors.background,
     marginLeft: 4,
     fontWeight: '500',
+  },
+  addButtonDisabled: {
+    opacity: 0.6,
   },
   emptyState: {
     alignItems: 'center',
@@ -1119,6 +1168,20 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     fontWeight: '500',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: theme.colors.secondary,
+    textAlign: 'center',
+  },
 });
 
 // Export helper functions and components for parent usage
@@ -1189,12 +1252,19 @@ export const modalStyles = StyleSheet.create({
     color: theme.colors.text,
     letterSpacing: -0.5,
   },
-  closeButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 40,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: theme.colors.secondary,
+    textAlign: 'center',
   },
 });
 

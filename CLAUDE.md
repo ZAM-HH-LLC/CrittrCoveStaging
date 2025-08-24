@@ -90,9 +90,9 @@ python3 manage.py test
 - Use `formatDateTimeRangeFromUTC` for ranges, `formatFromUTC` for single dates
 
 ### Logging & Debugging
-- Frontend: Use `debugLog("MBA<NNNN>: message", data)` format
+- Frontend: Use `debugLog("MBA2i3j4fi4: message", data)` format
 - Backend: Use Django logging, no debugLog function
-- Always use consistent log codes (MBA followed by 10 digits)
+- Always use consistent log codes (MBA2i3j4fi4)
 
 ### Code Organization
 - **DRY Principle**: Search for existing utilities before creating new ones

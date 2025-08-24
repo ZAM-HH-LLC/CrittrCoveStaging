@@ -144,11 +144,6 @@ For testing professional onboarding:
 
 ## API Endpoints
 
-### POST `/api/payments/v1/create-setup-intent/`
-Create a SetupIntent for saving cards
-- **Auth**: Required
-- **Returns**: `{client_secret, setup_intent_id}`
-
 ### POST `/api/payments/v1/onboard-professional/`
 Create Connect Express onboarding link
 - **Auth**: Required (professionals only)
