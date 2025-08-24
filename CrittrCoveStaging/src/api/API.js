@@ -2019,3 +2019,19 @@ export const trackBlogVisitor = async (visitorData) => {
   }
 };
 
+// Get Stripe Connect account status for payout validation
+export const getConnectStatus = async () => {
+  try {
+    debugLog('MBA2i3j4fi4: Fetching connect status for payout validation');
+    
+    const response = await axios.get(`${API_BASE_URL}/api/payments/v1/connect-status/`);
+    
+    debugLog('MBA2i3j4fi4: Connect status response:', response.data);
+    return response.data;
+  } catch (error) {
+    debugLog('MBA2i3j4fi4: Error fetching connect status:', error);
+    debugLog('MBA2i3j4fi4: Error details:', error.response?.data || error.message);
+    throw error;
+  }
+};
+

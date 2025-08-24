@@ -184,12 +184,17 @@ def get_connect_account_status(user):
     Get the status of a user's Connect account including capabilities and external accounts.
     """
     if not user.stripe_connect_account_id:
-        return {
+        safe_json = {
             'has_account': False,
             'payouts_enabled': False,
             'external_accounts': [],
-            'is_verified': False
+            'is_verified': False,
+            'transfers_active': False,
+            'requirements_due': [],
+            'external_account': None
         }
+        logger.info("MBA2i3j4fi4 connect-status summary", safe_json)
+        return safe_json
     
     try:
         account = stripe.Account.retrieve(user.stripe_connect_account_id)
@@ -201,29 +206,67 @@ def get_connect_account_status(user):
         )
         
         bank_accounts = []
+        default_bank_account = None
+        
         for bank_account in external_accounts.data:
-            bank_accounts.append({
+            bank_info = {
                 'id': bank_account.id,
                 'bank_name': bank_account.bank_name,
                 'last4': bank_account.last4,
                 'status': bank_account.status
-            })
+            }
+            bank_accounts.append(bank_info)
+            
+            # Find default_for_currency bank account (USD for US accounts)
+            if hasattr(bank_account, 'default_for_currency') and bank_account.default_for_currency:
+                default_bank_account = {
+                    'bank_name': bank_account.bank_name,
+                    'last4': bank_account.last4,
+                    'status': bank_account.status
+                }
+            elif not default_bank_account and bank_account.currency == 'usd':
+                # Fallback to first USD account if no default_for_currency found
+                default_bank_account = {
+                    'bank_name': bank_account.bank_name,
+                    'last4': bank_account.last4,
+                    'status': bank_account.status
+                }
         
-        return {
+        # Check transfers capability status
+        transfers_active = False
+        if hasattr(account, 'capabilities') and hasattr(account.capabilities, 'transfers'):
+            transfers_active = account.capabilities.transfers == 'active'
+        
+        # Get requirements due
+        requirements_due = []
+        if hasattr(account, 'requirements') and hasattr(account.requirements, 'currently_due'):
+            requirements_due = list(account.requirements.currently_due)
+        
+        safe_json = {
             'has_account': True,
             'payouts_enabled': account.payouts_enabled,
             'external_accounts': bank_accounts,
             'is_verified': account.payouts_enabled,
-            'requirements': account.requirements.currently_due if hasattr(account.requirements, 'currently_due') else [],
             'charges_enabled': account.charges_enabled,
-            'details_submitted': account.details_submitted
+            'details_submitted': account.details_submitted,
+            'transfers_active': transfers_active,
+            'requirements_due': requirements_due,
+            'external_account': default_bank_account
         }
+        
+        logger.info("MBA2i3j4fi4 connect-status summary", safe_json)
+        return safe_json
         
     except stripe.error.InvalidRequestError:
         logger.error(f"Connect account not found: {user.stripe_connect_account_id}")
-        return {
+        safe_json = {
             'has_account': False,
             'payouts_enabled': False,
             'external_accounts': [],
-            'is_verified': False
+            'is_verified': False,
+            'transfers_active': False,
+            'requirements_due': [],
+            'external_account': None
         }
+        logger.info("MBA2i3j4fi4 connect-status summary", safe_json)
+        return safe_json

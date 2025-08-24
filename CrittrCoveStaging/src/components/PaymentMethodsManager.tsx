@@ -6,6 +6,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/config';
 import { debugLog, AuthContext } from '../context/AuthContext';
 import { useToast } from './ToastProvider';
+import { getConnectStatus } from '../api/API';
 
 // Stripe imports - conditional for web platform
 let PaymentElement: any = null;
@@ -299,10 +300,10 @@ const PaymentMethodsManager: React.FC<PaymentMethodsManagerProps> = ({
     try {
       setIsLoadingConnectStatus(true);
       console.log('MBA2i3onv4i3 Making connect-status API call...');
-      const response = await axios.get(`${API_BASE_URL}/api/payments/v1/connect-status/`);
-      console.log('MBA2i3onv4i3 Connect status API response received:', response.data);
-      setConnectStatus(response.data);
-      debugLog('MBA2knlv843', 'Connect status:', response.data);
+      const response = await getConnectStatus();
+      console.log('MBA2i3onv4i3 Connect status API response received:', response);
+      setConnectStatus(response);
+      debugLog('MBA2knlv843', 'Connect status:', response);
     } catch (error) {
       console.log('MBA2i3onv4i3 Error in fetchConnectStatus:', error);
       debugLog('MBA2knlv843', 'Error fetching connect status:', error);

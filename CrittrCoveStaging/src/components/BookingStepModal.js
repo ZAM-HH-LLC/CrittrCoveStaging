@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -24,7 +25,8 @@ import { updateBookingDraftPetsAndServices,
          updateBookingDraftMultipleDays,
          updateBookingDraftRecurring,
          createBookingFromDraft,
-         getBookingDraftDatesAndTimes
+         getBookingDraftDatesAndTimes,
+         getConnectStatus
 } from '../api/API';
 import { convertToUTC, formatDateForAPI, formatTimeForAPI, parseOccurrencesForBookingSteps } from '../utils/time_utils';
 
@@ -85,6 +87,9 @@ const BookingStepModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [payoutStatus, setPayoutStatus] = useState(null);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [isPayoutReady, setIsPayoutReady] = useState(false);
   
   // Function to check if user has already agreed to terms (matches ReviewAndRatesCard logic)
   const getTosStatus = () => {
@@ -95,6 +100,59 @@ const BookingStepModal = ({
     return bookingData.pro_agreed_tos;
   };
   
+  // Function to calculate payout readiness from status
+  const calculatePayoutReadiness = (status) => {
+    if (!status) return false;
+    
+    const ready = status.transfers_active === true && 
+                  status.requirements_due.length === 0 && 
+                  status.external_account !== null && 
+                  status.external_account.status === 'verified' &&
+                  status.is_verified === true &&
+                  status.payouts_enabled === true;
+    
+    debugLog('MBA2i3j4fi4: Payout readiness calculated:', {
+      transfers_active: status.transfers_active,
+      requirements_due: status.requirements_due,
+      external_account: status.external_account,
+      external_account_status: status.external_account?.status,
+      is_verified: status.is_verified,
+      payouts_enabled: status.payouts_enabled,
+      isPayoutReady: ready
+    });
+    
+    return ready;
+  };
+  
+  // Function to validate payout setup
+  const validatePayoutSetup = async () => {
+    try {
+      debugLog('MBA2i3j4fi4: Validating payout setup before review step');
+      const status = await getConnectStatus();
+      
+      debugLog('MBA2i3j4fi4: Connect status response:', status);
+      setPayoutStatus(status);
+      
+      const ready = calculatePayoutReadiness(status);
+      setIsPayoutReady(ready);
+      
+      return ready;
+    } catch (error) {
+      debugLog('MBA2i3j4fi4: Error validating payout setup:', error);
+      // On error, don't block the user - let them proceed but warn them
+      setIsPayoutReady(false);
+      return true;
+    }
+  };
+  
+  // Update payout readiness whenever payoutStatus changes
+  useEffect(() => {
+    if (payoutStatus) {
+      const ready = calculatePayoutReadiness(payoutStatus);
+      setIsPayoutReady(ready);
+    }
+  }, [payoutStatus]);
+
   // Add persistent state for preventing duplicate API calls
   const [hasInitializedServices, setHasInitializedServices] = useState(false);
   const [hasInitializedPets, setHasInitializedPets] = useState(false);
@@ -670,7 +728,8 @@ const BookingStepModal = ({
         // Always allow proceeding from time selection since we have default times
         return true;
       case STEPS.REVIEW_AND_RATES.id:
-        return true;
+        // Check if payout setup is complete before allowing booking request
+        return isPayoutReady;
       // Add validation for other steps as they are implemented
       default:
         return false;
@@ -1337,6 +1396,21 @@ const BookingStepModal = ({
           setError('Failed to calculate booking totals');
           return;
         }
+        
+        // After saving draft data, validate payout setup before proceeding to review step
+        debugLog('MBA2i3j4fi4: Draft saved successfully, now validating payout setup');
+        setIsLoading(true); // Show loading state while validating payout
+        try {
+          const payoutReady = await validatePayoutSetup();
+          if (!payoutReady) {
+            debugLog('MBA2i3j4fi4: Payout setup incomplete, showing modal after draft save');
+            setShowPayoutModal(true);
+            return;
+          }
+          debugLog('MBA2i3j4fi4: Payout setup complete, proceeding to review step');
+        } finally {
+          setIsLoading(false); // Always clear loading state
+        }
       }
 
       setCurrentStep(prev => prev + 1);
@@ -1567,6 +1641,35 @@ const BookingStepModal = ({
           />
         );
       case STEPS.REVIEW_AND_RATES.id:
+        // Check if payout setup is incomplete and show appropriate content
+        if (payoutStatus && !isPayoutReady) {
+          return (
+            <View style={styles.payoutIncompleteContainer}>
+              <View style={styles.alertContainer}>
+                <MaterialCommunityIcons 
+                  name="bank" 
+                  size={48} 
+                  color={theme.colors.warning}
+                  style={styles.alertIcon}
+                />
+                <Text style={styles.alertTitle}>Finish Payout Setup Required</Text>
+                <Text style={styles.alertMessage}>
+                  You need to finish adding a payout method before you can request a booking. Consider a meet-and-greet while you complete this step.
+                </Text>
+                <TouchableOpacity
+                  style={styles.payoutSetupButton}
+                  onPress={() => {
+                    onClose(); // Close the BookingStepModal
+                    navigation?.navigate('MyProfile', { initialTab: 'settings_payments' });
+                  }}
+                >
+                  <Text style={styles.payoutSetupButtonText}>Complete Payout Setup</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        }
+        
         return (
           <ReviewAndRatesCard
             bookingData={bookingData}
@@ -1645,74 +1748,6 @@ const BookingStepModal = ({
     };
   }, []);
 
-  const formatDatesForAPI = (dateState) => {
-    if (!dateState || !dateState.dates || dateState.dates.length === 0) {
-      return { dates: [] };
-    }
-
-    // Format the dates for the API using the proper UTC conversion
-    const formattedDates = dateState.dates.map(date => {
-      const dateString = date.toISOString().split('T')[0];
-      
-      // Get time data for this specific date or fall back to default
-      let timeData = dateState.times;
-      
-      // Check if we have individual day schedules
-      if (dateState.times.hasIndividualTimes && dateState.times[dateString]) {
-        timeData = dateState.times[dateString];
-      }
-      
-      // Format start and end times
-      const formattedStartTime = formatTimeObj(timeData.startTime);
-      const formattedEndTime = formatTimeObj(timeData.endTime);
-      
-      // Handle midnight (00:00) as end of current day, not start of next day
-      // This ensures proper duration calculation and prevents negative durations
-      let endDate = dateString;
-      const isMidnightEnd = formattedEndTime === "00:00";
-      const isTimeBeforeStart = compareTimesAsMinutes(timeData.endTime, timeData.startTime) < 0;
-      
-      // If end time is midnight (00:00) or earlier than start time, use the next day as the end date
-      if (isMidnightEnd || isTimeBeforeStart) {
-        // Calculate the next day
-        const nextDay = new Date(date);
-        nextDay.setDate(nextDay.getDate() + 1);
-        endDate = nextDay.toISOString().split('T')[0];
-        
-        debugLog("MBA8810: Using next day for end date due to midnight/early morning end time:", {
-          date: dateString,
-          startTime: formattedStartTime,
-          endTime: formattedEndTime,
-          endDate: endDate,
-          isMidnightEnd,
-          isTimeBeforeStart
-        });
-      }
-      
-      return {
-        date: dateString,
-        start_time: formattedStartTime,
-        end_time: formattedEndTime,
-        end_date: endDate, // Always include end_date for proper backend processing
-        is_overnight: timeData.isOvernightForced || dateState.service?.is_overnight || false
-      };
-    });
-
-    return { dates: formattedDates };
-  };
-
-  const formatTimeObj = (timeObj) => {
-    const hours = timeObj.hours.toString().padStart(2, '0');
-    const minutes = timeObj.minutes.toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  };
-  
-  // Helper to compare two time objects by converting to minutes
-  const compareTimesAsMinutes = (time1, time2) => {
-    const time1Minutes = (time1.hours * 60) + time1.minutes;
-    const time2Minutes = (time2.hours * 60) + time2.minutes;
-    return time1Minutes - time2Minutes;
-  };
 
   return (
     <>
@@ -1762,12 +1797,19 @@ const BookingStepModal = ({
                     onPress={handleNext}
                     disabled={!canProceedToNextStep() || isLoading}
                   >
-                    <Text style={[
-                      styles.nextButtonText,
-                      (!canProceedToNextStep() || isLoading) && styles.disabledButtonText
-                    ]}>
-                      Next
-                    </Text>
+                    {isLoading ? (
+                      <ActivityIndicator 
+                        size="small" 
+                        color={theme.colors.surface} 
+                      />
+                    ) : (
+                      <Text style={[
+                        styles.nextButtonText,
+                        (!canProceedToNextStep() || isLoading) && styles.disabledButtonText
+                      ]}>
+                        Next
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </>
               ) : (
@@ -1806,9 +1848,18 @@ const BookingStepModal = ({
                         </Text>
                       </View>
                     ) : (
-                      <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
-                        {currentStep === STEPS.REVIEW_AND_RATES.id ? 'Request Booking' : 'Next'}
-                      </Text>
+                      <>
+                        {isLoading ? (
+                          <ActivityIndicator 
+                            size="small" 
+                            color={(!canProceedToNextStep() || isLoading) ? theme.colors.surface : theme.colors.surface} 
+                          />
+                        ) : (
+                          <Text style={[styles.nextButtonText, (!canProceedToNextStep() || isLoading) && styles.disabledButtonText]}>
+                            {currentStep === STEPS.REVIEW_AND_RATES.id ? 'Request Booking' : 'Next'}
+                          </Text>
+                        )}
+                      </>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1824,6 +1875,51 @@ const BookingStepModal = ({
         onClose={() => setShowTermsModal(false)}
         actionType="booking"
       />
+
+      {/* Payout Setup Required Modal */}
+      <Modal
+        visible={showPayoutModal}
+        animationType="fade"
+        onRequestClose={() => setShowPayoutModal(false)}
+        transparent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.payoutModalContent}>
+            <View style={styles.payoutModalHeader}>
+              <MaterialCommunityIcons 
+                name="bank" 
+                size={48} 
+                color={theme.colors.warning}
+              />
+              <Text style={styles.payoutModalTitle}>Payout Setup Required</Text>
+            </View>
+            
+            <Text style={styles.payoutModalMessage}>
+              Please finish adding your payout method in the Profile's Settings page before proceeding.
+            </Text>
+            
+            <View style={styles.payoutModalButtons}>
+              <TouchableOpacity
+                style={styles.payoutModalCancelButton}
+                onPress={() => setShowPayoutModal(false)}
+              >
+                <Text style={styles.payoutModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.payoutModalSetupButton}
+                onPress={() => {
+                  setShowPayoutModal(false);
+                  onClose(); // Close the BookingStepModal
+                  navigation?.navigate('MyProfile', { initialTab: 'settings_payments' });
+                }}
+              >
+                <Text style={styles.payoutModalSetupText}>Setup Payout Method</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -1986,6 +2082,112 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  payoutIncompleteContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: theme.colors.background,
+  },
+  alertContainer: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.warning,
+    maxWidth: 400,
+    width: '100%',
+  },
+  alertIcon: {
+    marginBottom: 16,
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontFamily: theme.fonts.medium.fontFamily,
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  alertMessage: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  payoutSetupButton: {
+    backgroundColor: theme.colors.mainColors.main,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 180,
+  },
+  payoutSetupButtonText: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontFamily: theme.fonts.medium.fontFamily,
+  },
+  payoutModalContent: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 12,
+    padding: 24,
+    margin: 20,
+    maxWidth: 400,
+    width: '90%',
+  },
+  payoutModalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  payoutModalTitle: {
+    fontSize: 20,
+    fontFamily: theme.fonts.medium.fontFamily,
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  payoutModalMessage: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  payoutModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  payoutModalCancelButton: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  payoutModalCancelText: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+  },
+  payoutModalSetupButton: {
+    flex: 1,
+    backgroundColor: theme.colors.mainColors.main,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  payoutModalSetupText: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontFamily: theme.fonts.medium.fontFamily,
   },
 
 });
