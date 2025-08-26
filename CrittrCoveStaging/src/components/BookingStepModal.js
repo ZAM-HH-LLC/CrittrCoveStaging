@@ -84,6 +84,7 @@ const BookingStepModal = ({
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [termsAgreed, setTermsAgreed] = useState(false);
+  const [timeValidationModal, setTimeValidationModal] = useState({ visible: false, message: '' });
   const [showTermsModal, setShowTermsModal] = useState(false);
   
   // Function to check if user has already agreed to terms (matches ReviewAndRatesCard logic)
@@ -526,6 +527,9 @@ const BookingStepModal = ({
           startDate: dateData.startDate,
           endDate: dateData.endDate
         };
+      } else if (dateData.rangeType === 'date-range' && dateData.startDate && !dateData.endDate) {
+        // Incomplete range selection - clear the date range to prevent stale data
+        newDateRange = null;
       } else if (dateData.rangeType === 'multiple-days') {
         // Keep the existing date range when in multiple-days mode
         newDateRange = prev.dateRange;
@@ -564,6 +568,15 @@ const BookingStepModal = ({
 
   const handleTimeSelect = (timeData) => {
     debugLog('MBAoi1h34ghnvo: TimeSelectionCard sent time data:', timeData);
+
+    // Clear any previous time validation errors when user changes times
+    if (bookingData.timeValidationError) {
+      setBookingData(prev => ({
+        ...prev,
+        timeValidationError: null
+      }));
+      setError(null);
+    }
 
     // CRITICAL FIX: Determine overnight status from current service, not timeData
     const hasServiceOvernight = bookingData.service?.is_overnight === true;
@@ -649,18 +662,92 @@ const BookingStepModal = ({
         // 2. dates array with entries
         // 3. a valid dateRange with both startDate and endDate
 
+        debugLog('MBA_VALIDATION_DEBUG: Checking date selection validity', {
+          hasDateSelectionData: !!bookingData.dateSelectionData,
+          dateSelectionDataIsValid: bookingData.dateSelectionData?.isValid,
+          dateSelectionDataStartDate: bookingData.dateSelectionData?.startDate,
+          dateSelectionDataEndDate: bookingData.dateSelectionData?.endDate,
+          datesLength: bookingData.dates?.length,
+          hasDateRange: !!(bookingData.dateRange?.startDate && bookingData.dateRange?.endDate),
+          serviceIsOvernight: bookingData.service?.is_overnight,
+          dateRangeType: bookingData.dateRangeType
+        });
+
         // First check if dateSelectionData exists and is valid
         if (bookingData.dateSelectionData && bookingData.dateSelectionData.isValid) {
+          // Additional validation for overnight bookings - must have different start/end dates
+          if (bookingData.service?.is_overnight && bookingData.dateSelectionData.rangeType === 'date-range') {
+            const startDate = bookingData.dateSelectionData.startDate;
+            const endDate = bookingData.dateSelectionData.endDate;
+            
+            if (!startDate || !endDate) {
+              debugLog('MBA_VALIDATION: Overnight booking missing start or end date');
+              return false;
+            }
+            
+            // Check if start and end dates are the same (same day)
+            const startDateStr = startDate instanceof Date ? startDate.toISOString().split('T')[0] : startDate;
+            const endDateStr = endDate instanceof Date ? endDate.toISOString().split('T')[0] : endDate;
+            
+            if (startDateStr === endDateStr) {
+              debugLog('MBA_VALIDATION: Overnight booking cannot be same day', { startDateStr, endDateStr });
+              return false;
+            }
+          }
           return true;
         }
         
         // Check if we have any dates in the array
         if (bookingData.dates && bookingData.dates.length > 0) {
+          // For overnight bookings, ensure we have at least 2 dates (spanning multiple days)
+          if (bookingData.service?.is_overnight && bookingData.dateRangeType === 'date-range') {
+            if (bookingData.dates.length < 2) {
+              debugLog('MBA_VALIDATION: Overnight booking needs at least 2 dates', { 
+                datesLength: bookingData.dates.length,
+                dates: bookingData.dates 
+              });
+              return false;
+            }
+            
+            // Additional check: ensure dates are different days
+            const firstDate = bookingData.dates[0];
+            const lastDate = bookingData.dates[bookingData.dates.length - 1];
+            
+            if (firstDate && lastDate) {
+              const firstDateStr = firstDate instanceof Date ? firstDate.toISOString().split('T')[0] : firstDate;
+              const lastDateStr = lastDate instanceof Date ? lastDate.toISOString().split('T')[0] : lastDate;
+              
+              if (firstDateStr === lastDateStr) {
+                debugLog('MBA_VALIDATION: Overnight booking cannot have same start/end date', { 
+                  firstDateStr, 
+                  lastDateStr 
+                });
+                return false;
+              }
+            }
+          }
           return true;
         }
         
         // Check if we have a valid date range
         if (bookingData.dateRange && bookingData.dateRange.startDate && bookingData.dateRange.endDate) {
+          // For overnight bookings, ensure start and end dates are different
+          if (bookingData.service?.is_overnight && bookingData.dateRangeType === 'date-range') {
+            const startDateStr = bookingData.dateRange.startDate instanceof Date 
+              ? bookingData.dateRange.startDate.toISOString().split('T')[0] 
+              : bookingData.dateRange.startDate;
+            const endDateStr = bookingData.dateRange.endDate instanceof Date 
+              ? bookingData.dateRange.endDate.toISOString().split('T')[0] 
+              : bookingData.dateRange.endDate;
+              
+            if (startDateStr === endDateStr) {
+              debugLog('MBA_VALIDATION: Overnight booking dateRange cannot be same day', { 
+                startDateStr, 
+                endDateStr 
+              });
+              return false;
+            }
+          }
           return true;
         }
         
@@ -678,7 +765,19 @@ const BookingStepModal = ({
   };
 
   const handleNext = async () => {
-    if (!canProceedToNextStep()) {
+    const canProceed = canProceedToNextStep();
+    debugLog('MBA_VALIDATION_DEBUG: handleNext called', {
+      currentStep,
+      canProceed,
+      bookingData: {
+        dateSelectionData: bookingData.dateSelectionData,
+        dates: bookingData.dates,
+        dateRange: bookingData.dateRange,
+        serviceIsOvernight: bookingData.service?.is_overnight
+      }
+    });
+    
+    if (!canProceed) {
       setError('Please complete all required fields before proceeding');
       return;
     }
@@ -1010,48 +1109,31 @@ const BookingStepModal = ({
                   
                   debugLog('MBA53212co2v3nvoub5 Formatted times for slot', slotIndex, 'on date:', dateKey, { startTime, endTime });
                   
-                  // Format the date
+                  // Format the date - use same date for both start and end, let backend handle validation
                   const formattedDate = formatDateForAPI(date);
+                  const formattedEndDate = formattedDate; // Always use same date - let user intent drive this
+                  
                   debugLog('MBA53212co2v3nvoub5 Formatted date:', formattedDate);
                   
-                  // Determine if the end time might cross to the next day
-                  // Check if end time is midnight or earlier than start time, indicating day boundary crossing
-                  const needsNextDayDate = endTime === '00:00' || 
-                                          (parseInt(endTime.split(':')[0], 10) < parseInt(startTime.split(':')[0], 10)) ||
-                                          (parseInt(endTime.split(':')[0], 10) === parseInt(startTime.split(':')[0], 10) && 
-                                           parseInt(endTime.split(':')[1], 10) < parseInt(startTime.split(':')[1], 10));
-                  
-                  // Calculate end date - either same day or next day
-                  const endDateObj = needsNextDayDate 
-                    ? new Date(date.getTime() + 24*60*60*1000) // Next day if crossing midnight
-                    : new Date(date);
-                    
-                  const formattedEndDate = formatDateForAPI(endDateObj);
-                  
-                  debugLog('MBA53212co2v3nvoub5 End date calculation for slot', slotIndex, ':', {
-                    needsNextDayDate,
+                  debugLog('MBA53212co2v3nvoub5 Using same date for both start and end times:', {
                     startTime,
                     endTime,
-                    originalDate: formattedDate,
-                    calculatedEndDate: formattedEndDate
+                    formattedDate,
+                    formattedEndDate,
+                    message: 'Backend will validate if end time is valid for the selected date'
                   });
-                  
-                  // IMPORTANT: Crossing midnight or having a different end date due to 00:00 end time
-                  // should NOT force overnight mode - that should only be based on the service type
-                  // We're just calculating the correct end date for API payload
                   
                   // Get user's timezone from context
                   const userTz = timeSettings?.timezone || 'US/Mountain';
-                  debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion in forEach function:', userTz);
+                  debugLog('MBA53212co2v3nvoub5 Using user timezone for UTC conversion:', userTz);
                   
-                  // Convert local times to UTC for start time and date
+                  // Convert local times to UTC - use the same date for both start and end
                   const { date: utcStartDate, time: utcStartTime } = convertToUTC(
                     formattedDate,
                     startTime,
                     userTz
                   );
                   
-                  // Convert end time to UTC with potentially different end date
                   const { date: utcEndDate, time: utcEndTime } = convertToUTC(
                     formattedEndDate,
                     endTime,
@@ -1067,12 +1149,13 @@ const BookingStepModal = ({
                   });
                   
                   // Add each time slot as a separate occurrence
+                  // Backend will determine if this is overnight based on the date/time combination
                   formattedDates.push({
                     date: utcStartDate,
                     startTime: utcStartTime,
-                    endDate: utcEndDate,  // Always include endDate
+                    endDate: utcEndDate,
                     endTime: utcEndTime,
-                    is_overnight: needsNextDayDate
+                    is_overnight: false // Let backend determine overnight status
                   });
                 });
               });
@@ -1226,16 +1309,8 @@ const BookingStepModal = ({
                   // Format the date
                   const formattedDate = formatDateForAPI(date);
                   
-                  // Determine if the end time might cross to the next day
-                  const needsNextDayDate = endTime === '00:00' || 
-                                          (parseInt(endTime.split(':')[0], 10) < parseInt(startTime.split(':')[0], 10)) ||
-                                          (parseInt(endTime.split(':')[0], 10) === parseInt(startTime.split(':')[0], 10) && 
-                                           parseInt(endTime.split(':')[1], 10) < parseInt(startTime.split(':')[1], 10));
-                  
-                  // Calculate end date
-                  const endDateObj = needsNextDayDate 
-                    ? new Date(date.getTime() + 24*60*60*1000)
-                    : new Date(date);
+                  // Use same date for both start and end, let backend handle validation  
+                  const endDateObj = new Date(date);
                     
                   const formattedEndDate = formatDateForAPI(endDateObj);
                   
@@ -1262,13 +1337,14 @@ const BookingStepModal = ({
                     utcEndTime
                   });
                   
-                  // Add each time slot as a separate occurrence
+                  // Add each time slot as a separate occurrence  
+                  // Backend will determine if this is overnight based on the date/time combination
                   formattedDates.push({
                     date: utcStartDate,
                     startTime: utcStartTime,
                     endDate: utcEndDate,
                     endTime: utcEndTime,
-                    is_overnight: needsNextDayDate
+                    is_overnight: false // Let backend determine overnight status
                   });
                 });
               });
@@ -1334,11 +1410,54 @@ const BookingStepModal = ({
             name: error.name,
             response: error.response?.data
           });
-          setError('Failed to calculate booking totals');
+          
+          // Use specific error message from backend if available
+          let errorMessage = 'Failed to calculate booking totals';
+          let timeValidationError = null;
+          
+          if (error.response?.data?.error) {
+            errorMessage = error.response.data.error;
+            // Check if this is a time validation error
+            if (errorMessage.includes('End time') && errorMessage.includes('must be after start time')) {
+              timeValidationError = {
+                type: 'end_time_before_start',
+                message: errorMessage
+              };
+            }
+          } else if (error.response?.data?.detail) {
+            errorMessage = error.response.data.detail;
+            // Check if this is a time validation error
+            if (errorMessage.includes('End time') && errorMessage.includes('must be after start time')) {
+              timeValidationError = {
+                type: 'end_time_before_start',
+                message: errorMessage
+              };
+            }
+          } else if (error.message) {
+            errorMessage = error.message;
+          }
+          
+          setError(errorMessage);
+          
+          // Show modal instead of highlighting UI elements for better UX
+          if (timeValidationError) {
+            setTimeValidationModal({
+              visible: true,
+              message: timeValidationError.message
+            });
+          }
           return;
         }
       }
 
+      // Clear any time validation errors when successfully proceeding
+      if (bookingData.timeValidationError) {
+        setBookingData(prev => ({
+          ...prev,
+          timeValidationError: null
+        }));
+      }
+      
       setCurrentStep(prev => prev + 1);
     } else {
       // We're on the final step (REVIEW_AND_RATES), so create the booking
@@ -1428,6 +1547,15 @@ const BookingStepModal = ({
   };
 
   const handleBack = () => {
+    // Clear any time validation errors when going back
+    if (bookingData.timeValidationError) {
+      setBookingData(prev => ({
+        ...prev,
+        timeValidationError: null
+      }));
+      setError(null);
+    }
+    
     if (currentStep > STEPS.SERVICES_AND_PETS.id) {
       setCurrentStep(prev => prev - 1);
     } else {
@@ -1616,6 +1744,7 @@ const BookingStepModal = ({
       dateSelectionData: null,
       dateRange: null,
       hasFetchedDates: false, // Reset the fetch flag to ensure dates are refetched
+      timeValidationError: null, // Clear any validation errors
     });
     setError(null);
     setIsLoading(false);
@@ -1824,6 +1953,29 @@ const BookingStepModal = ({
         onClose={() => setShowTermsModal(false)}
         actionType="booking"
       />
+
+      {/* Time Validation Error Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={timeValidationModal.visible}
+        onRequestClose={() => setTimeValidationModal({ visible: false, message: '' })}
+      >
+        <View style={styles.timeValidationModalOverlay}>
+          <View style={styles.timeValidationModalContent}>
+            <Text style={styles.timeValidationModalTitle}>Invalid Time Selection</Text>
+            <Text style={styles.timeValidationModalMessage}>
+              {timeValidationModal.message}
+            </Text>
+            <TouchableOpacity
+              style={styles.timeValidationModalButton}
+              onPress={() => setTimeValidationModal({ visible: false, message: '' })}
+            >
+              <Text style={styles.timeValidationModalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -1986,6 +2138,58 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Time Validation Modal Styles
+  timeValidationModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  timeValidationModalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  timeValidationModalTitle: {
+    fontSize: 20,
+    fontFamily: theme.fonts.medium.fontFamily,
+    color: theme.colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  timeValidationModalMessage: {
+    fontSize: 16,
+    fontFamily: theme.fonts.regular.fontFamily,
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  timeValidationModalButton: {
+    backgroundColor: theme.colors.mainColors.main,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    minWidth: 100,
+  },
+  timeValidationModalButtonText: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontFamily: theme.fonts.medium.fontFamily,
+    textAlign: 'center',
   },
 
 });

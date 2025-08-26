@@ -13,7 +13,7 @@ const NewTimeRangeSelector = ({
   uniqueId = 'default',
   dateRange = null,
   selectedDates = [],
-  isIndividualDaySelector = false,
+  isIndividualDaySelector = false
 }) => {
   const { is_DEBUG } = useContext(AuthContext);
   
@@ -78,28 +78,7 @@ const NewTimeRangeSelector = ({
   
   // Handle start time change
   const handleStartTimeChange = (newTime) => {
-    // Validate that start time is not after end time
-    // End time could be 00:00 (midnight) which is treated as end of day
-    // So we need a special check for that case
-    const isEndTimeMidnight = times.endTime.hours === 0 && times.endTime.minutes === 0;
-    const startTotalMinutes = (newTime.hours * 60) + newTime.minutes;
-    const endTotalMinutes = (times.endTime.hours * 60) + times.endTime.minutes;
-    
-    // Check if the time combination is valid
-    // Allow if end time is midnight (special case) or if start time is before end time
-    if (!(isEndTimeMidnight || startTotalMinutes < endTotalMinutes)) {
-      debugLog(`MBAoi9uv43d: NewTimeRangeSelector (${uniqueId}) invalid start time - would be after end time:`, {
-        attemptedStart: newTime,
-        currentEnd: times.endTime,
-        startMinutes: startTotalMinutes,
-        endMinutes: endTotalMinutes
-      });
-      
-      // Return false to trigger error handling in TimePickerDropdown
-      return false;
-    }
-    
-    // Time is valid, proceed with the update
+    // Remove frontend validation - backend will handle time validation based on dates
     const newTimes = {
       ...times,
       startTime: JSON.parse(JSON.stringify(newTime))
@@ -118,28 +97,7 @@ const NewTimeRangeSelector = ({
   
   // Handle end time change
   const handleEndTimeChange = (newTime) => {
-    // Special case: if new end time is midnight (00:00), always allow it
-    const isNewEndTimeMidnight = newTime.hours === 0 && newTime.minutes === 0;
-    
-    // For all other times, validate that end time is after start time
-    const startTotalMinutes = (times.startTime.hours * 60) + times.startTime.minutes;
-    const endTotalMinutes = (newTime.hours * 60) + newTime.minutes;
-    
-    // Check if the time combination is valid
-    // Allow if end time is midnight (special case) or if end time is after start time
-    if (!(isNewEndTimeMidnight || endTotalMinutes > startTotalMinutes)) {
-      debugLog(`MBAoi9uv43d: NewTimeRangeSelector (${uniqueId}) invalid end time - would be before start time:`, {
-        currentStart: times.startTime,
-        attemptedEnd: newTime,
-        startMinutes: startTotalMinutes,
-        endMinutes: endTotalMinutes
-      });
-      
-      // Return false to trigger error handling in TimePickerDropdown
-      return false;
-    }
-    
-    // Time is valid, proceed with the update
+    // Remove frontend validation - backend will handle time validation based on dates
     const newTimes = {
       ...times,
       endTime: JSON.parse(JSON.stringify(newTime))

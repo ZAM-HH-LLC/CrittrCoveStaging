@@ -453,6 +453,7 @@ const DateSelectionCard = ({
           dates: [date],
           rangeType: 'date-range',
           startDate: date,
+          endDate: null, // Explicitly set endDate to null
           isValid: false
         });
       }
@@ -460,9 +461,44 @@ const DateSelectionCard = ({
       let startDate = new Date(rangeStartDate);
       let endDate = new Date(date);
       
-      if (date < rangeStartDate) {
-        startDate = new Date(date);
-        endDate = new Date(rangeStartDate);
+      // For overnight bookings, ensure end date is at least one day after start date
+      if (isOvernightForced) {
+        // Check if user clicked the same date as start date
+        if (date.getTime() === rangeStartDate.getTime()) {
+          debugLog('MBA54321 Same-day selection not allowed for overnight bookings');
+          // Don't update anything - keep waiting for a different end date
+          // Could add user feedback here in the future (toast/alert)
+          console.warn('Same-day selection not allowed for overnight bookings. Please select an end date that is at least one day after the start date.');
+          return;
+        }
+        
+        // Ensure end date is after start date (no swapping for overnight bookings)
+        if (date < rangeStartDate) {
+          debugLog('MBA54321 End date must be after start date for overnight bookings');
+          // Reset selection and make the clicked date the new start date
+          setRangeStartDate(date);
+          setSelectedDatesList([date]);
+          setDateRangeEnd(null);
+          setLastRangeSelection(null);
+          
+          if (onDateSelect) {
+            onDateSelect({
+              type: 'one-time',
+              dates: [date],
+              rangeType: 'date-range',
+              startDate: date,
+              endDate: null, // Explicitly set endDate to null
+              isValid: false
+            });
+          }
+          return;
+        }
+      } else {
+        // For non-overnight bookings, allow date swapping
+        if (date < rangeStartDate) {
+          startDate = new Date(date);
+          endDate = new Date(rangeStartDate);
+        }
       }
       
       setDateRangeEnd(endDate);
@@ -484,30 +520,52 @@ const DateSelectionCard = ({
       });
 
       if (onDateSelect) {
+        // For overnight bookings, validate that the date range spans at least one night
+        let isValidRange = true;
+        if (isOvernightForced) {
+          const oneDay = 24 * 60 * 60 * 1000; // milliseconds in one day
+          const dateDifference = Math.abs(endDate.getTime() - startDate.getTime());
+          isValidRange = dateDifference >= oneDay; // At least one full day difference
+          
+          debugLog('MBA54321 Overnight booking validation:', {
+            startDate: startDate.toISOString().split('T')[0],
+            endDate: endDate.toISOString().split('T')[0],
+            dateDifference: dateDifference / oneDay,
+            isValidRange: isValidRange,
+            message: isValidRange ? 'Valid overnight range' : 'Invalid: must span at least one night'
+          });
+        }
+        
         const data = {
           type: 'one-time',
           dates: dateRange,
           rangeType: 'date-range',
           startDate: startDate,
           endDate: endDate,
-          isValid: true
+          isValid: isValidRange
         };
         if (is_DEBUG) console.log('MBA19ynkiy34b handleDateRangeSelection - complete range selected, sending data:', data);
         onDateSelect(data);
       }
     } else {
+      // User clicked a new date when a complete range was already selected
+      // Reset everything and start fresh
       setRangeStartDate(date);
       setSelectedDatesList([date]);
       setDateRangeEnd(null);
       setLastRangeSelection(null); // Clear last range when starting new selection
-      if (is_DEBUG) console.log('MBA19ynkiy34b handleDateRangeSelection - resetting selection');
+      setDatesFromRange(false); // Clear any range-from-dates flag
+      
+      if (is_DEBUG) console.log('MBA19ynkiy34b handleDateRangeSelection - resetting selection, clearing previous range');
+      
       if (onDateSelect) {
         onDateSelect({
           type: 'one-time',
           dates: [date],
           rangeType: 'date-range',
           startDate: date,
-          isValid: false
+          endDate: null, // Explicitly set endDate to null
+          isValid: false // This is critical - must be false to disable Next button
         });
       }
     }
@@ -802,9 +860,10 @@ const DateSelectionCard = ({
     }
 
     // If we have a date range and we're in date-range mode
-    if (selectedDateRangeType === 'date-range' && (dateRangeEnd || (datesFromRange && initialDateRange))) {
-      const startDate = rangeStartDate || initialDateRange?.startDate || selectedDatesList[0];
-      const endDate = dateRangeEnd || initialDateRange?.endDate || selectedDatesList[selectedDatesList.length - 1];
+    // Only show range display if we have both start and end dates (complete range)
+    if (selectedDateRangeType === 'date-range' && dateRangeEnd && rangeStartDate) {
+      const startDate = rangeStartDate;
+      const endDate = dateRangeEnd;
       
       return (
         <View style={styles.selectedDatesContainer}>
@@ -819,6 +878,25 @@ const DateSelectionCard = ({
             >
               <Text style={styles.removeButtonText}>×</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    // If we're in date-range mode but only have a start date (incomplete selection)
+    if (selectedDateRangeType === 'date-range' && rangeStartDate && !dateRangeEnd) {
+      return (
+        <View style={styles.selectedDatesContainer}>
+          <Text style={styles.selectedDatesTitle}>
+            {isOvernightForced 
+              ? "Start Date Selected - Choose End Date (must be at least 1 day later):"
+              : "Start Date Selected - Choose End Date:"
+            }
+          </Text>
+          <View style={styles.dateRangeChip}>
+            <Text style={styles.dateRangeText}>
+              From {formatSelectedDate(rangeStartDate)} to ?
+            </Text>
           </View>
         </View>
       );

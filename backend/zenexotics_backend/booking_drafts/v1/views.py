@@ -49,6 +49,53 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def validate_time_combination(start_date, end_date, start_time, end_time, occurrence_identifier=""):
+    """
+    Validate that end time is not before or equal to start time when considering dates.
+    For overnight bookings, end time can be earlier than start time if end_date > start_date.
+    For same-day bookings, end time must be after start time.
+    
+    Args:
+        start_date: date object or string in YYYY-MM-DD format
+        end_date: date object or string in YYYY-MM-DD format  
+        start_time: time object or string in HH:MM format
+        end_time: time object or string in HH:MM format
+        occurrence_identifier: string to identify occurrence in logs
+        
+    Returns:
+        tuple: (is_valid: bool, error_message: str or None)
+    """
+    try:
+        # Convert strings to date/time objects if needed
+        if isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        if isinstance(start_time, str):
+            start_time = datetime.strptime(start_time, '%H:%M').time()
+        if isinstance(end_time, str):
+            end_time = datetime.strptime(end_time, '%H:%M').time()
+            
+        # Create full datetime objects for comparison
+        start_datetime = datetime.combine(start_date, start_time)
+        end_datetime = datetime.combine(end_date, end_time)
+        
+        logger.info(f"MBA_TIME_VALIDATION: Validating {occurrence_identifier} - Start: {start_datetime}, End: {end_datetime}")
+        
+        # Check if end datetime is after start datetime
+        if end_datetime <= start_datetime:
+            error_msg = f"End time ({end_date} {end_time}) must be after start time ({start_date} {start_time})"
+            logger.error(f"MBA_TIME_VALIDATION: Invalid time combination for {occurrence_identifier}: {error_msg}")
+            return False, error_msg
+            
+        logger.info(f"MBA_TIME_VALIDATION: Valid time combination for {occurrence_identifier}")
+        return True, None
+        
+    except Exception as e:
+        error_msg = f"Error validating time combination: {str(e)}"
+        logger.error(f"MBA_TIME_VALIDATION: Exception for {occurrence_identifier}: {error_msg}")
+        return False, error_msg
+
 class OrderedDictJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, OrderedDict):
@@ -1426,6 +1473,18 @@ class UpdateBookingDraftTimeAndDateView(APIView):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
+            # Validate time combination for overnight bookings
+            is_valid, validation_error = validate_time_combination(
+                start_date, end_date, start_time, end_time, 
+                f"overnight booking {draft_id}"
+            )
+            if not is_valid:
+                logger.error(f"MBA1234 - Time validation failed: {validation_error}")
+                return Response(
+                    {"error": validation_error, "detail": validation_error},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Get number of pets
             num_pets = len(draft.draft_data.get('pets', [])) if draft.draft_data else 0
 
@@ -2153,6 +2212,18 @@ class UpdateBookingDraftMultipleDaysView(APIView):
                 end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
                 start_time_obj = datetime.strptime(start_time, '%H:%M').time()
                 end_time_obj = datetime.strptime(end_time, '%H:%M').time()
+
+                # Validate time combination for each occurrence
+                is_valid, validation_error = validate_time_combination(
+                    start_date_obj, end_date_obj, start_time_obj, end_time_obj, 
+                    f"occurrence {occurrence_counter+1} ({start_date} {start_time}-{end_time})"
+                )
+                if not is_valid:
+                    logger.error(f"MBA5321 - Time validation failed for occurrence {occurrence_counter+1}: {validation_error}")
+                    return Response(
+                        {"error": validation_error, "detail": validation_error},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
                 # Look for matching existing occurrence
                 # Strategy: Match by start date OR by position in the list for better user experience
